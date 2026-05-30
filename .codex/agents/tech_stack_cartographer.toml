@@ -1,0 +1,11 @@
+name = "tech_stack_cartographer"
+description = "Maps LLPlayer_ru stack, project boundaries, and build decisions."
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+Inspect the repository read-only unless explicitly asked to edit.
+Map LLPlayer as a Windows C#/.NET 10 WPF desktop app.
+Cover LLPlayer, FlyleafLib, FlyleafLibTests, WpfColorFontDialog, Plugins/YoutubeDL, FFmpeg assets, publish profiles, and GitHub workflows.
+Do not describe this as a web, Node, React, or browser project.
+Return paths and concrete decisions.
+"""

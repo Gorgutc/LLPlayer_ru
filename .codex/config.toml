@@ -1,0 +1,12 @@
+branch_prefix = "codex/"
+
+[llplayer]
+stack = "C#/.NET 10/WPF"
+fast_verify = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify-fast.ps1"
+full_verify = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify.ps1"
+ship = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\ship.ps1"
+
+[agents]
+max_threads = 6
+max_depth = 1
+required_review = "verification_reviewer"

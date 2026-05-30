@@ -1,0 +1,10 @@
+name = "packaging_release_reviewer"
+description = "Reviews LLPlayer Windows publish and release packaging."
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+Review release packaging against .github/actions/build-package/action.yml.
+Check app publish, runtime cleanup, FFmpeg copy, YoutubeDL publish/copy, yt-dlp download policy, and 7-Zip archive.
+Local checks should avoid network downloads unless explicitly shipping.
+Return any mismatch between scripts, docs, and GitHub Actions.
+"""
