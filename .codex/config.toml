@@ -36,19 +36,6 @@ release_action = ".github/actions/build-package/action.yml"
 [agents]
 max_threads = 6
 max_depth = 1
-required_review = "verification_reviewer"
-required_read_only_agents = [
-  "tech_stack_cartographer",
-  "media_runtime_mapper",
-  "wpf_xaml_reviewer",
-  "dotnet_quality_guardian",
-  "native_dependency_auditor",
-  "packaging_release_reviewer",
-  "instruction_drift_auditor",
-  "codex_infra_architect",
-  "verification_reviewer",
-  "deadwood_reuse_auditor",
-]
 
 [forbidden_baseline_tooling]
 web_stack = [
