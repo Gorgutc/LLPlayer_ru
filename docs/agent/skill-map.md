@@ -2,6 +2,7 @@
 
 - `llplayer-bootstrap`: start-of-session repository context.
 - `llplayer-rules`: repo-wide rules from `AGENTS.md`.
+- `llplayer-product-contract`: frozen product/design/runtime/config contracts.
 - `llplayer-dotnet-rules`: C#/XAML/project changes.
 - `llplayer-context-keeper`: small read-only context gathering.
 - `llplayer-spec-guardian`: scope and requirement review.

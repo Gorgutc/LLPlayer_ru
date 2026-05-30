@@ -1,0 +1,51 @@
+# Media Runtime Contract
+
+This document freezes runtime boundaries and high-risk invariants from `main`.
+
+## Engine
+
+- `FlyleafLoader.StartEngine()` loads `LLPlayer.Engine.json` or defaults, then calls `Engine.Start`.
+- `Engine.Start()` has UI-thread expectations and initializes UI-side pieces before non-UI FFmpeg/plugins loading.
+- Default release engine paths are `FFmpegPath = ":FFmpeg"` and `PluginsPath = ":Plugins"`.
+- Leading-colon paths are intentional. `:FFmpeg` and `:Plugins` are resolved by searching upward from `AppDomain.CurrentDomain.BaseDirectory`; this supports debug and release layouts. Do not replace this with a single fixed relative path.
+- `timeBeginPeriod(1)` and `SetThreadExecutionState` are reference-counted. Do not bypass their counters.
+
+## WPF Dispatcher Boundaries
+
+- `Utils.UI`, `UIInvokeIfRequired`, subtitle collection synchronization, subtitle property updates, and player open/update paths are dispatcher-sensitive.
+- Do not remove UI marshalling because a call appears indirect or unused. Playback threads, subtitle updates, and WPF collections must keep their UI-thread boundaries.
+
+## Player
+
+- `Config` is bound to a single `Player`; do not reuse one config instance across players.
+- Open/open-async, stop, seek, playback, stream switching, and error events are coordinated by `Player` partial classes.
+- Latest open requests clear stale queued opens; preserve this behavior.
+- Seek/resync lock ordering across decoder codec contexts and demuxer format context is high risk.
+
+## Media Framework
+
+- Demuxers and decoders inherit thread lifecycle from `RunThreadBase`.
+- Native packet/frame ownership is explicit. Do not bypass `PacketQueue` and frame disposal paths.
+- Rendering has D3D/Flyleaf paths, device-lost handling, swapchain present, frame cache, and screen clear behavior.
+- Any render loop or device change requires real Windows/WPF/DirectX smoke testing.
+
+## Subtitles
+
+- `SubtitlesManager.Subs` must remain sorted by `StartTime`; current/previous/next lookup depends on binary search.
+- Text and bitmap subtitles are both first-class.
+- Bitmap subtitle data has explicit lifetime/disposal and positioning.
+- `SubtitlesSelectedHelper` is static/global and is not multi-player safe. Do not redesign it incidentally.
+
+## ASR/OCR/Translation
+
+- ASR uses independent audio demux/decode, 16 kHz WAV chunks, Whisper.net or faster-whisper process, cancellation, and shared dual-ASR behavior.
+- OCR services must preserve `TryInitialize -> Do -> Dispose`.
+- Translation service creation is lazy and provider-based through `ITranslateService`, `ITranslateSettings`, `TranslateServiceType`, and `TranslateServiceFactory`.
+- LLM-like translation has sequential/context modes; do not parallelize away context retention.
+
+## Plugins
+
+- Plugin discovery is reflection-based.
+- Extension points are interfaces in `PluginBase.cs`: `IOpen`, `IOpenSubtitles`, `ISuggest*`, `ISearch*`, `IScrapeItem`, and `IDownloadSubtitles`.
+- Prefer new plugin/provider interfaces over adding special cases to `Player`.
+- `YoutubeDL` manages an external process, watcher, temp folder, and stream suggestions. It needs process cleanup and race-aware file reads.

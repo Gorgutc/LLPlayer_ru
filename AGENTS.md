@@ -24,12 +24,28 @@ LLPlayer is a Windows-only C#/.NET 10 WPF media player for language learning. Th
 
 The application targets `net10.0-windows10.0.18362.0`, `win-x64`, and publishes as a framework-dependent single-file Windows exe. Do not assume this is a web, Node, React, or Playwright project.
 
+## Frozen Product Contracts
+
+Before changing product behavior, inspect the matching frozen contract:
+
+- `docs/agent/product-behavior-contract.md`: user-facing functions and feature boundaries.
+- `docs/agent/wpf-design-contract.md`: WPF layout, dialogs, subtitles UI, MaterialDesign usage, and shortcut discoverability.
+- `docs/agent/media-runtime-contract.md`: Flyleaf engine, FFmpeg, player, subtitles, ASR/OCR, translation, plugins, threading, and rendering boundaries.
+- `docs/agent/config-data-contract.md`: config persistence, defaults, key bindings, user data, local files, and secrets.
+- `docs/agent/dependency-baseline.md`: package/native/runtime dependency baseline and upgrade rules.
+- `docs/agent/manual-smoke-matrix.md`: manual checks for behavior that unit tests do not cover.
+- `docs/agent/subagent-review-matrix.md`: path scopes mapped to required review agents.
+
+These contracts document current `main` behavior. Change them only when the user explicitly asks to change the underlying product decision.
+
 ## Required Workflow
 
 - Work on a `codex/*` branch unless the user explicitly asks otherwise.
 - Use explicit spawned subagents for meaningful reviews, audits, or parallel sidecar analysis. Do not simulate agents inline.
+- If a subagent spawn tool is unavailable, notify the user and do not claim `/review` has been satisfied.
 - Keep application-code changes separate from agent/tooling changes. For this Codex infrastructure pass, do not change app behavior.
 - Use existing C#/.NET/WPF patterns and keep generated infrastructure small and readable.
+- Make product changes as narrowly as possible. Preserve unrelated frozen contracts unless the user explicitly requests a broader redesign.
 - Ask or notify the user when requirements are unclear or when an assumption could change the delivered behavior.
 - Always run `/review` before final handoff. In this environment, that means spawn a review subagent and address Critical/Important findings.
 

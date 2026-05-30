@@ -349,3 +349,15 @@ FlyleafLib/FlyleafLib.xml
 
 # YT-DLP
 yt-dlp.exe
+
+# LLPlayer local runtime state
+LLPlayer.Config.json
+LLPlayer.Engine.json
+LLPlayer.PlayerConfig.json
+crash.log
+Recordings/
+Snapshots/
+whispermodels/
+Whisper/
+tesseractmodels/
+.env*

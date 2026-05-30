@@ -9,6 +9,14 @@ Treat these as protected unless the user explicitly changes them:
 
 - Windows-only WPF app targeting `.NET 10`.
 - `LLPlayer` app + `FlyleafLib` media core + `Plugins/YoutubeDL` plugin split.
+- Product behavior, WPF design, media runtime, config/data, dependencies, manual smoke expectations, and review ownership documented in:
+  - `docs/agent/product-behavior-contract.md`
+  - `docs/agent/wpf-design-contract.md`
+  - `docs/agent/media-runtime-contract.md`
+  - `docs/agent/config-data-contract.md`
+  - `docs/agent/dependency-baseline.md`
+  - `docs/agent/manual-smoke-matrix.md`
+  - `docs/agent/subagent-review-matrix.md`
 - FFmpeg DLLs and `LLPlayer/lib/7z.dll` are intentional tracked native assets.
 - Release packaging is defined by `.github/actions/build-package/action.yml`.
 - Codex gates are PowerShell/.NET-first.

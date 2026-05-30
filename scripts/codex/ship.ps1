@@ -50,13 +50,17 @@ try {
         "x86"
     )
 
-    foreach ($relativePath in $pathsToRemove) {
-        $targetPath = Join-Path $appPublish $relativePath
+    $cleanupTargets = @($pathsToRemove | ForEach-Object { Join-Path $appPublish $_ })
+    $missingCleanupTargets = @($cleanupTargets | Where-Object { -not (Test-Path $_) })
+    if ($missingCleanupTargets.Count -gt 0) {
+        throw "Publish cleanup target(s) missing: $($missingCleanupTargets -join ', '). Keep scripts/codex/ship.ps1 in sync with .github/actions/build-package/action.yml."
+    }
+
+    Remove-Item -LiteralPath $cleanupTargets -Recurse -Force
+
+    foreach ($targetPath in $cleanupTargets) {
         if (Test-Path $targetPath) {
-            Remove-Item -Recurse -Force $targetPath
-        }
-        if (Test-Path $targetPath) {
-            throw "Publish cleanup failed for $relativePath."
+            throw "Publish cleanup failed for $targetPath."
         }
     }
 
@@ -78,6 +82,35 @@ try {
     }
     if (-not (Test-Path (Join-Path $pluginOut "YoutubeDL.pdb"))) {
         throw "Publish smoke is missing Plugins\YoutubeDL\YoutubeDL.pdb."
+    }
+
+    $packageAction = Get-Content ".\.github\actions\build-package\action.yml" -Raw
+    $releaseTailChecks = @{
+        "yt-dlp input version" = "yt-dlp-version"
+        "yt-dlp GitHub release URL" = "https://github.com/yt-dlp/yt-dlp/releases/download/`$ver/yt-dlp.exe"
+        "yt-dlp download command" = "Invoke-WebRequest"
+        "yt-dlp placeholder" = "yt-dlp.exe_here"
+        "7-Zip executable" = "C:\Program Files\7-Zip\7z.exe"
+        "7-Zip add command" = " a -t7z -mx=8 -mmt=4 "
+    }
+    foreach ($check in $releaseTailChecks.GetEnumerator()) {
+        if (-not $packageAction.Contains($check.Value)) {
+            throw "Release packaging action is missing expected $($check.Key) marker: $($check.Value)"
+        }
+    }
+
+    $ytDlpPlaceholder = Join-Path $pluginOut "yt-dlp.exe_here"
+    New-Item -Path $ytDlpPlaceholder -ItemType File -Force | Out-Null
+    if (-not (Test-Path $ytDlpPlaceholder)) {
+        throw "Release dry-run did not create Plugins\YoutubeDL\yt-dlp.exe_here placeholder."
+    }
+    if (Test-Path (Join-Path $pluginOut "yt-dlp.exe")) {
+        throw "Ship dry-run must not download or carry a local yt-dlp.exe."
+    }
+
+    $sevenZipPath = "C:\Program Files\7-Zip\7z.exe"
+    if (-not (Test-Path $sevenZipPath)) {
+        Write-Warning "7-Zip is not installed at $sevenZipPath; archive command is verified from .github/actions/build-package/action.yml only."
     }
 
     Write-Host "LLPlayer ship smoke completed at $publishRoot."

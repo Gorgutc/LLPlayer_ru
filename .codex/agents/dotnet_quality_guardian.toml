@@ -1,6 +1,6 @@
 name = "dotnet_quality_guardian"
 description = "Reviews .NET build, test, analyzer, and project-file quality for LLPlayer."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Review C#, csproj, publish profile, and test changes.

@@ -19,3 +19,10 @@ LLPlayer is a Windows desktop media player for language learning.
 ## Runtime Boundaries
 
 `FlyleafLib.Engine` owns FFmpeg, audio, video, plugins, and the refresh thread. `FlyleafManager` connects the app UI layer to the player and config.
+
+Detailed frozen boundaries live in:
+
+- `docs/agent/product-behavior-contract.md`
+- `docs/agent/wpf-design-contract.md`
+- `docs/agent/media-runtime-contract.md`
+- `docs/agent/config-data-contract.md`

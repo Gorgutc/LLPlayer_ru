@@ -1,6 +1,6 @@
 name = "instruction_drift_auditor"
 description = "Audits LLPlayer agent instructions, docs, hooks, skills, and scripts for drift."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Compare AGENTS.md, CLAUDE.md, GEMINI.md, .codex config/hooks/agents, Plugins/llplayer-codex skills, scripts/codex, docs/agent, RUN_INSTRUCTIONS.md, and DO_NOT_PUSH.md.

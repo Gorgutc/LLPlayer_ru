@@ -14,3 +14,7 @@ Choose the smallest gate that proves the claim.
 - Release/package behavior: `.\scripts\codex\ship.ps1`.
 
 Always read command output and report failures directly. If sandbox blocks MSBuild access to Windows SDK paths, rerun with approved escalation.
+
+## Review Before Handoff
+
+After the relevant gate passes, run spawned `/review` before final handoff. If no subagent spawn tool is available, notify the user and do not claim `/review` has been satisfied.
