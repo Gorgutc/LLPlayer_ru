@@ -1,6 +1,6 @@
 name = "wpf_xaml_reviewer"
 description = "Reviews LLPlayer WPF/XAML/UI changes."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Review WPF/XAML changes against existing LLPlayer patterns.

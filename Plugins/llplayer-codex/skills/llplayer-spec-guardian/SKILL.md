@@ -11,6 +11,7 @@ Compare the work against the requested scope before quality review.
 
 - Does the change stay inside the requested subsystem?
 - Did it avoid product code when the task is Codex/tooling only?
+- Which frozen contracts are touched: product behavior, WPF design, media runtime, config/data, dependencies, packaging, or agent infrastructure?
 - Are Windows/.NET/WPF constraints preserved?
 - Are runtime assets and release packaging rules preserved?
 - Did it avoid importing web/Node/browser tooling?

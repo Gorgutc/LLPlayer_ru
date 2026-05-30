@@ -1,12 +1,65 @@
+# Convenience mirror for Codex sessions working in LLPlayer_ru.
+# Canonical authority remains:
+# current user request > AGENTS.md > Plugins/llplayer-codex/skills/** > docs/agent/**
+
 branch_prefix = "codex/"
 
-[llplayer]
+[project]
+name = "LLPlayer_ru"
+repository = "Gorgutc/LLPlayer_ru"
+upstream = "umlx5h/LLPlayer"
 stack = "C#/.NET 10/WPF"
-fast_verify = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify-fast.ps1"
-full_verify = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify.ps1"
+platform = "Windows x64"
+solution = "LLPlayer.slnx"
+
+[workflow]
+bootstrap_doc = "docs/agent/bootstrap.md"
+orchestration_doc = "docs/agent/orchestration.md"
+frozen_decisions_doc = "docs/agent/frozen-decisions.md"
+ship_command = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\ship.ps1"
+verify_command = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify.ps1"
+fast_verify_command = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify-fast.ps1"
+
+[quality]
+fast = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify-fast.ps1"
+full = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\verify.ps1"
 ship = "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\codex\\ship.ps1"
+
+[llplayer]
+app_project = "LLPlayer/LLPlayer.csproj"
+media_project = "FlyleafLib/FlyleafLib.csproj"
+test_project = "FlyleafLibTests/FlyleafLibTests.csproj"
+youtube_plugin_project = "Plugins/YoutubeDL/YoutubeDL.csproj"
+publish_profile = "LLPlayer/Properties/PublishProfiles/FolderProfile.pubxml"
+release_action = ".github/actions/build-package/action.yml"
 
 [agents]
 max_threads = 6
 max_depth = 1
 required_review = "verification_reviewer"
+required_read_only_agents = [
+  "tech_stack_cartographer",
+  "media_runtime_mapper",
+  "wpf_xaml_reviewer",
+  "dotnet_quality_guardian",
+  "native_dependency_auditor",
+  "packaging_release_reviewer",
+  "instruction_drift_auditor",
+  "codex_infra_architect",
+  "verification_reviewer",
+  "deadwood_reuse_auditor",
+]
+
+[forbidden_baseline_tooling]
+web_stack = [
+  "package.json",
+  "pnpm-lock.yaml",
+  "playwright.config.ts",
+  "playwright.config.mjs",
+  "lighthouserc.cjs",
+  ".htmlhintrc",
+  "eslint.config.mjs",
+  "stylelint.config.mjs",
+  "dependency-cruiser.config.cjs",
+  "knip.json",
+]

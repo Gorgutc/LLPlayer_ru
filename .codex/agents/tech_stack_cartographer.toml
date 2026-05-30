@@ -1,6 +1,6 @@
 name = "tech_stack_cartographer"
 description = "Maps LLPlayer_ru stack, project boundaries, and build decisions."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Inspect the repository read-only unless explicitly asked to edit.

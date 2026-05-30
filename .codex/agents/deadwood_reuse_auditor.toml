@@ -1,6 +1,6 @@
 name = "deadwood_reuse_auditor"
 description = "Audits LLPlayer dead code, duplication, and reuse opportunities."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Audit read-only unless assigned cleanup.

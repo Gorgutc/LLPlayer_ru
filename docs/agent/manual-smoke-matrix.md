@@ -1,0 +1,57 @@
+# Manual Smoke Matrix
+
+Automated tests do not cover every LLPlayer behavior. Use these manual checks when touching related areas.
+
+## Playback
+
+- Open a local video file.
+- Open media from a command-line path/URL.
+- Play, pause, seek, stop, change volume, fullscreen, and close.
+- Confirm taskbar progress and play/pause thumbnail action update.
+
+## Subtitles
+
+- Load embedded text subtitles.
+- Load external text subtitles.
+- Load bitmap subtitles when relevant.
+- Enable primary and secondary subtitles together.
+- Use subtitle seek, sidebar current/previous/next behavior, and sidebar search.
+- Confirm overlay subtitle placement, separator, sizing, and bitmap positioning.
+
+## Sidebar And Word Actions
+
+- Toggle sidebar, move it left/right, resize it.
+- Use spoiler mask and original/translated toggles.
+- Left-click a subtitle word and confirm word lookup pauses playback and opens/copies according to settings.
+- Left-drag across subtitle words and confirm phrase lookup, including reverse-direction selection.
+- Middle-click subtitle text and confirm sentence lookup.
+- Right-click a subtitle word and confirm configured word actions/search/copy menu.
+- Use the configured last-search modifier and confirm it opens the previous search action.
+- Resume playback and confirm open word popups close.
+
+## Translation
+
+- Verify target language selection.
+- Smoke the touched provider only.
+- For LLM-like providers, check context-aware sequential behavior if changed.
+
+## ASR/OCR
+
+- Download/select model or engine through existing dialogs when changing download/settings code.
+- Start ASR and cancel it.
+- Run OCR on bitmap subtitles and cancel it.
+- For Whisper/ASR native-runtime issues, check Microsoft Visual C++ Redistributable 2022 or newer as a troubleshooting prerequisite.
+
+## Config
+
+- Open Settings, change a setting, use `Close`, restart, confirm it was not persisted.
+- Open Settings, change a setting, use `Save & Close`, restart, confirm it was persisted.
+- Check key binding edit/apply/load workflows when shortcut code changes.
+- In Settings Keys, add/clone/delete a row, capture a key, commit with Enter, create and clear a duplicate, confirm Apply is blocked only while duplicates exist.
+- Open CheatSheet with F1, switch Keyboard/Mouse tabs, search by shortcut/description, and execute an action button.
+
+## Packaging
+
+- Run `scripts/codex/ship.ps1`.
+- Confirm publish output contains `LLPlayer.exe`, copied `FFmpeg`, `Plugins/YoutubeDL/YoutubeDL.dll`, and `YoutubeDL.pdb`.
+- Do not require network download of `yt-dlp.exe` for local smoke unless explicitly shipping a release.

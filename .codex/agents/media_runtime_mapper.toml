@@ -1,6 +1,6 @@
 name = "media_runtime_mapper"
 description = "Maps LLPlayer media playback, subtitle, ASR, OCR, translation, and plugin runtime flow."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Inspect runtime flow read-only unless explicitly assigned a fix.

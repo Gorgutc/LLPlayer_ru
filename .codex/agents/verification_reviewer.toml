@@ -1,6 +1,6 @@
 name = "verification_reviewer"
 description = "Performs final LLPlayer verification review before handoff."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Before final delivery, inspect git status, changed files, and relevant verification output.

@@ -38,6 +38,7 @@ try {
     $requiredSkills = @(
         "llplayer-bootstrap",
         "llplayer-rules",
+        "llplayer-product-contract",
         "llplayer-dotnet-rules",
         "llplayer-context-keeper",
         "llplayer-spec-guardian",
@@ -76,7 +77,14 @@ try {
         "deadwood_reuse_auditor"
     )
     foreach ($agent in $requiredAgents) {
-        Require-Path ".\.codex\agents\$agent.toml" "Missing agent .codex/agents/$agent.toml."
+        $agentPath = ".\.codex\agents\$agent.toml"
+        Require-Path $agentPath "Missing agent .codex/agents/$agent.toml."
+        if (Test-Path $agentPath) {
+            $agentText = Get-Content $agentPath -Raw
+            if ($agentText -notmatch 'sandbox_mode\s*=\s*"read-only"') {
+                $failures.Add("Agent .codex/agents/$agent.toml must use sandbox_mode = `"read-only`".")
+            }
+        }
     }
 
     $requiredDocs = @(
@@ -92,10 +100,31 @@ try {
         "plan_template",
         "frozen-decisions",
         "skill-map",
-        "migration-from-source-repos"
+        "migration-from-source-repos",
+        "product-behavior-contract",
+        "wpf-design-contract",
+        "media-runtime-contract",
+        "config-data-contract",
+        "dependency-baseline",
+        "manual-smoke-matrix",
+        "subagent-review-matrix"
     )
     foreach ($doc in $requiredDocs) {
         Require-Path ".\docs\agent\$doc.md" "Missing docs/agent/$doc.md."
+    }
+
+    $requiredScripts = @(
+        "check-environment",
+        "verify-fast",
+        "verify",
+        "verify-plugin",
+        "verify-doc-coverage",
+        "verify-frozen",
+        "audit-frozen",
+        "ship"
+    )
+    foreach ($script in $requiredScripts) {
+        Require-Path ".\scripts\codex\$script.ps1" "Missing scripts/codex/$script.ps1."
     }
 
     foreach ($pointer in @("CLAUDE.md", "GEMINI.md")) {

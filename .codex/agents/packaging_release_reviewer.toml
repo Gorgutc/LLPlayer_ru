@@ -1,6 +1,6 @@
 name = "packaging_release_reviewer"
 description = "Reviews LLPlayer Windows publish and release packaging."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Review release packaging against .github/actions/build-package/action.yml.

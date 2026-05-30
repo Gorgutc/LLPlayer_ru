@@ -16,3 +16,5 @@ Use spawned subagents for independent analysis and final review. Do not simulate
 - `deadwood_reuse_auditor`: dead code, duplication, reuse, and stale infrastructure.
 
 One agent should own one question. Keep prompts bounded and read-only unless the agent is explicitly assigned edits.
+
+Path-to-agent ownership is frozen in `docs/agent/subagent-review-matrix.md`. For broad changes, use every relevant role from that matrix and always include `verification_reviewer` for `/review`.

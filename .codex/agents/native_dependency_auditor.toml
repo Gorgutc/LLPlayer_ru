@@ -1,6 +1,6 @@
 name = "native_dependency_auditor"
 description = "Audits LLPlayer native and runtime dependencies."
-sandbox_mode = "workspace-write"
+sandbox_mode = "read-only"
 
 developer_instructions = """
 Audit native/runtime assets and dependency packaging.

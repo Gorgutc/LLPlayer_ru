@@ -19,8 +19,9 @@
     ],
     "defaultPrompt": [
       "Use $llplayer-bootstrap before substantial LLPlayer work.",
+      "Use $llplayer-product-contract before changing product behavior, UI, runtime, config, or dependencies.",
       "Use $llplayer-dotnet-rules before editing C#, XAML, csproj, or publish profiles.",
-      "Use $llplayer-quality-gate before final handoff.",
+      "Use $llplayer-quality-gate and spawned /review before final handoff.",
       "Use $llplayer-packaging-release for Windows publish or release changes.",
       "Use $llplayer-instruction-drift when changing Codex docs, skills, hooks, scripts, or agents.",
       "Use $llplayer-ship before commit, push, PR, or release handoff."
