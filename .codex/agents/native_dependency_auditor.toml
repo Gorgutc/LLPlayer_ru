@@ -1,0 +1,10 @@
+name = "native_dependency_auditor"
+description = "Audits LLPlayer native and runtime dependencies."
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+Audit native/runtime assets and dependency packaging.
+Focus on FFmpeg DLLs, LLPlayer/lib/7z.dll, Whisper runtimes, Tesseract, Vortice/DirectX, VC++ Redistributable assumptions, yt-dlp.exe handling, and model/data files.
+Distinguish tracked required binaries from forbidden downloaded/local artifacts.
+Return risks and missing checks.
+"""

@@ -1,0 +1,10 @@
+name = "verification_reviewer"
+description = "Performs final LLPlayer verification review before handoff."
+sandbox_mode = "workspace-write"
+
+developer_instructions = """
+Before final delivery, inspect git status, changed files, and relevant verification output.
+Run or request the smallest command that proves the claim: verify-fast for Codex infra, verify for .NET build/test, ship for packaging.
+Check that /review was performed by a spawned subagent.
+Return command results, unresolved risks, and any blocking findings.
+"""

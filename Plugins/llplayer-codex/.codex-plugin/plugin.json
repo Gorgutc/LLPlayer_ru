@@ -1,0 +1,30 @@
+{
+  "name": "llplayer-codex",
+  "version": "0.1.0",
+  "description": "Repository-local Codex workflow for LLPlayer's C#/.NET/WPF Windows stack.",
+  "author": {
+    "name": "Gorgutc"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "LLPlayer Codex",
+    "shortDescription": "Use Codex safely with LLPlayer.",
+    "longDescription": "LLPlayer Codex provides repository-specific skills, verification rules, and ship guidance for the C#/.NET 10 WPF media player.",
+    "developerName": "Gorgutc",
+    "category": "Productivity",
+    "capabilities": [
+      "Code",
+      "Review",
+      "Workflow"
+    ],
+    "defaultPrompt": [
+      "Use $llplayer-bootstrap before substantial LLPlayer work.",
+      "Use $llplayer-dotnet-rules before editing C#, XAML, csproj, or publish profiles.",
+      "Use $llplayer-quality-gate before final handoff.",
+      "Use $llplayer-packaging-release for Windows publish or release changes.",
+      "Use $llplayer-instruction-drift when changing Codex docs, skills, hooks, scripts, or agents.",
+      "Use $llplayer-ship before commit, push, PR, or release handoff."
+    ],
+    "brandColor": "#D23D6F"
+  }
+}
