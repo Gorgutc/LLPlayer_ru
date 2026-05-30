@@ -17,6 +17,37 @@ try {
     Require-Path ".\.codex\hooks.json" ".codex/hooks.json is required."
     Require-Path ".\.codex\config.toml" ".codex/config.toml is required."
 
+    if (Test-Path ".\.codex\config.toml") {
+        $allowedDirectAgentKeys = @(
+            "max_threads",
+            "max_depth",
+            "job_max_runtime_seconds",
+            "interrupt_message"
+        )
+        $invalidDirectAgentKeys = New-Object System.Collections.Generic.List[string]
+        $inAgentsTable = $false
+        $lineNumber = 0
+        foreach ($line in Get-Content ".\.codex\config.toml") {
+            $lineNumber++
+            if ($line -match '^\s*\[[^\]]+\]\s*$') {
+                $inAgentsTable = $line -match '^\s*\[agents\]\s*$'
+                continue
+            }
+            if (-not $inAgentsTable) {
+                continue
+            }
+            if ($line -match '^\s*([A-Za-z0-9_-]+)\s*=') {
+                $key = $Matches[1]
+                if ($key -notin $allowedDirectAgentKeys) {
+                    $invalidDirectAgentKeys.Add("line $lineNumber agents.$key")
+                }
+            }
+        }
+        if ($invalidDirectAgentKeys.Count -gt 0) {
+            $failures.Add(".codex/config.toml has invalid direct [agents] values: $($invalidDirectAgentKeys -join ', '). [agents] is reserved for Codex agent settings; move custom metadata outside this table or define a role table.")
+        }
+    }
+
     $plugin = Get-Content ".\Plugins\llplayer-codex\.codex-plugin\plugin.json" -Raw | ConvertFrom-Json
     if ($plugin.name -ne "llplayer-codex") {
         $failures.Add("plugin.json name must be llplayer-codex.")
