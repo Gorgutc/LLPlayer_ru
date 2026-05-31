@@ -220,6 +220,7 @@ public class Language : IEquatable<Language>
     };
 
     public static readonly Language English = Get("eng");
+    public static readonly Language Russian = Get("rus");
     public static readonly Language Unknown = Get("und");
 
     public static List<Language> AllLanguages

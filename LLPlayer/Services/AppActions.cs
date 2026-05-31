@@ -86,6 +86,7 @@ public class AppActions
             [CustomKeyBindingAction.OpenWindowSettings] = CmdOpenWindowSettings.Execute,
             [CustomKeyBindingAction.OpenWindowSubsDownloader] = CmdOpenWindowSubsDownloader.Execute,
             [CustomKeyBindingAction.OpenWindowSubsExporter] = CmdOpenWindowSubsExporter.Execute,
+            [CustomKeyBindingAction.OpenWindowBatchSubtitles] = CmdOpenWindowBatchSubtitles.Execute,
             [CustomKeyBindingAction.OpenWindowCheatSheet] = CmdOpenWindowCheatSheet.Execute,
 
             [CustomKeyBindingAction.AppNew] = CmdAppNew.Execute,
@@ -468,6 +469,12 @@ public class AppActions
         }, false);
     });
 
+    public DelegateCommand CmdOpenWindowBatchSubtitles => field ??= new(() =>
+    {
+        _player.Activity.ForceFullActive();
+        _dialogService.ShowSingleton(nameof(BatchSubtitlesDialog), true);
+    });
+
     public DelegateCommand CmdOpenWindowCheatSheet => field ??= new(() =>
     {
         _player.Activity.ForceFullActive();
@@ -727,6 +734,8 @@ public enum CustomKeyBindingAction
     OpenWindowSubsDownloader,
     [Description("Open Subtitles Exporter Window")]
     OpenWindowSubsExporter,
+    [Description("Open Batch Subtitles Window")]
+    OpenWindowBatchSubtitles,
     [Description("Open Cheat Sheet Window")]
     OpenWindowCheatSheet,
 
@@ -801,6 +810,7 @@ public static class KeyBindingActionExtensions
             case CustomKeyBindingAction.OpenWindowSettings:
             case CustomKeyBindingAction.OpenWindowSubsDownloader:
             case CustomKeyBindingAction.OpenWindowSubsExporter:
+            case CustomKeyBindingAction.OpenWindowBatchSubtitles:
             case CustomKeyBindingAction.OpenWindowCheatSheet:
                 return KeyBindingActionGroup.Window;
 
