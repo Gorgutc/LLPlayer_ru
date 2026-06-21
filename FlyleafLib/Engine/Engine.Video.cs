@@ -131,10 +131,6 @@ public class VideoEngine
                 };
             }
 
-            // Currently not used
-            //var devMode = DEVMODE.Get(gpuOutput.DeviceName);
-            //gpuOutput.RefreshRate = devMode.dmDisplayFrequency;
-
             outputs.Add(gpuOutput);
             output.Dispose();
         }
