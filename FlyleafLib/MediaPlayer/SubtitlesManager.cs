@@ -950,7 +950,9 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
 
     public bool IsText => !string.IsNullOrEmpty(Text);
 
-    public bool IsTranslated => TranslatedText != null;
+    // Treat empty/whitespace as "not translated" so a blank result falls back to the source text
+    // (DisplayText) and is retried, instead of being cached as a permanent blank subtitle.
+    public bool IsTranslated => !string.IsNullOrEmpty(TranslatedText);
     public bool UseTranslated => EnabledTranslated && IsTranslated;
 
     public bool EnabledTranslated = true;

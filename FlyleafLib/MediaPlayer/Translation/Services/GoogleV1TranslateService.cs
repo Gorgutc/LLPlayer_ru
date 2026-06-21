@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Text.Json;
 
 namespace FlyleafLib.MediaPlayer.Translation.Services;
@@ -142,17 +141,57 @@ public class GoogleV1TranslateService : ITranslateService
             statusCode = (int)result.StatusCode;
             result.EnsureSuccessStatusCode();
 
-            List<string> resultTexts = new();
             using JsonDocument doc = JsonDocument.Parse(jsonResultString);
-            resultTexts.AddRange(doc.RootElement[0].EnumerateArray().Select(arr => arr[0].GetString()!.Trim()));
+            JsonElement root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0)
+            {
+                throw new TranslationException($"Unexpected response shape from {ServiceType}")
+                {
+                    Data =
+                    {
+                        ["status_code"] = statusCode.ToString(),
+                        ["response"] = jsonResultString
+                    }
+                };
+            }
 
-            return string.Join(Environment.NewLine, resultTexts);
+            JsonElement segments = root[0];
+            if (segments.ValueKind != JsonValueKind.Array)
+            {
+                // Nothing translatable was returned; keep the original text rather than losing it.
+                return text;
+            }
+
+            // Google splits a translation into per-sentence segments ([translated, original, ...]).
+            // Concatenate the translated parts WITHOUT newlines or per-segment Trim, so the spacing
+            // Google produced is preserved (joining with newlines + Trim previously broke sentences
+            // mid-line and dropped inter-segment spaces, garbling the subtitle).
+            List<string> resultTexts = new();
+            foreach (JsonElement seg in segments.EnumerateArray())
+            {
+                if (seg.ValueKind != JsonValueKind.Array || seg.GetArrayLength() == 0)
+                {
+                    continue;
+                }
+
+                JsonElement chunk = seg[0];
+                if (chunk.ValueKind == JsonValueKind.String)
+                {
+                    string? s = chunk.GetString();
+                    if (!string.IsNullOrEmpty(s))
+                    {
+                        resultTexts.Add(s);
+                    }
+                }
+            }
+
+            return string.Concat(resultTexts).Trim();
         }
-        // Distinguish between timeout and cancel errors
-        catch (OperationCanceledException ex)
-            when (!ex.Message.StartsWith("The request was canceled due to the configured HttpClient.Timeout"))
+        // Distinguish between user cancellation and HttpClient timeout by inspecting the token,
+        // not the (locale-dependent) exception message.
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            // cancel
+            // genuine cancellation
             throw;
         }
         catch (Exception ex)

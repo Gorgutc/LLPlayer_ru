@@ -569,7 +569,10 @@ unsafe partial class Player
             {
                 if (!Video.IsOpened)
                 {
-                    args.Error = "Subtitles require opened video stream";
+                    // args is still null here; allocate a proper completed-args instance instead of
+                    // dereferencing null (which threw NullReferenceException on this reachable path).
+                    args = new OpenExternalSubtitlesStreamCompletedArgs(
+                        (ExternalSubtitlesStream)extStream, null, "Subtitles require opened video stream");
                     return args;
                 }
 
@@ -581,7 +584,9 @@ unsafe partial class Player
 
         } catch (Exception e)
         {
-            args.Error = !args.Success ? args.Error + "\r\n" + e.Message : e.Message;
+            // args may still be null if the exception was thrown before it was assigned.
+            if (args != null)
+                args.Error = !args.Success ? args.Error + "\r\n" + e.Message : e.Message;
             return args;
         } finally
         {

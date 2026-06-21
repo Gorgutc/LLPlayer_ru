@@ -650,7 +650,7 @@ public static partial class Utils
             }
         }
 
-        if (nameStart < query.Length - 1)
+        if (nameStart < query.Length)
         {
             if (equalPos == -1)
                 dict[query[nameStart..].ToString()] = null;

@@ -464,6 +464,11 @@ public class AudioReader : IDisposable
                 _ => throw new InvalidOperationException()
             };
 
+            // Track the previous emitted segment to drop consecutive duplicate segments produced by
+            // whisper repetition loops (see the dedup check below).
+            string? lastText = null;
+            TimeSpan lastEnd = TimeSpan.MinValue;
+
             while (await channel.Reader.WaitToReadAsync(token))
             {
                 // Use TryPeek() to reduce the channel capacity by one.
@@ -486,11 +491,38 @@ public class AudioReader : IDisposable
                     {
                         TimeSpan start = chunk.Start.Add(data.start);
                         TimeSpan end = chunk.Start.Add(data.end);
+
+                        // Drop a hallucinated tail whose start is already at/after the chunk boundary
+                        // (whisper sometimes emits trailing segments timestamped outside the audio).
+                        if (start >= chunk.End)
+                        {
+                            continue;
+                        }
+
                         if (end > chunk.End)
                         {
                             // Shorten by 20 ms to prevent the next subtitle from being covered
                             end = chunk.End.Subtract(TimeSpan.FromMilliseconds(20));
                         }
+
+                        // Guarantee a positive duration so the subtitle remains searchable/visible
+                        // (the clamp above could otherwise push end before start).
+                        if (end <= start)
+                        {
+                            end = start.Add(TimeSpan.FromMilliseconds(1));
+                        }
+
+                        // Drop consecutive duplicate segments that overlap or are immediately adjacent:
+                        // these are whisper repetition-loop artifacts, not genuine repeated lines (a
+                        // real repeat is separated in time, so it is preserved).
+                        if (lastText == data.text && start <= lastEnd.Add(TimeSpan.FromMilliseconds(200)))
+                        {
+                            if (CanDebug) Log.Debug($"Skipping duplicate ASR segment: {data.text}");
+                            continue;
+                        }
+
+                        lastText = data.text;
+                        lastEnd = end;
 
                         SubtitleASRData subData = new()
                         {
@@ -985,12 +1017,21 @@ public class WhisperCppASRService : IASRService
         {
             token.ThrowIfCancellationRequested();
 
+            string text = result.Text.Trim(); // remove leading whitespace
+
+            // Skip empty/blank segments (silence or hallucinated blanks) so they are not emitted as
+            // empty subtitles.
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            // Pin the detected language only from a segment that actually produced text, so a silent
+            // or music-only first chunk cannot lock the whole file to a wrongly-detected language.
             if (_detectedLanguage is null && !string.IsNullOrEmpty(result.Language))
             {
                 _detectedLanguage = result.Language;
             }
-
-            string text = result.Text.Trim(); // remove leading whitespace
 
             yield return (text, result.Start, result.End, result.Language);
         }
@@ -1237,6 +1278,10 @@ public partial class FasterWhisperASRService : IASRService
                 TimeSpan end = ParseTime(lineSpan[endRange], isLong);
                 // because some languages have leading spaces
                 string text = lineSpan[textRange].Trim().ToString();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    continue;
+                }
 
                 yield return (text, start, end, _isLanguageDetect ? _detectedLanguage! : _manualLanguage);
 

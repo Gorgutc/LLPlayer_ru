@@ -21,7 +21,6 @@ namespace FlyleafLib.MediaPlayer;
 public unsafe class SubtitlesOCR
 {
     private readonly Config.SubtitlesConfig _config;
-    private int _subNum;
 
     private readonly CancellationTokenSource?[] _ctss;
     private readonly object[] _lockers;
@@ -30,7 +29,6 @@ public unsafe class SubtitlesOCR
     public SubtitlesOCR(Config.SubtitlesConfig config, int subNum)
     {
         _config = config;
-        _subNum = subNum;
 
         _lockers = new object[subNum];
         _ctss = new CancellationTokenSource[subNum];
@@ -532,30 +530,4 @@ public static class ImageProcessor
         return paddedBitmap;
     }
 
-    /// <summary>
-    /// Enlarge the size of the bitmap while maintaining the aspect ratio.
-    /// </summary>
-    /// <param name="original">source bitmap</param>
-    /// <returns>processed bitmap</returns>
-    private static Bitmap ResizeBitmap(Bitmap original, double scaleFactor)
-    {
-        // Calculate new size
-        int newWidth = (int)(original.Width * scaleFactor);
-        int newHeight = (int)(original.Height * scaleFactor);
-
-        Bitmap resizedBitmap = new(newWidth, newHeight);
-
-        using (Graphics graphics = Graphics.FromImage(resizedBitmap))
-        {
-            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            graphics.CompositingQuality = CompositingQuality.HighQuality;
-            graphics.SmoothingMode = SmoothingMode.HighQuality;
-            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-            // resize
-            graphics.DrawImage(original, 0, 0, newWidth, newHeight);
-        }
-
-        return resizedBitmap;
-    }
 }

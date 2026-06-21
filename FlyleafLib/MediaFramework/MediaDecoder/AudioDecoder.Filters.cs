@@ -34,7 +34,7 @@ public unsafe partial class AudioDecoder
         AVFilterContext*    filterCtx;
 
         if (filter == null)
-            throw new Exception($"[Filter {BytePtrToStringUTF8(filter->name)}] not found");
+            throw new Exception($"[Filter {id ?? "unknown"}] not found");
         
         ret = avfilter_graph_create_filter(&filterCtx, filter, id, args, null, filterGraph);
         if (ret < 0)

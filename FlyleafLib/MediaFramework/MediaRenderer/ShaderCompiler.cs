@@ -110,5 +110,4 @@ internal static partial class ShaderCompiler
     static void LogError(string msg) => Engine.Log.Error($"{LOG_PREFIX}{msg}");
     static void LogInfo (string msg) => Engine.Log.Info ($"{LOG_PREFIX}{msg}");
     static void LogDebug(string msg) => Engine.Log.Debug($"{LOG_PREFIX}{msg}");
-    static void LogTrace(string msg) => Engine.Log.Trace($"{LOG_PREFIX}{msg}");
 }

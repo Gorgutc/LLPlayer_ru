@@ -17,7 +17,8 @@ public class SubTranslator
     private CancellationTokenSource? _translationCancellation;
     private readonly TranslateServiceFactory _translateServiceFactory;
     private Task? _translateTask;
-    private bool _isReset;
+    private readonly Lock _taskLock = new();
+    private volatile bool _isReset;
     private Language? _srcLang;
 
     private bool IsEnabled => _config[_subIndex].EnabledTranslated;
@@ -130,13 +131,33 @@ public class SubTranslator
 
     private async Task Cancel()
     {
-        _translationCancellation?.Cancel();
-        Task? pendingTask = _translateTask;
+        Task? pendingTask;
+        lock (_taskLock)
+        {
+            _translationCancellation?.Cancel();
+            pendingTask = _translateTask;
+        }
+
         if (pendingTask != null)
         {
-            await pendingTask;
+            try
+            {
+                await pendingTask;
+            }
+            catch (OperationCanceledException)
+            {
+                // expected on cancellation
+            }
         }
-        _translateTask = null;
+
+        lock (_taskLock)
+        {
+            // Only clear if it is still the same task (the task's own finally may have replaced it).
+            if (_translateTask == pendingTask)
+            {
+                _translateTask = null;
+            }
+        }
     }
 
     private async Task UpdateCurrentIndexAsync(int newIndex, CancellationToken token)
@@ -169,22 +190,38 @@ public class SubTranslator
             }
             token.ThrowIfCancellationRequested();
 
-            if (_translateTask == null && !_isReset)
+            lock (_taskLock)
             {
-                // singleton task
-                // Ensure that it is not executed in the main thread because it scans all subtitles
-                Task task = Task.Run(async () =>
+                // Singleton task (guarded): only one ahead-translation run at a time.
+                // Ensure that it is not executed in the main thread because it scans all subtitles.
+                if (_translateTask == null && !_isReset)
                 {
-                    try
-                    {
-                        await TranslateAheadAsync(newIndex, _config.TranslateCountBackward, _config.TranslateCountForward);
-                    }
-                    finally
-                    {
-                        _translateTask = null;
-                    }
-                });
-                _translateTask = task;
+                    _translateTask = Task.Run(() => RunTranslateAheadAsync(newIndex));
+                }
+            }
+        }
+    }
+
+    // Runs a single ahead-translation pass and, when it finishes, reschedules itself if the playhead
+    // moved to a different subtitle while this pass was in flight (so a position change during a batch
+    // does not leave later subtitles untranslated until the next large seek).
+    private async Task RunTranslateAheadAsync(int currentIndex)
+    {
+        try
+        {
+            await TranslateAheadAsync(currentIndex, _config.TranslateCountBackward, _config.TranslateCountForward);
+        }
+        finally
+        {
+            lock (_taskLock)
+            {
+                _translateTask = null;
+
+                int latest = _subManager.CurrentIndex;
+                if (!_isReset && IsEnabled && latest >= 0 && latest != currentIndex)
+                {
+                    _translateTask = Task.Run(() => RunTranslateAheadAsync(latest));
+                }
             }
         }
     }
@@ -215,13 +252,22 @@ public class SubTranslator
     {
         try
         {
-            // Token for canceling translation, releasing previous one to prevent leakage
-            _translationCancellation?.Dispose();
-            _translationCancellation = new CancellationTokenSource();
+            // Token for canceling translation, releasing previous one to prevent leakage.
+            // Guard create/dispose under the same lock used by Cancel(), so a concurrent Cancel does
+            // not act on a disposed CancellationTokenSource.
+            CancellationToken token;
+            lock (_taskLock)
+            {
+                _translationCancellation?.Dispose();
+                _translationCancellation = new CancellationTokenSource();
+                token = _translationCancellation.Token;
+            }
 
-            var token = _translationCancellation.Token;
+            // Anchor the window to the playhead: translate up to countForward subtitles ahead and
+            // countBackward behind. Previously `end` was anchored to `start`, so countBackward ate into
+            // the forward budget (and could even push end before the current subtitle).
             int start = Math.Max(0, currentIndex - countBackward);
-            int end = Math.Min(start + countForward - 1, _subManager.Subs.Count - 1);
+            int end = Math.Min(currentIndex + countForward, _subManager.Subs.Count - 1);
 
             List<SubtitleData> translateSubs = new();
             for (int i = start; i <= end; i++)
@@ -316,6 +362,16 @@ public class SubTranslator
             if (CanDebug) Log.Debug($"Translation Start {sub.Index} - {translateText}");
             EnsureTranslationService();
             string translated = await _translateService!.TranslateAsync(translateText, token);
+
+            // Do not cache an empty/whitespace result as a successful translation. Leaving
+            // TranslatedText null keeps IsTranslated false, so DisplayText falls back to the source
+            // text (instead of showing a blank line) and the subtitle is retried on a later pass.
+            if (string.IsNullOrWhiteSpace(translated))
+            {
+                if (CanDebug) Log.Debug($"Translation Empty {sub.Index} - keeping original, will retry");
+                return;
+            }
+
             sub.TranslatedText = translated;
 
             if (CanDebug)
@@ -328,6 +384,18 @@ public class SubTranslator
         {
             if (CanDebug) Log.Debug($"Translation Cancel {sub.Index}");
             throw;
+        }
+        catch (TranslationConfigException)
+        {
+            // Configuration/auth errors are not transient: let them bubble up so the caller can
+            // disable translation and notify the user.
+            throw;
+        }
+        catch (TranslationException ex)
+        {
+            // Transient per-subtitle failure (network glitch, empty/truncated/odd provider response).
+            // Skip this subtitle instead of disabling the whole track; it will be retried later.
+            if (CanDebug) Log.Debug($"Translation skipped {sub.Index}: {ex.Message}");
         }
     }
 }

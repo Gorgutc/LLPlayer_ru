@@ -302,6 +302,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         }
 
         _cts = new CancellationTokenSource();
+        CancellationTokenSource cts = _cts;
 
         string source = e.Words;
 
@@ -336,12 +337,16 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
         try
         {
-            string result = await TranslateWithCache(source, e, _cts.Token);
+            string result = await TranslateWithCache(source, e, cts.Token);
             TranslationText.Text = result;
             IsLoading = false;
         }
         catch (OperationCanceledException)
         {
+            // Only clear the spinner if this is still the active operation; a rapid re-trigger may have
+            // started a new translation whose spinner must stay on.
+            if (cts == _cts)
+                IsLoading = false;
             return;
         }
 

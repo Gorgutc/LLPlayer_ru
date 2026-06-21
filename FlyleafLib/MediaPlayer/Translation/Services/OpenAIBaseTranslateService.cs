@@ -111,9 +111,15 @@ public class OpenAIBaseTranslateService : ITranslateService
         string reply = await SendChatRequest(
             _httpClient, _settings, messages.ToArray(), token);
 
-        // add to message history if success
-        _messageQueue.Enqueue(newMessage);
-        _messageQueue.Enqueue(new OpenAIMessage { role = "assistant", content = reply });
+        // Anti-poisoning gate: only feed a sane reply back into the context window. A degenerate
+        // (looping) reply re-fed as few-shot context primes the model to repeat the same pattern on
+        // the following subtitles. SendChatRequest already throws on empty/truncated replies, so by
+        // here `reply` is non-empty; we still guard against degeneration before caching it.
+        if (!ChatReplyParser.IsDegenerate(reply))
+        {
+            _messageQueue.Enqueue(newMessage);
+            _messageQueue.Enqueue(new OpenAIMessage { role = "assistant", content = reply });
+        }
 
         return reply;
     }
@@ -163,6 +169,8 @@ public class OpenAIBaseTranslateService : ITranslateService
 
             temperature = settings.TemperatureManual ? settings.Temperature : null,
             top_p = settings.TopPManual ? settings.TopP : null,
+            frequency_penalty = settings.FrequencyPenaltyManual ? settings.FrequencyPenalty : null,
+            presence_penalty = settings.PresencePenaltyManual ? settings.PresencePenalty : null,
             max_completion_tokens = settings.MaxCompletionTokens,
             max_tokens = settings.MaxTokens,
         };
@@ -185,20 +193,62 @@ public class OpenAIBaseTranslateService : ITranslateService
             result.EnsureSuccessStatusCode();
 
             OpenAIResponse? chatResponse = JsonSerializer.Deserialize<OpenAIResponse>(jsonResultString);
-            string reply = chatResponse!.choices[0].message.content;
-            if (settings.ReasonStripRequired)
+
+            // Null-safe parsing: some OpenAI-compatible/reasoning endpoints return an empty choices
+            // array or a null content (reasoning-only / tool-call responses). Treat these as a
+            // recoverable translation failure instead of throwing NullReferenceException, which
+            // previously bubbled up and disabled the whole translation track.
+            if (chatResponse?.choices is not { Length: > 0 })
             {
-                var stripped = ChatReplyParser.StripReasoning(reply);
-                return stripped.Trim().ToString();
+                throw new TranslationException($"Empty or invalid response from {settings.ServiceType}")
+                {
+                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+                };
             }
 
-            return reply.Trim();
+            OpenAIChoice choice = chatResponse.choices[0];
+            string? rawContent = choice.message?.content;
+            if (rawContent == null)
+            {
+                throw new TranslationException($"No content in response from {settings.ServiceType}")
+                {
+                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+                };
+            }
+
+            string reply = settings.ReasonStripRequired
+                ? ChatReplyParser.StripReasoning(rawContent).Trim().ToString()
+                : rawContent.Trim();
+
+            // The model was cut off at the token cap: the visible text is truncated (lost text) and,
+            // in KeepContext mode, a half-finished reply would poison subsequent subtitles. Surface it
+            // as a recoverable failure rather than silently accepting/caching the partial output.
+            if (string.Equals(choice.finish_reason, "length", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new TranslationException(
+                    $"Response from {settings.ServiceType} was truncated (finish_reason=length); increase max tokens")
+                {
+                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+                };
+            }
+
+            // An empty reply (e.g. a reasoning-only response fully consumed by StripReasoning) is not a
+            // usable translation; fail so the caller can retry / fall back to the source text.
+            if (reply.Length == 0)
+            {
+                throw new TranslationException($"Empty translation from {settings.ServiceType}")
+                {
+                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+                };
+            }
+
+            return reply;
         }
-        // Distinguish between timeout and cancel errors
-        catch (OperationCanceledException ex)
-            when (!ex.Message.StartsWith("The request was canceled due to the configured HttpClient.Timeout"))
+        // Distinguish between user cancellation and HttpClient timeout by inspecting the token,
+        // not the (locale-dependent) exception message.
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            // cancel
+            // genuine cancellation
             throw;
         }
         catch (Exception ex)
@@ -267,18 +317,21 @@ public class OpenAIRequest
     public required bool stream { get; init; }
     public double? temperature { get; set; }
     public double? top_p { get; set; }
+    public double? frequency_penalty { get; set; }
+    public double? presence_penalty { get; set; }
     public int? max_completion_tokens { get; set; }
     public int? max_tokens { get; set; }
 }
 
 public class OpenAIResponse
 {
-    public required OpenAIChoice[] choices { get; init; }
+    public OpenAIChoice[]? choices { get; init; }
 }
 
 public class OpenAIChoice
 {
-    public required OpenAIMessage message { get; init; }
+    public OpenAIMessage? message { get; init; }
+    public string? finish_reason { get; init; }
 }
 
 public static class ChatReplyParser
@@ -327,10 +380,69 @@ public static class ChatReplyParser
                     }
                     return input.Slice(next);
                 }
+
+                // Open reasoning tag with no matching close tag (truncated reasoning): there is no
+                // usable answer portion. Return empty so the caller treats it as a failed reply
+                // instead of leaking the raw chain-of-thought as the "translation".
+                return ReadOnlySpan<char>.Empty;
             }
         }
 
         // Return original string if no tag matched
         return input;
+    }
+
+    /// <summary>
+    /// Heuristically detects a degenerate (looping) model reply: the same short word n-gram repeated
+    /// consecutively many times. Used to avoid feeding a looping reply back into the chat context,
+    /// which would prime the model to keep repeating on subsequent subtitles. Thresholds are
+    /// deliberately conservative to avoid flagging legitimately repetitive subtitles.
+    /// </summary>
+    public static bool IsDegenerate(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length < 40)
+        {
+            return false;
+        }
+
+        string[] words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length < 8)
+        {
+            return false;
+        }
+
+        // More than `maxRepeat` consecutive identical n-grams (n = 1..3) is treated as a loop.
+        const int maxRepeat = 4;
+        for (int n = 1; n <= 3; n++)
+        {
+            int repeat = 1;
+            for (int i = n; i + n <= words.Length; i += n)
+            {
+                bool same = true;
+                for (int j = 0; j < n; j++)
+                {
+                    if (!string.Equals(words[i + j], words[i - n + j], StringComparison.OrdinalIgnoreCase))
+                    {
+                        same = false;
+                        break;
+                    }
+                }
+
+                if (same)
+                {
+                    repeat++;
+                    if (repeat > maxRepeat)
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    repeat = 1;
+                }
+            }
+        }
+
+        return false;
     }
 }

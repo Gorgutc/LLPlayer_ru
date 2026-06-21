@@ -200,10 +200,10 @@ public class TesseractModelLoader
         {
             if (TesseractModel.TesseractLangToISO6391.TryGetValue(model.Lang, out string? iso6391))
             {
-                if (dict.ContainsKey(iso6391))
+                if (dict.TryGetValue(iso6391, out List<TesseractModel>? list))
                 {
                     // for chinese (zh-CN, zh-TW)
-                    dict[iso6391].Add(model);
+                    list.Add(model);
                 }
                 else
                 {

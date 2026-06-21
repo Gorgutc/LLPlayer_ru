@@ -18,7 +18,6 @@ public unsafe class Remuxer
     Dictionary<int, long>       mapInStreamToDts2   = [];
 
     AVFormatContext* fmtCtx;
-    AVOutputFormat* fmt;
 
     public Remuxer(int uniqueId = -1)
         => UniqueId = uniqueId == -1 ? GetUniqueId() : uniqueId;
@@ -33,7 +32,6 @@ public unsafe class Remuxer
 
         if (ret < 0) return ret;
 
-        fmt = fmtCtx->oformat;
         mapInStreamToDts = [];
         Disposed = false;
 
@@ -123,14 +121,15 @@ public unsafe class Remuxer
             if (packet->dts != AV_NOPTS_VALUE)
             {
 
-                if (!mapInStreamToDts.ContainsKey(in_stream->index))
+                if (!mapInStreamToDts.TryGetValue(in_stream->index, out long startDts))
                 {
                     // TODO: In case of AudioDemuxer calculate the diff with the VideoDemuxer and add it in one of them - all stream - (in a way to have positive)
-                    mapInStreamToDts.Add(in_stream->index, packet->dts);
+                    startDts = packet->dts;
+                    mapInStreamToDts.Add(in_stream->index, startDts);
                 }
 
-                packet->pts = packet->pts == AV_NOPTS_VALUE ? AV_NOPTS_VALUE : av_rescale_q_rnd(packet->pts - mapInStreamToDts[in_stream->index], in_stream->time_base, out_stream->time_base, AVRounding.NearInf | AVRounding.PassMinmax);
-                packet->dts = av_rescale_q_rnd(packet->dts - mapInStreamToDts[in_stream->index], in_stream->time_base, out_stream->time_base, AVRounding.NearInf | AVRounding.PassMinmax);
+                packet->pts = packet->pts == AV_NOPTS_VALUE ? AV_NOPTS_VALUE : av_rescale_q_rnd(packet->pts - startDts, in_stream->time_base, out_stream->time_base, AVRounding.NearInf | AVRounding.PassMinmax);
+                packet->dts = av_rescale_q_rnd(packet->dts - startDts, in_stream->time_base, out_stream->time_base, AVRounding.NearInf | AVRounding.PassMinmax);
             }
             else
             {
@@ -175,6 +174,8 @@ public unsafe class Remuxer
         mapInInStream.Clear();
         mapInOutStreams2.Clear();
         mapInInStream2.Clear();
+        mapInStreamToDts.Clear();
+        mapInStreamToDts2.Clear();
 
         return ret;
     }

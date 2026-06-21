@@ -123,7 +123,7 @@ public unsafe class VideoDecoder : DecoderBase
 
         AVCodec* codec = avcodec_find_decoder(id);
         spec = codec != null ? new() { Codec = codec, Name = BytePtrToStringUTF8(codec->name) } : CodecSpec.Empty;
-        swSpecs[codec->id] = spec;
+        swSpecs[id] = spec;
         return spec;
     }
     static CodecSpec FindDecoder(string name)
@@ -1198,7 +1198,7 @@ public unsafe class VideoDecoder : DecoderBase
 
         if (keyFrameRequired)
         {
-            if (!frame->flags.HasFlag(FrameFlags.Key)) { av_frame_unref(frame); DecodeFrameNextInternal(); }
+            if (!frame->flags.HasFlag(FrameFlags.Key)) { av_frame_unref(frame); return DecodeFrameNextInternal(); }
             keyFrameRequired = false;
         }
 

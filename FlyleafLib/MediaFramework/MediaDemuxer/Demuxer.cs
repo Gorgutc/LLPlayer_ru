@@ -1004,15 +1004,6 @@ public unsafe class Demuxer : RunThreadBase
 
         return dump;
     }
-    string GetDumpStreams()
-    {
-        string dump = "";
-        foreach(var stream in AVStreamToStream.Values)
-            dump += stream.GetDump() + "\r\n";
-
-        return dump;
-    }
-
     public int SeekInQueue(long ticks, bool forward = false)
     {
         lock (lockActions)
