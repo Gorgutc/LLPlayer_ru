@@ -788,6 +788,7 @@ public enum KeyBindingActionGroup
     Audio,
     Video,
     Subtitles,
+    [Description("Subtitles Position")]
     SubtitlesPosition,
     Window,
     Other

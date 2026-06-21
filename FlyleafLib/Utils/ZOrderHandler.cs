@@ -54,26 +54,6 @@ public static partial class Utils
 
                 Window.StateChanged += Window_StateChanged;
                 lastState = Window.WindowState;
-
-                // TBR: Minimize with WindowsKey + D for example will not fire (none of those)
-                //HwndSource source = HwndSource.FromHwnd(WindowHwnd);
-                //source.AddHook(new HwndSourceHook(WndProc));
-            }
-
-            public const Int32 WM_SYSCOMMAND = 0x112;
-            public const Int32 SC_MAXIMIZE = 0xF030;
-            private const int SC_MINIMIZE = 0xF020;
-            private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-            {
-                if (msg == WM_SYSCOMMAND)
-                {
-                    if (wParam.ToInt32() == SC_MINIMIZE)
-                    {
-                        Save();
-                        //handled = true;
-                    }
-                }
-                return IntPtr.Zero;
             }
 
             private IntPtr GetHandle(Window window)

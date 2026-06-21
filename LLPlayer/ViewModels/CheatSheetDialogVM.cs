@@ -180,7 +180,7 @@ public class KeyBindingCSGroup
 {
     public required KeyBindingActionGroup Group { get; init; }
 
-    public string GroupName => field ??= Group.ToString();
+    public string GroupName => field ??= Group.GetDescription();
     public required List<KeyBindingCS> KeyBindings { get; init; }
 
     public Color GroupColor =>
