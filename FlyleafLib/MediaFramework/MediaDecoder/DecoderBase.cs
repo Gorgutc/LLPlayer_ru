@@ -17,7 +17,7 @@ public abstract unsafe class DecoderBase : RunThreadBase
     public Action<DecoderBase>      CodecChanged    { get; set; }
     public Config                   Config          { get; protected set; }
     public double                   Speed           { get => speed; set { if (Disposed) { speed = value; return; } if (speed != value) OnSpeedChanged(value); } }
-    protected double speed = 1, oldSpeed = 1;
+    protected double speed = 1;
     protected virtual void OnSpeedChanged(double value) { }
 
     internal bool               codecChanged;
@@ -57,9 +57,15 @@ public abstract unsafe class DecoderBase : RunThreadBase
     }
     protected bool Open2(StreamBase stream, StreamBase prevStream, bool openStream = true)
     {
+        if (stream == null)
+        {
+            Log.Debug("Cancelled");
+            return false;
+        }
+
         lock (stream.Demuxer.lockActions)
         {
-            if (stream == null || stream.Demuxer.Interrupter.ForceInterrupt == 1 || stream.Demuxer.Disposed)
+            if (stream.Demuxer.Interrupter.ForceInterrupt == 1 || stream.Demuxer.Disposed)
             {
                 Log.Debug("Cancelled");
                 return false;

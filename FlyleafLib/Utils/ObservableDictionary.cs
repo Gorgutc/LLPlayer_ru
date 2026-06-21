@@ -1,6 +1,5 @@
 ﻿using System.Collections.Specialized;
 using System.ComponentModel;
-using System.Linq;
 
 namespace FlyleafLib;
 
@@ -25,7 +24,7 @@ public static partial class Utils
                     KeyValuePair<TKey, TVal> newItem = new(key, value);
                     base[key] = value;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(key.ToString()));
-                    CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Replace, newItem, oldItem, this.ToList().IndexOf(newItem)));
+                    CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Replace, newItem, oldItem, -1));
                 }
                 else
                 {

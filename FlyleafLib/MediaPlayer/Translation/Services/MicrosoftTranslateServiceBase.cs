@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Net;
+﻿using System.Net;
 using System.Net.Http;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -116,10 +115,11 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
 
         string jsonResultString = "";
         int statusCode = -1;
+        Task<string>? accessTokenTask = null;
 
         try
         {
-            Task<string> accessTokenTask = GetAccessTokenTask(token);
+            accessTokenTask = GetAccessTokenTask(token);
             string accessToken = await accessTokenTask.WaitAsync(token).ConfigureAwait(false);
 
             MicrosoftTranslateRequest[] body = [new() { Text = text }];
@@ -156,21 +156,48 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
 
             MicrosoftTranslateResponse[]? responseData = JsonSerializer.Deserialize<MicrosoftTranslateResponse[]>(jsonResultString);
 
-            Debug.Assert(responseData != null);
-            Debug.Assert(responseData.Length == 1, "must match the size of the request array");
-            Debug.Assert(responseData[0].translations.Length == 1, "must match the number of languages in 'to'");
+            // Validate the response shape explicitly. Debug.Assert is compiled out in Release, where a
+            // malformed-but-successful (200) body would otherwise NRE / IndexOutOfRange.
+            if (responseData is not { Length: > 0 }
+                || responseData[0].translations is not { Length: > 0 }
+                || responseData[0].translations[0].text == null)
+            {
+                throw new TranslationException($"{ServiceType} returned an unexpected response body")
+                {
+                    Data =
+                    {
+                        ["status_code"] = statusCode.ToString(),
+                        ["response"] = jsonResultString
+                    }
+                };
+            }
 
             return responseData[0].translations[0].text;
         }
-        catch (OperationCanceledException ex)
-            when (!ex.Message.StartsWith("The request was canceled due to the configured HttpClient.Timeout"))
+        // Distinguish between user cancellation and HttpClient timeout by inspecting the token, not the
+        // (locale-dependent) exception message. Do not clear the cached token on a transient request
+        // failure — that would invalidate an otherwise-valid token and cause token thrash under
+        // concurrency; the 401 path above already clears it with a compare-and-clear guard.
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            _accessToken = null;
             throw;
         }
         catch (Exception ex)
         {
-            _accessToken = null;
+            // Evict a FAULTED token-acquisition task so the next call retries; do NOT clear a token that
+            // was acquired successfully (a transient translate-request failure must not invalidate a
+            // valid cached token). Mirrors the 401 compare-and-clear guard above.
+            if (accessTokenTask is { IsCompletedSuccessfully: false })
+            {
+                lock (_accessTokenLock)
+                {
+                    if (_accessToken == accessTokenTask)
+                    {
+                        _accessToken = null;
+                    }
+                }
+            }
+
             throw new TranslationException($"Cannot request to {ServiceType}: {ex.Message}", ex)
             {
                 Data =

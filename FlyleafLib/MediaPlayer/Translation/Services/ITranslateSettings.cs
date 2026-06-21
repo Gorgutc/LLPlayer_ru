@@ -295,6 +295,36 @@ public abstract class OpenAIBaseTranslateSettings : NotifyPropertyChanged, ITran
         get;
         set => Set(ref field, value is <= 0 ? null : value);
     }
+
+    // Anti-repetition penalties. Opt-in (Manual=false by default) so existing behavior is unchanged;
+    // when enabled they are sent to OpenAI-compatible backends to discourage degenerate token loops.
+    public double FrequencyPenalty
+    {
+        get;
+        set
+        {
+            if (value is >= -2.0 and <= 2.0)
+            {
+                Set(ref field, Math.Round(value, 2));
+            }
+        }
+    }
+
+    public bool FrequencyPenaltyManual { get; set => Set(ref field, value); }
+
+    public double PresencePenalty
+    {
+        get;
+        set
+        {
+            if (value is >= -2.0 and <= 2.0)
+            {
+                Set(ref field, Math.Round(value, 2));
+            }
+        }
+    }
+
+    public bool PresencePenaltyManual { get; set => Set(ref field, value); }
     #endregion
 
     /// <summary>

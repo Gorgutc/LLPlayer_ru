@@ -71,7 +71,7 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
         List<VideoStream> results = iresults.ToList();
 
         if (results.Count != 0)
-            return iresults.ToList()[0];
+            return results[0];
         else
         {
             // Fall-back to FFmpeg's default

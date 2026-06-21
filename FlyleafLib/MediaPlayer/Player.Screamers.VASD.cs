@@ -670,14 +670,6 @@ unsafe partial class Player
                         dFrame = null;
                         DataDecoder.Frames.TryDequeue(out var devnull);
                     }
-                    else if (dDistanceMs < -30)
-                    {
-                        if (CanDebug)
-                            Log.Debug($"dDistanceMs = {dDistanceMs}");
-
-                        dFrame = null;
-                        DataDecoder.Frames.TryDequeue(out var devnull);
-                    }
                 }
             }
 

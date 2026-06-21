@@ -6,11 +6,8 @@ namespace FlyleafLib.MediaPlayer.Translation.Services;
 
 public class BingTranslateService : MicrosoftTranslateServiceBase
 {
-    private readonly BingTranslateSettings _settings;
-
     public BingTranslateService(BingTranslateSettings settings) : base(settings)
     {
-        _settings = settings;
     }
 
     // curl --location 'https://edge.microsoft.com/translate/auth'

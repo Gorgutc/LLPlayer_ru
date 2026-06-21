@@ -424,7 +424,7 @@ public class AppActions
             }
 
             _config.PropertyChanged -= ConfigOnPropertyChanged;
-            _player.Config.Subtitles.WhisperCppConfig.PropertyChanged += ConfigOnPropertyChanged;
+            _player.Config.Subtitles.WhisperCppConfig.PropertyChanged -= ConfigOnPropertyChanged;
 
             if (result.Result == ButtonResult.OK)
             {
@@ -754,17 +754,6 @@ public enum KeyBindingActionGroup
 
 public static class KeyBindingActionExtensions
 {
-    public static string ToString(this KeyBindingActionGroup group)
-    {
-        var str = group.ToString();
-        if (group == KeyBindingActionGroup.SubtitlesPosition)
-        {
-            str = "Subtitles Position";
-        }
-
-        return str;
-    }
-
     public static KeyBindingActionGroup ToGroup(this CustomKeyBindingAction action)
     {
         switch (action)

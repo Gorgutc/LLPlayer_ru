@@ -149,7 +149,7 @@ public class EnumToVisibilityConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is not Enum enumValue || parameter is not Enum enumTarget)
-            return false;
+            return Visibility.Collapsed;
 
         return enumValue.Equals(enumTarget) ? Visibility.Visible : Visibility.Collapsed;
     }

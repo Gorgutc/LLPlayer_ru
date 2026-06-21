@@ -86,10 +86,23 @@ public class DeepLXTranslateService : ITranslateService
             result.EnsureSuccessStatusCode();
 
             DeepLXTranslateResult? responseData = JsonSerializer.Deserialize<DeepLXTranslateResult>(jsonResultString);
-            return responseData!.data;
+            if (responseData?.data == null)
+            {
+                throw new TranslationException($"{ServiceType} returned no data")
+                {
+                    Data =
+                    {
+                        ["status_code"] = statusCode.ToString(),
+                        ["response"] = jsonResultString
+                    }
+                };
+            }
+
+            return responseData.data;
         }
-        catch (OperationCanceledException ex)
-            when (!ex.Message.StartsWith("The request was canceled due to the configured HttpClient.Timeout"))
+        // Distinguish between user cancellation and HttpClient timeout by inspecting the token,
+        // not the (locale-dependent) exception message.
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             throw;
         }

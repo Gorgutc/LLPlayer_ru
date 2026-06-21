@@ -202,6 +202,19 @@ public partial class SelectableSubtitleText : UserControl
 
     private static readonly Lazy<MeCabIpaDicTagger> MeCabTagger = new(() => MeCabIpaDicTagger.Create(), true);
 
+    // Reused frozen brushes: SetText() rebuilds the whole word panel on every subtitle change, so a new
+    // SolidColorBrush per word/space (and per hover) was allocated on a hot path. These colors are
+    // constant, so share one frozen instance each.
+    private static readonly SolidColorBrush HitTestTransparentBrush = CreateFrozenBrush(Color.FromArgb(1, 0, 0, 0));
+    private static readonly SolidColorBrush HoverFillBrush = CreateFrozenBrush(Color.FromArgb(80, 127, 127, 127));
+
+    private static SolidColorBrush CreateFrozenBrush(Color color)
+    {
+        SolidColorBrush brush = new(color);
+        brush.Freeze();
+        return brush;
+    }
+
     private void SetText(string text)
     {
         if (text == null)
@@ -275,7 +288,7 @@ public partial class SelectableSubtitleText : UserControl
                     {
                         Text = word,
                         // Created a click judgment to prevent playback toggling when clicking between words.
-                        Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)),
+                        Background = HitTestTransparentBrush,
                     };
                     space.SetBinding(TextBlock.FontSizeProperty, _bindFontSize);
                     space.SetBinding(TextBlock.FontWeightProperty, _bindFontWeight);
@@ -320,7 +333,7 @@ public partial class SelectableSubtitleText : UserControl
                     {
                         // Set brush to Border because OutlinedTextBlock's character click judgment is only on the character.
                         //ref: https://stackoverflow.com/questions/50653308/hit-testing-a-transparent-element-in-a-transparent-window
-                        Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)),
+                        Background = HitTestTransparentBrush,
                         BorderThickness = new Thickness(1),
                         IsHitTestVisible = true,
                         Child = textBlock,
@@ -336,12 +349,12 @@ public partial class SelectableSubtitleText : UserControl
                     border.MouseEnter += (_, _) =>
                     {
                         border.BorderBrush = WordHoverBorderBrush;
-                        border.Background = new SolidColorBrush(Color.FromArgb(80, 127, 127, 127));
+                        border.Background = HoverFillBrush;
                     };
                     border.MouseLeave += (_, _) =>
                     {
                         border.BorderBrush = null;
-                        border.Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
+                        border.Background = HitTestTransparentBrush;
                     };
 
                     wrapPanel.Children.Add(border);

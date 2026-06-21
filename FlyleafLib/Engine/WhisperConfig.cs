@@ -119,6 +119,14 @@ public class WhisperCppConfig : NotifyPropertyChanged
     public int? MaxTokensPerSegment { get; set => Set(ref field, value); }
     public bool SplitOnWord { get; set => Set(ref field, value); }
     public float? NoSpeechThreshold { get; set => Set(ref field, value); }
+
+    // Anti-repetition / anti-hallucination decoding controls (whisper.cpp). Null = use the Whisper.net
+    // library default (already loop-resistant); exposed so power users can tune the temperature
+    // fallback + entropy/logprob guards that break degenerate repetition loops.
+    public float? Temperature { get; set => Set(ref field, value); }
+    public float? TemperatureInc { get; set => Set(ref field, value); }
+    public float? EntropyThreshold { get; set => Set(ref field, value); }
+    public float? LogProbThreshold { get; set => Set(ref field, value); }
     public bool NoContext { get; set => Set(ref field, value); }
     public int? AudioContextSize { get; set => Set(ref field, value); }
     public string Prompt { get; set => Set(ref field, value); } = string.Empty;
@@ -168,6 +176,18 @@ public class WhisperCppConfig : NotifyPropertyChanged
         if (NoSpeechThreshold is > 0)
             builder.WithNoSpeechThreshold(NoSpeechThreshold.Value);
 
+        if (Temperature.HasValue)
+            builder.WithTemperature(Temperature.Value);
+
+        if (TemperatureInc.HasValue)
+            builder.WithTemperatureInc(TemperatureInc.Value);
+
+        if (EntropyThreshold.HasValue)
+            builder.WithEntropyThreshold(EntropyThreshold.Value);
+
+        if (LogProbThreshold.HasValue)
+            builder.WithLogProbThreshold(LogProbThreshold.Value);
+
         if (NoContext)
             builder.WithNoContext();
 
@@ -178,7 +198,7 @@ public class WhisperCppConfig : NotifyPropertyChanged
             builder.WithPrompt(Prompt);
 
         // auto set
-        if (MaxSegmentLength is > 0 || MaxSegmentLength is > 0)
+        if (MaxSegmentLength is > 0 || MaxTokensPerSegment is > 0 || SplitOnWord)
             builder.WithTokenTimestamps();
 
         return builder;
