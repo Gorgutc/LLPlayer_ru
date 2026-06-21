@@ -22,9 +22,7 @@ public class DeepLXTranslateService : ITranslateService
         }
 
         _settings = settings;
-        _httpClient = new HttpClient();
-        _httpClient.BaseAddress = new Uri(settings.Endpoint);
-        _httpClient.Timeout = TimeSpan.FromMilliseconds(settings.TimeoutMs);
+        _httpClient = TranslateHttpClient.Create(new Uri(settings.Endpoint), TimeSpan.FromMilliseconds(settings.TimeoutMs));
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()

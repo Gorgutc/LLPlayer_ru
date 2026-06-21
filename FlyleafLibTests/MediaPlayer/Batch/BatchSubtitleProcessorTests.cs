@@ -197,6 +197,39 @@ public class BatchSubtitleProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_ShouldSkipFileWithNoSpeech()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string video = Path.Combine(tempDir, "silent.mkv");
+            File.WriteAllText(video, "");
+
+            // Valid media that produced no subtitles (no speech), without cancellation.
+            var asr = new FakeAsrTranscriber(_ =>
+                Task.FromResult(new BatchAsrResult([], Language.English)));
+
+            BatchSubtitleJob job = new(video);
+            var writer = new MemorySubtitleWriter();
+            var processor = new BatchSubtitleProcessor(
+                asr,
+                new FakeBatchTranslator(),
+                writer,
+                new BatchSubtitleOptions());
+
+            await processor.ProcessAsync([job], CancellationToken.None);
+
+            job.Status.Should().Be(BatchSubtitleStatus.Skipped);
+            writer.Writes.Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ProcessAsync_ShouldForwardPerSegmentAsrProgress()
     {
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
