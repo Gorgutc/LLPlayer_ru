@@ -79,11 +79,7 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
         }
 
         _settings = settings;
-        _httpClient = new HttpClient
-        {
-            BaseAddress = new Uri(settings.Endpoint),
-            Timeout = TimeSpan.FromMilliseconds(settings.TimeoutMs)
-        };
+        _httpClient = TranslateHttpClient.Create(new Uri(settings.Endpoint), TimeSpan.FromMilliseconds(settings.TimeoutMs));
         _httpClient.DefaultRequestHeaders.Add("User-Agent", UserAgent);
     }
 

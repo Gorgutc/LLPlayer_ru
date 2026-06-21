@@ -522,6 +522,19 @@ public class AudioReader : IDisposable
                             end = start.Add(TimeSpan.FromMilliseconds(1));
                         }
 
+                        // Prevent adjacent segments from the same chunk from overlapping: whisper can emit
+                        // a start earlier than the previous emitted segment's end. Clamp start up to the
+                        // previous end. This runs before the duplicate check below (so a same-text overlap
+                        // is still caught as a duplicate) and never drops a segment.
+                        if (lastText != null && start < lastEnd)
+                        {
+                            start = lastEnd;
+                            if (end <= start)
+                            {
+                                end = start.Add(TimeSpan.FromMilliseconds(1));
+                            }
+                        }
+
                         // Drop consecutive duplicate segments that overlap or are immediately adjacent:
                         // these are whisper repetition-loop artifacts, not genuine repeated lines (a
                         // real repeat is separated in time, so it is preserved).

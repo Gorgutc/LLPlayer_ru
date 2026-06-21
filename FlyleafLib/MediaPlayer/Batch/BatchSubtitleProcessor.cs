@@ -70,7 +70,12 @@ public sealed class BatchSubtitleProcessor
                     token.ThrowIfCancellationRequested();
 
                     if (result.Subtitles.Count == 0)
-                        throw new InvalidOperationException("ASR did not produce subtitles.");
+                    {
+                        // Valid media with no detectable speech (e.g. music-only) is not a failure — skip
+                        // it (no output file is written) instead of marking the whole job Failed.
+                        Report(job, BatchSubtitleStatus.Skipped, error: "No speech detected.", completedAt: DateTimeOffset.Now);
+                        continue;
+                    }
 
                     Report(job, BatchSubtitleStatus.QueuedForTranslation, subtitleCount: result.Subtitles.Count);
 
