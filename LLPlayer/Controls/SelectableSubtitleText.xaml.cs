@@ -215,6 +215,21 @@ public partial class SelectableSubtitleText : UserControl
         return brush;
     }
 
+    // Per-instance element pools. SetText() rebuilds the word panel on every subtitle change; instead of
+    // discarding and re-creating every Border/OutlinedTextBlock/space (with their bindings and event
+    // handlers) each time, the previous run's elements are recycled by type and reconfigured. Pools are
+    // per-control (never shared) so primary/secondary subtitles and RTL/LTR flow never cross-contaminate.
+    private readonly Stack<TextBlock> _spacePool = new();
+    private readonly Stack<OutlinedTextBlock> _splitterPool = new();
+    private readonly Stack<Border> _wordBorderPool = new();
+    private readonly Stack<NewLine> _newLinePool = new();
+
+    // Tokenization (MeCab / regex split) is deterministic for a given (language, line), so cache it to
+    // avoid re-segmenting repeated subtitle lines. Bounded to keep memory flat over a long session.
+    // Accessed only from SetText, which runs on the UI thread, so no synchronization is required.
+    private const int TokenizeCacheMax = 256;
+    private static readonly Dictionary<(string Lang, string Line), string[]> TokenizeCache = new();
+
     private void SetText(string text)
     {
         if (text == null)
@@ -234,44 +249,20 @@ public partial class SelectableSubtitleText : UserControl
         // If it contains line feeds, expand them to the full screen width (respecting the formatting in the SRT subtitle)
         WidthPercentageFix = containLineBreak ? 100.0 : WidthPercentage;
 
-        wrapPanel.Children.Clear();
+        // Recycle the previous run's elements into the per-type pools, then rebuild from them.
+        RecycleChildren();
         _wordStart = null;
 
         string[] lines = text.SplitToLines().ToArray();
 
         var wordOffset = 0;
 
-        // Use an OutlinedTextBlock for each word to display the border Text and enclose it in a WrapPanel
+        // Reuse one element per token (word / space / split-char / line-break), keeping the children of
+        // wrapPanel strictly 1:1 with the tokens by type and order — phrase selection relies on this
+        // (see WordMouseLeftButtonUp). An OutlinedTextBlock is used to draw each word's outlined text.
         for (int i = 0; i < lines.Length; i++)
         {
-            IEnumerable<string> words;
-
-            if (TextLanguage != null && TextLanguage.ISO6391 == "ja")
-            {
-                // word segmentation for Japanese
-                // TODO: L: Also do word segmentation in sidebar
-                var nodes = MeCabTagger.Value.Parse(lines[i]);
-                List<string> wordsList = new(nodes.Length);
-                foreach (var node in nodes)
-                {
-                    // If there are space-separated characters, such as English, add them manually since they are not on the Surface
-                    if (char.IsWhiteSpace(lines[i][node.BPos]))
-                    {
-                        wordsList.Add(" ");
-                    }
-                    wordsList.Add(node.Surface);
-                }
-
-                words = wordsList;
-            }
-            else if (TextLanguage != null && TextLanguage.ISO6391 == "zh")
-            {
-                words = ChineseWordSplitReg.Split(lines[i]);
-            }
-            else
-            {
-                words = WordSplitReg.Split(lines[i]);
-            }
+            string[] words = Tokenize(lines[i]);
 
             foreach (string word in words)
             {
@@ -283,17 +274,10 @@ public partial class SelectableSubtitleText : UserControl
 
                 if (string.IsNullOrWhiteSpace(word))
                 {
-                    // Blanks are inserted with TextBlock.
-                    TextBlock space = new()
-                    {
-                        Text = word,
-                        // Created a click judgment to prevent playback toggling when clicking between words.
-                        Background = HitTestTransparentBrush,
-                    };
-                    space.SetBinding(TextBlock.FontSizeProperty, _bindFontSize);
-                    space.SetBinding(TextBlock.FontWeightProperty, _bindFontWeight);
-                    space.SetBinding(TextBlock.FontStyleProperty, _bindFontStyle);
-                    space.SetBinding(TextBlock.FontFamilyProperty, _bindFontFamily);
+                    // Blanks are inserted with a (hit-testable) TextBlock so clicking between words does
+                    // not toggle playback.
+                    TextBlock space = RentSpace();
+                    space.Text = word;
                     wrapPanel.Children.Add(space);
                     wordOffset += word.Length;
                     continue;
@@ -301,72 +285,208 @@ public partial class SelectableSubtitleText : UserControl
 
                 bool isSplitChar = WordSplitFullReg.IsMatch(word);
 
-                OutlinedTextBlock textBlock = new()
-                {
-                    Text = word,
-                    ClipToBounds = false,
-                    TextWrapping = TextWrapping.Wrap,
-                    StrokePosition = StrokePosition.Outside,
-                    IsHitTestVisible = false,
-                    WordOffset = wordOffset,
-                    // Fixed because the word itself is inverted
-                    FlowDirection = FlowDirection.LeftToRight
-                };
-
-                wordOffset += word.Length;
-
-                textBlock.SetBinding(OutlinedTextBlock.FontSizeProperty, _bindFontSize);
-                textBlock.SetBinding(OutlinedTextBlock.FontWeightProperty, _bindFontWeight);
-                textBlock.SetBinding(OutlinedTextBlock.FontStyleProperty, _bindFontStyle);
-                textBlock.SetBinding(OutlinedTextBlock.FontFamilyProperty, _bindFontFamily);
-                textBlock.SetBinding(OutlinedTextBlock.FillProperty, _bindFill);
-                textBlock.SetBinding(OutlinedTextBlock.StrokeProperty, _bindStroke);
-                textBlock.SetBinding(OutlinedTextBlock.StrokeThicknessInitialProperty, _bindStrokeThicknessInitial);
-
                 if (isSplitChar)
                 {
-                    wrapPanel.Children.Add(textBlock);
+                    OutlinedTextBlock splitter = RentSplitter();
+                    splitter.Text = word;
+                    splitter.WordOffset = wordOffset;
+                    wrapPanel.Children.Add(splitter);
                 }
                 else
                 {
-                    Border border = new()
-                    {
-                        // Set brush to Border because OutlinedTextBlock's character click judgment is only on the character.
-                        //ref: https://stackoverflow.com/questions/50653308/hit-testing-a-transparent-element-in-a-transparent-window
-                        Background = HitTestTransparentBrush,
-                        BorderThickness = new Thickness(1),
-                        IsHitTestVisible = true,
-                        Child = textBlock,
-                        Cursor = Cursors.Hand,
-                    };
-
-                    border.MouseLeftButtonDown += WordMouseLeftButtonDown;
-                    border.MouseLeftButtonUp += WordMouseLeftButtonUp;
-                    border.MouseRightButtonUp += WordMouseRightButtonUp;
-                    border.MouseUp += WordMouseMiddleButtonUp;
-
-                    // Change background color on mouse over
-                    border.MouseEnter += (_, _) =>
-                    {
-                        border.BorderBrush = WordHoverBorderBrush;
-                        border.Background = HoverFillBrush;
-                    };
-                    border.MouseLeave += (_, _) =>
-                    {
-                        border.BorderBrush = null;
-                        border.Background = HitTestTransparentBrush;
-                    };
-
+                    Border border = RentWordBorder();
+                    var textBlock = (OutlinedTextBlock)border.Child;
+                    textBlock.Text = word;
+                    textBlock.WordOffset = wordOffset;
                     wrapPanel.Children.Add(border);
                 }
+
+                wordOffset += word.Length;
             }
 
             if (containLineBreak && i != lines.Length - 1)
             {
                 // Add line breaks except at the end when there are two or more lines
-                wrapPanel.Children.Add(new NewLine());
+                wrapPanel.Children.Add(RentNewLine());
             }
         }
+    }
+
+    // Tokenize a single line, memoized by (language, line). The returned array is read-only to callers.
+    private string[] Tokenize(string line)
+    {
+        string lang = TextLanguage?.ISO6391 ?? string.Empty;
+        var key = (lang, line);
+        if (TokenizeCache.TryGetValue(key, out string[]? cached))
+        {
+            return cached;
+        }
+
+        string[] words;
+        if (lang == "ja")
+        {
+            // word segmentation for Japanese
+            // TODO: L: Also do word segmentation in sidebar
+            var nodes = MeCabTagger.Value.Parse(line);
+            List<string> wordsList = new(nodes.Length);
+            foreach (var node in nodes)
+            {
+                // If there are space-separated characters, such as English, add them manually since they are not on the Surface
+                if (char.IsWhiteSpace(line[node.BPos]))
+                {
+                    wordsList.Add(" ");
+                }
+                wordsList.Add(node.Surface);
+            }
+
+            words = wordsList.ToArray();
+        }
+        else if (lang == "zh")
+        {
+            words = ChineseWordSplitReg.Split(line);
+        }
+        else
+        {
+            words = WordSplitReg.Split(line);
+        }
+
+        if (TokenizeCache.Count >= TokenizeCacheMax)
+        {
+            TokenizeCache.Clear();
+        }
+        TokenizeCache[key] = words;
+        return words;
+    }
+
+    // Move the current children back into their per-type pools (resetting any hover state) and detach
+    // them so they can be re-added on the next rebuild.
+    private void RecycleChildren()
+    {
+        foreach (UIElement child in wrapPanel.Children)
+        {
+            switch (child)
+            {
+                case Border border:
+                    _wordBorderPool.Push(border);
+                    break;
+                case OutlinedTextBlock splitter:
+                    _splitterPool.Push(splitter);
+                    break;
+                case TextBlock space:
+                    _spacePool.Push(space);
+                    break;
+                case NewLine newLine:
+                    _newLinePool.Push(newLine);
+                    break;
+            }
+        }
+
+        wrapPanel.Children.Clear();
+    }
+
+    private TextBlock RentSpace()
+    {
+        if (_spacePool.Count > 0)
+        {
+            return _spacePool.Pop();
+        }
+
+        TextBlock space = new()
+        {
+            Background = HitTestTransparentBrush,
+        };
+        space.SetBinding(TextBlock.FontSizeProperty, _bindFontSize);
+        space.SetBinding(TextBlock.FontWeightProperty, _bindFontWeight);
+        space.SetBinding(TextBlock.FontStyleProperty, _bindFontStyle);
+        space.SetBinding(TextBlock.FontFamilyProperty, _bindFontFamily);
+        return space;
+    }
+
+    private OutlinedTextBlock RentSplitter()
+    {
+        return _splitterPool.Count > 0 ? _splitterPool.Pop() : CreateOutlinedTextBlock();
+    }
+
+    private Border RentWordBorder()
+    {
+        Border border;
+        if (_wordBorderPool.Count > 0)
+        {
+            border = _wordBorderPool.Pop();
+        }
+        else
+        {
+            // Set brush to Border because OutlinedTextBlock's character click judgment is only on the character.
+            //ref: https://stackoverflow.com/questions/50653308/hit-testing-a-transparent-element-in-a-transparent-window
+            border = new Border
+            {
+                BorderThickness = new Thickness(1),
+                IsHitTestVisible = true,
+                Child = CreateOutlinedTextBlock(),
+                Cursor = Cursors.Hand,
+                // Lets the shared static hover handlers reach this control's WordHoverBorderBrush.
+                Tag = this,
+            };
+
+            // Handlers are attached once, at creation only — never on reuse — to avoid double subscriptions.
+            border.MouseLeftButtonDown += WordMouseLeftButtonDown;
+            border.MouseLeftButtonUp += WordMouseLeftButtonUp;
+            border.MouseRightButtonUp += WordMouseRightButtonUp;
+            border.MouseUp += WordMouseMiddleButtonUp;
+            border.MouseEnter += OnWordBorderMouseEnter;
+            border.MouseLeave += OnWordBorderMouseLeave;
+        }
+
+        // Reset hover visuals before the border is shown again (it may have been recycled mid-hover).
+        border.BorderBrush = null;
+        border.Background = HitTestTransparentBrush;
+        return border;
+    }
+
+    private NewLine RentNewLine()
+    {
+        return _newLinePool.Count > 0 ? _newLinePool.Pop() : new NewLine();
+    }
+
+    private OutlinedTextBlock CreateOutlinedTextBlock()
+    {
+        OutlinedTextBlock textBlock = new()
+        {
+            ClipToBounds = false,
+            TextWrapping = TextWrapping.Wrap,
+            StrokePosition = StrokePosition.Outside,
+            IsHitTestVisible = false,
+            // Fixed because the word itself is inverted
+            FlowDirection = FlowDirection.LeftToRight
+        };
+
+        textBlock.SetBinding(OutlinedTextBlock.FontSizeProperty, _bindFontSize);
+        textBlock.SetBinding(OutlinedTextBlock.FontWeightProperty, _bindFontWeight);
+        textBlock.SetBinding(OutlinedTextBlock.FontStyleProperty, _bindFontStyle);
+        textBlock.SetBinding(OutlinedTextBlock.FontFamilyProperty, _bindFontFamily);
+        textBlock.SetBinding(OutlinedTextBlock.FillProperty, _bindFill);
+        textBlock.SetBinding(OutlinedTextBlock.StrokeProperty, _bindStroke);
+        textBlock.SetBinding(OutlinedTextBlock.StrokeThicknessInitialProperty, _bindStrokeThicknessInitial);
+        return textBlock;
+    }
+
+    // Shared static hover handlers (one delegate instance for all words) replace the previous per-word
+    // closures. The owning control is reached via Border.Tag to read the current WordHoverBorderBrush.
+    private static void OnWordBorderMouseEnter(object sender, MouseEventArgs e)
+    {
+        var border = (Border)sender;
+        if (border.Tag is SelectableSubtitleText owner)
+        {
+            border.BorderBrush = owner.WordHoverBorderBrush;
+        }
+        border.Background = HoverFillBrush;
+    }
+
+    private static void OnWordBorderMouseLeave(object sender, MouseEventArgs e)
+    {
+        var border = (Border)sender;
+        border.BorderBrush = null;
+        border.Background = HitTestTransparentBrush;
     }
 
     private void WordMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
