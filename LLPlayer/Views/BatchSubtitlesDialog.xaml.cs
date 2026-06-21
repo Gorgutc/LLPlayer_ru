@@ -2,6 +2,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using LLPlayer.ViewModels;
 
 namespace LLPlayer.Views;
@@ -10,6 +11,7 @@ public partial class BatchSubtitlesDialog : UserControl
 {
     private readonly BatchSubtitlesDialogVM _vm;
     private INotifyCollectionChanged? _transcript;
+    private bool _scrollScheduled;
 
     public BatchSubtitlesDialog()
     {
@@ -42,10 +44,27 @@ public partial class BatchSubtitlesDialog : UserControl
         if (_transcript != null)
             _transcript.CollectionChanged += OnTranscriptChanged;
 
-        ScrollToEnd();
+        ScheduleScrollToEnd();
     }
 
-    private void OnTranscriptChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScrollToEnd();
+    private void OnTranscriptChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScheduleScrollToEnd();
+
+    // Auto-scroll must NOT run synchronously inside the transcript's CollectionChanged notification:
+    // calling ScrollIntoView there re-enters the ListBox generator before it has finished processing the
+    // same change, which throws "ItemsControl is inconsistent with its items source" and crashes the
+    // process. Defer it to a later dispatcher turn (after layout) and coalesce rapid segment updates.
+    private void ScheduleScrollToEnd()
+    {
+        if (_scrollScheduled)
+            return;
+
+        _scrollScheduled = true;
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            _scrollScheduled = false;
+            ScrollToEnd();
+        }), DispatcherPriority.Background);
+    }
 
     private void ScrollToEnd()
     {
