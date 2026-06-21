@@ -1,0 +1,166 @@
+<UserControl x:Class="LLPlayer.Views.BatchSubtitlesDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:LLPlayer.ViewModels"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:BatchSubtitlesDialogVM}"
+             d:Foreground="White"
+             d:Background="Black"
+             d:DesignHeight="620" d:DesignWidth="1000">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="0 0 0 10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock
+                Grid.Column="0"
+                Margin="0 0 10 0"
+                VerticalAlignment="Center"
+                Text="Folder" />
+
+            <TextBox
+                Grid.Column="1"
+                Margin="0 0 8 0"
+                VerticalAlignment="Center"
+                Text="{Binding FolderPath, UpdateSourceTrigger=LostFocus}"
+                materialDesign:HintAssist.Hint="Video folder" />
+
+            <Button
+                Grid.Column="2"
+                Margin="0 0 8 0"
+                Command="{Binding CmdBrowseFolder}"
+                ToolTip="Select folder">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="FolderOpen" Margin="0 0 6 0" />
+                    <TextBlock Text="Browse" />
+                </StackPanel>
+            </Button>
+
+            <Button
+                Grid.Column="3"
+                Command="{Binding CmdScan}"
+                ToolTip="Scan folder">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Magnify" Margin="0 0 6 0" />
+                    <TextBlock Text="Scan" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <DockPanel Grid.Row="1" Margin="0 0 0 10">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <CheckBox
+                    Margin="0 0 18 0"
+                    VerticalAlignment="Center"
+                    Content="Recursive"
+                    IsChecked="{Binding Recursive}" />
+
+                <CheckBox
+                    Margin="0 0 18 0"
+                    VerticalAlignment="Center"
+                    Content="Overwrite existing"
+                    IsChecked="{Binding OverwriteExisting}" />
+            </StackPanel>
+
+            <TextBlock
+                DockPanel.Dock="Right"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource MaterialDesignBodyLight}"
+                Text="{Binding FL.PlayerConfig.Subtitles.TranslateServiceType, StringFormat=Translate: {0} -> Russian}" />
+        </DockPanel>
+
+        <DataGrid
+            Grid.Row="2"
+            ItemsSource="{Binding Jobs}"
+            SelectedItem="{Binding SelectedJob}"
+            AutoGenerateColumns="False"
+            CanUserAddRows="False"
+            CanUserDeleteRows="False"
+            IsReadOnly="True"
+            GridLinesVisibility="Horizontal"
+            SelectionMode="Single">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Phase" Binding="{Binding Status}" Width="140" />
+                <DataGridTextColumn Header="Subs" Binding="{Binding SubtitleCount}" Width="70" />
+                <DataGridTextColumn Header="File" Binding="{Binding MediaPath}" Width="2*" />
+                <DataGridTextColumn Header="Output" Binding="{Binding OutputPath}" Width="2*" />
+                <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="2*" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <Grid Grid.Row="3" Margin="0 12 0 0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock
+                Grid.Column="0"
+                VerticalAlignment="Center"
+                Text="{Binding SummaryText}" />
+
+            <Button
+                Grid.Column="1"
+                Margin="8 0 0 0"
+                Command="{Binding CmdStart}"
+                ToolTip="Start batch">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Play" Margin="0 0 6 0" />
+                    <TextBlock Text="Start" />
+                </StackPanel>
+            </Button>
+
+            <Button
+                Grid.Column="2"
+                Margin="8 0 0 0"
+                Command="{Binding CmdCancel}"
+                ToolTip="Cancel batch">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Stop" Margin="0 0 6 0" />
+                    <TextBlock Text="Cancel" />
+                </StackPanel>
+            </Button>
+
+            <Button
+                Grid.Column="3"
+                Margin="8 0 0 0"
+                Command="{Binding CmdOpenOutputFolder}"
+                ToolTip="Open output folder">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="FolderOpen" Margin="0 0 6 0" />
+                    <TextBlock Text="Output" />
+                </StackPanel>
+            </Button>
+
+            <Button
+                Grid.Column="4"
+                Margin="8 0 0 0"
+                Command="{Binding CmdCloseDialog}"
+                ToolTip="Close">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Close" Margin="0 0 6 0" />
+                    <TextBlock Text="Close" />
+                </StackPanel>
+            </Button>
+        </Grid>
+    </Grid>
+</UserControl>

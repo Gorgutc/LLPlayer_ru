@@ -182,6 +182,12 @@
                     ToolTip="Export subtitles as srt"
                     Content="{materialDesign:PackIcon Kind=FileExportOutline}" />
 
+            <!-- Batch Subtitles -->
+            <Button Style="{StaticResource IconButton}"
+                    Command="{Binding FL.Action.CmdOpenWindowBatchSubtitles}"
+                    ToolTip="Batch ASR and translate subtitles"
+                    Content="{materialDesign:PackIcon Kind=PlaylistPlay}" />
+
             <!-- Sidebar Left Toggle -->
             <Button Style="{StaticResource IconButton}"
                     Command="{Binding CmdSwapSidebarPosition}"

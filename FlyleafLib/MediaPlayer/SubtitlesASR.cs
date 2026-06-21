@@ -948,6 +948,8 @@ public interface IASRService : IAsyncDisposable
 // https://github.com/ggerganov/whisper.cpp
 public class WhisperCppASRService : IASRService
 {
+    public static readonly Lock RuntimeSelectionLock = new();
+
     private readonly Config _config;
 
     private readonly LogHandler Log;
@@ -963,27 +965,30 @@ public class WhisperCppASRService : IASRService
         _config = config;
         Log = new LogHandler(("[#1]").PadRight(8, ' ') + " [WhisperCpp    ] ");
 
-        if (_config.Subtitles.WhisperCppConfig.RuntimeLibraries.Count >= 1)
+        lock (RuntimeSelectionLock)
         {
-            RuntimeOptions.RuntimeLibraryOrder = [.. _config.Subtitles.WhisperCppConfig.RuntimeLibraries];
+            if (_config.Subtitles.WhisperCppConfig.RuntimeLibraries.Count >= 1)
+            {
+                RuntimeOptions.RuntimeLibraryOrder = [.. _config.Subtitles.WhisperCppConfig.RuntimeLibraries];
+            }
+            else
+            {
+                RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx]; // fallback to default
+            }
+
+            _logger = CanDebug
+                ? LogProvider.AddLogger((level, s) => Log.Debug($"[Whisper.net] [{level.ToString()}] {s}"))
+                : Disposable.Empty;
+
+            if (CanDebug) Log.Debug($"Selecting whisper runtime libraries from ({string.Join(",", RuntimeOptions.RuntimeLibraryOrder)})");
+
+            _factory = WhisperFactory.FromPath(_config.Subtitles.WhisperCppConfig.Model!.ModelFilePath, _config.Subtitles.WhisperCppConfig.GetFactoryOptions());
+
+            if (CanDebug) Log.Debug($"Selected whisper runtime library '{RuntimeOptions.LoadedLibrary}'");
+
+            WhisperProcessorBuilder whisperBuilder = _factory.CreateBuilder();
+            _processor = _config.Subtitles.WhisperCppConfig.ConfigureBuilder(_config.Subtitles.WhisperConfig, whisperBuilder).Build();
         }
-        else
-        {
-            RuntimeOptions.RuntimeLibraryOrder = [RuntimeLibrary.Cpu, RuntimeLibrary.CpuNoAvx]; // fallback to default
-        }
-
-        _logger = CanDebug
-            ? LogProvider.AddLogger((level, s) => Log.Debug($"[Whisper.net] [{level.ToString()}] {s}"))
-            : Disposable.Empty;
-
-        if (CanDebug) Log.Debug($"Selecting whisper runtime libraries from ({string.Join(",", RuntimeOptions.RuntimeLibraryOrder)})");
-
-        _factory = WhisperFactory.FromPath(_config.Subtitles.WhisperCppConfig.Model!.ModelFilePath, _config.Subtitles.WhisperCppConfig.GetFactoryOptions());
-
-        if (CanDebug) Log.Debug($"Selected whisper runtime library '{RuntimeOptions.LoadedLibrary}'");
-
-        WhisperProcessorBuilder whisperBuilder = _factory.CreateBuilder();
-        _processor = _config.Subtitles.WhisperCppConfig.ConfigureBuilder(_config.Subtitles.WhisperConfig, whisperBuilder).Build();
 
         if (_config.Subtitles.WhisperCppConfig.IsEnglishModel)
         {

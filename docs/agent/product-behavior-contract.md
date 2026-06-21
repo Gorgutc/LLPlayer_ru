@@ -15,6 +15,7 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 - Subtitle overlay on the video surface and optional subtitles sidebar.
 - Subtitle seeking, sidebar search, current/previous/next subtitle context, and per-item seek.
 - ASR subtitle generation through Whisper.net/whisper.cpp and faster-whisper.
+- Batch subtitles for local folders: scan video files, run ASR per video, translate completed subtitle sets to Russian through the configured Translate provider, and save `video.ru.srt` beside each video.
 - OCR for bitmap subtitles through Tesseract and Microsoft OCR paths.
 - Translation through Google V1, Bing, Azure, DeepL, DeepLX, Ollama, LM Studio, KoboldCpp, OpenAI, OpenAI-like, Claude, and LiteLLM settings.
 - Context-aware translation for LLM-like providers through chat/context configuration.
@@ -37,6 +38,7 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 - Preserve Settings Keys as an editable shortcut workflow with Add/Load/Apply, clone/delete, duplicate blocking, grouped actions, custom actions, key capture, and Enter commit.
 - Preserve CheatSheet as a searchable, executable action surface with Keyboard/Mouse tabs and enabled-binding filtering.
 - Preserve explicit user-selected export path for SRT export.
+- Preserve batch subtitle output as user runtime files beside source videos. The default batch collision policy skips existing `video.ru.srt` files unless overwrite is explicitly enabled.
 
 ## Manual Checks When Touched
 

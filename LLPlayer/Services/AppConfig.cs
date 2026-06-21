@@ -47,6 +47,7 @@ public class AppConfig : Bindable
     }
 
     public AppConfigSubs Subs { get; set => Set(ref field, value); } = new();
+    public AppConfigBatchSubtitles BatchSubtitles { get; set => Set(ref field, value); } = new();
 
     public static AppConfig Load(string path)
     {
@@ -213,6 +214,13 @@ public class AppConfig : Bindable
 
         return jsonOptions;
     }
+}
+
+public class AppConfigBatchSubtitles : Bindable
+{
+    public string LastFolder { get; set => Set(ref field, value); } = string.Empty;
+    public bool Recursive { get; set => Set(ref field, value); }
+    public bool OverwriteExisting { get; set => Set(ref field, value); }
 }
 
 public class AppConfigSubs : Bindable

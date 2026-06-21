@@ -26,6 +26,7 @@ Registered Prism dialogs are part of the product surface:
 - Select language
 - Subtitles downloader
 - Subtitles exporter
+- Batch subtitles
 - CheatSheet
 - Whisper model download
 - Whisper engine download
@@ -62,7 +63,8 @@ Do not remove or merge sections unless the user explicitly requests a settings r
 
 ## Subtitle UI
 
-- Sidebar toolbar includes primary/secondary toggle, font size, spoiler mask, original/translated toggle, download/export, side swap, and search.
+- Sidebar toolbar includes primary/secondary toggle, font size, spoiler mask, original/translated toggle, download/export/batch subtitles, side swap, and search.
+- Batch subtitles is a non-modal singleton dialog opened through `AppActions`. It owns folder selection, scan, queue progress, cancel, and output-folder access without redesigning existing subtitle settings or sidebar behavior.
 - Sidebar list remains virtualized/recycling and supports text and bitmap templates.
 - Search behavior: Ctrl+F activates search, Esc clears, Enter/Shift+Enter navigate matches, focus returns to video after clear.
 - Overlay supports primary/secondary text, bitmap absolute positioning, separator, word-click popups, and separate primary/secondary hover colors.
