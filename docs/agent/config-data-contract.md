@@ -31,6 +31,7 @@ Do not reorder this without explicit migration work.
 - Default player config passes HLS query options, leaves GPU adapter empty for later persistence, enables local subtitle search, and derives target translation language from original culture.
 - Default custom key bindings are applied only for new config files.
 - Existing key bindings may be migrated through Flyleaf config `UpdateDefault()`.
+- Batch subtitle UI defaults live in `LLPlayer.Config.json`: last folder, recursive scan, and overwrite-existing policy. Batch processing reuses ASR/Translate settings from player config snapshots and must not silently change `TranslateTargetLanguage` or Whisper translate settings in the live player config.
 
 ## Actions And Key Bindings
 
@@ -51,6 +52,7 @@ Current default user data paths include:
 - `Whisper`
 - `tesseractmodels/tessdata`
 - `%TEMP%/LLPlayer/Subs`
+- Batch-generated `video.ru.srt` files beside source videos
 
 These are runtime/user data, not source artifacts.
 

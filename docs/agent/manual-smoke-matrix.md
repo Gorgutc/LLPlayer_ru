@@ -42,6 +42,17 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Run OCR on bitmap subtitles and cancel it.
 - For Whisper/ASR native-runtime issues, check Microsoft Visual C++ Redistributable 2022 or newer as a troubleshooting prerequisite.
 
+## Batch Subtitles
+
+- Open the batch subtitles dialog from the sidebar and from the context menu.
+- Scan a local folder with multiple videos; repeat with recursive scan enabled.
+- Run batch with whisper.cpp and faster-whisper on real media; confirm `video.ru.srt` is saved beside each completed video.
+- Smoke a local LLM provider such as Ollama, LM Studio, KoboldCpp, or LiteLLM; confirm LLM keep-context translation stays ordered within each file.
+- Cancel while ASR is running and while translation is running; confirm completed outputs remain and pending files do not start.
+- Include a no-audio video and confirm it fails in the queue while later files continue.
+- Open a generated `video.ru.srt` in LLPlayer and confirm playback/sidebar/subtitle UI still works.
+- Restart LLPlayer and confirm batch last folder, recursive scan, and overwrite policy are restored.
+
 ## Config
 
 - Open Settings, change a setting, use `Close`, restart, confirm it was not persisted.
