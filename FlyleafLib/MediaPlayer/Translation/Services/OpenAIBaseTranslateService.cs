@@ -213,57 +213,7 @@ public class OpenAIBaseTranslateService : ITranslateService
             statusCode = (int)result.StatusCode;
             result.EnsureSuccessStatusCode();
 
-            OpenAIResponse? chatResponse = JsonSerializer.Deserialize<OpenAIResponse>(jsonResultString);
-
-            // Null-safe parsing: some OpenAI-compatible/reasoning endpoints return an empty choices
-            // array or a null content (reasoning-only / tool-call responses). Treat these as a
-            // recoverable translation failure instead of throwing NullReferenceException, which
-            // previously bubbled up and disabled the whole translation track.
-            if (chatResponse?.choices is not { Length: > 0 })
-            {
-                throw new TranslationException($"Empty or invalid response from {settings.ServiceType}")
-                {
-                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
-                };
-            }
-
-            OpenAIChoice choice = chatResponse.choices[0];
-            string? rawContent = choice.message?.content;
-            if (rawContent == null)
-            {
-                throw new TranslationException($"No content in response from {settings.ServiceType}")
-                {
-                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
-                };
-            }
-
-            string reply = settings.ReasonStripRequired
-                ? ChatReplyParser.StripReasoning(rawContent).Trim().ToString()
-                : rawContent.Trim();
-
-            // The model was cut off at the token cap: the visible text is truncated (lost text) and,
-            // in KeepContext mode, a half-finished reply would poison subsequent subtitles. Surface it
-            // as a recoverable failure rather than silently accepting/caching the partial output.
-            if (string.Equals(choice.finish_reason, "length", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new TranslationException(
-                    $"Response from {settings.ServiceType} was truncated (finish_reason=length); increase max tokens")
-                {
-                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
-                };
-            }
-
-            // An empty reply (e.g. a reasoning-only response fully consumed by StripReasoning) is not a
-            // usable translation; fail so the caller can retry / fall back to the source text.
-            if (reply.Length == 0)
-            {
-                throw new TranslationException($"Empty translation from {settings.ServiceType}")
-                {
-                    Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
-                };
-            }
-
-            return reply;
+            return ParseChatResponse(jsonResultString, settings.ServiceType, settings.ReasonStripRequired, statusCode);
         }
         // Distinguish between user cancellation and HttpClient timeout by inspecting the token,
         // not the (locale-dependent) exception message.
@@ -284,6 +234,66 @@ public class OpenAIBaseTranslateService : ITranslateService
                 }
             };
         }
+    }
+
+    /// <summary>
+    /// Parses an OpenAI chat-completions response body into the reply text. Throws a (recoverable)
+    /// <see cref="TranslationException"/> on an empty/invalid response, null content, a truncated reply
+    /// (finish_reason=length), or an empty reply. Extracted from SendChatRequest so it can be unit-tested
+    /// without performing an HTTP request.
+    /// </summary>
+    public static string ParseChatResponse(string jsonResultString, TranslateServiceType serviceType, bool reasonStripRequired, int statusCode = -1)
+    {
+        OpenAIResponse? chatResponse = JsonSerializer.Deserialize<OpenAIResponse>(jsonResultString);
+
+        // Null-safe parsing: some OpenAI-compatible/reasoning endpoints return an empty choices array or
+        // a null content (reasoning-only / tool-call responses). Treat these as a recoverable translation
+        // failure instead of throwing NullReferenceException (which previously disabled the whole track).
+        if (chatResponse?.choices is not { Length: > 0 })
+        {
+            throw new TranslationException($"Empty or invalid response from {serviceType}")
+            {
+                Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+            };
+        }
+
+        OpenAIChoice choice = chatResponse.choices[0];
+        string? rawContent = choice.message?.content;
+        if (rawContent == null)
+        {
+            throw new TranslationException($"No content in response from {serviceType}")
+            {
+                Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+            };
+        }
+
+        string reply = reasonStripRequired
+            ? ChatReplyParser.StripReasoning(rawContent).Trim().ToString()
+            : rawContent.Trim();
+
+        // The model was cut off at the token cap: the visible text is truncated (lost text) and, in
+        // KeepContext mode, a half-finished reply would poison subsequent subtitles. Surface it as a
+        // recoverable failure rather than silently accepting/caching the partial output.
+        if (string.Equals(choice.finish_reason, "length", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new TranslationException(
+                $"Response from {serviceType} was truncated (finish_reason=length); increase max tokens")
+            {
+                Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+            };
+        }
+
+        // An empty reply (e.g. a reasoning-only response fully consumed by StripReasoning) is not a
+        // usable translation; fail so the caller can retry / fall back to the source text.
+        if (reply.Length == 0)
+        {
+            throw new TranslationException($"Empty translation from {serviceType}")
+            {
+                Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
+            };
+        }
+
+        return reply;
     }
 
     public static async Task<List<string>> GetLoadedModels(OpenAIBaseTranslateSettings settings)
