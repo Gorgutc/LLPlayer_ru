@@ -9,6 +9,7 @@ using FlyleafLib.MediaPlayer;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
 using LLPlayer.Views;
+using MaterialDesignThemes.Wpf;
 
 namespace LLPlayer;
 
@@ -43,6 +44,9 @@ public partial class App : PrismApplication
             .Register<Player>(FlyleafLoader.CreateFlyleafPlayer)
             .RegisterSingleton<FlyleafManager>()
             .RegisterSingleton<IDialogService, ExtendedDialogService>();
+
+        // Single app-wide snackbar queue (notifications + actionable config errors), hosted in FlyleafOverlay.
+        containerRegistry.RegisterInstance<ISnackbarMessageQueue>(new SnackbarMessageQueue(TimeSpan.FromSeconds(6)));
 
         containerRegistry.RegisterDialogWindow<MyDialogWindow>();
 

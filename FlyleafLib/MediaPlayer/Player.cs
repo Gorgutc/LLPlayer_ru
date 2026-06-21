@@ -447,6 +447,13 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
 
     public string       OSDMessage          { get; set => Set(ref field, value, false); }
 
+    /// <summary>
+    /// True while subtitle ASR (speech-to-text) is actively transcribing. Toggled on the UI thread
+    /// (via UI()) so it can be data-bound directly, e.g. by a status chip in the player bar.
+    /// </summary>
+    public bool         IsASRRunning        { get => _isASRRunning; internal set => SetUI(ref _isASRRunning, value); }
+    bool _isASRRunning;
+
     public event        EventHandler<KnownErrorOccurredEventArgs> KnownErrorOccurred;
     public event        EventHandler<UnknownErrorOccurredEventArgs> UnknownErrorOccurred;
 
@@ -690,12 +697,13 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     // Avoid having this code in OnPaintBackground as it can cause designer issues (renderer will try to load FFmpeg.Autogen assembly because of HDR Data)
     internal bool WFPresent() { if (Renderer == null || Renderer.SwapChain.Disposed) return false; Renderer?.RenderRequest(); return true; }
 
-    internal void RaiseKnownErrorOccurred(string message, KnownErrorType errorType)
+    internal void RaiseKnownErrorOccurred(string message, KnownErrorType errorType, string settingsTab = null)
     {
         KnownErrorOccurred?.Invoke(this, new KnownErrorOccurredEventArgs
         {
             Message = message,
-            ErrorType = errorType
+            ErrorType = errorType,
+            SettingsTab = settingsTab
         });
     }
 
@@ -716,10 +724,27 @@ public enum KnownErrorType
     ASR
 }
 
+/// <summary>
+/// Well-known settings sections a <see cref="KnownErrorType.Configuration"/> error can deep-link to.
+/// Values are stable string keys interpreted by the host UI (LLPlayer) to navigate the settings dialog.
+/// </summary>
+public static class KnownErrorSettingsTab
+{
+    public const string SubtitlesASR = "SubtitlesASR";
+    public const string SubtitlesOCR = "SubtitlesOCR";
+    public const string Translation = "Translation";
+}
+
 public class KnownErrorOccurredEventArgs : EventArgs
 {
     public required string Message { get; init; }
     public required KnownErrorType ErrorType { get; init; }
+
+    /// <summary>
+    /// Optional settings section to deep-link to (see <see cref="KnownErrorSettingsTab"/>);
+    /// null means no deep-link target.
+    /// </summary>
+    public string SettingsTab { get; init; }
 }
 
 public enum UnknownErrorType

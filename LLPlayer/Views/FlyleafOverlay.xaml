@@ -127,6 +127,15 @@
 
             <!--Flyleaf Bar-->
             <controls:FlyleafBar />
+
+            <!--Global Snackbar: notifications + actionable config errors. Hosted in the overlay so it is
+                visible in fullscreen too. Kept bottom-centre and compact so it does not cover the subtitle
+                interaction area while shown.-->
+            <materialDesign:Snackbar
+                MessageQueue="{Binding FL.MessageQueue}"
+                VerticalAlignment="Bottom"
+                HorizontalAlignment="Center"
+                Margin="0,0,0,72" />
         </Grid>
     </Grid>
 </UserControl>

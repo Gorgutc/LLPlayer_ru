@@ -7,6 +7,7 @@ using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
+using MaterialDesignThemes.Wpf;
 using InputType = FlyleafLib.InputType;
 
 namespace LLPlayer.ViewModels;
@@ -62,7 +63,19 @@ public class MainWindowVM : Bindable
             Utils.UI(() =>
             {
                 Log.Error($"Known error occurred in Flyleaf: {args.Message} ({args.ErrorType.ToString()})");
-                ErrorDialogHelper.ShowKnownErrorPopup(args.Message, args.ErrorType);
+
+                // Recoverable configuration errors with a known settings section are shown as an actionable
+                // snackbar (with a deep-link) instead of a modal. Everything else (e.g. live-stream ASR, or
+                // a Configuration error without a target) keeps the topmost modal so it stays visible.
+                if (args.ErrorType == KnownErrorType.Configuration && !string.IsNullOrEmpty(args.SettingsTab))
+                {
+                    string tab = args.SettingsTab;
+                    FL.MessageQueue.Enqueue(args.Message, "OPEN SETTINGS", () => FL.Action.OpenSettingsAt(tab));
+                }
+                else
+                {
+                    ErrorDialogHelper.ShowKnownErrorPopup(args.Message, args.ErrorType);
+                }
             });
         };
 
