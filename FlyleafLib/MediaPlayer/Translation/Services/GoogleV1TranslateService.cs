@@ -126,6 +126,60 @@ public class GoogleV1TranslateService : ITranslateService
         };
     }
 
+    /// <summary>
+    /// Parses a Google Translate v1 (translate_a/single) response body into the translated text. Throws a
+    /// (recoverable) <see cref="TranslationException"/> on an unexpected root shape; returns the original
+    /// text when there is nothing translatable. Extracted from TranslateAsync for unit testing without HTTP.
+    /// </summary>
+    public static string ParseGoogleV1(string jsonResultString, string originalText, TranslateServiceType serviceType, int statusCode = -1)
+    {
+        using JsonDocument doc = JsonDocument.Parse(jsonResultString);
+        JsonElement root = doc.RootElement;
+        if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0)
+        {
+            throw new TranslationException($"Unexpected response shape from {serviceType}")
+            {
+                Data =
+                {
+                    ["status_code"] = statusCode.ToString(),
+                    ["response"] = jsonResultString
+                }
+            };
+        }
+
+        JsonElement segments = root[0];
+        if (segments.ValueKind != JsonValueKind.Array)
+        {
+            // Nothing translatable was returned; keep the original text rather than losing it.
+            return originalText;
+        }
+
+        // Google splits a translation into per-sentence segments ([translated, original, ...]).
+        // Concatenate the translated parts WITHOUT newlines or per-segment Trim, so the spacing Google
+        // produced is preserved (joining with newlines + Trim previously broke sentences mid-line and
+        // dropped inter-segment spaces, garbling the subtitle).
+        List<string> resultTexts = new();
+        foreach (JsonElement seg in segments.EnumerateArray())
+        {
+            if (seg.ValueKind != JsonValueKind.Array || seg.GetArrayLength() == 0)
+            {
+                continue;
+            }
+
+            JsonElement chunk = seg[0];
+            if (chunk.ValueKind == JsonValueKind.String)
+            {
+                string? s = chunk.GetString();
+                if (!string.IsNullOrEmpty(s))
+                {
+                    resultTexts.Add(s);
+                }
+            }
+        }
+
+        return string.Concat(resultTexts).Trim();
+    }
+
     public async Task<string> TranslateAsync(string text, CancellationToken token)
     {
         string jsonResultString = "";
@@ -141,51 +195,7 @@ public class GoogleV1TranslateService : ITranslateService
             statusCode = (int)result.StatusCode;
             result.EnsureSuccessStatusCode();
 
-            using JsonDocument doc = JsonDocument.Parse(jsonResultString);
-            JsonElement root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Array || root.GetArrayLength() == 0)
-            {
-                throw new TranslationException($"Unexpected response shape from {ServiceType}")
-                {
-                    Data =
-                    {
-                        ["status_code"] = statusCode.ToString(),
-                        ["response"] = jsonResultString
-                    }
-                };
-            }
-
-            JsonElement segments = root[0];
-            if (segments.ValueKind != JsonValueKind.Array)
-            {
-                // Nothing translatable was returned; keep the original text rather than losing it.
-                return text;
-            }
-
-            // Google splits a translation into per-sentence segments ([translated, original, ...]).
-            // Concatenate the translated parts WITHOUT newlines or per-segment Trim, so the spacing
-            // Google produced is preserved (joining with newlines + Trim previously broke sentences
-            // mid-line and dropped inter-segment spaces, garbling the subtitle).
-            List<string> resultTexts = new();
-            foreach (JsonElement seg in segments.EnumerateArray())
-            {
-                if (seg.ValueKind != JsonValueKind.Array || seg.GetArrayLength() == 0)
-                {
-                    continue;
-                }
-
-                JsonElement chunk = seg[0];
-                if (chunk.ValueKind == JsonValueKind.String)
-                {
-                    string? s = chunk.GetString();
-                    if (!string.IsNullOrEmpty(s))
-                    {
-                        resultTexts.Add(s);
-                    }
-                }
-            }
-
-            return string.Concat(resultTexts).Trim();
+            return ParseGoogleV1(jsonResultString, text, ServiceType, statusCode);
         }
         // Distinguish between user cancellation and HttpClient timeout by inspecting the token,
         // not the (locale-dependent) exception message.
