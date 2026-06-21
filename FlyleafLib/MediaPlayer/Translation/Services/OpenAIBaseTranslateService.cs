@@ -111,15 +111,36 @@ public class OpenAIBaseTranslateService : ITranslateService
         string reply = await SendChatRequest(
             _httpClient, _settings, messages.ToArray(), token);
 
-        // Anti-poisoning gate: only feed a sane reply back into the context window. A degenerate
-        // (looping) reply re-fed as few-shot context primes the model to repeat the same pattern on
-        // the following subtitles. SendChatRequest already throws on empty/truncated replies, so by
-        // here `reply` is non-empty; we still guard against degeneration before caching it.
-        if (!ChatReplyParser.IsDegenerate(reply))
+        // Degeneration recovery (plan item 1.4). SendChatRequest already throws on empty/truncated
+        // replies, so `reply` is non-empty here. If it is degenerate (the model looped, e.g. repeating
+        // the same short phrase many times), the anti-poisoning enqueue below already keeps it out of the
+        // context window — but without this recovery the looping text would still be returned to the user
+        // and cached as the translation for THIS subtitle. Reset the (possibly biased) context window and
+        // retry once from a clean slate; if it still loops, surface a recoverable failure so the caller
+        // skips caching and falls back to the source text (the line is retried on a later pass).
+        if (ChatReplyParser.IsDegenerate(reply))
         {
-            _messageQueue.Enqueue(newMessage);
-            _messageQueue.Enqueue(new OpenAIMessage { role = "assistant", content = reply });
+            _messageQueue.Clear();
+
+            OpenAIMessage[] retryMessages =
+            [
+                new OpenAIMessage { role = "system", content = _basePrompt },
+                newMessage,
+            ];
+
+            reply = await SendChatRequest(_httpClient, _settings, retryMessages, token);
+
+            if (ChatReplyParser.IsDegenerate(reply))
+            {
+                throw new TranslationException(
+                    $"Degenerate (looping) reply from {_settings.ServiceType} after retry");
+            }
         }
+
+        // Anti-poisoning gate: only feed a sane (non-degenerate) reply back into the context window, so a
+        // looping reply cannot prime the model to repeat the same pattern on the following subtitles.
+        _messageQueue.Enqueue(newMessage);
+        _messageQueue.Enqueue(new OpenAIMessage { role = "assistant", content = reply });
 
         return reply;
     }
