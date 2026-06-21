@@ -10,7 +10,8 @@ public sealed record MediaAudioProbeResult(
     string MediaPath,
     int StreamIndex,
     MediaType MediaType,
-    Language Language);
+    Language Language,
+    TimeSpan Duration);
 
 public sealed class MediaAudioProbe
 {
@@ -50,7 +51,8 @@ public sealed class MediaAudioProbe
                 mediaPath,
                 stream.StreamIndex,
                 demuxer.Type,
-                stream.Language ?? Language.Unknown);
+                stream.Language ?? Language.Unknown,
+                demuxer.Duration > 0 ? new TimeSpan(demuxer.Duration) : TimeSpan.Zero);
         }
         finally
         {

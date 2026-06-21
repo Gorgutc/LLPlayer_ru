@@ -14,20 +14,24 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         ValidateAsrConfig(_batchConfig);
     }
 
-    public Task<BatchAsrResult> TranscribeAsync(string mediaPath, CancellationToken token)
-        => Task.Run(() => Transcribe(mediaPath, token), token);
+    public Task<BatchAsrResult> TranscribeAsync(
+        string mediaPath,
+        CancellationToken token,
+        IProgress<BatchAsrProgress>? asrProgress = null)
+        => Task.Run(() => Transcribe(mediaPath, token, asrProgress), token);
 
-    private BatchAsrResult Transcribe(string mediaPath, CancellationToken token)
+    private BatchAsrResult Transcribe(string mediaPath, CancellationToken token, IProgress<BatchAsrProgress>? asrProgress)
     {
         MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig).Probe(mediaPath, token);
 
-        return TranscribeInternal(_batchConfig, audio, token);
+        return TranscribeInternal(_batchConfig, audio, token, asrProgress);
     }
 
     private static BatchAsrResult TranscribeInternal(
         Config batchConfig,
         MediaAudioProbeResult audio,
-        CancellationToken token)
+        CancellationToken token,
+        IProgress<BatchAsrProgress>? asrProgress)
     {
         List<SubtitleData> subtitles = [];
         Language sourceLanguage = GetInitialSourceLanguage(batchConfig);
@@ -59,6 +63,14 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
             };
 
             subtitles.Add(subtitle);
+
+            // Stream per-segment progress so the UI shows live feedback during the (otherwise opaque) ASR.
+            asrProgress?.Report(new BatchAsrProgress(
+                audio.MediaPath,
+                subtitles.Count,
+                data.Text,
+                data.EndTime,
+                audio.Duration));
         }, token);
         token.ThrowIfCancellationRequested();
 

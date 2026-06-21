@@ -7,11 +7,36 @@ namespace LLPlayer.Views;
 
 public partial class SettingsDialog : UserControl
 {
+    // Lazily created once per dialog instance, then reused — avoids re-instantiating a settings page
+    // (and the UI-thread freeze on heavy pages like ASR/Trans/Keys) on every tree selection, and keeps
+    // each page's scroll position / transient state while the dialog is open.
+    private readonly Dictionary<string, UserControl> _pageCache = new();
+    private readonly Dictionary<string, Func<UserControl>> _pageFactories;
+
     public SettingsDialog()
     {
         InitializeComponent();
 
         DataContext = ((App)Application.Current).Container.Resolve<SettingsDialogVM>();
+
+        _pageFactories = new Dictionary<string, Func<UserControl>>
+        {
+            [nameof(SettingsPlayer)] = () => new SettingsPlayer(),
+            [nameof(SettingsAudio)] = () => new SettingsAudio(),
+            [nameof(SettingsVideo)] = () => new SettingsVideo(),
+            [nameof(SettingsSubtitles)] = () => new SettingsSubtitles(),
+            [nameof(SettingsSubtitlesPS)] = () => new SettingsSubtitlesPS(),
+            [nameof(SettingsSubtitlesASR)] = () => new SettingsSubtitlesASR(),
+            [nameof(SettingsSubtitlesOCR)] = () => new SettingsSubtitlesOCR(),
+            [nameof(SettingsSubtitlesTrans)] = () => new SettingsSubtitlesTrans(),
+            [nameof(SettingsSubtitlesAction)] = () => new SettingsSubtitlesAction(),
+            [nameof(SettingsKeys)] = () => new SettingsKeys(),
+            [nameof(SettingsKeysOffset)] = () => new SettingsKeysOffset(),
+            [nameof(SettingsMouse)] = () => new SettingsMouse(),
+            [nameof(SettingsThemes)] = () => new SettingsThemes(),
+            [nameof(SettingsPlugins)] = () => new SettingsPlugins(),
+            [nameof(SettingsAbout)] = () => new SettingsAbout(),
+        };
     }
 
     private void SettingsTreeView_OnSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -21,71 +46,22 @@ public partial class SettingsDialog : UserControl
             return;
         }
 
-        if (SettingsTreeView.SelectedItem is TreeViewItem selectedItem)
+        if (SettingsTreeView.SelectedItem is not TreeViewItem selectedItem)
         {
-            string? tag = selectedItem.Tag as string;
-            switch (tag)
-            {
-                case nameof(SettingsPlayer):
-                    SettingsContent.Content = new SettingsPlayer();
-                    break;
-
-                case nameof(SettingsAudio):
-                    SettingsContent.Content = new SettingsAudio();
-                    break;
-
-                case nameof(SettingsVideo):
-                    SettingsContent.Content = new SettingsVideo();
-                    break;
-
-                case nameof(SettingsSubtitles):
-                    SettingsContent.Content = new SettingsSubtitles();
-                    break;
-
-                case nameof(SettingsSubtitlesPS):
-                    SettingsContent.Content = new SettingsSubtitlesPS();
-                    break;
-
-                case nameof(SettingsSubtitlesASR):
-                    SettingsContent.Content = new SettingsSubtitlesASR();
-                    break;
-
-                case nameof(SettingsSubtitlesOCR):
-                    SettingsContent.Content = new SettingsSubtitlesOCR();
-                    break;
-
-                case nameof(SettingsSubtitlesTrans):
-                    SettingsContent.Content = new SettingsSubtitlesTrans();
-                    break;
-
-                case nameof(SettingsSubtitlesAction):
-                    SettingsContent.Content = new SettingsSubtitlesAction();
-                    break;
-
-                case nameof(SettingsKeys):
-                    SettingsContent.Content = new SettingsKeys();
-                    break;
-
-                case nameof(SettingsKeysOffset):
-                    SettingsContent.Content = new SettingsKeysOffset();
-                    break;
-
-                case nameof(SettingsMouse):
-                    SettingsContent.Content = new SettingsMouse();
-                    break;
-
-                case nameof(SettingsThemes):
-                    SettingsContent.Content = new SettingsThemes();
-                    break;
-
-                case nameof(SettingsPlugins):
-                    SettingsContent.Content = new SettingsPlugins();
-                    break;
-
-                case nameof(SettingsAbout):
-                    SettingsContent.Content = new SettingsAbout();
-                    break;
-            }
+            return;
         }
+
+        if (selectedItem.Tag is not string tag || !_pageFactories.TryGetValue(tag, out Func<UserControl>? factory))
+        {
+            return;
+        }
+
+        if (!_pageCache.TryGetValue(tag, out UserControl? page))
+        {
+            page = factory();
+            _pageCache[tag] = page;
+        }
+
+        SettingsContent.Content = page;
     }
 }

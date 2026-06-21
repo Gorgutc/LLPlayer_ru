@@ -178,6 +178,23 @@ public class ColorToBrushConverter : IValueConverter
     }
 }
 
+[ValueConversion(typeof(TimeSpan), typeof(string))]
+public class TimeSpanShortConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not TimeSpan span || span <= TimeSpan.Zero)
+            return "--:--";
+
+        return span.TotalHours >= 1
+            ? span.ToString(@"h\:mm\:ss", culture)
+            : span.ToString(@"m\:ss", culture);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
 /// <summary>
 /// Converts from System.Windows.Input.Key to human readable string
 /// </summary>
