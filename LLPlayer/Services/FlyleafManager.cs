@@ -3,6 +3,7 @@ using System.Windows;
 using FlyleafLib;
 using FlyleafLib.Controls.WPF;
 using FlyleafLib.MediaPlayer;
+using MaterialDesignThemes.Wpf;
 
 namespace LLPlayer.Services;
 
@@ -14,12 +15,16 @@ public class FlyleafManager
     public AppConfig Config { get; }
     public AppActions Action { get; }
 
+    /// <summary>App-wide MaterialDesign snackbar queue (notifications + actionable config errors).</summary>
+    public ISnackbarMessageQueue MessageQueue { get; }
+
     public AudioEngine AudioEngine => Engine.Audio;
     public EngineConfig ConfigEngine => Engine.Config;
 
-    public FlyleafManager(Player player, IDialogService dialogService)
+    public FlyleafManager(Player player, IDialogService dialogService, ISnackbarMessageQueue messageQueue)
     {
         Player = player;
+        MessageQueue = messageQueue;
 
         // Load app configuration at this time
         Config = LoadAppConfig();

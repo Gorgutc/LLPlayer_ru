@@ -12,6 +12,7 @@ using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
+using MaterialDesignThemes.Wpf;
 
 namespace LLPlayer.Controls;
 
@@ -218,7 +219,11 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             catch (TranslationConfigException ex)
             {
                 Clear();
-                ErrorDialogHelper.ShowKnownErrorPopup(ex.Message, KnownErrorType.Configuration);
+
+                // Recoverable word-translation config error → actionable snackbar with a deep-link to the
+                // translation settings, instead of a topmost modal.
+                FL.MessageQueue.Enqueue(ex.Message, "OPEN SETTINGS",
+                    () => FL.Action.OpenSettingsAt(KnownErrorSettingsTab.Translation));
 
                 return text;
             }

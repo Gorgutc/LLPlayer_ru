@@ -7,6 +7,30 @@ namespace LLPlayer.Views;
 
 public partial class SettingsDialog : UserControl
 {
+    // Tracks the single open instance (this is a ShowSingleton dialog) so an external caller can deep-link
+    // to a settings section, plus a remembered target applied once the dialog has loaded.
+    private static SettingsDialog? _current;
+    private static string? _pendingTab;
+
+    /// <summary>True while the settings dialog is open.</summary>
+    public static bool IsOpen => _current != null;
+
+    /// <summary>
+    /// Deep-link to a settings section by page key (the TreeViewItem Tag). Navigates immediately if the
+    /// dialog is open, otherwise the target is applied when the dialog next loads.
+    /// </summary>
+    public static void RequestNavigate(string pageKey)
+    {
+        if (_current != null)
+        {
+            _current.NavigateToTab(pageKey);
+        }
+        else
+        {
+            _pendingTab = pageKey;
+        }
+    }
+
     // Lazily created once per dialog instance, then reused — avoids re-instantiating a settings page
     // (and the UI-thread freeze on heavy pages like ASR/Trans/Keys) on every tree selection, and keeps
     // each page's scroll position / transient state while the dialog is open.
@@ -37,21 +61,121 @@ public partial class SettingsDialog : UserControl
             [nameof(SettingsPlugins)] = () => new SettingsPlugins(),
             [nameof(SettingsAbout)] = () => new SettingsAbout(),
         };
+
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        _current = this;
+
+        // Clear the open-instance reference on the actual window close. Window.Closed is a reliable
+        // one-shot signal, unlike UserControl.Unloaded which can fire spuriously while still open.
+        Window host = Window.GetWindow(this);
+        if (host != null)
+        {
+            host.Closed -= OnHostClosed;
+            host.Closed += OnHostClosed;
+        }
+
+        if (_pendingTab != null)
+        {
+            NavigateToTab(_pendingTab);
+            _pendingTab = null;
+        }
+    }
+
+    private void OnHostClosed(object? sender, EventArgs e)
+    {
+        if (_current == this)
+        {
+            _current = null;
+        }
+    }
+
+    /// <summary>Bring the open settings window to the front (restoring it if minimized).</summary>
+    public static void ActivateExisting()
+    {
+        if (_current == null)
+        {
+            return;
+        }
+
+        Window host = Window.GetWindow(_current);
+        if (host == null)
+        {
+            return;
+        }
+
+        if (host.WindowState == WindowState.Minimized)
+        {
+            host.WindowState = WindowState.Normal;
+        }
+
+        host.Activate();
+    }
+
+    private void NavigateToTab(string pageKey)
+    {
+        if (SettingsTreeView == null)
+        {
+            return;
+        }
+
+        TreeViewItem? item = FindTreeViewItem(SettingsTreeView.Items, pageKey);
+        if (item != null)
+        {
+            item.IsSelected = true;
+            item.BringIntoView();
+
+            // Selecting an already-selected node raises no SelectedItemChanged, so load the page
+            // explicitly to guarantee a deep-link always shows its target section.
+            LoadPage(pageKey);
+        }
+    }
+
+    private static TreeViewItem? FindTreeViewItem(ItemCollection items, string tag)
+    {
+        foreach (object obj in items)
+        {
+            if (obj is not TreeViewItem tvi)
+            {
+                continue;
+            }
+
+            if (tvi.Tag as string == tag)
+            {
+                return tvi;
+            }
+
+            TreeViewItem? child = FindTreeViewItem(tvi.Items, tag);
+            if (child != null)
+            {
+                // Expand the parent so the nested item can be selected/realized.
+                tvi.IsExpanded = true;
+                return child;
+            }
+        }
+
+        return null;
     }
 
     private void SettingsTreeView_OnSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        if (SettingsTreeView.SelectedItem is TreeViewItem { Tag: string tag })
+        {
+            LoadPage(tag);
+        }
+    }
+
+    private void LoadPage(string tag)
     {
         if (SettingsContent == null)
         {
             return;
         }
 
-        if (SettingsTreeView.SelectedItem is not TreeViewItem selectedItem)
-        {
-            return;
-        }
-
-        if (selectedItem.Tag is not string tag || !_pageFactories.TryGetValue(tag, out Func<UserControl>? factory))
+        if (!_pageFactories.TryGetValue(tag, out Func<UserControl>? factory))
         {
             return;
         }

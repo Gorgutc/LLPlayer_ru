@@ -306,7 +306,7 @@ public class Commands
         {
             if (!player.SubtitlesOCR.TryInitialize(subIndex, lang, out string err))
             {
-                player.RaiseKnownErrorOccurred(err, KnownErrorType.Configuration);
+                player.RaiseKnownErrorOccurred(err, KnownErrorType.Configuration, KnownErrorSettingsTab.SubtitlesOCR);
                 return false;
             }
 
@@ -329,7 +329,7 @@ public class Commands
 
         if (!player.SubtitlesASR.CanExecute(out string err))
         {
-            player.RaiseKnownErrorOccurred(err, KnownErrorType.Configuration);
+            player.RaiseKnownErrorOccurred(err, KnownErrorType.Configuration, KnownErrorSettingsTab.SubtitlesASR);
             return;
         }
 

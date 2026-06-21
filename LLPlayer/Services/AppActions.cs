@@ -390,6 +390,38 @@ public class AppActions
         _config.AlwaysOnTop = !_config.AlwaysOnTop;
     });
 
+    /// <summary>
+    /// Opens the settings dialog deep-linked to the section for a given <see cref="KnownErrorSettingsTab"/>
+    /// value (used by actionable config-error snackbars). If the dialog is already open it just navigates.
+    /// </summary>
+    public void OpenSettingsAt(string settingsTab)
+    {
+        // Map the FlyleafLib settings-tab hint to the SettingsDialog page key (the TreeViewItem Tag).
+        string? pageKey = settingsTab switch
+        {
+            KnownErrorSettingsTab.SubtitlesASR => "SettingsSubtitlesASR",
+            KnownErrorSettingsTab.SubtitlesOCR => "SettingsSubtitlesOCR",
+            KnownErrorSettingsTab.Translation => "SettingsSubtitlesTrans",
+            _ => null
+        };
+
+        if (pageKey != null)
+        {
+            // Navigate the open dialog now, or remember the target for when it loads.
+            SettingsDialog.RequestNavigate(pageKey);
+        }
+
+        if (SettingsDialog.IsOpen)
+        {
+            // Already open (possibly behind the main window or minimized) — bring it to the front.
+            SettingsDialog.ActivateExisting();
+        }
+        else
+        {
+            CmdOpenWindowSettings.Execute();
+        }
+    }
+
     public DelegateCommand CmdOpenWindowSettings => field ??= new(() =>
     {
         if (_player.IsPlaying)

@@ -339,7 +339,7 @@ public class SubTranslator
             {
                 if (isConfigError)
                 {
-                    _config.player.RaiseKnownErrorOccurred($"Translation Failed: {ex.Message}", KnownErrorType.Configuration);
+                    _config.player.RaiseKnownErrorOccurred($"Translation Failed: {ex.Message}", KnownErrorType.Configuration, KnownErrorSettingsTab.Translation);
                 }
                 else
                 {

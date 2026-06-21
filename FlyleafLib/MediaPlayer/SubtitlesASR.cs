@@ -192,6 +192,11 @@ public class SubtitlesASR
         {
             SubIndexSet.Add(subIndex);
 
+            // UI status flag (e.g. the ASR chip): true only while actively transcribing. Reset in the
+            // finally below so it always clears on completion, cancellation, or error.
+            _config.Subtitles.player.IsASRRunning = true;
+            try
+            {
             _cts = new CancellationTokenSource();
             using AudioReader reader = new(_config, subIndex);
             reader.Open(url, streamIndex, type, _cts.Token);
@@ -259,6 +264,11 @@ public class SubtitlesASR
                     // Stop spinner (required when dual ASR)
                     _subtitlesManager[i].StartLoading().Dispose();
                 }
+            }
+            }
+            finally
+            {
+                _config.Subtitles.player.IsASRRunning = false;
             }
         }
 
