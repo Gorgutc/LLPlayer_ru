@@ -38,7 +38,7 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 - Preserve Settings Keys as an editable shortcut workflow with Add/Load/Apply, clone/delete, duplicate blocking, grouped actions, custom actions, key capture, and Enter commit.
 - Preserve CheatSheet as a searchable, executable action surface with Keyboard/Mouse tabs and enabled-binding filtering.
 - Preserve explicit user-selected export path for SRT export.
-- Preserve batch subtitle output as user runtime files beside source videos. The default batch collision policy skips existing `video.ru.srt` files unless overwrite is explicitly enabled.
+- Preserve batch subtitle output as user runtime files beside source videos. Files that already have a non-empty `video.ru.srt` are detected at scan time, shown as `Completed`, and excluded from the default run; at run time an existing non-empty `video.ru.srt` is likewise marked `Completed` rather than reprocessed. Both are overridden when overwrite is explicitly enabled. Each scanned file carries an include checkbox (with a select-all/none header) controlling whether it is processed, and failed files can be retried individually (per row) or in bulk; an explicit retry forces reprocessing regardless of an existing output.
 
 ## Manual Checks When Touched
 

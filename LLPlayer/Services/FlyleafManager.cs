@@ -59,7 +59,9 @@ public class FlyleafManager
                     // ignored
                 }
 
-                Application.Current.Shutdown();
+                // Fatal config-load failure: terminate immediately so execution does not continue
+                // and initialize a throwaway default AppConfig during teardown.
+                Environment.Exit(1);
             }
         }
 

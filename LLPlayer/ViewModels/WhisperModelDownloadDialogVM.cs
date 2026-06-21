@@ -110,6 +110,7 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
         }
         finally
         {
+            _cts?.Dispose();
             _cts = null;
             DeleteTempModel();
         }

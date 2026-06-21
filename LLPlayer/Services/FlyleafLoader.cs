@@ -37,7 +37,9 @@ public static class FlyleafLoader
                     // ignored
                 }
 
-                Application.Current.Shutdown();
+                // Fatal config-load failure: terminate immediately so execution does not continue
+                // and build the engine/player on a throwaway default config during teardown.
+                Environment.Exit(1);
             }
         }
 
@@ -76,7 +78,9 @@ public static class FlyleafLoader
                     // ignored
                 }
 
-                Application.Current.Shutdown();
+                // Fatal config-load failure: terminate immediately so execution does not continue
+                // and build the engine/player on a throwaway default config during teardown.
+                Environment.Exit(1);
             }
         }
 

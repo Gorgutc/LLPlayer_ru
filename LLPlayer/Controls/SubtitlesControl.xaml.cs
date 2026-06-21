@@ -67,7 +67,16 @@ public partial class SubtitlesControl : UserControl
 
     private async void SelectableSubtitleText_OnWordClicked(object sender, WordClickedEventArgs e)
     {
-        await WordPopupControl.OnWordClicked(e);
+        try
+        {
+            await WordPopupControl.OnWordClicked(e);
+        }
+        catch (Exception ex)
+        {
+            // async void: never let a word-lookup failure (Process.Start, PDIC, translate) escape to the
+            // global dispatcher handler as an intrusive modal — surface it as a non-blocking snackbar.
+            FL.MessageQueue.Enqueue($"Word lookup failed: {ex.Message}");
+        }
     }
 
     private void SelectableSubtitleText_OnWordClickedDown(object? sender, EventArgs e)

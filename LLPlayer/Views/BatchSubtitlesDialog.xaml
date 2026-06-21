@@ -107,7 +107,47 @@
                 IsReadOnly="True"
                 GridLinesVisibility="Horizontal"
                 SelectionMode="Single">
+                <DataGrid.RowStyle>
+                    <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Include}" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.RowStyle>
                 <DataGrid.Columns>
+                    <DataGridTemplateColumn Width="56" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+                        <!-- Center the cell content (and give the column enough width) so the checkbox and its
+                             hover ripple are fully visible and easy to click, not clipped to a sliver. -->
+                        <DataGridTemplateColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource MaterialDesignDataGridCell}">
+                                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                <Setter Property="Padding" Value="0" />
+                            </Style>
+                        </DataGridTemplateColumn.CellStyle>
+                        <DataGridTemplateColumn.Header>
+                            <CheckBox
+                                HorizontalAlignment="Center"
+                                ToolTip="Select all / none"
+                                AutomationProperties.Name="Select all files"
+                                IsThreeState="False"
+                                IsChecked="{Binding DataContext.AllIncluded, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                IsEnabled="{Binding DataContext.IsIdle, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                        </DataGridTemplateColumn.Header>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Cursor="Hand"
+                                    ToolTip="Include this file in the batch"
+                                    AutomationProperties.Name="Include this file in the batch"
+                                    IsChecked="{Binding Include, UpdateSourceTrigger=PropertyChanged}"
+                                    IsEnabled="{Binding DataContext.IsIdle, RelativeSource={RelativeSource AncestorType=DataGrid}}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Phase" Binding="{Binding Status}" Width="120" />
                     <DataGridTextColumn Header="Subs" Binding="{Binding SubtitleCount}" Width="60" />
                     <DataGridTemplateColumn Header="Progress" Width="190">
@@ -151,6 +191,35 @@
                     <DataGridTextColumn Header="File" Binding="{Binding MediaPath}" Width="2*" />
                     <DataGridTextColumn Header="Output" Binding="{Binding OutputPath}" Width="2*" />
                     <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
+                    <DataGridTemplateColumn Header="" Width="44" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button
+                                    Width="30" Height="30" Padding="0"
+                                    HorizontalAlignment="Center"
+                                    ToolTip="Retry this file"
+                                    AutomationProperties.Name="Retry this file"
+                                    Command="{Binding DataContext.CmdRetryJob, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    CommandParameter="{Binding}"
+                                    IsEnabled="{Binding DataContext.IsIdle, RelativeSource={RelativeSource AncestorType=DataGrid}}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignIconButton}">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="Failed">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Canceled">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                    <materialDesign:PackIcon Kind="Refresh" Width="18" Height="18" />
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                 </DataGrid.Columns>
             </DataGrid>
 
@@ -200,6 +269,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBlock
@@ -232,6 +302,17 @@
             <Button
                 Grid.Column="3"
                 Margin="8 0 0 0"
+                Command="{Binding CmdRetryFailed}"
+                ToolTip="Retry all failed files">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Refresh" Margin="0 0 6 0" />
+                    <TextBlock Text="Retry failed" />
+                </StackPanel>
+            </Button>
+
+            <Button
+                Grid.Column="4"
+                Margin="8 0 0 0"
                 Command="{Binding CmdOpenOutputFolder}"
                 ToolTip="Open output folder">
                 <StackPanel Orientation="Horizontal">
@@ -241,7 +322,7 @@
             </Button>
 
             <Button
-                Grid.Column="4"
+                Grid.Column="5"
                 Margin="8 0 0 0"
                 Command="{Binding CmdCloseDialog}"
                 ToolTip="Close">

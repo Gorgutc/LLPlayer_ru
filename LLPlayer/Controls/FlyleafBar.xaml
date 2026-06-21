@@ -100,7 +100,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Play / Pause Button -->
-                <Button Grid.Column="0" Command="{Binding FL.Player.Commands.TogglePlayPause}" ToolTip="Play / Pause">
+                <Button Grid.Column="0" Command="{Binding FL.Player.Commands.TogglePlayPause}" ToolTip="Play / Pause" AutomationProperties.Name="Play / Pause">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=Play}"/>
@@ -114,7 +114,7 @@
                 </Button>
 
                 <!-- Subtitles Primary Button -->
-                <Button Click="ButtonBase_OnClick" Grid.Column="1" Content="{materialDesign:PackIcon Kind=CcOutline}" ToolTip="Primary Subtitles">
+                <Button Click="ButtonBase_OnClick" Grid.Column="1" Content="{materialDesign:PackIcon Kind=CcOutline}" ToolTip="Primary Subtitles" AutomationProperties.Name="Primary Subtitles">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="ContextMenu">
@@ -122,25 +122,12 @@
                                     <ContextMenu ItemsSource="{StaticResource MenuSubtitlesStreams}" Style="{StaticResource FlyleafContextMenu}"/>
                                 </Setter.Value>
                             </Setter>
-                            <Style.Triggers>
-                                <EventTrigger RoutedEvent="Click">
-                                    <EventTrigger.Actions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="ContextMenu.IsOpen">
-                                                    <DiscreteBooleanKeyFrame KeyTime="0:0:0" Value="True"/>
-                                                </BooleanAnimationUsingKeyFrames>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </EventTrigger.Actions>
-                                </EventTrigger>
-                            </Style.Triggers>
                         </Style>
                     </Button.Style>
                 </Button>
 
                 <!-- Subtitles Secondary Button -->
-                <Button Click="ButtonBase_OnClick" Grid.Column="2" Foreground="{DynamicResource MaterialDesignBody}" Content="{materialDesign:PackIcon Kind=CcOutline}" ToolTip="Secondary Subtitles">
+                <Button Click="ButtonBase_OnClick" Grid.Column="2" Foreground="{DynamicResource MaterialDesignBody}" Content="{materialDesign:PackIcon Kind=CcOutline}" ToolTip="Secondary Subtitles" AutomationProperties.Name="Secondary Subtitles">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="ContextMenu">
@@ -148,24 +135,11 @@
                                     <ContextMenu ItemsSource="{StaticResource MenuSubtitlesStreams2}" Style="{StaticResource FlyleafContextMenu}"/>
                                 </Setter.Value>
                             </Setter>
-                            <Style.Triggers>
-                                <EventTrigger RoutedEvent="Click">
-                                    <EventTrigger.Actions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="ContextMenu.IsOpen">
-                                                    <DiscreteBooleanKeyFrame KeyTime="0:0:0" Value="True"/>
-                                                </BooleanAnimationUsingKeyFrames>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </EventTrigger.Actions>
-                                </EventTrigger>
-                            </Style.Triggers>
                         </Style>
                     </Button.Style>
                 </Button>
 
-                <Button Click="ButtonBase_OnClick" Grid.Column="3" Foreground="{DynamicResource MaterialDesignBody}" Content="{materialDesign:PackIcon Kind=MusicBoxOutline}" ToolTip="Audio Streams">
+                <Button Click="ButtonBase_OnClick" Grid.Column="3" Foreground="{DynamicResource MaterialDesignBody}" Content="{materialDesign:PackIcon Kind=MusicBoxOutline}" ToolTip="Audio Streams" AutomationProperties.Name="Audio Streams">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="ContextMenu">
@@ -173,26 +147,13 @@
                                     <ContextMenu ItemsSource="{StaticResource MenuAudioStreams}" Style="{StaticResource FlyleafContextMenu}"/>
                                 </Setter.Value>
                             </Setter>
-                            <Style.Triggers>
-                                <EventTrigger RoutedEvent="Click">
-                                    <EventTrigger.Actions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <BooleanAnimationUsingKeyFrames Storyboard.TargetProperty="ContextMenu.IsOpen">
-                                                    <DiscreteBooleanKeyFrame KeyTime="0:0:0" Value="True"/>
-                                                </BooleanAnimationUsingKeyFrames>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </EventTrigger.Actions>
-                                </EventTrigger>
-                            </Style.Triggers>
                         </Style>
                     </Button.Style>
                 </Button>
 
                 <!-- Quality + Movies Title -->
                 <StackPanel Grid.Column="4" Orientation="Horizontal">
-                    <Button Click="ButtonBase_OnClick" ToolTip="Video Streams">
+                    <Button Click="ButtonBase_OnClick" ToolTip="Video Streams" AutomationProperties.Name="Video Streams">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                                 <Setter Property="Content" Value="{materialDesign:PackIcon Kind=QualityLow}"/>
@@ -249,7 +210,7 @@ Right Click: Open Context Menu</ToolTip>
                     </TextBlock>
                 </StackPanel>
 
-                <Button Grid.Column="5" Content="{materialDesign:PackIcon Kind=SkipPrevious}" Command="{Binding FL.Player.Commands.Reopen}" CommandParameter="{Binding FL.Player.Playlist.PrevItem}" ToolTip="Previous Playlist Item">
+                <Button Grid.Column="5" Content="{materialDesign:PackIcon Kind=SkipPrevious}" Command="{Binding FL.Player.Commands.Reopen}" CommandParameter="{Binding FL.Player.Playlist.PrevItem}" ToolTip="Previous Playlist Item" AutomationProperties.Name="Previous Playlist Item">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Visibility" Value="Visible"/>
@@ -262,7 +223,7 @@ Right Click: Open Context Menu</ToolTip>
                     </Button.Style>
                 </Button>
 
-                <Button Grid.Column="6" Content="{materialDesign:PackIcon Kind=SkipNext}" Command="{Binding FL.Player.Commands.Reopen}" CommandParameter="{Binding FL.Player.Playlist.NextItem}" ToolTip="Next Playlist Item">
+                <Button Grid.Column="6" Content="{materialDesign:PackIcon Kind=SkipNext}" Command="{Binding FL.Player.Commands.Reopen}" CommandParameter="{Binding FL.Player.Playlist.NextItem}" ToolTip="Next Playlist Item" AutomationProperties.Name="Next Playlist Item">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Visibility" Value="Visible"/>
@@ -276,7 +237,7 @@ Right Click: Open Context Menu</ToolTip>
                 </Button>
 
                 <!-- Volume Button (Mute/Unmute) -->
-                <Button Grid.Column="7" Foreground="{DynamicResource MaterialDesignBody}" Command="{Binding FL.Player.Commands.ToggleMute}" ToolTip="Mute / Unmute">
+                <Button Grid.Column="7" Foreground="{DynamicResource MaterialDesignBody}" Command="{Binding FL.Player.Commands.ToggleMute}" ToolTip="Mute / Unmute" AutomationProperties.Name="Mute / Unmute">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=VolumeHigh}"/>
@@ -302,10 +263,10 @@ Right Click: Open Context Menu</ToolTip>
                 <Slider Grid.Column="8" Style="{DynamicResource FlyleafSlider}" Cursor="Hand" Foreground="{DynamicResource MaterialDesignBody}" Focusable="False" Margin="0,0,6,0" Width="100" VerticalAlignment="Center" Minimum="0" Maximum="{Binding FL.PlayerConfig.Audio.VolumeMax, Mode=OneWay}" d:Maximum="150" d:Value="75" Value="{Binding FL.Player.Audio.Volume}"/>
 
                 <!-- Open Settings Button -->
-                <Button Grid.Column="9" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings"/>
+                <Button Grid.Column="9" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings" AutomationProperties.Name="Open Settings"/>
 
                 <!-- Toggle Sub Sidebar -->
-                <Button Grid.Column="10" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar">
+                <Button Grid.Column="10" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar" AutomationProperties.Name="Toggle Sub Sidebar">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=DockRight}"/>
@@ -319,7 +280,7 @@ Right Click: Open Context Menu</ToolTip>
                 </Button>
 
                 <!-- Toggle Fullscreen Button -->
-                <ToggleButton Grid.Column="11" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen"/>
+                <ToggleButton Grid.Column="11" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen" AutomationProperties.Name="Toggle Fullscreen"/>
             </Grid>
         </Grid>
     </materialDesign:Card>

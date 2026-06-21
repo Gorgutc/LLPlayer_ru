@@ -22,15 +22,18 @@ public partial class FlyleafOverlay : UserControl
 
     private void FlyleafOverlay_OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (!e.HeightChanged)
+        if (!e.HeightChanged && !e.WidthChanged)
             return;
 
         // The height of MainWindow cannot be used because it includes the title bar, so the overlay
-        // height is captured here. Debounce: writing ScreenWidth/Height to the shared config on every
+        // size is captured here. Debounce: writing ScreenWidth/Height to the shared config on every
         // resize frame triggers a relayout (resize -> config -> relayout loop), so commit once the
-        // gesture settles.
-        double heightDiff = Math.Abs(e.NewSize.Height - e.PreviousSize.Height);
-        if (heightDiff < 1.0)
+        // gesture settles. Both dimensions are captured so a width-only resize is not dropped (only the
+        // ScreenHeight setter currently feeds layout; ScreenWidth is captured for completeness).
+        double sizeDiff = Math.Max(
+            Math.Abs(e.NewSize.Width - e.PreviousSize.Width),
+            Math.Abs(e.NewSize.Height - e.PreviousSize.Height));
+        if (sizeDiff < 1.0)
             return;
 
         _pendingScreenSize = e.NewSize;

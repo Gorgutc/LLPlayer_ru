@@ -48,10 +48,14 @@
                         <Setter Property="Height" Value="20" />
                         <Setter Property="Margin" Value="0 0 4 0" />
                         <Setter Property="Focusable" Value="False" />
-                        <Setter Property="Foreground" Value="{x:Null}" />
+                        <!-- Visible-but-dim at rest (was invisible until hover) so the per-row actions are
+                             discoverable; brighten to the accent on hover. -->
+                        <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+                        <Setter Property="Opacity" Value="0.45" />
                         <Style.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Secondary}" />
+                                <Setter Property="Opacity" Value="1.0" />
                             </Trigger>
                         </Style.Triggers>
                     </Style>
@@ -83,6 +87,8 @@
                                     </MultiBinding>
                                 </DataTrigger.Binding>
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+                                <!-- Full opacity for the currently-playing row even without hover (base rests at 0.45). -->
+                                <Setter Property="Opacity" Value="1.0" />
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
@@ -360,6 +366,7 @@
                         <Button
                             x:Name="PlayButton"
                             Grid.Column="0"
+                            AutomationProperties.Name="Play from this subtitle"
                             FlowDirection="LeftToRight"
                             ToolTipService.InitialShowDelay="200"
                             ToolTip="{Binding StartTime, Converter={StaticResource TimeSpanToStringConv}}"
@@ -392,6 +399,7 @@
                         <Button
                             x:Name="SubSyncButton"
                             Grid.Column="2"
+                            AutomationProperties.Name="Sync subtitle to current time"
                             FlowDirection="LeftToRight"
                             ToolTip="Adjust the delay so that this subtitle is currently playing."
                             Command="{Binding DataContext.CmdSubSync, ElementName=SubtitleListBox}"

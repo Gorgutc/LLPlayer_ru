@@ -11,9 +11,12 @@
                 <materialDesign:CustomColorTheme BaseTheme="Dark" PrimaryColor="#D23D6F" SecondaryColor="#00B8D4" />
                 <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesign2.Defaults.xaml" />
 
+                <!-- Order is load-bearing: PopupMenu.xaml uses StaticResource keys defined in
+                     MaterialDesignMy.xaml + Converters.xaml (and the MDIX defaults above), so it must
+                     stay merged after them. Do not reorder. -->
                 <ResourceDictionary Source="/Resources/MaterialDesignMy.xaml"/>
                 <ResourceDictionary Source="/Resources/Converters.xaml"/>
-                <ResourceDictionary Source="/Resources/PopUpMenu.xaml"/>
+                <ResourceDictionary Source="/Resources/PopupMenu.xaml"/>
                 <ResourceDictionary Source="/Resources/Validators.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

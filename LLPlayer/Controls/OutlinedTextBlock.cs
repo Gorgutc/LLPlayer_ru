@@ -113,6 +113,7 @@ public class OutlinedTextBlock : FrameworkElement
     private Geometry? _TextGeometry;
     private Pen? _Pen;
     private PathGeometry? _clipGeometry;
+    private (double Width, double Height, double StrokeThickness, StrokePosition StrokePosition, string? Text) _geometryKey;
 
     public Brush Fill
     {
@@ -301,8 +302,24 @@ public class OutlinedTextBlock : FrameworkElement
         _FormattedText!.MaxTextWidth = finalSize.Width;
         _FormattedText!.MaxTextHeight = Math.Max(0.0001d, finalSize.Height);
 
-        // need to re-generate the geometry now that the dimensions have changed
-        _TextGeometry = null;
+        // Only invalidate the (expensive) geometry/clip when an input that
+        // affects it actually changed. Pooled word elements re-arrange on every
+        // subtitle change even when text/size/stroke are unchanged; gating here
+        // skips a redundant FormattedText.BuildGeometry + Geometry.Combine.
+        // Font/text/alignment/decoration changes are already handled by the
+        // OnFormattedText* callbacks, which null _TextGeometry independently;
+        // the inputs with no such callback (size, StrokeThickness, StrokePosition)
+        // are captured here.
+        var geometryKey = (finalSize.Width, finalSize.Height, StrokeThickness, StrokePosition, Text);
+        if (_geometryKey != geometryKey)
+        {
+            _geometryKey = geometryKey;
+
+            // need to re-generate the geometry now that the dimensions have changed
+            _TextGeometry = null;
+            _clipGeometry = null;
+        }
+
         UpdatePen();
 
         return finalSize;
