@@ -156,7 +156,7 @@ public class AppActions
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"OpenNextPrevFile is failed: {ex.Message}");
+            ErrorDialogHelper.ShowKnownErrorPopup($"OpenNextPrevFile is failed: {ex.Message}", "Open file");
         }
     }
 
@@ -303,9 +303,10 @@ public class AppActions
                     _player.OSDMessage = "Copy All Subtitle Text";
                 }
             }
-            catch
+            catch (System.ComponentModel.Win32Exception)
             {
-                // ignored
+                // Clipboard was locked/busy (transient, e.g. another app holds it) — ignore; the next
+                // copy retries. Other exception types are no longer swallowed.
             }
         }
     });
@@ -339,9 +340,10 @@ public class AppActions
                     _player.OSDMessage = $"Copy {(subIndex == 0 ? "Primary" : "Secondary")} Subtitle Text";
                 }
             }
-            catch
+            catch (System.ComponentModel.Win32Exception)
             {
-                // ignored
+                // Clipboard was locked/busy (transient) — ignore; the next copy retries. Other exception
+                // types are no longer swallowed.
             }
         }
     }

@@ -20,6 +20,9 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 {
     public FlyleafManager FL { get; }
     private ITranslateService? _translateService;
+    // One-shot guard: the actionable word-translation config-error snackbar is enqueued at most once
+    // until the user changes translation settings (reset in the settings-change handlers, NOT in Clear()).
+    private bool _wordTranslateConfigErrorNotified;
     private readonly TranslateServiceFactory _translateServiceFactory;
     private PDICSender? _pdicSender;
     private readonly Lock _locker = new();
@@ -37,15 +40,17 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
         FL = ((App)Application.Current).Container.Resolve<FlyleafManager>();
 
-        FL.Player.PropertyChanged += Player_OnPropertyChanged;
-
         _translateServiceFactory = new TranslateServiceFactory(FL.PlayerConfig.Subtitles);
 
-        FL.PlayerConfig.Subtitles.PropertyChanged += SubtitlesOnPropertyChanged;
-        FL.PlayerConfig.Subtitles.TranslateChatConfig.PropertyChanged += ChatConfigOnPropertyChanged;
-        FL.Player.SubtitlesManager[0].PropertyChanged += SubManagerOnPropertyChanged;
-        FL.Player.SubtitlesManager[1].PropertyChanged += SubManagerOnPropertyChanged;
-        FL.Config.Subs.PropertyChanged += SubsOnPropertyChanged;
+        // Subscribe via weak events: Player/Config/SubtitlesManager are app-lifetime singletons, and a
+        // direct += would root this control for the whole process. Weak handlers fire identically to +=
+        // (empty propertyName = all PropertyChanged) but let the popup be collected once its host is gone.
+        PropertyChangedEventManager.AddHandler(FL.Player, Player_OnPropertyChanged, string.Empty);
+        PropertyChangedEventManager.AddHandler(FL.PlayerConfig.Subtitles, SubtitlesOnPropertyChanged, string.Empty);
+        PropertyChangedEventManager.AddHandler(FL.PlayerConfig.Subtitles.TranslateChatConfig, ChatConfigOnPropertyChanged, string.Empty);
+        PropertyChangedEventManager.AddHandler(FL.Player.SubtitlesManager[0], SubManagerOnPropertyChanged, string.Empty);
+        PropertyChangedEventManager.AddHandler(FL.Player.SubtitlesManager[1], SubManagerOnPropertyChanged, string.Empty);
+        PropertyChangedEventManager.AddHandler(FL.Config.Subs, SubsOnPropertyChanged, string.Empty);
 
         InitializeContextMenu();
     }
@@ -73,6 +78,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             case nameof(Config.SubtitlesConfig.TranslateTargetLanguage):
             case nameof(Config.SubtitlesConfig.LanguageFallbackPrimary):
                 // Apply translating settings changes
+                _wordTranslateConfigErrorNotified = false;
                 Clear();
                 break;
         }
@@ -81,6 +87,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
     private void ChatConfigOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         // Apply translating settings changes
+        _wordTranslateConfigErrorNotified = false;
         Clear();
     }
 
@@ -89,6 +96,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         if (e.PropertyName == nameof(SubManager.Language))
         {
             // Apply source language changes
+            _wordTranslateConfigErrorNotified = false;
             Clear();
         }
     }
@@ -221,9 +229,15 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
                 Clear();
 
                 // Recoverable word-translation config error → actionable snackbar with a deep-link to the
-                // translation settings, instead of a topmost modal.
-                FL.MessageQueue.Enqueue(ex.Message, "OPEN SETTINGS",
-                    () => FL.Action.OpenSettingsAt(KnownErrorSettingsTab.Translation));
+                // translation settings, instead of a topmost modal. Enqueue once until settings change:
+                // repeated word clicks keep re-entering this block (_translateService stays null), so an
+                // unguarded Enqueue would stack duplicate snackbars.
+                if (!_wordTranslateConfigErrorNotified)
+                {
+                    _wordTranslateConfigErrorNotified = true;
+                    FL.MessageQueue.Enqueue(ex.Message, "OPEN SETTINGS",
+                        () => FL.Action.OpenSettingsAt(KnownErrorSettingsTab.Translation));
+                }
 
                 return text;
             }

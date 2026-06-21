@@ -91,6 +91,9 @@ public partial class SettingsDialog : UserControl
         {
             _current = null;
         }
+
+        // Drop any unapplied deep-link target so it cannot hijack the next (manual) open.
+        _pendingTab = null;
     }
 
     /// <summary>Bring the open settings window to the front (restoring it if minimized).</summary>
@@ -125,12 +128,17 @@ public partial class SettingsDialog : UserControl
         TreeViewItem? item = FindTreeViewItem(SettingsTreeView.Items, pageKey);
         if (item != null)
         {
+            bool wasSelected = item.IsSelected;
             item.IsSelected = true;
             item.BringIntoView();
 
-            // Selecting an already-selected node raises no SelectedItemChanged, so load the page
-            // explicitly to guarantee a deep-link always shows its target section.
-            LoadPage(pageKey);
+            // Selecting a not-yet-selected node raises SelectedItemChanged -> LoadPage already runs.
+            // Only load explicitly when it was ALREADY selected (no event fires then), avoiding a double load
+            // while still guaranteeing a deep-link shows its target section.
+            if (wasSelected)
+            {
+                LoadPage(pageKey);
+            }
         }
     }
 

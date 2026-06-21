@@ -37,6 +37,10 @@ public sealed class BatchSubtitleJob : NotifyPropertyChanged
     public string MediaPath { get; }
     public string OutputPath { get; }
 
+    // UI selection: whether this file is processed when the batch runs. Default true.
+    // Auto-cleared at scan time for files that already have a translation.
+    public bool Include { get; set => Set(ref field, value); } = true;
+
     public BatchSubtitleStatus Status { get; set => Set(ref field, value); } = BatchSubtitleStatus.Pending;
     public string? Error { get; set => Set(ref field, value); }
     public int SubtitleCount { get; set => Set(ref field, value); }

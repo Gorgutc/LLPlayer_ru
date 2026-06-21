@@ -8,7 +8,7 @@ namespace FlyleafLib.MediaPlayer;
 public class BatchSubtitleProcessorTests
 {
     [Fact]
-    public async Task ProcessAsync_ShouldSkipExistingOutputAndContinueAfterFileFailure()
+    public async Task ProcessAsync_ShouldCompleteExistingOutputAndContinueAfterFileFailure()
     {
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -48,11 +48,14 @@ public class BatchSubtitleProcessorTests
 
             await processor.ProcessAsync(jobs, CancellationToken.None);
 
-            jobs[0].Status.Should().Be(BatchSubtitleStatus.Skipped);
+            jobs[0].Status.Should().Be(BatchSubtitleStatus.Completed);
             jobs[1].Status.Should().Be(BatchSubtitleStatus.Failed);
             jobs[1].Error.Should().Contain("no audio stream");
             jobs[2].Status.Should().Be(BatchSubtitleStatus.Completed);
-            writer.Writes.Should().ContainSingle(w => w.Path == jobs[2].OutputPath);
+            // The pre-existing output is detected and marked Completed WITHOUT re-running/writing;
+            // only the third (freshly transcribed) job is written.
+            writer.Writes.Should().ContainSingle()
+                .Which.Path.Should().Be(jobs[2].OutputPath);
         }
         finally
         {

@@ -6,7 +6,6 @@
              xmlns:vm="clr-namespace:LLPlayer.ViewModels"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:local="clr-namespace:LLPlayer.Views"
-             xmlns:settings="clr-namespace:LLPlayer.Controls.Settings"
              d:DataContext="{d:DesignInstance vm:SettingsDialogVM}"
              mc:Ignorable="d"
              d:Foreground="White"
@@ -200,7 +199,8 @@
                             <Setter Property="Padding" Value="3" />
                         </Style>
                     </ContentControl.Resources>
-                    <settings:SettingsPlayer />
+                    <!-- Content is populated by LoadPage() on tree selection (Player is IsSelected=True,
+                         which fires SelectedItemChanged on load), so no inline page is needed here. -->
                 </ContentControl>
 
                 <StackPanel

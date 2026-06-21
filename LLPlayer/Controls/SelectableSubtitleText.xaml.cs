@@ -352,7 +352,9 @@ public partial class SelectableSubtitleText : UserControl
 
         if (TokenizeCache.Count >= TokenizeCacheMax)
         {
-            TokenizeCache.Clear();
+            // Evict the oldest entry (FIFO) instead of flushing the whole cache, so a miss at
+            // capacity stays O(1) and never triggers a burst of re-segmentation (incl. MeCab).
+            TokenizeCache.Remove(TokenizeCache.Keys.First());
         }
         TokenizeCache[key] = words;
         return words;

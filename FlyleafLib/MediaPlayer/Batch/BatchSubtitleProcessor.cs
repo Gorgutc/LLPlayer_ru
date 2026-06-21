@@ -52,9 +52,11 @@ public sealed class BatchSubtitleProcessor
                     continue;
                 }
 
-                if (!_options.OverwriteExisting && File.Exists(job.OutputPath))
+                if (!_options.OverwriteExisting && SubtitleOutputPathBuilder.OutputExists(job.OutputPath))
                 {
-                    Report(job, BatchSubtitleStatus.Skipped, completedAt: DateTimeOffset.Now);
+                    // A usable translation already exists — report Completed (not Skipped) so the dialog
+                    // shows the file as done. Skipped is reserved for "no speech detected" below.
+                    Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
                     continue;
                 }
 

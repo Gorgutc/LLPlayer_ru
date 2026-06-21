@@ -214,21 +214,28 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
     {
         _debounceCts?.Cancel();
         _debounceCts?.Dispose();
-        _debounceCts = new CancellationTokenSource();
-        var token = _debounceCts.Token;
+        var cts = new CancellationTokenSource();
+        _debounceCts = cts;
+        var token = cts.Token;
 
         try
         {
             await Task.Delay(300, token); // 300ms debounce
 
-            if (!token.IsCancellationRequested)
+            // Apply only if this invocation's CTS is still the active one — CmdClearSearch or a newer
+            // DebounceFilter may have cancelled/disposed/replaced it while we were awaiting.
+            if (!token.IsCancellationRequested && ReferenceEquals(_debounceCts, cts))
             {
                 ApplyFilter();
             }
         }
         catch (OperationCanceledException)
         {
-            // ignore
+            // ignore: superseded by a newer search or cleared
+        }
+        catch (ObjectDisposedException)
+        {
+            // ignore: CmdClearSearch disposed the CTS backing our token while awaiting (UI-thread continuation race)
         }
     }
 

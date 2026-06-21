@@ -164,7 +164,13 @@ public class ColorToBrushConverter : IValueConverter
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is Color color)
-            return new SolidColorBrush(color);
+        {
+            // Freeze so the brush is immutable and cheap to share on the subtitle Fill/Stroke hot path.
+            // All consumers feed it to read-only render props; colour edits rebind a new Color.
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
 
         return Binding.DoNothing;
     }

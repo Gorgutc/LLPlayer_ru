@@ -8,7 +8,7 @@ public static class ErrorDialogHelper
 {
     public static void ShowKnownErrorPopup(string message, string errorType)
     {
-        var dialogService = ((App)Application.Current).Container.Resolve<DialogService>();
+        var dialogService = ((App)Application.Current).Container.Resolve<IDialogService>();
 
         DialogParameters p = new()
         {
@@ -27,7 +27,7 @@ public static class ErrorDialogHelper
 
     public static void ShowUnknownErrorPopup(string message, string errorType, Exception? ex = null)
     {
-        var dialogService = ((App)Application.Current).Container.Resolve<DialogService>();
+        var dialogService = ((App)Application.Current).Container.Resolve<IDialogService>();
 
         DialogParameters p = new()
         {

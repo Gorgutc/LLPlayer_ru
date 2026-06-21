@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -99,6 +100,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 OnPropertyChanged(nameof(CanScan));
                 OnPropertyChanged(nameof(CanStart));
                 OnPropertyChanged(nameof(CanCancel));
+                OnPropertyChanged(nameof(IsIdle));
+                OnPropertyChanged(nameof(CanRetryFailed));
             }
         }
     }
@@ -112,6 +115,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             {
                 OnPropertyChanged(nameof(CanScan));
                 OnPropertyChanged(nameof(CanStart));
+                OnPropertyChanged(nameof(IsIdle));
+                OnPropertyChanged(nameof(CanRetryFailed));
             }
         }
     }
@@ -119,9 +124,32 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     public string SummaryText { get; set => Set(ref field, value); } = string.Empty;
 
     public bool CanScan => !IsRunning && !IsScanning && Directory.Exists(FolderPath);
-    public bool CanStart => !IsRunning && !IsScanning && Jobs.Count > 0;
+    public bool CanStart => IsIdle && Jobs.Any(j => j.Include);
     public bool CanCancel => IsRunning;
+    public bool IsIdle => !IsRunning && !IsScanning;
+    public bool CanRetryFailed => IsIdle && Jobs.Any(j => j.Status == BatchSubtitleStatus.Failed);
     public bool CanOpenOutputFolder => Directory.Exists(GetOutputFolder());
+
+    // Tri-state "select all / none" bound to the DataGrid header checkbox.
+    // null = mixed selection (display-only; user clicks only toggle true/false since IsThreeState=False).
+    public bool? AllIncluded
+    {
+        get
+        {
+            if (Jobs.Count == 0)
+                return false;
+            if (Jobs.All(j => j.Include))
+                return true;
+            return Jobs.All(j => !j.Include) ? false : null;
+        }
+        set
+        {
+            bool target = value == true;
+            foreach (BatchSubtitleJob job in Jobs)
+                job.Include = target;
+            // Per-job PropertyChanged (OnJobPropertyChanged) refreshes AllIncluded/CanStart/summary.
+        }
+    }
 
     public DelegateCommand CmdBrowseFolder => field ??= new(() =>
     {
@@ -153,15 +181,32 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
         try
         {
-            List<string> mediaPaths = await Task.Run(() =>
-                BatchVideoScanner.Scan(FolderPath, Recursive).ToList());
+            bool overwrite = OverwriteExisting;
+            List<(string Path, bool HasTranslation)> scanned = await Task.Run(() =>
+                BatchVideoScanner.Scan(FolderPath, Recursive)
+                    .Select(path => (path, HasTranslation: SubtitleOutputPathBuilder.TranslationExists(path)))
+                    .ToList());
 
+            UnsubscribeJobs();
             Jobs.Clear();
-            foreach (string mediaPath in mediaPaths)
+            foreach ((string mediaPath, bool hasTranslation) in scanned)
             {
-                Jobs.Add(new BatchSubtitleJob(mediaPath));
+                BatchSubtitleJob job = new(mediaPath);
+                if (hasTranslation)
+                {
+                    // Already translated — show it as done. Unless overwriting, drop it from the
+                    // default run so Start only processes the not-yet-translated files.
+                    job.Status = BatchSubtitleStatus.Completed;
+                    job.CompletedAt = DateTimeOffset.Now;
+                    if (!overwrite)
+                        job.Include = false;
+                }
+
+                job.PropertyChanged += OnJobPropertyChanged;
+                Jobs.Add(job);
             }
 
+            OnPropertyChanged(nameof(AllIncluded));
             UpdateSummary();
         }
         catch (Exception ex)
@@ -177,17 +222,45 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
     public AsyncDelegateCommand CmdStart => field ??= new AsyncDelegateCommand(async () =>
     {
+        await RunAsync(Jobs.Where(job => job.Include).ToList());
+    }).ObservesCanExecute(() => CanStart);
+
+    public AsyncDelegateCommand CmdRetryFailed => field ??= new AsyncDelegateCommand(async () =>
+    {
+        await RunAsync(Jobs.Where(job => job.Status == BatchSubtitleStatus.Failed).ToList(), forceOverwrite: true);
+    }).ObservesCanExecute(() => CanRetryFailed);
+
+    public DelegateCommand<BatchSubtitleJob> CmdRetryJob => field ??= new DelegateCommand<BatchSubtitleJob>(job =>
+    {
+        if (job is null || !IsIdle)
+            return;
+
+        // Explicit retry: force re-processing even if a stale/partial output already exists.
+        _ = RunAsync([job], forceOverwrite: true);
+    }).ObservesCanExecute(() => IsIdle);
+
+    // Shared run path for Start, per-row retry, and "Retry failed". Each call builds its own CTS,
+    // processor, and capacity-1 channel, so re-running a subset is safe. Only the jobs in 'toRun'
+    // are reset, preserving scan-time Completed/Include marks on the rows left alone.
+    private async Task RunAsync(IReadOnlyList<BatchSubtitleJob> toRun, bool forceOverwrite = false)
+    {
         if (IsRunning)
             return;
 
         PersistBatchDefaults();
 
-        List<BatchSubtitleJob> workerJobs = Jobs.Select(job => new BatchSubtitleJob(job.MediaPath)).ToList();
-        Dictionary<string, BatchSubtitleJob> uiJobs = Jobs
+        if (toRun.Count == 0)
+        {
+            UpdateSummary();
+            return;
+        }
+
+        List<BatchSubtitleJob> workerJobs = toRun.Select(job => new BatchSubtitleJob(job.MediaPath)).ToList();
+        Dictionary<string, BatchSubtitleJob> uiJobs = toRun
             .GroupBy(job => job.MediaPath, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
-        foreach (BatchSubtitleJob job in Jobs)
+        foreach (BatchSubtitleJob job in toRun)
         {
             job.Status = BatchSubtitleStatus.Pending;
             job.Error = null;
@@ -254,7 +327,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 new BatchSubtitleOptions
                 {
                     Recursive = Recursive,
-                    OverwriteExisting = OverwriteExisting,
+                    OverwriteExisting = OverwriteExisting || forceOverwrite,
                     Utf8Bom = FL.Config.Subs.SubsExportUTF8WithBom
                 },
                 progress);
@@ -263,7 +336,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
         catch (OperationCanceledException)
         {
-            MarkPendingCanceled();
+            MarkPendingCanceled(toRun);
             UpdateSummary();
         }
         catch (Exception ex)
@@ -277,7 +350,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             IsRunning = false;
             UpdateSummary();
         }
-    }).ObservesCanExecute(() => CanStart);
+    }
 
     public DelegateCommand CmdCancel => field ??= new DelegateCommand(() =>
     {
@@ -341,12 +414,30 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         OnPropertyChanged(nameof(CanOpenOutputFolder));
     }
 
-    private void MarkPendingCanceled()
+    private static void MarkPendingCanceled(IEnumerable<BatchSubtitleJob> scope)
     {
-        foreach (BatchSubtitleJob job in Jobs.Where(job => job.Status == BatchSubtitleStatus.Pending))
+        foreach (BatchSubtitleJob job in scope.Where(job => job.Status == BatchSubtitleStatus.Pending))
         {
             job.Status = BatchSubtitleStatus.Canceled;
             job.CompletedAt = DateTimeOffset.Now;
+        }
+    }
+
+    private void OnJobPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BatchSubtitleJob.Include))
+        {
+            OnPropertyChanged(nameof(CanStart));
+            OnPropertyChanged(nameof(AllIncluded));
+            UpdateSummary();
+        }
+    }
+
+    private void UnsubscribeJobs()
+    {
+        foreach (BatchSubtitleJob job in Jobs)
+        {
+            job.PropertyChanged -= OnJobPropertyChanged;
         }
     }
 
@@ -401,7 +492,10 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 or BatchSubtitleStatus.Translating
                 or BatchSubtitleStatus.Saving);
 
-        SummaryText = $"{Jobs.Count} files | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
+        int included = Jobs.Count(job => job.Include);
+        SummaryText = $"{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
+
+        OnPropertyChanged(nameof(CanRetryFailed));
     }
 
     #region IDialogAware
@@ -432,6 +526,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     public void OnDialogClosed()
     {
         _cts?.Cancel();
+        UnsubscribeJobs();
     }
 
     public void OnDialogOpened(IDialogParameters parameters)
