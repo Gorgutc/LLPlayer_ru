@@ -25,6 +25,23 @@
     <Grid>
         <controls:SubtitlesControl />
 
+        <!-- Empty state: shown when no media is loaded. Hit-test transparent so clicks and drag &amp; drop
+             pass through to the video surface. -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding FL.Player.Playlist.Url}" Value="{x:Null}">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
+            <materialDesign:PackIcon Kind="MovieOpenOutline" Width="72" Height="72" HorizontalAlignment="Center" Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.5" />
+            <TextBlock Text="Open a file or drag &amp; drop here" Margin="0 12 0 0" HorizontalAlignment="Center" FontSize="18" Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.6" />
+        </StackPanel>
+
         <Grid Margin="6 4 6 4">
             <!-- Debug Info -->
             <!-- TODO: L: make it dedicated window -->

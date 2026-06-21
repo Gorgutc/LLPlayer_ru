@@ -1,5 +1,6 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Services;
 
@@ -9,6 +10,9 @@ public partial class SubtitlesControl : UserControl
 {
     public FlyleafManager FL { get; }
 
+    private DispatcherTimer? _subsResizeTimer;
+    private Size _pendingSubsSize;
+
     public SubtitlesControl()
     {
         InitializeComponent();
@@ -16,19 +20,48 @@ public partial class SubtitlesControl : UserControl
         FL = ((App)Application.Current).Container.Resolve<FlyleafManager>();
 
         DataContext = this;
+        Unloaded += OnUnloaded;
     }
 
     private void SubtitlePanel_OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (e.HeightChanged)
+        if (!e.HeightChanged)
+            return;
+
+        // Sometimes there is a very small decimal-point difference when subtitles switch and this event
+        // fires; only react past a threshold. Debounce too: writing SubsPanelSize on every resize frame
+        // re-lays-out the window (resize -> config -> relayout loop).
+        double heightDiff = Math.Abs(e.NewSize.Height - e.PreviousSize.Height);
+        if (heightDiff < 1.0)
+            return;
+
+        _pendingSubsSize = e.NewSize;
+        _subsResizeTimer ??= CreateSubsResizeTimer();
+        _subsResizeTimer.Stop();
+        _subsResizeTimer.Start();
+    }
+
+    private DispatcherTimer CreateSubsResizeTimer()
+    {
+        var timer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            // Sometimes there is a very small difference in decimal points when the subtitles are switched, and this event fires.
-            // If you update the margin of the Sub at this time, the window will go wrong, so do it only when the difference is above a certain level.
-            double heightDiff = Math.Abs(e.NewSize.Height - e.PreviousSize.Height);
-            if (heightDiff >= 1.0)
-            {
-                FL.Config.Subs.SubsPanelSize = e.NewSize;
-            }
+            Interval = TimeSpan.FromMilliseconds(120)
+        };
+        timer.Tick += (_, _) =>
+        {
+            _subsResizeTimer!.Stop();
+            FL.Config.Subs.SubsPanelSize = _pendingSubsSize;
+        };
+        return timer;
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        // Flush a pending resize so the final size is not lost if the control unloads mid-gesture.
+        if (_subsResizeTimer is { IsEnabled: true })
+        {
+            _subsResizeTimer.Stop();
+            FL.Config.Subs.SubsPanelSize = _pendingSubsSize;
         }
     }
 

@@ -91,6 +91,7 @@
             OverlayCreated="FlyleafHost_OverlayCreated"
             Player="{Binding FL.Player}"
             KeyBindings="Both"
+            OpenOnDrop="Both"
             PanRotateOnShiftWheel="None"
             PanZoomOnCtrlWheel="None"
             AttachedDragMove="None"
