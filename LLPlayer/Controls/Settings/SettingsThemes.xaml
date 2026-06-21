@@ -8,6 +8,7 @@
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:controls="clr-namespace:LLPlayer.Controls.Settings.Controls"
              xmlns:helpers="clr-namespace:LLPlayer.Extensions"
+             xmlns:services="clr-namespace:LLPlayer.Services"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:SettingsDialogVM}"
              d:Foreground="White"
@@ -23,6 +24,20 @@
 
             <GroupBox Header="Themes">
                 <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
+                        <TextBlock
+                            Width="180"
+                            Text="Theme" />
+                        <ComboBox
+                            Width="160"
+                            SelectedValuePath="Tag"
+                            SelectedValue="{Binding FL.Config.Theme.Mode}">
+                            <ComboBoxItem Content="Dark" Tag="{x:Static services:ThemeMode.Dark}" />
+                            <ComboBoxItem Content="Light" Tag="{x:Static services:ThemeMode.Light}" />
+                            <ComboBoxItem Content="Follow Windows" Tag="{x:Static services:ThemeMode.FollowOS}" />
+                        </ComboBox>
+                    </StackPanel>
+
                     <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
                         <TextBlock
                             Width="180"
@@ -110,6 +125,38 @@
                         </TextBlock>
                         <ToggleButton
                             IsChecked="{Binding FL.Config.IsDarkTitlebar}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0 16 0 0">
+                        <TextBlock Width="180">
+                            Sync Accent Color
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Use the Windows accent color as the app primary color (live). Turn off to restore your chosen Primary Color."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon Kind="Information" Width="16" Height="16" Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton IsChecked="{Binding FL.Config.AccentColorSync}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0 16 0 0">
+                        <TextBlock Width="180">
+                            Mica Backdrop (Win11)
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Win11 translucent window backdrop on the title bar / borders (restart to apply). The video area is unaffected (DirectX airspace)."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon Kind="Information" Width="16" Height="16" Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton IsChecked="{Binding FL.Config.MicaBackdrop}" />
                     </StackPanel>
                 </StackPanel>
             </GroupBox>

@@ -4,7 +4,7 @@ This document freezes the current WPF/UI design decisions from `main`.
 
 ## Visual Style
 
-- Dark MaterialDesign2 theme is the default.
+- Dark MaterialDesign2 theme is the default. Light and Follow-Windows theme modes, a Win11 Mica backdrop, and Windows accent-color sync are opt-in (Settings ▸ Themes); all default off so the dark MaterialDesign2 look is the shipped default. Theme mode applies live via `PaletteHelper`; Mica is restart-to-apply and, due to the FlyleafHost DirectX child-HWND airspace, only affects chrome/borders (never the video surface).
 - App colors originate from `App.xaml` and app theme settings.
 - MaterialDesign PackIcon is the primary icon language for toolbar and menu actions.
 - Resource dictionaries under `LLPlayer/Resources` and `LLPlayer/Themes` are shared UI infrastructure, not per-view decoration.

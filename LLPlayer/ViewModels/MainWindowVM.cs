@@ -67,7 +67,11 @@ public class MainWindowVM : Bindable
                 // Recoverable configuration errors with a known settings section are shown as an actionable
                 // snackbar (with a deep-link) instead of a modal. Everything else (e.g. live-stream ASR, or
                 // a Configuration error without a target) keeps the topmost modal so it stays visible.
-                if (args.ErrorType == KnownErrorType.Configuration && !string.IsNullOrEmpty(args.SettingsTab))
+                if (args.ErrorType == KnownErrorType.Configuration && args.ActionHint == KnownErrorActionKeys.DownloadWhisperModel)
+                {
+                    FL.MessageQueue.Enqueue(args.Message, "DOWNLOAD", () => FL.Action.OpenWhisperModelDownload());
+                }
+                else if (args.ErrorType == KnownErrorType.Configuration && !string.IsNullOrEmpty(args.SettingsTab))
                 {
                     string tab = args.SettingsTab;
                     FL.MessageQueue.Enqueue(args.Message, "OPEN SETTINGS", () => FL.Action.OpenSettingsAt(tab));

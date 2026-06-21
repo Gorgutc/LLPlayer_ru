@@ -25,9 +25,10 @@
     <Grid>
         <controls:SubtitlesControl />
 
-        <!-- Empty state: shown when no media is loaded. Hit-test transparent so clicks and drag &amp; drop
-             pass through to the video surface. -->
-        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+        <!-- Empty state: shown when no media is loaded. The panel/icon/text have no Background, so clicks and
+             drag &amp; drop pass through to the video surface everywhere except the rendered Open File button.
+             (Do NOT set IsHitTestVisible=False here — it would also block the button.) -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
             <StackPanel.Style>
                 <Style TargetType="StackPanel">
                     <Setter Property="Visibility" Value="Collapsed" />
@@ -40,6 +41,23 @@
             </StackPanel.Style>
             <materialDesign:PackIcon Kind="MovieOpenOutline" Width="72" Height="72" HorizontalAlignment="Center" Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.5" />
             <TextBlock Text="Open a file or drag &amp; drop here" Margin="0 12 0 0" HorizontalAlignment="Center" FontSize="18" Foreground="{DynamicResource MaterialDesignBody}" Opacity="0.6" />
+            <!-- Primary CTA. Only this button has a rendered background, so clicks/drops elsewhere pass through. -->
+            <Button Margin="0 20 0 0"
+                    HorizontalAlignment="Center"
+                    Style="{StaticResource MaterialDesignRaisedButton}"
+                    Command="{Binding FL.Player.Commands.OpenFromFileDialog}"
+                    ToolTip="Open a media file (Ctrl+O)">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="FolderOutline" VerticalAlignment="Center" Margin="0 0 8 0" />
+                    <TextBlock Text="Open File" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+            <TextBlock Text="Press Ctrl+O to open a file"
+                       Margin="0 12 0 0"
+                       HorizontalAlignment="Center"
+                       FontSize="12"
+                       Foreground="{DynamicResource MaterialDesignBody}"
+                       Opacity="0.45" />
         </StackPanel>
 
         <Grid Margin="6 4 6 4">

@@ -60,24 +60,116 @@ public partial class MainWindow : Window
 
     public static void SetTitleBarDarkMode(Window window)
     {
+        try
+        {
+            var fl = ((App)Application.Current).Container.Resolve<FlyleafManager>();
+            // Single source of truth: theme resolution lives in AppConfigTheme.EffectiveDark.
+            // IsDarkTitlebar=false forces a light title bar regardless of the app theme.
+            bool dark = fl.Config.IsDarkTitlebar && fl.Config.Theme.EffectiveDark;
+            ApplyTitleBarDark(window, dark);
+        }
+        catch
+        {
+            // Title bar styling is cosmetic; never let it crash the app or a dialog window.
+        }
+    }
+
+    /// <summary>Re-applies the title-bar appearance when the theme mode changes at runtime.</summary>
+    public static void ReapplyTitleBar(bool dark)
+    {
+        try
+        {
+            // MainWindow is null during config load / CreateShell — the ctor's SetTitleBarDarkMode applies it then.
+            if (Application.Current is not App app || app.MainWindow is not { } window)
+            {
+                return;
+            }
+
+            var fl = app.Container.Resolve<FlyleafManager>();
+            ApplyTitleBarDark(window, dark && fl.Config.IsDarkTitlebar);
+        }
+        catch
+        {
+            // Cosmetic; ignore.
+        }
+    }
+
+    private static void ApplyTitleBarDark(Window window, bool dark)
+    {
         // Check OS Version
         if (!(Environment.OSVersion.Version >= new Version(10, 0, 18985)))
         {
             return;
         }
 
+        // ref: https://stackoverflow.com/questions/71362654/wpf-window-titlebar
+        IntPtr hWnd = new WindowInteropHelper(window).EnsureHandle();
+        DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, [dark ? 1 : 0], 4);
+    }
+    #endregion
+
+    #region Win11 backdrop + OS appearance hook
+    private const int WM_DWMCOLORIZATIONCOLORCHANGED = 0x0320;
+    private const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
+    private const int DWMWA_MICA_EFFECT = 1029;
+    private const int DWMSBT_MAINWINDOW = 2;
+    private AccentColorService? _accent;
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        // Live "Follow Windows" theme + opt-in accent sync: keep the watcher alive with the window and
+        // hook the accent-changed message (this runs on the UI thread).
+        _accent = ((App)Application.Current).Container.Resolve<AccentColorService>();
+        if (PresentationSource.FromVisual(this) is HwndSource src)
+        {
+            src.AddHook(WndProc);
+        }
+
+        ApplyMicaBackdrop();
+    }
+
+    private void ApplyMicaBackdrop()
+    {
         var fl = ((App)Application.Current).Container.Resolve<FlyleafManager>();
-        if (!fl.Config.IsDarkTitlebar)
+        if (!fl.Config.MicaBackdrop)
         {
             return;
         }
 
-        bool darkMode = true;
+        // Win11 only. Note: the video is a DirectX child HWND, so by WPF airspace rules the Mica backdrop
+        // can only show on chrome/borders/empty regions, never through the video surface.
+        if (!(Environment.OSVersion.Version >= new Version(10, 0, 22000)))
+        {
+            return;
+        }
 
-        // Set title bar to dark mode
-        // ref: https://stackoverflow.com/questions/71362654/wpf-window-titlebar
-        IntPtr hWnd = new WindowInteropHelper(window).EnsureHandle();
-        DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, [darkMode ? 1 : 0], 4);
+        IntPtr hWnd = new WindowInteropHelper(this).EnsureHandle();
+        if (Environment.OSVersion.Version >= new Version(10, 0, 22621))
+        {
+            DwmSetWindowAttribute(hWnd, DWMWA_SYSTEMBACKDROP_TYPE, [DWMSBT_MAINWINDOW], 4);
+        }
+        else
+        {
+            DwmSetWindowAttribute(hWnd, DWMWA_MICA_EFFECT, [1], 4);
+        }
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == WM_DWMCOLORIZATIONCOLORCHANGED)
+        {
+            _accent?.OnOsAppearanceChanged();
+        }
+
+        return IntPtr.Zero;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _accent?.Dispose();
+        base.OnClosed(e);
     }
     #endregion
 

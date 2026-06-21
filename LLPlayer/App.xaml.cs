@@ -43,6 +43,7 @@ public partial class App : PrismApplication
         containerRegistry
             .Register<Player>(FlyleafLoader.CreateFlyleafPlayer)
             .RegisterSingleton<FlyleafManager>()
+            .RegisterSingleton<AccentColorService>()
             .RegisterSingleton<IDialogService, ExtendedDialogService>();
 
         // Single app-wide snackbar queue (notifications + actionable config errors), hosted in FlyleafOverlay.
@@ -83,6 +84,28 @@ public partial class App : PrismApplication
         FlyleafLoader.StartEngine();
 
         base.OnStartup(e);
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        // Apply the persisted theme mode (Dark default / Light / FollowOS) + optional accent sync now that
+        // the shell and MDIX resources exist. This is intentionally NOT done during FlyleafManager
+        // construction (too early). Cosmetic — must never crash startup.
+        try
+        {
+            var fl = Container.Resolve<FlyleafManager>();
+            fl.Config.Theme.ApplyBaseTheme();
+            if (fl.Config.AccentColorSync)
+            {
+                fl.Config.Theme.ApplyAccentSync(AccentColorService.GetWindowsAccentColor());
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to apply startup theme: {ex}");
+        }
     }
 
     private void App_OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
