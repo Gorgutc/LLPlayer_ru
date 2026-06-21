@@ -39,6 +39,10 @@ public class WhisperEngineDownloadDialogVM : Bindable, IDialogAware
 
     public long DownloadedSize { get; set => Set(ref field, value); }
 
+    public long TotalSize { get; set => Set(ref field, value); }
+
+    public bool IsIndeterminateDownload { get; set => Set(ref field, value); } = true;
+
     public bool Downloaded => Directory.Exists(EnginePath);
 
     public bool CanDownload => !Downloaded && !CmdDownloadEngine.IsExecuting;
@@ -176,6 +180,8 @@ public class WhisperEngineDownloadDialogVM : Bindable, IDialogAware
     private async Task<long> DownloadEngineWithProgressAsync(string url, string destinationPath, CancellationToken token)
     {
         DownloadedSize = 0;
+        TotalSize = 0;
+        IsIndeterminateDownload = true;
 
         using HttpClient httpClient = new();
         httpClient.Timeout = TimeSpan.FromSeconds(10);
@@ -183,6 +189,9 @@ public class WhisperEngineDownloadDialogVM : Bindable, IDialogAware
         using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token);
 
         response.EnsureSuccessStatusCode();
+
+        TotalSize = response.Content.Headers.ContentLength ?? 0;
+        IsIndeterminateDownload = TotalSize <= 0;
 
         await using Stream engineStream = await response.Content.ReadAsStreamAsync(token);
         await using FileStream fileWriter = File.Open(destinationPath, FileMode.Create);

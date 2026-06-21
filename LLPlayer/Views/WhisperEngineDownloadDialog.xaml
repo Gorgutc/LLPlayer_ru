@@ -90,7 +90,10 @@
             Height="6"
             Visibility="{Binding CmdDownloadEngine.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}"
             Margin="0 0 0 10"
-            IsIndeterminate="True" />
+            Minimum="0"
+            Maximum="{Binding TotalSize}"
+            Value="{Binding DownloadedSize}"
+            IsIndeterminate="{Binding IsIndeterminateDownload}" />
 
         <!-- Download Size -->
         <StackPanel
@@ -101,6 +104,8 @@
             <TextBlock
                 Text="{Binding DownloadedSize, Converter={StaticResource FileSizeHumanConv}}"
                 FontWeight="Bold"/>
+            <TextBlock Text=" / " VerticalAlignment="Center" />
+            <TextBlock Text="{Binding TotalSize, Converter={StaticResource FileSizeHumanConv}}" VerticalAlignment="Center" />
         </StackPanel>
 
         <!-- Status -->
