@@ -4,12 +4,17 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:vm="clr-namespace:LLPlayer.ViewModels"
+             xmlns:conv="clr-namespace:LLPlayer.Converters"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:BatchSubtitlesDialogVM}"
              d:Foreground="White"
              d:Background="Black"
              d:DesignHeight="620" d:DesignWidth="1000">
+
+    <UserControl.Resources>
+        <conv:TimeSpanShortConverter x:Key="TimeSpanShort" />
+    </UserControl.Resources>
 
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -85,24 +90,108 @@
                 Text="{Binding FL.PlayerConfig.Subtitles.TranslateServiceType, StringFormat=Translate: {0} -> Russian}" />
         </DockPanel>
 
-        <DataGrid
-            Grid.Row="2"
-            ItemsSource="{Binding Jobs}"
-            SelectedItem="{Binding SelectedJob}"
-            AutoGenerateColumns="False"
-            CanUserAddRows="False"
-            CanUserDeleteRows="False"
-            IsReadOnly="True"
-            GridLinesVisibility="Horizontal"
-            SelectionMode="Single">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Phase" Binding="{Binding Status}" Width="140" />
-                <DataGridTextColumn Header="Subs" Binding="{Binding SubtitleCount}" Width="70" />
-                <DataGridTextColumn Header="File" Binding="{Binding MediaPath}" Width="2*" />
-                <DataGridTextColumn Header="Output" Binding="{Binding OutputPath}" Width="2*" />
-                <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="2*" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*" MinWidth="320" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="1.2*" MinWidth="200" />
+            </Grid.ColumnDefinitions>
+
+            <DataGrid
+                Grid.Column="0"
+                ItemsSource="{Binding Jobs}"
+                SelectedItem="{Binding SelectedJob}"
+                AutoGenerateColumns="False"
+                CanUserAddRows="False"
+                CanUserDeleteRows="False"
+                IsReadOnly="True"
+                GridLinesVisibility="Horizontal"
+                SelectionMode="Single">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Phase" Binding="{Binding Status}" Width="120" />
+                    <DataGridTextColumn Header="Subs" Binding="{Binding SubtitleCount}" Width="60" />
+                    <DataGridTemplateColumn Header="Progress" Width="190">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Grid VerticalAlignment="Center" Margin="2 0">
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="RunningASR">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Grid.Style>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <ProgressBar
+                                        Grid.Row="0"
+                                        Height="6"
+                                        Minimum="0" Maximum="1"
+                                        Value="{Binding Progress}"
+                                        IsIndeterminate="{Binding IsIndeterminateProgress}" />
+                                    <TextBlock
+                                        Grid.Row="1"
+                                        FontSize="10"
+                                        Foreground="{DynamicResource MaterialDesignBodyLight}">
+                                        <Run Text="{Binding ProcessedTime, Converter={StaticResource TimeSpanShort}, Mode=OneWay}" />
+                                        <Run Text="/" />
+                                        <Run Text="{Binding TotalDuration, Converter={StaticResource TimeSpanShort}, Mode=OneWay}" />
+                                        <Run Text="  " />
+                                        <Run Text="{Binding Throughput, Mode=OneWay}" />
+                                    </TextBlock>
+                                </Grid>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="File" Binding="{Binding MediaPath}" Width="2*" />
+                    <DataGridTextColumn Header="Output" Binding="{Binding OutputPath}" Width="2*" />
+                    <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <GridSplitter
+                Grid.Column="1"
+                Width="4"
+                Margin="6 0"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Stretch"
+                Background="{DynamicResource MaterialDesignDivider}" />
+
+            <DockPanel Grid.Column="2">
+                <TextBlock
+                    DockPanel.Dock="Top"
+                    Margin="0 0 0 4"
+                    FontWeight="Bold"
+                    Text="Live transcript" />
+                <TextBlock
+                    DockPanel.Dock="Top"
+                    Margin="0 0 0 6"
+                    FontSize="11"
+                    TextTrimming="CharacterEllipsis"
+                    Foreground="{DynamicResource MaterialDesignBodyLight}"
+                    Text="{Binding ActiveJob.MediaPath}" />
+                <Border
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource MaterialDesignDivider}">
+                    <ListBox
+                        x:Name="TranscriptList"
+                        ItemsSource="{Binding ActiveJob.Transcript}"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </DockPanel>
+        </Grid>
 
         <Grid Grid.Row="3" Margin="0 12 0 0">
             <Grid.ColumnDefinitions>

@@ -45,6 +45,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
     }
 
+    // The job whose ASR is currently streaming — the live transcript pane binds to its Transcript.
+    public BatchSubtitleJob? ActiveJob { get; private set => Set(ref field, value); }
+
     public string FolderPath
     {
         get;
@@ -191,7 +194,15 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             job.SubtitleCount = 0;
             job.StartedAt = null;
             job.CompletedAt = null;
+            job.ProcessedTime = null;
+            job.TotalDuration = null;
+            job.Progress = 0;
+            job.IsIndeterminateProgress = false;
+            job.Throughput = string.Empty;
+            job.Transcript.Clear();
         }
+
+        ActiveJob = null;
 
         _cts = new CancellationTokenSource();
         IsRunning = true;
@@ -203,6 +214,25 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             {
                 if (!uiJobs.TryGetValue(update.Job.MediaPath, out BatchSubtitleJob? uiJob))
                     return;
+
+                // Streaming per-segment ASR update (carries recognized text): live feedback only.
+                if (update.AsrSegmentText != null)
+                {
+                    ApplyAsrSegment(uiJob, update);
+                    UpdateSummary();
+                    return;
+                }
+
+                // New file started transcribing: reset its live feedback and focus the transcript pane.
+                if (update.Status == BatchSubtitleStatus.RunningASR)
+                {
+                    uiJob.Transcript.Clear();
+                    uiJob.Progress = 0;
+                    uiJob.ProcessedTime = null;
+                    uiJob.Throughput = string.Empty;
+                    uiJob.IsIndeterminateProgress = true;
+                    ActiveJob = uiJob;
+                }
 
                 uiJob.Status = update.Status;
                 uiJob.Error = update.Error;
@@ -317,6 +347,39 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         {
             job.Status = BatchSubtitleStatus.Canceled;
             job.CompletedAt = DateTimeOffset.Now;
+        }
+    }
+
+    private void ApplyAsrSegment(BatchSubtitleJob uiJob, BatchSubtitleProgress update)
+    {
+        ActiveJob = uiJob;
+
+        if (update.SubtitleCount.HasValue)
+            uiJob.SubtitleCount = update.SubtitleCount.Value;
+        if (update.ProcessedTime.HasValue)
+            uiJob.ProcessedTime = update.ProcessedTime;
+        if (update.TotalDuration.HasValue)
+            uiJob.TotalDuration = update.TotalDuration;
+
+        if (uiJob.TotalDuration is { Ticks: > 0 } total && uiJob.ProcessedTime is { } processed)
+        {
+            uiJob.Progress = Math.Clamp(processed.TotalSeconds / total.TotalSeconds, 0, 1);
+            uiJob.IsIndeterminateProgress = false;
+
+            if (uiJob.StartedAt is { } startedAt)
+            {
+                double elapsed = (DateTimeOffset.Now - startedAt).TotalSeconds;
+                if (elapsed >= 1.0)
+                    uiJob.Throughput = $"x{processed.TotalSeconds / elapsed:0.0} realtime";
+            }
+        }
+
+        string text = update.AsrSegmentText!.Trim();
+        if (text.Length > 0)
+        {
+            uiJob.Transcript.Add(text);
+            while (uiJob.Transcript.Count > 200)
+                uiJob.Transcript.RemoveAt(0);
         }
     }
 

@@ -196,6 +196,48 @@ public class BatchSubtitleProcessorTests
         }
     }
 
+    [Fact]
+    public async Task ProcessAsync_ShouldForwardPerSegmentAsrProgress()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string video = Path.Combine(tempDir, "video.mkv");
+            File.WriteAllText(video, "");
+
+            var asr = new StreamingFakeAsrTranscriber((path, asrProgress) =>
+            {
+                asrProgress?.Report(new BatchAsrProgress(path, 1, "hello", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(10)));
+                asrProgress?.Report(new BatchAsrProgress(path, 2, "world", TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10)));
+
+                return Task.FromResult(new BatchAsrResult(
+                    [CreateSub("hello"), CreateSub("world")],
+                    Language.English));
+            });
+
+            var collected = new CollectingProgress();
+            var processor = new BatchSubtitleProcessor(
+                asr,
+                new FakeBatchTranslator(),
+                new MemorySubtitleWriter(),
+                new BatchSubtitleOptions(),
+                collected);
+
+            await processor.ProcessAsync([new BatchSubtitleJob(video)], CancellationToken.None);
+
+            var segments = collected.Items.Where(p => p.AsrSegmentText != null).ToList();
+            segments.Select(s => s.AsrSegmentText).Should().ContainInOrder("hello", "world");
+            segments[^1].SubtitleCount.Should().Be(2);
+            segments[^1].ProcessedTime.Should().Be(TimeSpan.FromSeconds(2));
+            segments[^1].TotalDuration.Should().Be(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     private static SubtitleData CreateSub(string text) => new()
     {
         Text = text,
@@ -206,8 +248,28 @@ public class BatchSubtitleProcessorTests
     private sealed class FakeAsrTranscriber(Func<string, Task<BatchAsrResult>> transcribe)
         : IBatchAsrTranscriber
     {
-        public Task<BatchAsrResult> TranscribeAsync(string mediaPath, CancellationToken token)
+        public Task<BatchAsrResult> TranscribeAsync(
+            string mediaPath,
+            CancellationToken token,
+            IProgress<BatchAsrProgress>? asrProgress = null)
             => transcribe(mediaPath);
+    }
+
+    private sealed class StreamingFakeAsrTranscriber(
+        Func<string, IProgress<BatchAsrProgress>?, Task<BatchAsrResult>> transcribe)
+        : IBatchAsrTranscriber
+    {
+        public Task<BatchAsrResult> TranscribeAsync(
+            string mediaPath,
+            CancellationToken token,
+            IProgress<BatchAsrProgress>? asrProgress = null)
+            => transcribe(mediaPath, asrProgress);
+    }
+
+    private sealed class CollectingProgress : IProgress<BatchSubtitleProgress>
+    {
+        public ConcurrentQueue<BatchSubtitleProgress> Items { get; } = new();
+        public void Report(BatchSubtitleProgress value) => Items.Enqueue(value);
     }
 
     private sealed class FakeBatchTranslator(

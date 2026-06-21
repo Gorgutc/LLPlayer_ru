@@ -62,7 +62,11 @@ public sealed class BatchSubtitleProcessor
                 {
                     Report(job, BatchSubtitleStatus.RunningASR, startedAt: DateTimeOffset.Now);
 
-                    BatchAsrResult result = await _asrTranscriber.TranscribeAsync(job.MediaPath, token);
+                    IProgress<BatchAsrProgress>? asrProgress = _progress is null
+                        ? null
+                        : new AsrProgressForwarder(job, _progress);
+
+                    BatchAsrResult result = await _asrTranscriber.TranscribeAsync(job.MediaPath, token, asrProgress);
                     token.ThrowIfCancellationRequested();
 
                     if (result.Subtitles.Count == 0)
@@ -179,5 +183,19 @@ public sealed class BatchSubtitleProcessor
             subtitleCount,
             startedAt,
             completedAt));
+    }
+
+    // Forwards per-segment ASR progress as a BatchSubtitleProgress so it flows through the same
+    // UI-thread IProgress sink (the VM marshals it onto the dispatcher).
+    private sealed class AsrProgressForwarder(BatchSubtitleJob job, IProgress<BatchSubtitleProgress> sink)
+        : IProgress<BatchAsrProgress>
+    {
+        public void Report(BatchAsrProgress p) => sink.Report(new BatchSubtitleProgress(
+            job,
+            BatchSubtitleStatus.RunningASR,
+            SubtitleCount: p.SubtitleCount,
+            AsrSegmentText: p.Text,
+            ProcessedTime: p.Position,
+            TotalDuration: p.Duration));
     }
 }
