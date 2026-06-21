@@ -28,6 +28,10 @@ public class AppConfig : Bindable
         Loaded = true;
 
         Subs.Initialize(this, fl);
+
+        // NOTE: theme/accent are applied in App.OnInitialized (after the shell exists), NOT here —
+        // running PaletteHelper during FlyleafManager construction is too early and a failure would
+        // corrupt the singleton.
     }
 
     public string Version { get; set; } = "";
@@ -90,6 +94,25 @@ public class AppConfig : Bindable
     }
 
     public bool IsDarkTitlebar { get; set => Set(ref field, value); } = true;
+
+    /// <summary>Opt-in: use the Windows accent colour as the app primary colour (live). Default off.</summary>
+    public bool AccentColorSync
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value) && Loaded)
+            {
+                if (value)
+                    Theme.ApplyAccentSync(AccentColorService.GetWindowsAccentColor());
+                else
+                    Theme.RestorePrimaryColor();
+            }
+        }
+    }
+
+    /// <summary>Opt-in: request a Win11 Mica window backdrop (applied at startup). Default off.</summary>
+    public bool MicaBackdrop { get; set => Set(ref field, value); }
 
     public int ActivityTimeout
     {
@@ -866,9 +889,72 @@ public enum SubPositionAlignment
     Bottom  // Normal video players use this
 }
 
+public enum ThemeMode
+{
+    Dark,
+    Light,
+    FollowOS
+}
+
 public class AppConfigTheme : Bindable
 {
     private readonly PaletteHelper _paletteHelper = new();
+
+    /// <summary>App theme mode. Dark is the default; Light and FollowOS are opt-in.</summary>
+    public ThemeMode Mode
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                ApplyBaseTheme();
+                OnPropertyChanged(nameof(EffectiveDark));
+            }
+        }
+    } = ThemeMode.Dark;
+
+    /// <summary>Resolved dark/light decision (FollowOS reads the live Windows preference).</summary>
+    [JsonIgnore]
+    public bool EffectiveDark => Mode switch
+    {
+        ThemeMode.Light => false,
+        ThemeMode.FollowOS => !IsOsLightTheme(),
+        _ => true
+    };
+
+    /// <summary>Applies the resolved MDIX base theme and re-syncs the native title bar to match.</summary>
+    public void ApplyBaseTheme()
+    {
+        try
+        {
+            bool dark = EffectiveDark;
+            Theme cur = _paletteHelper.GetTheme();
+            cur.SetBaseTheme(dark ? BaseTheme.Dark : BaseTheme.Light);
+            _paletteHelper.SetTheme(cur);
+
+            LLPlayer.Views.MainWindow.ReapplyTitleBar(dark);
+        }
+        catch
+        {
+            // Theme application is cosmetic; on failure keep the App.xaml default (dark).
+        }
+    }
+
+    /// <summary>True when Windows is in light mode (HKCU Personalize\AppsUseLightTheme != 0). Defaults to dark on failure.</summary>
+    public static bool IsOsLightTheme()
+    {
+        try
+        {
+            using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("AppsUseLightTheme") is int v && v != 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     public Color PrimaryColor
     {
@@ -900,6 +986,22 @@ public class AppConfigTheme : Bindable
             }
         }
     } = (Color)ColorConverter.ConvertFromString("#00B8D4"); // Cyan
+
+    /// <summary>Applies the OS accent as the MDIX primary colour WITHOUT mutating the persisted PrimaryColor.</summary>
+    internal void ApplyAccentSync(Color accent)
+    {
+        Theme cur = _paletteHelper.GetTheme();
+        cur.SetPrimaryColor(accent);
+        _paletteHelper.SetTheme(cur);
+    }
+
+    /// <summary>Re-applies the user's stored PrimaryColor (used when accent sync is turned off).</summary>
+    internal void RestorePrimaryColor()
+    {
+        Theme cur = _paletteHelper.GetTheme();
+        cur.SetPrimaryColor(PrimaryColor);
+        _paletteHelper.SetTheme(cur);
+    }
 }
 
 public interface IMenuAction : INotifyPropertyChanged, ICloneable

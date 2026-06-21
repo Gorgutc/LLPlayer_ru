@@ -697,13 +697,14 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     // Avoid having this code in OnPaintBackground as it can cause designer issues (renderer will try to load FFmpeg.Autogen assembly because of HDR Data)
     internal bool WFPresent() { if (Renderer == null || Renderer.SwapChain.Disposed) return false; Renderer?.RenderRequest(); return true; }
 
-    internal void RaiseKnownErrorOccurred(string message, KnownErrorType errorType, string settingsTab = null)
+    internal void RaiseKnownErrorOccurred(string message, KnownErrorType errorType, string settingsTab = null, string actionHint = null)
     {
         KnownErrorOccurred?.Invoke(this, new KnownErrorOccurredEventArgs
         {
             Message = message,
             ErrorType = errorType,
-            SettingsTab = settingsTab
+            SettingsTab = settingsTab,
+            ActionHint = actionHint
         });
     }
 
@@ -735,6 +736,15 @@ public static class KnownErrorSettingsTab
     public const string Translation = "Translation";
 }
 
+/// <summary>
+/// Well-known recoverable-action keys a <see cref="KnownErrorType.Configuration"/> error can suggest.
+/// Interpreted by the host UI to offer a one-tap fix (e.g. open the Whisper model downloader).
+/// </summary>
+public static class KnownErrorActionKeys
+{
+    public const string DownloadWhisperModel = "DownloadWhisperModel";
+}
+
 public class KnownErrorOccurredEventArgs : EventArgs
 {
     public required string Message { get; init; }
@@ -745,6 +755,11 @@ public class KnownErrorOccurredEventArgs : EventArgs
     /// null means no deep-link target.
     /// </summary>
     public string SettingsTab { get; init; }
+
+    /// <summary>
+    /// Optional recoverable-action hint (see <see cref="KnownErrorActionKeys"/>); null means no action.
+    /// </summary>
+    public string ActionHint { get; init; }
 }
 
 public enum UnknownErrorType

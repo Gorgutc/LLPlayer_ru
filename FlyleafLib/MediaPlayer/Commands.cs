@@ -327,9 +327,9 @@ public class Commands
             return;
         }
 
-        if (!player.SubtitlesASR.CanExecute(out string err))
+        if (!player.SubtitlesASR.CanExecute(out string err, out string asrActionHint))
         {
-            player.RaiseKnownErrorOccurred(err, KnownErrorType.Configuration, KnownErrorSettingsTab.SubtitlesASR);
+            player.RaiseKnownErrorOccurred(err, KnownErrorType.Configuration, KnownErrorSettingsTab.SubtitlesASR, asrActionHint);
             return;
         }
 

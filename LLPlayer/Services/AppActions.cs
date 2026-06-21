@@ -424,6 +424,13 @@ public class AppActions
         }
     }
 
+    // Opens the Whisper model downloader directly (e.g. from the "missing ASR model" snackbar action).
+    public void OpenWhisperModelDownload()
+    {
+        _player.Activity.ForceFullActive();
+        _dialogService.ShowDialog(nameof(WhisperModelDownloadDialog));
+    }
+
     public DelegateCommand CmdOpenWindowSettings => field ??= new(() =>
     {
         if (_player.IsPlaying)

@@ -32,6 +32,7 @@ Do not reorder this without explicit migration work.
 - Default custom key bindings are applied only for new config files.
 - Existing key bindings may be migrated through Flyleaf config `UpdateDefault()`.
 - Batch subtitle UI defaults live in `LLPlayer.Config.json`: last folder, recursive scan, and overwrite-existing policy. Batch processing reuses ASR/Translate settings from player config snapshots and must not silently change `TranslateTargetLanguage` or Whisper translate settings in the live player config.
+- Theme/appearance keys in `LLPlayer.Config.json` are additive and absent-defaulting so existing configs are unchanged: `Theme.Mode` (default `Dark`; `Light`/`FollowOS` opt-in), `AccentColorSync` (default `false`), and `MicaBackdrop` (default `false`). The dark MaterialDesign2 theme remains the default appearance.
 
 ## Actions And Key Bindings
 

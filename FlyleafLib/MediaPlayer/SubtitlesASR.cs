@@ -57,20 +57,25 @@ public class SubtitlesASR
     /// Check that ASR is executable
     /// </summary>
     /// <param name="err">error information</param>
+    /// <param name="actionHint">recoverable-action hint (see KnownErrorActionKeys); empty when none</param>
     /// <returns></returns>
-    public bool CanExecute(out string err)
+    public bool CanExecute(out string err, out string actionHint)
     {
+        actionHint = "";
+
         if (_config.Subtitles.ASREngine == SubASREngineType.WhisperCpp)
         {
             if (_config.Subtitles.WhisperCppConfig.Model == null)
             {
                 err = "whisper.cpp model is not set. Please download it from the settings.";
+                actionHint = KnownErrorActionKeys.DownloadWhisperModel;
                 return false;
             }
 
             if (!File.Exists(_config.Subtitles.WhisperCppConfig.Model.ModelFilePath))
             {
                 err = $"whisper.cpp model file '{_config.Subtitles.WhisperCppConfig.Model.ModelFileName}' does not exist in the folder. Please download it from the settings.";
+                actionHint = KnownErrorActionKeys.DownloadWhisperModel;
                 return false;
             }
         }
