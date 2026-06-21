@@ -56,6 +56,10 @@ public class TesseractDownloadDialogVM : Bindable, IDialogAware
 
     public long DownloadedSize { get; set => Set(ref field, value); }
 
+    public long TotalSize { get; set => Set(ref field, value); }
+
+    public bool IsIndeterminateDownload { get; set => Set(ref field, value); } = true;
+
     public bool CanDownload =>
         SelectedModel is { Downloaded: false } && !CmdDownloadModel.IsExecuting;
 
@@ -191,6 +195,8 @@ public class TesseractDownloadDialogVM : Bindable, IDialogAware
     private async Task<long> DownloadModelWithProgressAsync(string langCode, string destinationPath, CancellationToken token)
     {
         DownloadedSize = 0;
+        TotalSize = 0;
+        IsIndeterminateDownload = true;
 
         using HttpClient httpClient = new();
         httpClient.Timeout = TimeSpan.FromSeconds(10);
@@ -198,6 +204,9 @@ public class TesseractDownloadDialogVM : Bindable, IDialogAware
         using var response = await httpClient.GetAsync($"https://github.com/tesseract-ocr/tessdata/raw/refs/heads/main/{langCode}.traineddata", HttpCompletionOption.ResponseHeadersRead, token);
 
         response.EnsureSuccessStatusCode();
+
+        TotalSize = response.Content.Headers.ContentLength ?? 0;
+        IsIndeterminateDownload = TotalSize <= 0;
 
         await using Stream modelStream = await response.Content.ReadAsStreamAsync(token);
         await using FileStream fileWriter = File.OpenWrite(destinationPath);
