@@ -128,6 +128,12 @@ public static class BatchSubtitleConfigSnapshot
             MaxTokensPerSegment = source.MaxTokensPerSegment,
             SplitOnWord = source.SplitOnWord,
             NoSpeechThreshold = source.NoSpeechThreshold,
+            // Anti-repetition / anti-hallucination decoding guards. These were dropped from the batch snapshot,
+            // so a UI-set guard was silently ignored during batch transcription — carry them over.
+            Temperature = source.Temperature,
+            TemperatureInc = source.TemperatureInc,
+            EntropyThreshold = source.EntropyThreshold,
+            LogProbThreshold = source.LogProbThreshold,
             NoContext = source.NoContext,
             AudioContextSize = source.AudioContextSize,
             Prompt = source.Prompt

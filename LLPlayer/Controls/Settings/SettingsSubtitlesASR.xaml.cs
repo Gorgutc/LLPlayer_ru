@@ -200,6 +200,10 @@ public class SettingsSubtitlesASRVM : Bindable
     #region faster-whisper
     public OrderedDictionary<string, string> ExtraArgumentsPresets { get; } = new()
     {
+        // Anti-repetition preset: turns off condition_on_previous_text (so a looping segment cannot prime the
+        // next) and blocks 3-gram loops. Opt-in; verify the flags against your engine build via "Copy help
+        // command" if a preset ever errors.
+        ["Anti-repetition (CPU)"] = "--device cpu --condition_on_previous_text False --no_repeat_ngram_size 3",
         ["Use CPU device"] = "--device cpu",
         ["Use CUDA device with >= RTX 50XX (requires less GPU memory, slow)"] = "--device cuda --compute_type float16",
         ["Use CUDA device with >= RTX 50XX (requires more GPU memory)"] = "--device cuda --compute_type float32",

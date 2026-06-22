@@ -185,6 +185,80 @@
                         helpers:TextBoxHelper.OnlyNumeric="Double" />
                 </StackPanel>
 
+                <StackPanel Orientation="Horizontal" Margin="0 0 0 12"
+                            VerticalAlignment="Center">
+                    <TextBlock
+                        Width="180">
+                        frequency_penalty
+                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                            <ToolTipService.ToolTip>
+                                <TextBlock
+                                    Text="(Defaults to 0) Number between -2.0 and 2.0. Positive values penalize tokens by how often they have already appeared, lowering the chance the model repeats the same line. Raising this (e.g. 0.3-0.6) helps break repetition loops on local models."
+                                    TextWrapping="Wrap"
+                                    MaxWidth="400" />
+                            </ToolTipService.ToolTip>
+                            <materialDesign:PackIcon
+                                Kind="Information"
+                                Width="16" Height="16"
+                                Margin="4 0 0 0" />
+                        </InlineUIContainer>
+                    </TextBlock>
+                    <CheckBox
+                        Content="Manual"
+                        IsChecked="{Binding FrequencyPenaltyManual}" />
+                    <Slider
+                        Minimum="-2" Maximum="2" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                        Margin="8 0 0 0"
+                        Value="{Binding FrequencyPenalty}"
+                        Width="200"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource MaterialDesignDiscreteSlider}"
+                        materialDesign:SliderAssist.OnlyShowFocusVisualWhileDragging="True"
+                        IsEnabled="{Binding FrequencyPenaltyManual}" />
+                    <TextBox
+                        Width="40"
+                        Text="{Binding FrequencyPenalty}"
+                        IsEnabled="{Binding FrequencyPenaltyManual}"
+                        helpers:TextBoxHelper.OnlyNumeric="Double" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0 0 0 12"
+                            VerticalAlignment="Center">
+                    <TextBlock
+                        Width="180">
+                        presence_penalty
+                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                            <ToolTipService.ToolTip>
+                                <TextBlock
+                                    Text="(Defaults to 0) Number between -2.0 and 2.0. Positive values penalize tokens that have appeared at all so far, nudging the model toward new content. A small value (e.g. 0.2-0.5) can also help avoid repetition loops."
+                                    TextWrapping="Wrap"
+                                    MaxWidth="400" />
+                            </ToolTipService.ToolTip>
+                            <materialDesign:PackIcon
+                                Kind="Information"
+                                Width="16" Height="16"
+                                Margin="4 0 0 0" />
+                        </InlineUIContainer>
+                    </TextBlock>
+                    <CheckBox
+                        Content="Manual"
+                        IsChecked="{Binding PresencePenaltyManual}" />
+                    <Slider
+                        Minimum="-2" Maximum="2" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                        Margin="8 0 0 0"
+                        Value="{Binding PresencePenalty}"
+                        Width="200"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource MaterialDesignDiscreteSlider}"
+                        materialDesign:SliderAssist.OnlyShowFocusVisualWhileDragging="True"
+                        IsEnabled="{Binding PresencePenaltyManual}" />
+                    <TextBox
+                        Width="40"
+                        Text="{Binding PresencePenalty}"
+                        IsEnabled="{Binding PresencePenaltyManual}"
+                        helpers:TextBoxHelper.OnlyNumeric="Double" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
                     <TextBlock
                         Width="180">

@@ -72,6 +72,11 @@ public class OpenAIBaseTranslateService : ITranslateService
         return await DoOneByOne(text, token);
     }
 
+    // Anti-loop retry sampling. A deterministic argmax loop (temperature 0) reproduces the SAME loop on a
+    // plain retry, so the recovery retry forces a non-zero temperature plus a frequency penalty to escape it.
+    private const double AntiLoopTemperature = 0.7;
+    private const double AntiLoopFrequencyPenalty = 0.5;
+
     private async Task<string> DoKeepContext(string text, CancellationToken token)
     {
         if (_basePrompt == null)
@@ -96,46 +101,20 @@ public class OpenAIBaseTranslateService : ITranslateService
             }
         }
 
-        List<OpenAIMessage> messages = new(_messageQueue.Count + 2)
-        {
-            new OpenAIMessage { role = "system", content = _basePrompt },
-        };
+        OpenAIMessage systemMessage = new() { role = "system", content = _basePrompt };
+        OpenAIMessage newMessage = new() { role = "user", content = text };
 
+        List<OpenAIMessage> messages = new(_messageQueue.Count + 2) { systemMessage };
         // add history
         messages.AddRange(_messageQueue);
-
         // add new message
-        OpenAIMessage newMessage = new() { role = "user", content = text };
         messages.Add(newMessage);
 
-        string reply = await SendChatRequest(
-            _httpClient, _settings, messages.ToArray(), token);
-
-        // Degeneration recovery (plan item 1.4). SendChatRequest already throws on empty/truncated
-        // replies, so `reply` is non-empty here. If it is degenerate (the model looped, e.g. repeating
-        // the same short phrase many times), the anti-poisoning enqueue below already keeps it out of the
-        // context window — but without this recovery the looping text would still be returned to the user
-        // and cached as the translation for THIS subtitle. Reset the (possibly biased) context window and
-        // retry once from a clean slate; if it still loops, surface a recoverable failure so the caller
-        // skips caching and falls back to the source text (the line is retried on a later pass).
-        if (ChatReplyParser.IsDegenerate(reply))
-        {
-            _messageQueue.Clear();
-
-            OpenAIMessage[] retryMessages =
-            [
-                new OpenAIMessage { role = "system", content = _basePrompt },
-                newMessage,
-            ];
-
-            reply = await SendChatRequest(_httpClient, _settings, retryMessages, token);
-
-            if (ChatReplyParser.IsDegenerate(reply))
-            {
-                throw new TranslationException(
-                    $"Degenerate (looping) reply from {_settings.ServiceType} after retry");
-            }
-        }
+        // On a looping/truncated reply, retry once from a clean context (drop the possibly-poisoned history),
+        // clearing the queue first. SendChatWithRecovery returns only a sane reply or throws a recoverable failure.
+        OpenAIMessage[] retryMessages = [systemMessage, newMessage];
+        string reply = await SendChatWithRecovery(
+            messages.ToArray(), retryMessages, onBeforeRetry: _messageQueue.Clear, token);
 
         // Anti-poisoning gate: only feed a sane (non-degenerate) reply back into the context window, so a
         // looping reply cannot prime the model to repeat the same pattern on the following subtitles.
@@ -157,7 +136,65 @@ public class OpenAIBaseTranslateService : ITranslateService
             new() { role = "user", content = prompt }
         ];
 
-        return await SendChatRequest(_httpClient, _settings, messages, token);
+        // OneByOne has no context to poison, but the model can still loop on a given line; recover the same way.
+        return await SendChatWithRecovery(messages, messages, onBeforeRetry: null, token);
+    }
+
+    /// <summary>
+    /// Sends <paramref name="initialMessages"/>; if the reply loops (<see cref="ChatReplyParser.IsDegenerate"/>)
+    /// or was cut off by the token cap (<see cref="TranslationFailureKind.Truncated"/> — both signal a runaway
+    /// loop on a local model), retries ONCE with <paramref name="retryMessages"/> using anti-loop sampling
+    /// (non-zero temperature + frequency penalty) so a deterministic argmax loop can actually break. Throws a
+    /// recoverable <see cref="TranslationFailureKind.Degenerate"/> failure if it still loops, so the caller
+    /// falls back to the source text instead of returning/caching the loop. The token cap is what keeps the
+    /// first attempt from running to the HTTP timeout when the model loops.
+    /// </summary>
+    private async Task<string> SendChatWithRecovery(
+        OpenAIMessage[] initialMessages,
+        OpenAIMessage[] retryMessages,
+        Action? onBeforeRetry,
+        CancellationToken token)
+    {
+        try
+        {
+            string reply = await SendChatRequest(_httpClient, _settings, initialMessages, token);
+            if (!ChatReplyParser.IsDegenerate(reply))
+            {
+                return reply;
+            }
+            // Completed but looping -> fall through to the anti-loop retry.
+        }
+        catch (TranslationException ex) when (ex.Kind == TranslationFailureKind.Truncated)
+        {
+            // Capped mid-loop (or a genuinely over-long reply) -> treat as a loop and retry.
+        }
+
+        onBeforeRetry?.Invoke();
+
+        string retry;
+        try
+        {
+            retry = await SendChatRequest(_httpClient, _settings, retryMessages, token, antiLoop: true);
+        }
+        catch (TranslationException ex) when (ex.Kind == TranslationFailureKind.Truncated)
+        {
+            throw new TranslationException(
+                $"Looping or over-long reply from {_settings.ServiceType} after anti-loop retry", ex)
+            {
+                Kind = TranslationFailureKind.Degenerate
+            };
+        }
+
+        if (ChatReplyParser.IsDegenerate(retry))
+        {
+            throw new TranslationException(
+                $"Degenerate (looping) reply from {_settings.ServiceType} after retry")
+            {
+                Kind = TranslationFailureKind.Degenerate
+            };
+        }
+
+        return retry;
     }
 
     public static async Task<string> Hello(OpenAIBaseTranslateSettings settings)
@@ -176,7 +213,8 @@ public class OpenAIBaseTranslateService : ITranslateService
         HttpClient client,
         OpenAIBaseTranslateSettings settings,
         OpenAIMessage[] messages,
-        CancellationToken token)
+        CancellationToken token,
+        bool antiLoop = false)
     {
         string jsonResultString = string.Empty;
         int statusCode = -1;
@@ -188,12 +226,26 @@ public class OpenAIBaseTranslateService : ITranslateService
             stream = false,
             messages = messages,
 
-            temperature = settings.TemperatureManual ? settings.Temperature : null,
-            top_p = settings.TopPManual ? settings.TopP : null,
-            frequency_penalty = settings.FrequencyPenaltyManual ? settings.FrequencyPenalty : null,
+            // antiLoop (the degeneration retry) forces non-zero temperature + a frequency penalty to break a
+            // deterministic argmax loop, regardless of the user's manual settings. It also clears a
+            // user-pinned near-greedy top_p that would otherwise keep selection deterministic on the retry.
+            temperature = antiLoop
+                ? AntiLoopTemperature
+                : (settings.TemperatureManual ? settings.Temperature : null),
+            top_p = antiLoop ? null : (settings.TopPManual ? settings.TopP : null),
+            frequency_penalty = antiLoop
+                ? AntiLoopFrequencyPenalty
+                : (settings.FrequencyPenaltyManual ? settings.FrequencyPenalty : null),
             presence_penalty = settings.PresencePenaltyManual ? settings.PresencePenalty : null,
             max_completion_tokens = settings.MaxCompletionTokens,
-            max_tokens = settings.MaxTokens,
+            // Bound generation so a runaway loop fails fast (finish_reason=length -> recoverable) instead of
+            // running to the HTTP timeout. Only inject the fallback cap when the user set NEITHER token limit
+            // (an explicit max_completion_tokens must not be silently overridden, and cloud backends keep the
+            // fallback null to avoid breaking o-series max_tokens rules). The anti-loop retry gets extra
+            // headroom so a legitimately long (e.g. reasoning-model) reply that truncated attempt 1 can finish.
+            max_tokens = settings.MaxTokens ?? (settings.MaxCompletionTokens is null
+                ? (antiLoop && settings.DefaultMaxTokensFallback is int cap ? cap * 2 : settings.DefaultMaxTokensFallback)
+                : null),
         };
 
         if (!settings.ModelRequired && string.IsNullOrWhiteSpace(settings.Model))
@@ -253,6 +305,7 @@ public class OpenAIBaseTranslateService : ITranslateService
         {
             throw new TranslationException($"Empty or invalid response from {serviceType}")
             {
+                Kind = TranslationFailureKind.EmptyResponse,
                 Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
             };
         }
@@ -263,6 +316,7 @@ public class OpenAIBaseTranslateService : ITranslateService
         {
             throw new TranslationException($"No content in response from {serviceType}")
             {
+                Kind = TranslationFailureKind.NullContent,
                 Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
             };
         }
@@ -279,6 +333,7 @@ public class OpenAIBaseTranslateService : ITranslateService
             throw new TranslationException(
                 $"Response from {serviceType} was truncated (finish_reason=length); increase max tokens")
             {
+                Kind = TranslationFailureKind.Truncated,
                 Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
             };
         }
@@ -289,6 +344,7 @@ public class OpenAIBaseTranslateService : ITranslateService
         {
             throw new TranslationException($"Empty translation from {serviceType}")
             {
+                Kind = TranslationFailureKind.EmptyResponse,
                 Data = { ["status_code"] = statusCode.ToString(), ["response"] = jsonResultString }
             };
         }
@@ -436,44 +492,100 @@ public static class ChatReplyParser
             return false;
         }
 
+        // Short consecutive n-gram loop (n = 1..3). Only runs when a whitespace split yields enough tokens;
+        // spaceless scripts (CJK/Thai) collapse to a few tokens, so for those the block scan below is the
+        // detector. Do NOT early-return on a low word count — that would skip the block scan and let a
+        // spaceless "X---X---X" loop through (the very bug class this guards against).
         string[] words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length < 8)
+        if (words.Length >= 8)
         {
-            return false;
-        }
-
-        // More than `maxRepeat` consecutive identical n-grams (n = 1..3) is treated as a loop.
-        const int maxRepeat = 4;
-        for (int n = 1; n <= 3; n++)
-        {
-            int repeat = 1;
-            for (int i = n; i + n <= words.Length; i += n)
+            // More than `maxRepeat` consecutive identical n-grams (n = 1..3) is treated as a loop.
+            const int maxRepeat = 4;
+            for (int n = 1; n <= 3; n++)
             {
-                bool same = true;
-                for (int j = 0; j < n; j++)
+                int repeat = 1;
+                for (int i = n; i + n <= words.Length; i += n)
                 {
-                    if (!string.Equals(words[i + j], words[i - n + j], StringComparison.OrdinalIgnoreCase))
+                    bool same = true;
+                    for (int j = 0; j < n; j++)
                     {
-                        same = false;
-                        break;
+                        if (!string.Equals(words[i + j], words[i - n + j], StringComparison.OrdinalIgnoreCase))
+                        {
+                            same = false;
+                            break;
+                        }
+                    }
+
+                    if (same)
+                    {
+                        repeat++;
+                        if (repeat > maxRepeat)
+                        {
+                            return true;
+                        }
+                    }
+                    else
+                    {
+                        repeat = 1;
                     }
                 }
+            }
+        }
 
-                if (same)
+        // Long repeated-block loop: a multi-word sentence/paragraph repeated many times, often joined by
+        // separator lines like "---". The short n-gram scan above misses these (the repeat period in words
+        // far exceeds 3) and is skipped entirely for spaceless scripts, so this runs regardless of word
+        // count. Split into content blocks (dropping blank / separator-only / trivially short lines) and
+        // flag when one block dominates the reply by repetition.
+        List<string> blocks = SplitContentBlocks(text);
+        if (blocks.Count >= 3)
+        {
+            // 3+ consecutive identical blocks, e.g. "X\n---\nX\n---\nX"
+            int run = 1;
+            for (int i = 1; i < blocks.Count; i++)
+            {
+                if (string.Equals(blocks[i], blocks[i - 1], StringComparison.OrdinalIgnoreCase))
                 {
-                    repeat++;
-                    if (repeat > maxRepeat)
+                    if (++run >= 3)
                     {
                         return true;
                     }
                 }
                 else
                 {
-                    repeat = 1;
+                    run = 1;
                 }
+            }
+
+            // A single block repeated and dominating the reply when separators break adjacency. Require the
+            // dominant block to be >= 2/3 of all content blocks (and >= 3 occurrences) so an interleaved
+            // refrain like "A B A B A" (3-of-5) is not mistaken for a loop.
+            int topCount = blocks
+                .GroupBy(b => b, StringComparer.OrdinalIgnoreCase)
+                .Max(g => g.Count());
+            if (topCount >= 3 && topCount * 3 >= blocks.Count * 2)
+            {
+                return true;
             }
         }
 
         return false;
+    }
+
+    // Splits a reply into normalized content lines, dropping blank lines, separator-only lines (---, ***,
+    // ===, bullets) and trivially short fragments so they don't dilute the repeated-block ratio above.
+    private static List<string> SplitContentBlocks(string text)
+    {
+        List<string> blocks = [];
+        foreach (string raw in text.Split('\n'))
+        {
+            string line = raw.Trim().Trim('-', '—', '–', '*', '=', '_', '·', '•', '#', '>', '~', ' ', '\t', '\r');
+            if (line.Length < 8)
+            {
+                continue;
+            }
+            blocks.Add(line);
+        }
+        return blocks;
     }
 }

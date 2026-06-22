@@ -127,7 +127,12 @@ public class WhisperCppConfig : NotifyPropertyChanged
     public float? TemperatureInc { get; set => Set(ref field, value); }
     public float? EntropyThreshold { get; set => Set(ref field, value); }
     public float? LogProbThreshold { get; set => Set(ref field, value); }
-    public bool NoContext { get; set => Set(ref field, value); }
+
+    // Default ON: disables condition_on_previous_text. With conditioning ON, a hallucinated/looping window
+    // primes the next window, so a single bad spot at the start of a video propagates a repetition loop
+    // across the whole transcript. (Frozen default flip 1.5 — applies to new configs; existing configs are
+    // migrated once via Config.UpdateDefault.)
+    public bool NoContext { get; set => Set(ref field, value); } = true;
     public int? AudioContextSize { get; set => Set(ref field, value); }
     public string Prompt { get; set => Set(ref field, value); } = string.Empty;
 
