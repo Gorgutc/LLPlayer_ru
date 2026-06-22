@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using FlyleafLib;
 using Microsoft.Win32;
 
 namespace LLPlayer.Services;
@@ -14,6 +15,7 @@ namespace LLPlayer.Services;
 public sealed class AccentColorService : IDisposable
 {
     private readonly FlyleafManager FL;
+    private readonly LogHandler _log = new("[App] [AccentColor   ] ");
 
     public AccentColorService(FlyleafManager fl)
     {
@@ -68,13 +70,24 @@ public sealed class AccentColorService : IDisposable
 
     private void Apply()
     {
-        // FollowOS live-switch (a no-op for fixed Dark/Light modes).
-        FL.Config.Theme.ApplyBaseTheme();
-
-        // Accent sync (only when the user opted in).
-        if (FL.Config.AccentColorSync)
+        // Theme/accent re-apply is cosmetic and runs from an OS-appearance window message (WndProc /
+        // SystemEvents). A colorization message can arrive during startup before the MDIX resources are
+        // ready, where PaletteHelper.GetTheme/SetTheme throws — and on the dispatcher that would crash the
+        // app. Guard it exactly like App.OnInitialized: theme re-apply must never crash the app.
+        try
         {
-            FL.Config.Theme.ApplyAccentSync(GetWindowsAccentColor());
+            // FollowOS live-switch (a no-op for fixed Dark/Light modes).
+            FL.Config.Theme.ApplyBaseTheme();
+
+            // Accent sync (only when the user opted in).
+            if (FL.Config.AccentColorSync)
+            {
+                FL.Config.Theme.ApplyAccentSync(GetWindowsAccentColor());
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error($"Failed to re-apply theme on OS appearance change: {ex}");
         }
     }
 
