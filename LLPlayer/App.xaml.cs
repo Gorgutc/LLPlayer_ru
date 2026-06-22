@@ -129,7 +129,30 @@ public partial class App : PrismApplication
             Log.Error($"Unknown error occurred in App: {e.Exception}");
             Logger.ForceFlush();
 
-            ErrorDialogHelper.ShowUnknownErrorPopup($"Unhandled Exception: {e.Exception.Message}", "Global", e.Exception);
+            // Persist to crash.log so the error is diagnosable even in release builds (where LogOutput is
+            // unset and Log goes nowhere). Best-effort; must not throw.
+            try
+            {
+                File.AppendAllText(CrashLogPath,
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {e.Exception}{Environment.NewLine}{Environment.NewLine}");
+            }
+            catch
+            {
+                // ignore
+            }
+
+            // Showing the error must never itself crash the app (e.g. the Prism container is unavailable
+            // during early startup/shutdown). ErrorDialogHelper already falls back to a message box; this is
+            // belt-and-braces so the global handler can never turn one exception into a fatal crash.
+            try
+            {
+                ErrorDialogHelper.ShowUnknownErrorPopup($"Unhandled Exception: {e.Exception.Message}", "Global", e.Exception);
+            }
+            catch (Exception dialogEx)
+            {
+                Log.Error($"Failed to show error dialog: {dialogEx}");
+            }
+
             e.Handled = true;
         }
     }
