@@ -514,8 +514,10 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
     #region IDialogAware
     public string Title { get; set => Set(ref field, value); } = $"Batch Subtitles - {App.Name}";
-    public double WindowWidth { get; set => Set(ref field, value); } = 1000;
-    public double WindowHeight { get; set => Set(ref field, value); } = 620;
+    // Open wide by default so the folder-grouped list shows full file names without manual resizing
+    // (columns are fixed-width, so a smaller window scrolls horizontally rather than squishing).
+    public double WindowWidth { get; set => Set(ref field, value); } = 1650;
+    public double WindowHeight { get; set => Set(ref field, value); } = 840;
 
     public DialogCloseListener RequestClose { get; }
 
