@@ -47,13 +47,18 @@
                         <Setter Property="Width" Value="20" />
                         <Setter Property="Height" Value="20" />
                         <Setter Property="Margin" Value="0 0 4 0" />
-                        <Setter Property="Focusable" Value="False" />
-                        <!-- Visible-but-dim at rest (was invisible until hover) so the per-row actions are
-                             discoverable; brighten to the accent on hover. -->
+                        <!-- Focusable so per-row actions can take keyboard focus (the list stays non-selectable;
+                             with the ListBox default TabNavigation=Once, Tab reaches the first row's action — full
+                             per-row arrow-key navigation is a separate pass). Visible-but-dim at rest (>=0.6 for
+                             UI-icon contrast) so the actions are discoverable; brighten on hover OR keyboard focus. -->
                         <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
-                        <Setter Property="Opacity" Value="0.45" />
+                        <Setter Property="Opacity" Value="0.6" />
                         <Style.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Secondary}" />
+                                <Setter Property="Opacity" Value="1.0" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Secondary}" />
                                 <Setter Property="Opacity" Value="1.0" />
                             </Trigger>
@@ -75,6 +80,11 @@
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
                             </Trigger>
 
+                            <!-- Same Primary accent on keyboard focus as on hover (overrides the base Secondary focus colour). -->
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+                            </Trigger>
+
                             <!-- Activate if playing -->
                             <DataTrigger Value="True">
                                 <DataTrigger.Binding>
@@ -87,7 +97,7 @@
                                     </MultiBinding>
                                 </DataTrigger.Binding>
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
-                                <!-- Full opacity for the currently-playing row even without hover (base rests at 0.45). -->
+                                <!-- Full opacity for the currently-playing row even without hover (base rests at 0.6). -->
                                 <Setter Property="Opacity" Value="1.0" />
                             </DataTrigger>
                         </Style.Triggers>

@@ -17,6 +17,7 @@ This document freezes the current WPF/UI design decisions from `main`.
 - Sidebar can be left or right, has configurable width, and collapses with its `GridSplitter`.
 - Fullscreen/video focus workflows must not be broken by dialogs or sidebar search.
 - Taskbar progress and play/pause thumbnail action are owned by `MainWindowVM`.
+- A single app-wide MaterialDesign `Snackbar` (top-centre, hosted in `FlyleafOverlay`) carries non-blocking notifications and actionable config-error deep-links; ASR completion also enqueues a short confirmation here. It must not overlap the bottom `FlyleafBar` or the subtitle interaction area.
 
 ## Dialogs
 
@@ -28,6 +29,7 @@ Registered Prism dialogs are part of the product surface:
 - Subtitles exporter
 - Batch subtitles
 - CheatSheet
+- Command palette
 - Whisper model download
 - Whisper engine download
 - Tesseract download
@@ -61,6 +63,8 @@ Settings navigation is a left TreeView plus right content area. Current sections
 
 Do not remove or merge sections unless the user explicitly requests a settings redesign.
 
+A search box above the TreeView filters sections by label/key (hiding non-matches, expanding branches with a match) and is cleared automatically before a deep-link navigation so targets are never hidden; it must not change the page cache or the `SelectedItemChanged`/`LoadPage` flow. The ASR section keeps its advanced whisper.cpp tuning knobs in a collapsed Expander.
+
 ## Subtitle UI
 
 - Sidebar toolbar includes primary/secondary toggle, font size, spoiler mask, original/translated toggle, download/export/batch subtitles, side swap, and search.
@@ -76,6 +80,8 @@ Shortcut actions must stay centralized in `AppActions` and visible through Cheat
 Settings Keys is an editable DataGrid workflow, not a static shortcut list. Preserve load-on-open, Add/Load/Apply buttons, clone/delete row actions, enabled toggles, modifier columns, `IsKeyUp`, duplicate-key warnings that block Apply, grouped action ComboBox with custom actions, key capture textbox, Enter-to-commit behavior, and scroll-to-added-row behavior.
 
 CheatSheet is both documentation and an action surface. Preserve F1 access, Keyboard and Mouse tabs, enabled-binding filtering, grouped keyboard actions with color coding, Ctrl+F/find focus, search by description/shortcut, hit count, and the per-row action button that executes the selected action through `ActionInternal`.
+
+The Command Palette is a `ShowSingleton` dialog (default `Ctrl+K`) that reuses the CheatSheet `KeyBindingCS` model as a flat, filterable list and runs the selected action through `ActionInternal` (Enter / double-click). It is additive and must not replace CheatSheet/Settings Keys or change `AppActions` centralization.
 
 ## Subtitle Word And Mouse UI
 

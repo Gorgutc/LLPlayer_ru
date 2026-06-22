@@ -95,6 +95,24 @@ public static class FlyleafLoader
                 config.Player.KeyBindings.Keys.Add(binding);
             }
         }
+        else
+        {
+            // Backfill ONLY the newly-added command-palette default (Ctrl+K) for returning users with an
+            // existing config, so the shortcut works without resetting their config. Scoped to this one new
+            // action (reusing its exact default definition) to avoid re-adding bindings a user may have
+            // intentionally removed for pre-existing actions.
+            bool hasPalette = config.Player.KeyBindings.Keys.Any(k =>
+                k.ActionName == nameof(CustomKeyBindingAction.OpenCommandPalette));
+            if (!hasPalette)
+            {
+                KeyBinding? paletteDefault = AppActions.DefaultCustomActionsMap()
+                    .FirstOrDefault(b => b.ActionName == nameof(CustomKeyBindingAction.OpenCommandPalette));
+                if (paletteDefault != null)
+                {
+                    config.Player.KeyBindings.Keys.Add(paletteDefault);
+                }
+            }
+        }
 
         return player;
     }

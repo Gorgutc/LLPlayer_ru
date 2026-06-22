@@ -258,8 +258,9 @@ public class SubtitlesASR
 
             if (!_cts.Token.IsCancellationRequested)
             {
-                // TODO: L: Notify, express completion in some way
                 Utils.PlayCompletionSound();
+                // Also surface a non-blocking visual confirmation (the UI subscribes to ASRCompleted).
+                _config.Subtitles.player.RaiseASRCompleted();
             }
 
             foreach (int i in SubIndexSet)

@@ -587,6 +587,7 @@ AncestorType={x:Type MenuItem}}}">
         </MenuItem>
 
         <Separator Margin="0,6" />
+        <MenuItem Header="Settings" Command="{Binding FL.Action.CmdOpenWindowSettings}" Icon="{materialDesign:PackIcon Kind=SettingsOutline}" />
         <MenuItem Header="Show Debug" IsCheckable="True" IsChecked="{Binding FL.Config.ShowDebug}"/>
         <MenuItem Header="Cheat Sheet" Command="{Binding FL.Action.CmdOpenWindowCheatSheet}" Icon="{materialDesign:PackIcon Kind=Help}" />
     </ContextMenu>

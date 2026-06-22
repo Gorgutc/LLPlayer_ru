@@ -16,6 +16,11 @@
         <conv:TimeSpanShortConverter x:Key="TimeSpanShort" />
     </UserControl.Resources>
 
+    <UserControl.InputBindings>
+        <!-- Esc closes the dialog, matching native dialog behavior. -->
+        <KeyBinding Key="Escape" Command="{Binding CmdCloseDialog}" />
+    </UserControl.InputBindings>
+
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

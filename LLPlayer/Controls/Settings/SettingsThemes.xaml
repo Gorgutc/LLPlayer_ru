@@ -30,6 +30,7 @@
                             Text="Theme" />
                         <ComboBox
                             Width="160"
+                            AutomationProperties.Name="Theme"
                             SelectedValuePath="Tag"
                             SelectedValue="{Binding FL.Config.Theme.Mode}">
                             <ComboBoxItem Content="Dark" Tag="{x:Static services:ThemeMode.Dark}" />
@@ -38,7 +39,10 @@
                         </ComboBox>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
+                    <!-- While accent sync is on, the OS accent overrides the primary colour, so disable this
+                         row — otherwise the user edits a value that silently reverts on the next OS colour change. -->
+                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16"
+                                IsEnabled="{Binding FL.Config.AccentColorSync, Converter={StaticResource InvertBooleanConv}}">
                         <TextBlock
                             Width="180"
                             Text="Primary Color" />
@@ -46,6 +50,7 @@
                             Background="{x:Null}"
                             Padding="0"
                             BorderThickness="0"
+                            AutomationProperties.Name="Primary Color"
                             Command="{x:Static materialDesign:DialogHost.OpenDialogCommand}">
                             <Button.CommandParameter>
                                 <controls:ColorPicker PickerColor="{Binding FL.Config.Theme.PrimaryColor, Mode=TwoWay}" />
@@ -78,6 +83,7 @@
                             Background="{x:Null}"
                             Padding="0"
                             BorderThickness="0"
+                            AutomationProperties.Name="Secondary Color"
                             Command="{x:Static materialDesign:DialogHost.OpenDialogCommand}">
                             <Button.CommandParameter>
                                 <controls:ColorPicker PickerColor="{Binding FL.Config.Theme.SecondaryColor, Mode=TwoWay}" />
@@ -124,6 +130,8 @@
                             </InlineUIContainer>
                         </TextBlock>
                         <ToggleButton
+                            AutomationProperties.Name="Dark Title Bar"
+                            AutomationProperties.HelpText="Required to restart to apply changes"
                             IsChecked="{Binding FL.Config.IsDarkTitlebar}" />
                     </StackPanel>
 
@@ -133,14 +141,17 @@
                             <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
                                 <ToolTipService.ToolTip>
                                     <TextBlock
-                                        Text="Use the Windows accent color as the app primary color (live). Turn off to restore your chosen Primary Color."
+                                        Text="Use the Windows accent color as the app primary color (live). While on, this overrides and disables the Primary Color picker; turn off to restore your chosen Primary Color. (On Windows 10 the accent may differ slightly from Settings.)"
                                         TextWrapping="Wrap"
                                         MaxWidth="400" />
                                 </ToolTipService.ToolTip>
                                 <materialDesign:PackIcon Kind="Information" Width="16" Height="16" Margin="4 0 0 0" />
                             </InlineUIContainer>
                         </TextBlock>
-                        <ToggleButton IsChecked="{Binding FL.Config.AccentColorSync}" />
+                        <ToggleButton
+                            AutomationProperties.Name="Sync Accent Color"
+                            AutomationProperties.HelpText="Use the Windows accent color as the app primary color (live). While on, this overrides and disables the Primary Color picker; turn off to restore your chosen Primary Color. (On Windows 10 the accent may differ slightly from Settings.)"
+                            IsChecked="{Binding FL.Config.AccentColorSync}" />
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0 16 0 0">
@@ -156,7 +167,10 @@
                                 <materialDesign:PackIcon Kind="Information" Width="16" Height="16" Margin="4 0 0 0" />
                             </InlineUIContainer>
                         </TextBlock>
-                        <ToggleButton IsChecked="{Binding FL.Config.MicaBackdrop}" />
+                        <ToggleButton
+                            AutomationProperties.Name="Mica Backdrop"
+                            AutomationProperties.HelpText="Win11 translucent window backdrop on the title bar / borders (restart to apply). The video area is unaffected (DirectX airspace)."
+                            IsChecked="{Binding FL.Config.MicaBackdrop}" />
                     </StackPanel>
                 </StackPanel>
             </GroupBox>

@@ -24,7 +24,7 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 - Subtitle download through OpenSubtitles provider and subtitle export to SRT.
 - Online video integration through the `YoutubeDL` plugin and release-downloaded `yt-dlp.exe`.
 - Fully customizable keyboard shortcuts and mouse controls.
-- Built-in CheatSheet for keyboard and mouse actions.
+- Built-in CheatSheet for keyboard and mouse actions, plus a `Ctrl+K` command palette to search and run any bound action.
 - Dark theme with configurable colors and app settings.
 
 ## User-Facing Invariants
@@ -37,6 +37,9 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 - Preserve CheatSheet discoverability for shortcuts and mouse behavior when actions change.
 - Preserve Settings Keys as an editable shortcut workflow with Add/Load/Apply, clone/delete, duplicate blocking, grouped actions, custom actions, key capture, and Enter commit.
 - Preserve CheatSheet as a searchable, executable action surface with Keyboard/Mouse tabs and enabled-binding filtering.
+- The Command Palette (`Ctrl+K`) is an additive, optional surface over the same enabled key bindings; it does not replace CheatSheet or the context menu.
+- Error routing: only the recoverable missing-ASR-model case is a non-blocking actionable snackbar (download deep-link, plus a one-time first-run onboarding hint). All other known errors — including translation/OCR configuration failures — remain blocking modals so they are not missed. The word-translation config error keeps its existing one-shot in-popup snackbar. ASR completion shows a non-blocking confirmation in addition to the completion sound.
+- The empty (no-media) state offers Open File plus Settings and keyboard-shortcuts entries, and the right-click context menu includes a Settings entry.
 - Preserve explicit user-selected export path for SRT export.
 - Preserve batch subtitle output as user runtime files beside source videos. Files that already have a non-empty `video.ru.srt` are detected at scan time, shown as `Completed`, and excluded from the default run; at run time an existing non-empty `video.ru.srt` is likewise marked `Completed` rather than reprocessed. Both are overridden when overwrite is explicitly enabled. Each scanned file carries an include checkbox (with a select-all/none header) controlling whether it is processed, and failed files can be retried individually (per row) or in bulk; an explicit retry forces reprocessing regardless of an existing output.
 

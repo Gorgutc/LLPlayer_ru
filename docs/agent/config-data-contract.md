@@ -29,10 +29,11 @@ Do not reorder this without explicit migration work.
 
 - Default engine keeps `PluginsPath`, `FFmpegPath`, HLS live seek, UI refresh, and FFmpeg filter load profile.
 - Default player config passes HLS query options, leaves GPU adapter empty for later persistence, enables local subtitle search, and derives target translation language from original culture.
-- Default custom key bindings are applied only for new config files.
+- Default custom key bindings are applied only for new config files. Exception: a newly-introduced custom action's default binding may be backfilled into an existing config when absent (e.g. `Ctrl+K` command palette), scoped to that single action so bindings the user removed for pre-existing actions are not re-added.
 - Existing key bindings may be migrated through Flyleaf config `UpdateDefault()`.
 - Batch subtitle UI defaults live in `LLPlayer.Config.json`: last folder, recursive scan, and overwrite-existing policy. Batch processing reuses ASR/Translate settings from player config snapshots and must not silently change `TranslateTargetLanguage` or Whisper translate settings in the live player config.
 - Theme/appearance keys in `LLPlayer.Config.json` are additive and absent-defaulting so existing configs are unchanged: `Theme.Mode` (default `Dark`; `Light`/`FollowOS` opt-in), `AccentColorSync` (default `false`), and `MicaBackdrop` (default `false`). The dark MaterialDesign2 theme remains the default appearance.
+- `AsrOnboardingShown` in `LLPlayer.Config.json` is additive and absent-defaulting (`false`); it is set once, when the first-run ASR onboarding hint is shown, and persisted via a load-modify-save of a fresh config instance so no transient live state is committed on that path.
 
 ## Actions And Key Bindings
 
@@ -42,6 +43,7 @@ Do not reorder this without explicit migration work.
 - `IsKeyUp` actions are intentionally delayed until key-up, with a guard for missed key-up.
 - Settings Keys edits the live key-binding list through an editable DataGrid. Preserve Add, Load, Apply, clone row, delete row, duplicate detection, Apply blocking on duplicates, grouped action selection, custom action names, key capture, and Enter commit.
 - CheatSheet reads only enabled key bindings, groups them by action group, filters by action description or shortcut text, and can execute an action from the dialog.
+- The Command Palette (`Ctrl+K`) reuses the same enabled-key-binding list as a flat, filterable dialog and runs the selected action's delegate (`ActionInternal`).
 
 ## User Data Directories
 

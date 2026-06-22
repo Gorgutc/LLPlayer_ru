@@ -1,0 +1,71 @@
+﻿<UserControl x:Class="LLPlayer.Views.CommandPaletteDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:LLPlayer.ViewModels"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             Loaded="OnLoaded"
+             PreviewKeyDown="Root_OnPreviewKeyDown"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:CommandPaletteDialogVM}"
+             d:Foreground="White"
+             d:Background="Black"
+             d:DesignHeight="520" d:DesignWidth="620">
+    <materialDesign:Card>
+        <Grid Margin="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <TextBox
+                Grid.Row="0"
+                x:Name="SearchBox"
+                FontSize="16"
+                AutomationProperties.Name="Command search"
+                materialDesign:HintAssist.Hint="Type a command…  (↑ ↓ to choose, Enter to run, Esc to close)"
+                materialDesign:TextFieldAssist.HasClearButton="True"
+                Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+            <ListBox
+                Grid.Row="1"
+                x:Name="CommandList"
+                Margin="0 10 0 0"
+                ItemsSource="{Binding Commands}"
+                SelectedItem="{Binding SelectedCommand, Mode=TwoWay}"
+                MouseDoubleClick="CommandList_OnMouseDoubleClick"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
+                        <Setter Property="Cursor" Value="Hand" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:KeyBindingCS}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                Grid.Column="0"
+                                Text="{Binding Description}"
+                                ToolTip="{Binding ActionName}"
+                                VerticalAlignment="Center"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Column="1"
+                                Text="{Binding Shortcut}"
+                                Opacity="0.7"
+                                FontWeight="SemiBold"
+                                VerticalAlignment="Center"
+                                Margin="12 0 0 0" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Grid>
+    </materialDesign:Card>
+</UserControl>

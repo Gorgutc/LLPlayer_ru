@@ -88,6 +88,7 @@ public class AppActions
             [CustomKeyBindingAction.OpenWindowSubsExporter] = CmdOpenWindowSubsExporter.Execute,
             [CustomKeyBindingAction.OpenWindowBatchSubtitles] = CmdOpenWindowBatchSubtitles.Execute,
             [CustomKeyBindingAction.OpenWindowCheatSheet] = CmdOpenWindowCheatSheet.Execute,
+            [CustomKeyBindingAction.OpenCommandPalette] = CmdOpenWindowCommandPalette.Execute,
 
             [CustomKeyBindingAction.AppNew] = CmdAppNew.Execute,
             [CustomKeyBindingAction.AppClone] = CmdAppClone.Execute,
@@ -118,6 +119,7 @@ public class AppActions
             new() { ActionName = nameof(CustomKeyBindingAction.ToggleAlwaysOnTop), Key = Key.T, Ctrl = true, IsKeyUp = true },
             new() { ActionName = nameof(CustomKeyBindingAction.OpenWindowSettings), Key = Key.OemComma, Ctrl = true, IsKeyUp = true },
             new() { ActionName = nameof(CustomKeyBindingAction.OpenWindowCheatSheet), Key = Key.F1, IsKeyUp = true },
+            new() { ActionName = nameof(CustomKeyBindingAction.OpenCommandPalette), Key = Key.K, Ctrl = true, IsKeyUp = true },
             new() { ActionName = nameof(CustomKeyBindingAction.AppNew), Key = Key.N, Ctrl = true, IsKeyUp = true },
         ];
     }
@@ -450,6 +452,7 @@ public class AppActions
             switch (e.PropertyName)
             {
                 case nameof(_config.IsDarkTitlebar):
+                case nameof(_config.MicaBackdrop):
                 case nameof(_player.Config.Subtitles.WhisperCppConfig.RuntimeLibraries):
                     requiredRestart = true;
                     break;
@@ -520,6 +523,12 @@ public class AppActions
     {
         _player.Activity.ForceFullActive();
         _dialogService.ShowSingleton(nameof(CheatSheetDialog), true);
+    });
+
+    public DelegateCommand CmdOpenWindowCommandPalette => field ??= new(() =>
+    {
+        _player.Activity.ForceFullActive();
+        _dialogService.ShowSingleton(nameof(CommandPaletteDialog), true);
     });
 
     public DelegateCommand CmdAppNew => field ??= new(() =>
@@ -788,6 +797,11 @@ public enum CustomKeyBindingAction
     AppRestart,
     [Description("Exit Application")]
     AppExit,
+
+    // NOTE: appended at the END — CustomKeyBindingAction is persisted by name, and keeping new members last
+    // avoids any positional assumptions.
+    [Description("Open Command Palette")]
+    OpenCommandPalette,
 }
 
 public enum KeyBindingActionGroup
@@ -843,6 +857,7 @@ public static class KeyBindingActionExtensions
             case CustomKeyBindingAction.OpenWindowSubsExporter:
             case CustomKeyBindingAction.OpenWindowBatchSubtitles:
             case CustomKeyBindingAction.OpenWindowCheatSheet:
+            case CustomKeyBindingAction.OpenCommandPalette:
                 return KeyBindingActionGroup.Window;
 
             // TODO: L: review group

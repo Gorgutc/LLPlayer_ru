@@ -14,11 +14,23 @@
     <Border
         DataContext="{Binding ElementName=Root}"
         ContextMenu="{Binding PopupContextMenu}"
-        Background="#333333"
         BorderBrush="{DynamicResource MaterialDesignDivider}"
         BorderThickness="1"
         CornerRadius="8"
-        Padding="10 15">
+        Padding="10 15"
+        PreviewKeyDown="Border_OnPreviewKeyDown">
+        <Border.Style>
+            <Style TargetType="Border">
+                <!-- Over video (default) a fixed dark chip stays readable on any frame; in the themed
+                     sidebar follow the active theme so it matches Light mode. -->
+                <Setter Property="Background" Value="#333333" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsSidebar}" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource MaterialDesignPaper}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
 
         <!-- TODO: L: Support dictionary API in addition to translations-->
         <Grid>
@@ -53,6 +65,9 @@
                     Style="{StaticResource MaterialDesignToolButton}"
                     Width="24" Height="24"
                     Margin="0,0,0,0"
+                    AutomationProperties.Name="Close"
+                    ToolTip="Close"
+                    Click="CloseButton_OnClick"
                     PreviewMouseLeftButtonUp="CloseButton_OnMouseLeftButtonUp">
                     <materialDesign:PackIcon
                         Kind="Close"
@@ -81,9 +96,19 @@
                 materialDesign:TextFieldAssist.DecorationVisibility="Hidden"
                 BorderThickness="0"
                 Grid.Row="1"
-                FontSize="20"
-                Foreground="White"
-                />
+                FontSize="20">
+                <TextBox.Style>
+                    <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                        <!-- Matches the Border: white over video, theme body colour in the sidebar. -->
+                        <Setter Property="Foreground" Value="White" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSidebar}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBox.Style>
+            </TextBox>
         </Grid>
     </Border>
 </UserControl>

@@ -34,6 +34,10 @@
                 Command="{Binding CmdCopyMessage}"
                 Key="C"
                 Modifiers="Control" />
+            <!-- Keyboard-only users can dismiss the error with Escape (the window is otherwise click-to-close). -->
+            <KeyBinding
+                Command="{Binding CmdCloseDialog}"
+                Key="Escape" />
         </Border.InputBindings>
         <Grid Margin="15">
             <Grid.RowDefinitions>
@@ -64,6 +68,8 @@
                 </TextBlock.Style>
 
                 <InlineUIContainer BaselineAlignment="Center">
+                    <!-- Decorative severity glyph; the ErrorTitle Run below carries the accessible name.
+                         Intentionally unnamed so a screen reader announces the title once, not "Error <title>". -->
                     <materialDesign:PackIcon
                         Kind="Error"
                         Width="20" Height="20"
@@ -122,6 +128,8 @@
                     Grid.Column="2"
                     Content="Close"
                     FontWeight="Bold"
+                    IsDefault="True"
+                    IsCancel="True"
                     Command="{Binding CmdCloseDialog}"
                     Style="{StaticResource MaterialDesignOutlinedButton}" />
             </Grid>
