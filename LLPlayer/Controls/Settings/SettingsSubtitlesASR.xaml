@@ -267,8 +267,21 @@
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock
-                                        Width="200"
-                                        Text="MaxTokensPerSegment" />
+                                        Width="200">
+                                        MaxTokensPerSegment
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    Text="Limit the maximum number of tokens (sub-word pieces) per subtitle segment. Leave empty to use the model default."
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400" />
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
                                     <TextBox
                                         Width="100"
                                         Text="{Binding FL.PlayerConfig.Subtitles.WhisperCppConfig.MaxTokensPerSegment, Converter={StaticResource NullableIntConv}}"
@@ -277,16 +290,42 @@
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock
-                                        Width="200"
-                                        Text="SplitOnWord" />
+                                        Width="200">
+                                        SplitOnWord
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    Text="Split subtitle segments on word boundaries instead of in the middle of a word, so lines break more naturally."
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400" />
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
                                     <ToggleButton
                                         IsChecked="{Binding FL.PlayerConfig.Subtitles.WhisperCppConfig.SplitOnWord}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock
-                                        Width="200"
-                                        Text="NoSpeechThreshold" />
+                                        Width="200">
+                                        NoSpeechThreshold
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    Text="Probability that a segment contains no speech, above which it may be treated as silence and skipped (combined with the log-probability check). Higher = more aggressive silence skipping. Leave empty for the model default."
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400" />
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
                                     <TextBox
                                         Width="100"
                                         Text="{Binding FL.PlayerConfig.Subtitles.WhisperCppConfig.NoSpeechThreshold, Converter={StaticResource NullableIntConv}}"
@@ -295,16 +334,42 @@
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock
-                                        Width="200"
-                                        Text="NoContext" />
+                                        Width="200">
+                                        NoContext
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    Text="Do not carry text from the previous segment into the next one as context. Prevents a repetition/hallucination loop at one bad spot from propagating across the whole transcript; enabled by default."
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400" />
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
                                     <ToggleButton
                                         IsChecked="{Binding FL.PlayerConfig.Subtitles.WhisperCppConfig.NoContext}" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock
-                                        Width="200"
-                                        Text="AudioContextSize" />
+                                        Width="200">
+                                        AudioContextSize
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    Text="Size of the audio context the model attends to. A smaller value can speed up generation at some accuracy cost. Leave empty for the model default."
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400" />
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
                                     <TextBox
                                         Width="100"
                                         Text="{Binding FL.PlayerConfig.Subtitles.WhisperCppConfig.AudioContextSize, Converter={StaticResource NullableIntConv}}"
@@ -603,8 +668,21 @@
                                 <DockPanel
                                     Visibility="{Binding FL.PlayerConfig.Subtitles.FasterWhisperConfig.UseManualModel, Converter={StaticResource BooleanToVisibilityConv}}">
                                     <TextBlock
-                                        Width="180"
-                                        Text="    Manual Model Directory" />
+                                        Width="180">
+                                        <Run Text="    Manual Model Directory" />
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    Text="Directory containing the manually downloaded Whisper model(s). Default: whispermodels\"
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400" />
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
                                     <TextBox
                                         HorizontalContentAlignment="Left"
                                         Text="{Binding FL.PlayerConfig.Subtitles.FasterWhisperConfig.ManualModelDir}" />

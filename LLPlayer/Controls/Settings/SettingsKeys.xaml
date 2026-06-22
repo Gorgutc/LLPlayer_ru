@@ -180,7 +180,7 @@
                     <DataGridCheckBoxColumn Header="Ctrl" Binding="{Binding Ctrl,  Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     <DataGridCheckBoxColumn Header="Shift" Binding="{Binding Shift, UpdateSourceTrigger=PropertyChanged}" />
                     <DataGridCheckBoxColumn Header="Alt" Binding="{Binding Alt, Mode=TwoWay,  UpdateSourceTrigger=PropertyChanged}" />
-                    <DataGridCheckBoxColumn Header="IsKeyUp" Binding="{Binding IsKeyUp, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridCheckBoxColumn Header="On Release" Binding="{Binding IsKeyUp, UpdateSourceTrigger=PropertyChanged}" />
 
                     <DataGridTemplateColumn Header="Delete" Width="80">
                         <DataGridTemplateColumn.CellTemplate>
