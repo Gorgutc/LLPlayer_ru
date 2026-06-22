@@ -70,7 +70,37 @@ public class MainWindowVM : Bindable
                 // cannot miss it (owner decision 2026-06-22: ASR → snackbar, everything else → modal).
                 if (args.ErrorType == KnownErrorType.Configuration && args.ActionHint == KnownErrorActionKeys.DownloadWhisperModel)
                 {
-                    FL.MessageQueue.Enqueue(args.Message, "DOWNLOAD", () => FL.Action.OpenWhisperModelDownload());
+                    // First-run ASR onboarding (E6): the first time speech-to-text is attempted without a model,
+                    // show a friendlier one-time hint; afterwards just surface the actionable error message.
+                    if (!FL.Config.AsrOnboardingShown)
+                    {
+                        FL.Config.AsrOnboardingShown = true; // session memory
+
+                        FL.MessageQueue.Enqueue(
+                            "Speech-to-text (ASR) needs a Whisper model the first time. Download one to auto-generate subtitles.",
+                            "DOWNLOAD", () => FL.Action.OpenWhisperModelDownload());
+
+                        // Persist ONLY the one-shot flag via load-modify-save of a fresh instance, so this
+                        // non-user-initiated save never commits transient live toggles (sidebar / always-on-top
+                        // / nudged subtitle position) or re-baselines the subtitle-reset target. Mirrors
+                        // BatchSubtitlesDialogVM.PersistBatchDefaults.
+                        try
+                        {
+                            AppConfig persisted = File.Exists(App.AppConfigPath)
+                                ? AppConfig.Load(App.AppConfigPath)
+                                : new AppConfig();
+                            persisted.AsrOnboardingShown = true;
+                            persisted.Save(App.AppConfigPath);
+                        }
+                        catch (Exception saveEx)
+                        {
+                            Log.Error($"Failed to persist AsrOnboardingShown: {saveEx.Message}");
+                        }
+                    }
+                    else
+                    {
+                        FL.MessageQueue.Enqueue(args.Message, "DOWNLOAD", () => FL.Action.OpenWhisperModelDownload());
+                    }
                 }
                 else
                 {

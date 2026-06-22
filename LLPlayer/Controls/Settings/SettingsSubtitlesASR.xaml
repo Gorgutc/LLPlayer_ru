@@ -215,6 +215,10 @@
                                     <TextBlock Text="Yes" />
                                 </StackPanel>
 
+                                <!-- Advanced whisper.cpp tuning — collapsed by default so the common case
+                                     (pick a model, download) is not buried under fine-tuning knobs (E8a). -->
+                                <Expander Header="Advanced (tuning)" IsExpanded="False" Margin="0 8 0 0">
+                                <StackPanel Margin="0 8 0 0">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock
                                         Width="200">
@@ -371,6 +375,8 @@
                                         Text="{Binding FL.PlayerConfig.Subtitles.WhisperCppConfig.GpuDevice, Converter={StaticResource NullableIntConv}}"
                                         helpers:TextBoxHelper.OnlyNumeric="Uint" />
                                 </StackPanel>
+                                </StackPanel>
+                                </Expander>
 
                             </StackPanel>
                         </GroupBox>

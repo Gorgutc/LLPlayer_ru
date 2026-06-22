@@ -32,11 +32,23 @@
                 Background="{DynamicResource MaterialDesignPaper}"
                 BorderBrush="{DynamicResource MaterialDesignDivider}"
                 BorderThickness="0 0 1 0">
-                <TreeView
-                    x:Name="SettingsTreeView"
-                    FontWeight="Bold"
-                    FontSize="16"
-                    SelectedItemChanged="SettingsTreeView_OnSelectedItemChanged">
+                <DockPanel>
+                    <!-- E8b: live filter over the settings tree (matches section label or key). -->
+                    <TextBox
+                        DockPanel.Dock="Top"
+                        x:Name="SettingsSearchBox"
+                        Margin="8 8 8 4"
+                        FontWeight="Normal"
+                        FontSize="13"
+                        AutomationProperties.Name="Search settings"
+                        materialDesign:HintAssist.Hint="Search settings"
+                        materialDesign:TextFieldAssist.HasClearButton="True"
+                        TextChanged="SettingsSearch_OnTextChanged" />
+                    <TreeView
+                        x:Name="SettingsTreeView"
+                        FontWeight="Bold"
+                        FontSize="16"
+                        SelectedItemChanged="SettingsTreeView_OnSelectedItemChanged">
                     <TreeViewItem Tag="SettingsPlayer" IsSelected="True">
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -153,7 +165,8 @@
                             </StackPanel>
                         </TreeViewItem.Header>
                     </TreeViewItem>
-                </TreeView>
+                    </TreeView>
+                </DockPanel>
             </Border>
 
             <Grid Grid.Column="1">

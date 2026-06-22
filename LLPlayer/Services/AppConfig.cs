@@ -117,6 +117,9 @@ public class AppConfig : Bindable
     /// <summary>Opt-in: request a Win11 Mica window backdrop (applied at startup). Default off.</summary>
     public bool MicaBackdrop { get; set => Set(ref field, value); }
 
+    /// <summary>One-shot flag: set true after the first-run ASR onboarding hint is shown (E6). Persisted.</summary>
+    public bool AsrOnboardingShown { get; set => Set(ref field, value); }
+
     public int ActivityTimeout
     {
         get;

@@ -151,8 +151,14 @@
                     </Button.Style>
                 </Button>
 
-                <!-- Quality + Movies Title -->
-                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                <!-- Quality + Movies Title. Hosted in a Grid so the title takes the remaining space and
+                     ellipsizes instead of overflowing onto the Skip/Volume controls (rank 8 / layout-2). -->
+                <Grid Grid.Column="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <Button Click="ButtonBase_OnClick" ToolTip="Video Streams" AutomationProperties.Name="Video Streams">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
@@ -191,7 +197,8 @@
                             <TextBlock Text="ASR" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" FontWeight="Bold" Foreground="White"/>
                         </StackPanel>
                     </Border>
-                    <TextBlock VerticalAlignment="Center" FontStyle="Italic" FontSize="14" Margin="5,0,0,0" Text="{Binding FL.Player.Playlist.Selected.Title}" Cursor="Hand">
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontStyle="Italic" FontSize="14" Margin="5,0,0,0" Text="{Binding FL.Player.Playlist.Selected.Title}" Cursor="Hand" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left">
                         <TextBlock.ToolTip>
                             <ToolTip xml:space="preserve">Left Click: Open File Dialog
 Right Click: Open Context Menu</ToolTip>
@@ -208,7 +215,7 @@ Right Click: Open Context Menu</ToolTip>
                             </ContextMenu>
                         </TextBlock.ContextMenu>
                     </TextBlock>
-                </StackPanel>
+                </Grid>
 
                 <Button Grid.Column="5" Content="{materialDesign:PackIcon Kind=SkipPrevious}" Command="{Binding FL.Player.Commands.Reopen}" CommandParameter="{Binding FL.Player.Playlist.PrevItem}" ToolTip="Previous Playlist Item" AutomationProperties.Name="Previous Playlist Item">
                     <Button.Style>

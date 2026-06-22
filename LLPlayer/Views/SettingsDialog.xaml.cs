@@ -139,6 +139,18 @@ public partial class SettingsDialog : UserControl
             return;
         }
 
+        // A deep-link target may be hidden/collapsed by an active search filter — clear it first.
+        if (SettingsSearchBox != null && SettingsSearchBox.Text.Length > 0)
+        {
+            SettingsSearchBox.Text = string.Empty; // triggers TextChanged -> RestoreTree
+        }
+        else if (_searchActive)
+        {
+            RestoreTree(SettingsTreeView.Items);
+            _searchOrigExpanded.Clear();
+            _searchActive = false;
+        }
+
         TreeViewItem? item = FindTreeViewItem(SettingsTreeView.Items, pageKey);
         if (item != null)
         {
@@ -209,5 +221,99 @@ public partial class SettingsDialog : UserControl
         }
 
         SettingsContent.Content = page;
+    }
+
+    // E8b — live settings-tree filter. The original expansion state is captured on the first keystroke and
+    // restored when the box is cleared, so search never leaves the tree expanded/collapsed unexpectedly.
+    private readonly Dictionary<TreeViewItem, bool> _searchOrigExpanded = new();
+    private bool _searchActive;
+
+    private void SettingsSearch_OnTextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (SettingsTreeView == null)
+        {
+            return;
+        }
+
+        string query = (SettingsSearchBox?.Text ?? string.Empty).Trim();
+
+        if (query.Length == 0)
+        {
+            if (_searchActive)
+            {
+                RestoreTree(SettingsTreeView.Items);
+                _searchOrigExpanded.Clear();
+                _searchActive = false;
+            }
+            return;
+        }
+
+        if (!_searchActive)
+        {
+            _searchOrigExpanded.Clear();
+            CaptureExpanded(SettingsTreeView.Items);
+            _searchActive = true;
+        }
+
+        foreach (TreeViewItem tvi in SettingsTreeView.Items.OfType<TreeViewItem>())
+        {
+            FilterItem(tvi, query);
+        }
+    }
+
+    // Returns true if this node or any descendant matches; hides non-matching nodes and expands branches
+    // that contain a match so the target is visible.
+    private static bool FilterItem(TreeViewItem tvi, string query)
+    {
+        bool childMatch = false;
+        foreach (TreeViewItem child in tvi.Items.OfType<TreeViewItem>())
+        {
+            childMatch |= FilterItem(child, query);
+        }
+
+        bool selfMatch = GetItemLabel(tvi).Contains(query, StringComparison.OrdinalIgnoreCase)
+                         || (tvi.Tag as string ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase);
+
+        bool visible = selfMatch || childMatch;
+        tvi.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (childMatch)
+        {
+            tvi.IsExpanded = true;
+        }
+        return visible;
+    }
+
+    private void CaptureExpanded(ItemCollection items)
+    {
+        foreach (TreeViewItem tvi in items.OfType<TreeViewItem>())
+        {
+            _searchOrigExpanded[tvi] = tvi.IsExpanded;
+            CaptureExpanded(tvi.Items);
+        }
+    }
+
+    private void RestoreTree(ItemCollection items)
+    {
+        foreach (TreeViewItem tvi in items.OfType<TreeViewItem>())
+        {
+            tvi.Visibility = Visibility.Visible;
+            if (_searchOrigExpanded.TryGetValue(tvi, out bool exp))
+            {
+                tvi.IsExpanded = exp;
+            }
+            RestoreTree(tvi.Items);
+        }
+    }
+
+    // The visible label is either a plain string Header (sub-items) or the TextBlock inside the icon+text
+    // StackPanel header (top-level items).
+    private static string GetItemLabel(TreeViewItem tvi)
+    {
+        return tvi.Header switch
+        {
+            string s => s,
+            StackPanel sp => sp.Children.OfType<TextBlock>().FirstOrDefault()?.Text ?? string.Empty,
+            _ => string.Empty
+        };
     }
 }
