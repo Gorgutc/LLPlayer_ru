@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:LLPlayer.Views"
              xmlns:vm="clr-namespace:LLPlayer.ViewModels"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:SubtitlesDownloaderDialogVM}"
              d:Foreground="White"
@@ -15,7 +16,15 @@
         <ResourceDictionary>
             <Style x:Key="Spinner" TargetType="ProgressBar" BasedOn="{StaticResource MaterialDesignCircularProgressBar}">
                 <Setter Property="IsIndeterminate" Value="True" />
-                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+                <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Secondary}" />
+            </Style>
+            <!-- M3: rose-tonal selected row on the results DataGrid -->
+            <Style x:Key="M3.ResultRow" TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Background" Value="#2EECB3C4" />
+                    </Trigger>
+                </Style.Triggers>
             </Style>
         </ResourceDictionary>
     </UserControl.Resources>
@@ -41,29 +50,33 @@
                 Grid.Column="0"
                 FontSize="18"
                 Text="Query:"
-                Foreground="Gray"
+                Foreground="{DynamicResource MaterialDesignBodyLight}"
                 VerticalAlignment="Center"
-                Margin="0,0,5,0"/>
+                Margin="0,0,8,0"/>
             <TextBox
                 Grid.Column="1"
+                Style="{StaticResource MaterialDesignFilledTextBox}"
+                materialDesign:TextFieldAssist.TextFieldCornerRadius="16 16 0 0"
                 FontSize="18"
                 Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}"
-                Padding="2"
+                Padding="8 6"
                 VerticalAlignment="Center"/>
 
             <Button
                 Grid.Column="2"
+                Style="{StaticResource M3.FilledButton}"
                 IsDefault="True"
                 Command="{Binding CmdSearch}"
                 Content="Search"
-                FontSize="18"
-                Margin="6 0" />
+                FontSize="16"
+                Margin="8 0 0 0" />
         </Grid>
 
         <Grid Grid.Row="1">
             <DataGrid
                 ItemsSource="{Binding Subs}"
                 SelectedItem="{Binding SelectedSub}"
+                RowStyle="{StaticResource M3.ResultRow}"
                 AutoGenerateColumns="False"
                 IsReadOnly="True"
                 SelectionMode="Single"
@@ -92,6 +105,7 @@
         <Grid Grid.Row="2">
             <StackPanel Orientation="Horizontal">
                 <Button
+                    Style="{StaticResource M3.FilledButton}"
                     Command="{Binding CmdLoad}"
                     Margin="0 0 8 0">
                     <StackPanel Orientation="Horizontal">
@@ -99,18 +113,19 @@
                             Visibility="{Binding CmdLoad.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}"
                             Style="{StaticResource Spinner}"
                             Margin="0 0 5 0" />
-                        <TextBlock Text="Load" FontSize="18" />
+                        <TextBlock Text="Load" FontSize="16" />
                     </StackPanel>
                 </Button>
 
                 <!-- TODO: L: Support for multiple downloads -->
                 <Button
+                    Style="{StaticResource M3.FilledButton}"
                     Command="{Binding CmdDownload}">
                     <StackPanel Orientation="Horizontal">
                         <ProgressBar
                             Visibility="{Binding CmdDownload.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}"
                             Style="{StaticResource Spinner}" />
-                        <TextBlock Text="Download" FontSize="18" />
+                        <TextBlock Text="Download" FontSize="16" />
                     </StackPanel>
                 </Button>
             </StackPanel>

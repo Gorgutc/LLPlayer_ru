@@ -43,7 +43,7 @@
                         HorizontalAlignment="Left"
                         ToolTip="Copy version to clipboard"
                         Command="{Binding CmdCopyVersion}"
-                        Style="{StaticResource MaterialDesignIconButton}" >
+                        Style="{StaticResource M3.IconButton.Small}" >
                         <materialDesign:PackIcon
                             Width="16"
                             Height="16"

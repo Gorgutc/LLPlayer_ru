@@ -263,6 +263,7 @@
                         Margin="360 6 0 0"
                         HorizontalAlignment="Left"
                         Content="Reset all"
+                        Style="{StaticResource M3.TonalButton}"
                         Command="{Binding FL.Player.Commands.ResetFilters}" />
                 </StackPanel>
             </GroupBox>

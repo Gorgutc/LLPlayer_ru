@@ -60,7 +60,7 @@
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsUnknown}" Value="True">
                                 <DataTrigger.Setters>
-                                    <Setter Property="Foreground" Value="#ef5350" />
+                                    <Setter Property="Foreground" Value="#FF5370" />
                                 </DataTrigger.Setters>
                             </DataTrigger>
                         </Style.Triggers>
@@ -78,20 +78,27 @@
                 <Run Text="{Binding ErrorTitle, Mode=OneWay}" />
             </TextBlock>
 
-            <TextBox
+            <Border
                 Grid.Row="1"
-                Text="{Binding Message, Mode=OneWay}"
-                FontSize="16"
-                IsReadOnly="True"
-                TextWrapping="Wrap"
-                ContextMenu="{x:Null}"
-                CommandManager.PreviewExecuted="TextBox_PreviewMouseDown"
-                Padding="10"
-                TextAlignment="Left"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Center"
-                Foreground="{DynamicResource MaterialDesignBody}">
-            </TextBox>
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                CornerRadius="{StaticResource M3.Radius.16}"
+                Padding="6"
+                VerticalAlignment="Center">
+                <TextBox
+                    Text="{Binding Message, Mode=OneWay}"
+                    FontSize="16"
+                    IsReadOnly="True"
+                    TextWrapping="Wrap"
+                    ContextMenu="{x:Null}"
+                    CommandManager.PreviewExecuted="TextBox_PreviewMouseDown"
+                    Background="Transparent"
+                    Padding="10"
+                    TextAlignment="Left"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Center"
+                    Foreground="{DynamicResource MaterialDesignBody}">
+                </TextBox>
+            </Border>
 
             <Expander
                 Grid.Row="2"
@@ -100,15 +107,21 @@
                 Header="Exception Details"
                 IsExpanded="False"
                 Visibility="{Binding HasException, Converter={StaticResource BooleanToVisibilityConv}}">
-                <TextBox
-                    Text="{Binding ExceptionDetail, Mode=OneWay}"
-                    IsReadOnly="True"
-                    ContextMenu="{x:Null}"
-                    CommandManager.PreviewExecuted="TextBox_PreviewMouseDown"
-                    FontSize="12"
-                    TextAlignment="Left"
-                    TextWrapping="Wrap"
-                    MaxHeight="140" />
+                <Border
+                    Background="{DynamicResource MaterialDesignCardBackground}"
+                    CornerRadius="{StaticResource M3.Radius.16}"
+                    Padding="6">
+                    <TextBox
+                        Text="{Binding ExceptionDetail, Mode=OneWay}"
+                        IsReadOnly="True"
+                        ContextMenu="{x:Null}"
+                        CommandManager.PreviewExecuted="TextBox_PreviewMouseDown"
+                        Background="Transparent"
+                        FontSize="12"
+                        TextAlignment="Left"
+                        TextWrapping="Wrap"
+                        MaxHeight="140" />
+                </Border>
             </Expander>
 
             <Grid Grid.Row="3" Margin="0 12 0 0">
@@ -122,7 +135,7 @@
                     Grid.Column="0"
                     Content="Copy to Clipboard"
                     Command="{Binding CmdCopyMessage}"
-                    Style="{StaticResource MaterialDesignRaisedButton}" />
+                    Style="{StaticResource M3.FilledButton}" />
 
                 <Button
                     Grid.Column="2"
@@ -131,7 +144,7 @@
                     IsDefault="True"
                     IsCancel="True"
                     Command="{Binding CmdCloseDialog}"
-                    Style="{StaticResource MaterialDesignOutlinedButton}" />
+                    Style="{StaticResource M3.OutlinedButton}" />
             </Grid>
         </Grid>
     </Border>

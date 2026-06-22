@@ -61,10 +61,10 @@
 
             <Button
                 ToolTip="Open Folder"
-                Style="{StaticResource MaterialDesignIconButton}"
+                Style="{StaticResource M3.IconButton.Small}"
                 HorizontalAlignment="Center"
-                Width="30"
-                Height="30"
+                Width="36"
+                Height="36"
                 Command="{Binding CmdOpenFolder}">
                 <materialDesign:PackIcon Kind="Folder" />
             </Button>
@@ -76,22 +76,23 @@
                 Content="Download Model"
                 Command="{Binding CmdDownloadModel}"
                 Width="150"
-                Height="30"
+                Height="36"
+                Style="{StaticResource M3.FilledButton}"
                 Visibility="{Binding CmdDownloadModel.IsExecuting, Converter={StaticResource BooleanToVisibilityInvertConv}}" />
 
             <Button
                 Content="Cancel"
                 Command="{Binding CmdCancelDownloadModel}"
                 Width="150"
-                Height="30"
-                Style="{StaticResource MaterialDesignPaperButton}"
+                Height="36"
+                Style="{StaticResource M3.OutlinedButton}"
                 Visibility="{Binding CmdDownloadModel.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}"/>
 
             <Button
                 Command="{Binding CmdDeleteModel}"
                 Width="100"
-                Height="30"
-                Style="{StaticResource MaterialDesignFlatButton}"
+                Height="36"
+                Style="{StaticResource M3.TextButton}"
                 Margin="10 0 0 0">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Kind="Delete" Width="20" Height="20" VerticalAlignment="Center" />
@@ -101,15 +102,20 @@
         </StackPanel>
 
         <!-- Progress bar (hidden) -->
-        <ProgressBar
+        <Border
             Grid.Row="2"
-            Height="6"
-            Visibility="{Binding CmdDownloadModel.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}"
+            CornerRadius="{StaticResource M3.Radius.Pill}"
+            ClipToBounds="True"
             Margin="0 0 0 10"
-            Minimum="0"
-            Maximum="{Binding TotalSize}"
-            Value="{Binding DownloadedSize}"
-            IsIndeterminate="{Binding IsIndeterminateDownload}" />
+            Visibility="{Binding CmdDownloadModel.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}">
+            <ProgressBar
+                Height="6"
+                Foreground="{DynamicResource MaterialDesign.Brush.Primary}"
+                Minimum="0"
+                Maximum="{Binding TotalSize}"
+                Value="{Binding DownloadedSize}"
+                IsIndeterminate="{Binding IsIndeterminateDownload}" />
+        </Border>
 
         <!-- Download Size -->
         <StackPanel
@@ -125,8 +131,14 @@
         </StackPanel>
 
         <!-- Status -->
-        <TextBlock Grid.Row="4"
-                   Text="{Binding StatusText}"
-                   TextWrapping="Wrap"/>
+        <Border Grid.Row="4"
+                Background="{DynamicResource MaterialDesignCardBackground}"
+                CornerRadius="{StaticResource M3.Radius.16}"
+                Padding="14 12"
+                VerticalAlignment="Top">
+            <TextBlock
+                Text="{Binding StatusText}"
+                TextWrapping="Wrap"/>
+        </Border>
     </Grid>
 </UserControl>

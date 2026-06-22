@@ -12,7 +12,10 @@
              d:Foreground="White"
              d:Background="Black"
              d:DesignHeight="520" d:DesignWidth="620">
-    <materialDesign:Card>
+    <materialDesign:Card
+        UniformCornerRadius="28"
+        Background="{DynamicResource MaterialDesignCardBackground}"
+        materialDesign:ElevationAssist.Elevation="Dp0">
         <Grid Margin="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -40,6 +43,17 @@
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
                         <Setter Property="Cursor" Value="Hand" />
+                        <Setter Property="Margin" Value="0 1" />
+                        <Style.Triggers>
+                            <!-- Selected (keyboard-focused) row reads stronger than hover so the
+                                 "which row will Enter fire" affordance survives mouse-over. -->
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#1FECB3C4" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="#33ECB3C4" />
+                            </Trigger>
+                        </Style.Triggers>
                     </Style>
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
@@ -55,13 +69,19 @@
                                 ToolTip="{Binding ActionName}"
                                 VerticalAlignment="Center"
                                 TextTrimming="CharacterEllipsis" />
-                            <TextBlock
+                            <Border
                                 Grid.Column="1"
-                                Text="{Binding Shortcut}"
-                                Opacity="0.7"
-                                FontWeight="SemiBold"
+                                Background="#382A30"
+                                CornerRadius="{StaticResource M3.Radius.8}"
+                                Padding="8 2"
                                 VerticalAlignment="Center"
-                                Margin="12 0 0 0" />
+                                Margin="12 0 0 0">
+                                <TextBlock
+                                    Text="{Binding Shortcut}"
+                                    FontFamily="Cascadia Code, Consolas"
+                                    FontWeight="Medium"
+                                    VerticalAlignment="Center" />
+                            </Border>
                         </Grid>
                     </DataTemplate>
                 </ListBox.ItemTemplate>

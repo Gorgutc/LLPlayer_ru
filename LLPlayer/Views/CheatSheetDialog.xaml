@@ -61,11 +61,19 @@
                             <GridViewColumn Header="Shortcut" Width="120">
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate DataType="{x:Type vm:KeyBindingCS}">
-                                        <TextBlock
-                                            Text="{Binding Path=Shortcut}"
-                                            FontSize="14"
-                                            TextWrapping="Wrap"
-                                            FontWeight="SemiBold" />
+                                        <Border
+                                            Background="#382A30"
+                                            CornerRadius="{StaticResource M3.Radius.8}"
+                                            Padding="8 3"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Center">
+                                            <TextBlock
+                                                Text="{Binding Path=Shortcut}"
+                                                FontSize="14"
+                                                FontFamily="Cascadia Code, Consolas"
+                                                TextWrapping="Wrap"
+                                                FontWeight="Medium" />
+                                        </Border>
                                     </DataTemplate>
                                 </GridViewColumn.CellTemplate>
                             </GridViewColumn>
@@ -99,7 +107,7 @@
         </Style>
     </UserControl.Resources>
 
-    <materialDesign:Card>
+    <materialDesign:Card Style="{StaticResource M3.Card}">
         <TabControl
             HorizontalContentAlignment="Center"
             materialDesign:ColorZoneAssist.Mode="PrimaryLight">

@@ -11,6 +11,20 @@
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:SelectLanguageDialogVM}"
              d:DesignHeight="450" d:DesignWidth="800">
+    <UserControl.Resources>
+        <Style x:Key="M3LanguageListItem" TargetType="ListBoxItem" BasedOn="{StaticResource MaterialDesignListBoxItem}">
+            <Setter Property="Margin" Value="2 1" />
+            <Setter Property="materialDesign:ListBoxItemAssist.CornerRadius" Value="16" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#1FECB3C4" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#33ECB3C4" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
     <Grid Margin="20">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
@@ -52,8 +66,10 @@
                     ItemsSource="{Binding AvailableLanguages}"
                     SelectedItem="{Binding SelectedAvailable}"
                     DisplayMemberPath="DisplayName"
+                    ItemContainerStyle="{StaticResource M3LanguageListItem}"
                     BorderThickness="1"
-                    BorderBrush="{DynamicResource MaterialDesign.Brush.Primary}" />
+                    BorderBrush="#40ECB3C4"
+                    Padding="4" />
             </Grid>
 
         </DockPanel>
@@ -130,8 +146,10 @@
                     ItemsSource="{Binding SelectedLanguages}"
                     SelectedItem="{Binding SelectedSelected}"
                     DisplayMemberPath="DisplayName"
+                    ItemContainerStyle="{StaticResource M3LanguageListItem}"
                     BorderThickness="1"
-                    BorderBrush="{DynamicResource MaterialDesign.Brush.Primary}" />
+                    BorderBrush="#40ECB3C4"
+                    Padding="4" />
             </Grid>
         </DockPanel>
     </Grid>

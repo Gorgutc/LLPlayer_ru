@@ -317,7 +317,7 @@
                     </Setter>
                     <Style.Triggers>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter Property="Background" Value="#444444" />
+                            <Setter Property="Background" Value="#2EECB3C4" />
                         </Trigger>
                     </Style.Triggers>
                 </Style>
@@ -378,12 +378,12 @@
                         </DataTemplate>
                     </DataTemplate.Resources>
 
-                    <!-- Left-accent border marks the currently-playing cue, reusing the EXACT signal the
-                         Play button uses (SubIsPlayingConv). Rows stay non-selectable; no auto-scroll change. -->
-                    <Border BorderThickness="3 0 0 0">
+                    <!-- M3: the currently-playing cue is marked by a rounded (16px) rose tonal FILL — no left bar.
+                         Reuses the EXACT signal the Play button uses (SubIsPlayingConv). Rows stay non-selectable. -->
+                    <Border CornerRadius="{StaticResource M3.Radius.16}" Margin="3 0">
                         <Border.Style>
                             <Style TargetType="Border">
-                                <Setter Property="BorderBrush" Value="Transparent" />
+                                <Setter Property="Background" Value="Transparent" />
                                 <Style.Triggers>
                                     <DataTrigger Value="True">
                                         <DataTrigger.Binding>
@@ -393,7 +393,7 @@
                                                 <Binding ElementName="SubtitleListBox" Path="DataContext.SubManager.IsDisplaying" />
                                             </MultiBinding>
                                         </DataTrigger.Binding>
-                                        <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+                                        <Setter Property="Background" Value="#2EECB3C4" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -496,6 +496,6 @@
             Visibility="{Binding SubManager.IsLoading, Converter={StaticResource BooleanToVisibilityConv}}"
             Width="20"
             Height="20"
-            Foreground="#888888" />
+            Foreground="{DynamicResource MaterialDesign.Brush.Secondary}" />
     </Grid>
 </UserControl>

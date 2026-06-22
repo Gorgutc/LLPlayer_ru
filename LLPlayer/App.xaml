@@ -15,9 +15,18 @@
                      MaterialDesignMy.xaml + Converters.xaml (and the MDIX defaults above), so it must
                      stay merged after them. Do not reorder. -->
                 <ResourceDictionary Source="/Resources/MaterialDesignMy.xaml"/>
+                <!-- M3 (Material You) shape + component styles. Non-colour; keyed (opt-in). Must stay
+                     after MaterialDesignMy (its styles are BasedOn MDIX defaults) and before Converters. -->
+                <ResourceDictionary Source="/Resources/M3.xaml"/>
                 <ResourceDictionary Source="/Resources/Converters.xaml"/>
                 <ResourceDictionary Source="/Resources/PopupMenu.xaml"/>
                 <ResourceDictionary Source="/Resources/Validators.xaml"/>
+                <!-- M3 colour overlays — merged LAST so the rose-tinted surface ramp + primary-container
+                     accents win over the CustomColorTheme-generated palette at DynamicResource lookup.
+                     Toggled at runtime by AppConfigTheme (present only for the dark default + un-customised
+                     colours), so Light / Follow-Windows / accent-sync / colour-picker keep working. -->
+                <ResourceDictionary Source="/Resources/M3.Surfaces.xaml"/>
+                <ResourceDictionary Source="/Resources/M3.Accent.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

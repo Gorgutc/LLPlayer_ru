@@ -64,7 +64,7 @@
                             Margin="10 0 0 0"
                             Command="{Binding CmdDownloadEngine}">
                             <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedSecondaryButton}">
+                                <Style TargetType="Button" BasedOn="{StaticResource M3.TonalButton}">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding FL.PlayerConfig.Subtitles.ASREngine}" Value="FasterWhisper">
@@ -193,7 +193,7 @@
                                     <Button
                                         Margin="10 0 0 0"
                                         Content="Download Model"
-                                        Style="{StaticResource MaterialDesignRaisedSecondaryButton}"
+                                        Style="{StaticResource M3.TonalButton}"
                                         Command="{Binding CmdDownloadModel}" />
                                 </StackPanel>
 
@@ -766,11 +766,13 @@
                                         Content="Copy Debug Command"
                                         Margin="0 0 10 0"
                                         HorizontalAlignment="Left"
+                                        Style="{StaticResource M3.TonalButton}"
                                         Command="{Binding CmdCopyDebugCommand}"/>
 
                                     <Button
                                         Content="Copy Help Command"
                                         HorizontalAlignment="Left"
+                                        Style="{StaticResource M3.TonalButton}"
                                         Command="{Binding CmdCopyHelpCommand}"/>
                                 </StackPanel>
                             </StackPanel>

@@ -212,11 +212,11 @@
         </Grid>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0 5 0 0">
-            <Button Margin="5" Content="Add" Command="{Binding CmdAdd}" />
-            <Button Margin="5" Content="Load" Command="{Binding CmdLoad}" />
+            <Button Margin="5" Content="Add" Command="{Binding CmdAdd}" Style="{StaticResource M3.TonalButton}" />
+            <Button Margin="5" Content="Load" Command="{Binding CmdLoad}" Style="{StaticResource M3.TonalButton}" />
             <Button Margin="5" Content="Apply" Command="{Binding CmdApply}">
                 <Button.Style>
-                    <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedSecondaryButton}">
+                    <Style TargetType="Button" BasedOn="{StaticResource M3.FilledButton}">
                         <Style.Triggers>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />

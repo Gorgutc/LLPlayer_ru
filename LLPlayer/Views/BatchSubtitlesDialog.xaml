@@ -1,4 +1,4 @@
-<UserControl x:Class="LLPlayer.Views.BatchSubtitlesDialog"
+﻿<UserControl x:Class="LLPlayer.Views.BatchSubtitlesDialog"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -14,6 +14,20 @@
 
     <UserControl.Resources>
         <conv:TimeSpanShortConverter x:Key="TimeSpanShort" />
+
+        <!-- M3: rose-tonal selected row (layered over the existing dim-when-excluded trigger) -->
+        <Style x:Key="M3.BatchRow" TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+            <Setter Property="ToolTip" Value="{Binding MediaPath}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Include}" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                </DataTrigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#2EECB3C4" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
     </UserControl.Resources>
 
     <UserControl.InputBindings>
@@ -45,6 +59,8 @@
 
             <TextBox
                 Grid.Column="1"
+                Style="{StaticResource MaterialDesignFilledTextBox}"
+                materialDesign:TextFieldAssist.TextFieldCornerRadius="16 16 0 0"
                 Margin="0 0 8 0"
                 VerticalAlignment="Center"
                 Text="{Binding FolderPath, UpdateSourceTrigger=LostFocus}"
@@ -52,6 +68,7 @@
 
             <Button
                 Grid.Column="2"
+                Style="{StaticResource M3.OutlinedButton}"
                 Margin="0 0 8 0"
                 Command="{Binding CmdBrowseFolder}"
                 ToolTip="Select folder">
@@ -63,6 +80,7 @@
 
             <Button
                 Grid.Column="3"
+                Style="{StaticResource M3.FilledButton}"
                 Command="{Binding CmdScan}"
                 ToolTip="Scan folder">
                 <StackPanel Orientation="Horizontal">
@@ -72,29 +90,37 @@
             </Button>
         </Grid>
 
-        <DockPanel Grid.Row="1" Margin="0 0 0 10">
-            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                <CheckBox
-                    Margin="0 0 18 0"
-                    VerticalAlignment="Center"
-                    Content="Recursive"
-                    ToolTip="Also scan every sub-folder for videos. Results are grouped by folder."
-                    IsChecked="{Binding Recursive}" />
+        <!-- M3: options panel on a raised surf2 panel, radius 16 -->
+        <Border
+            Grid.Row="1"
+            Margin="0 0 0 10"
+            Padding="12 8"
+            CornerRadius="16"
+            Background="{DynamicResource MaterialDesignCardBackground}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <CheckBox
+                        Margin="0 0 18 0"
+                        VerticalAlignment="Center"
+                        Content="Recursive"
+                        ToolTip="Also scan every sub-folder for videos. Results are grouped by folder."
+                        IsChecked="{Binding Recursive}" />
 
-                <CheckBox
-                    Margin="0 0 18 0"
-                    VerticalAlignment="Center"
-                    Content="Overwrite existing"
-                    IsChecked="{Binding OverwriteExisting}" />
-            </StackPanel>
+                    <CheckBox
+                        Margin="0 0 18 0"
+                        VerticalAlignment="Center"
+                        Content="Overwrite existing"
+                        IsChecked="{Binding OverwriteExisting}" />
+                </StackPanel>
 
-            <TextBlock
-                DockPanel.Dock="Right"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Center"
-                Foreground="{DynamicResource MaterialDesignBodyLight}"
-                Text="{Binding FL.PlayerConfig.Subtitles.TranslateServiceType, StringFormat=Translate: {0} -> Russian}" />
-        </DockPanel>
+                <TextBlock
+                    DockPanel.Dock="Right"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Foreground="{DynamicResource MaterialDesignBodyLight}"
+                    Text="{Binding FL.PlayerConfig.Subtitles.TranslateServiceType, StringFormat=Translate: {0} -> Russian}" />
+            </DockPanel>
+        </Border>
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
@@ -135,16 +161,10 @@
                         </GroupStyle.HeaderTemplate>
                     </GroupStyle>
                 </DataGrid.GroupStyle>
+                <!-- Row style (full source path on hover, dim when excluded, rose-tonal when selected)
+                     lives in UserControl.Resources as M3.BatchRow. -->
                 <DataGrid.RowStyle>
-                    <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
-                        <!-- Full source path on row hover (the File column now shows only the file name). -->
-                        <Setter Property="ToolTip" Value="{Binding MediaPath}" />
-                        <Style.Triggers>
-                            <DataTrigger Binding="{Binding Include}" Value="False">
-                                <Setter Property="Opacity" Value="0.45" />
-                            </DataTrigger>
-                        </Style.Triggers>
-                    </Style>
+                    <StaticResource ResourceKey="M3.BatchRow" />
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
                     <DataGridTemplateColumn Width="44" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
@@ -207,12 +227,18 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
-                                    <ProgressBar
+                                    <!-- M3: clip to a fully-rounded pill (radius = half the 6px height) -->
+                                    <Border
                                         Grid.Row="0"
-                                        Height="6"
-                                        Minimum="0" Maximum="1"
-                                        Value="{Binding Progress}"
-                                        IsIndeterminate="{Binding IsIndeterminateProgress}" />
+                                        CornerRadius="3"
+                                        ClipToBounds="True">
+                                        <ProgressBar
+                                            Height="6"
+                                            Foreground="{DynamicResource MaterialDesign.Brush.Primary}"
+                                            Minimum="0" Maximum="1"
+                                            Value="{Binding Progress}"
+                                            IsIndeterminate="{Binding IsIndeterminateProgress}" />
+                                    </Border>
                                     <TextBlock
                                         Grid.Row="1"
                                         FontSize="10"
@@ -283,11 +309,16 @@
                     TextTrimming="CharacterEllipsis"
                     Foreground="{DynamicResource MaterialDesignBodyLight}"
                     Text="{Binding ActiveJob.MediaPath}" />
+                <!-- M3: transcript on a raised surf2 group panel, radius 16, hairline outline -->
                 <Border
+                    CornerRadius="16"
+                    ClipToBounds="True"
                     BorderThickness="1"
+                    Background="{DynamicResource MaterialDesignCardBackground}"
                     BorderBrush="{DynamicResource MaterialDesignDivider}">
                     <ListBox
                         x:Name="TranscriptList"
+                        Background="Transparent"
                         ItemsSource="{Binding ActiveJob.Transcript}"
                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                         ScrollViewer.VerticalScrollBarVisibility="Auto">
@@ -318,6 +349,7 @@
 
             <Button
                 Grid.Column="1"
+                Style="{StaticResource M3.FilledButton}"
                 Margin="8 0 0 0"
                 Command="{Binding CmdStart}"
                 ToolTip="Start batch">
@@ -329,6 +361,7 @@
 
             <Button
                 Grid.Column="2"
+                Style="{StaticResource M3.OutlinedButton}"
                 Margin="8 0 0 0"
                 Command="{Binding CmdCancel}"
                 ToolTip="Cancel batch">
@@ -340,6 +373,7 @@
 
             <Button
                 Grid.Column="3"
+                Style="{StaticResource M3.OutlinedButton}"
                 Margin="8 0 0 0"
                 Command="{Binding CmdRetryFailed}"
                 ToolTip="Retry all failed files">
@@ -351,6 +385,7 @@
 
             <Button
                 Grid.Column="4"
+                Style="{StaticResource M3.OutlinedButton}"
                 Margin="8 0 0 0"
                 Command="{Binding CmdOpenOutputFolder}"
                 ToolTip="Open output folder">
@@ -362,6 +397,7 @@
 
             <Button
                 Grid.Column="5"
+                Style="{StaticResource M3.TextButton}"
                 Margin="8 0 0 0"
                 Command="{Binding CmdCloseDialog}"
                 ToolTip="Close">

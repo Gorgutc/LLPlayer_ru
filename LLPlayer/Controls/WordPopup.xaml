@@ -16,14 +16,14 @@
         ContextMenu="{Binding PopupContextMenu}"
         BorderBrush="{DynamicResource MaterialDesignDivider}"
         BorderThickness="1"
-        CornerRadius="8"
-        Padding="10 15"
+        CornerRadius="24"
+        Padding="14 16"
         PreviewKeyDown="Border_OnPreviewKeyDown">
         <Border.Style>
             <Style TargetType="Border">
                 <!-- Over video (default) a fixed dark chip stays readable on any frame; in the themed
-                     sidebar follow the active theme so it matches Light mode. -->
-                <Setter Property="Background" Value="#333333" />
+                     sidebar follow the active theme so it matches Light mode. M3: rose-tinted surf3. -->
+                <Setter Property="Background" Value="#382A30" />
                 <Style.Triggers>
                     <DataTrigger Binding="{Binding IsSidebar}" Value="True">
                         <Setter Property="Background" Value="{DynamicResource MaterialDesignPaper}" />

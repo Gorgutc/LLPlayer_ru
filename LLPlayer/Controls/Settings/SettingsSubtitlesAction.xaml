@@ -254,13 +254,16 @@
                             <Button
                                 Content="Add Search"
                                 Command="{Binding CmdAddSearchAction}"
+                                Style="{StaticResource M3.TonalButton}"
                                 Margin="0 0 8 0" />
                             <Button
                                 Content="Add Clipboard"
                                 Command="{Binding CmdAddClipboardAction}"
+                                Style="{StaticResource M3.TonalButton}"
                                 Margin="0 0 8 0" />
                             <Button
                                 Content="Add ClipboardAll"
+                                Style="{StaticResource M3.TonalButton}"
                                 Command="{Binding CmdAddClipboardAllAction}" />
                         </StackPanel>
 
@@ -268,7 +271,7 @@
                             <Button
                                 Content="Apply"
                                 Command="{Binding CmdApplyContextMenu}"
-                                Style="{StaticResource MaterialDesignRaisedSecondaryButton}"
+                                Style="{StaticResource M3.FilledButton}"
                                 Margin="0 0 8 0" />
                         </StackPanel>
                     </Grid>
@@ -332,7 +335,7 @@ Note that this does not work for bitmap subtitles. In that case, please use OCR 
                         Content="Auto Set"
                         HorizontalAlignment="Left"
                         Command="{Binding CmdSetPdicPath}"
-                        Style="{StaticResource MaterialDesignRaisedSecondaryButton}"
+                        Style="{StaticResource M3.TonalButton}"
                         Margin="180 0 0 0" />
 
                     <TextBlock Margin="5 10 5 0">

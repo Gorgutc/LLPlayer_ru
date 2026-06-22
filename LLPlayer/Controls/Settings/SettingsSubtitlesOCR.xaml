@@ -130,6 +130,7 @@
                         Margin="0 15 0 0"
                         MaxWidth="150"
                         Content="Download Model"
+                        Style="{StaticResource M3.TonalButton}"
                         Command="{Binding CmdDownloadTessModel}" />
 
                     <TextBlock Grid.Column="1" Grid.Row="2" Margin="5 10 5 0">

@@ -4,12 +4,51 @@ This document freezes the current WPF/UI design decisions from `main`.
 
 ## Visual Style
 
-- Dark MaterialDesign2 theme is the default. Light and Follow-Windows theme modes, a Win11 Mica backdrop, and Windows accent-color sync are opt-in (Settings ▸ Themes); all default off so the dark MaterialDesign2 look is the shipped default. Theme mode applies live via `PaletteHelper`; Mica is restart-to-apply and, due to the FlyleafHost DirectX child-HWND airspace, only affects chrome/borders (never the video surface).
-- App colors originate from `App.xaml` and app theme settings.
+> **Updated 2026-06 — Material 3 (Material You) re-skin.** The shipped default look is now a **rose-tinted
+> dark Material 3** theme, re-skinned 1:1 from the Claude Design `flutter-m3` direction (the design was
+> reverse-engineered from this app's own WPF). This is an appearance-only change: the WPF framework,
+> MaterialDesignInXAML 5.3.1, the engine, and all behaviour are unchanged. The full skin spec, the master
+> element tracker, the WPF map, and the foundation plan live in `docs/agent/redesign/`.
+
+- **Default theme = Material 3 rose-tinted dark.** Brand seed `#D23D6F` is kept only as the HCT palette
+  generator; filled surfaces use the lighter primary **container** tone `#ECB3C4` on `#5A1B2C` (not the
+  saturated seed). Neutral surfaces are a rose-tinted dark ramp `#1A1216 → #241A1E → #2D2025 → #382A30`;
+  secondary is tonal cyan `#7FD8E6`. Roboto (`MaterialDesignFont`) and MaterialDesign `PackIcon` (mdi) are
+  kept 1:1.
+- **Theme modes still work (functionality preserved).** Light, Follow-Windows, Win11 Mica, and Windows
+  accent-color sync remain opt-in (Settings ▸ Themes), all default off. Theme mode applies live via
+  `PaletteHelper`. The M3 rose ramp is delivered by two **toggled** resource dictionaries
+  (`Resources/M3.Surfaces.xaml` = surfaces, `Resources/M3.Accent.xaml` = primary-container + secondary),
+  managed by `AppConfigTheme.RefreshM3Overlays()`: present only for the dark default and only while the
+  user has not enabled accent-sync or picked a custom Primary/Secondary colour. In Light / Follow-Windows
+  the overlays are removed so the stock MaterialDesign light palette shows; accent-sync / colour-picker
+  drop only the accent overlay so the chosen colour flows through. The overlays are re-asserted after
+  every `PaletteHelper.SetTheme` (they are matched/removed by leaf filename). Mica stays restart-to-apply
+  and (FlyleafHost DirectX child-HWND airspace) affects only chrome, never the video surface.
+- **Shared shape + component layer** lives in `Resources/M3.xaml` (radii tokens `M3.Radius.8/16/20/24/28/Pill`;
+  keyed opt-in styles `M3.FilledButton/TonalButton/OutlinedButton/TextButton` (pill 20, weight 500,
+  flat-at-rest), `M3.IconButton`/`.Small` (round), `M3.Switch`, `M3.Card` (flat radius-16 + hairline);
+  implicit `ToolTip`). Screens opt into these keyed styles; surfaces/accents apply globally via the brush
+  overrides.
+- App colors originate from `App.xaml` (`CustomColorTheme`), the M3 overlay dictionaries, and app theme settings.
 - MaterialDesign PackIcon is the primary icon language for toolbar and menu actions.
 - Resource dictionaries under `LLPlayer/Resources` and `LLPlayer/Themes` are shared UI infrastructure, not per-view decoration.
-- Preserve the `App.xaml` merged dictionary order unless a task explicitly changes them together: `CustomColorTheme`, `MaterialDesign2.Defaults`, `MaterialDesignMy`, `Converters`, `PopUpMenu`, `Validators`.
+- Preserve the `App.xaml` merged dictionary order unless a task explicitly changes them together:
+  `CustomColorTheme`, `MaterialDesign2.Defaults`, `MaterialDesignMy`, `M3` (shape/styles),
+  `Converters`, `PopUpMenu`, `Validators`, then the two M3 colour overlays (`M3.Surfaces`, `M3.Accent`) last.
 - Do not remove shared converters, popup menus, validators, or MaterialDesign resource defaults as cleanup; many views depend on them indirectly.
+
+### Intentional M3 departures from the old UI (do not "restore")
+- Filled surfaces use pale rose container `#ECB3C4` (not saturated `#D23D6F`); neutral ramp is rose-tinted.
+- Sidebar now-playing cue: the 3px primary **left-border** is replaced by a **rounded 16px rose tonal fill**
+  (`#2EECB3C4`), reusing the same `SubIsPlayingConv` signal — **no left bar**.
+- Larger radii: buttons pill (20), fields/cards/menus 16, WordPopup 24, menu items rounded; menu icons rose.
+- Transport play is a 48px tonal squircle (radius 16); the bare-icon play is gone; transport title is non-italic.
+- OSD = round rose chip + on-primary glyph; timestamp = mono pill; loading spinner reads cyan.
+- Settings left rail loses its right divider; dialog inner content panels are rounded (16/28). The dialog
+  **OS window frame keeps `MaterialDesignWindow` chrome** (not retemplated) to avoid WindowChrome/DWM risk —
+  the rounded M3 look is on the inner content, not the window border.
+- Switches' on-track and seek/slider fill+thumb are rose; the snackbar keeps its placement/behaviour.
 
 ## Main Window Layout
 

@@ -1,0 +1,94 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+
+    <!-- ============================================================
+         M3 — Shared shape + component styles (Material You re-skin).
+         NON-colour layer: radii tokens + keyed component styles BasedOn the
+         MaterialDesignInXAML defaults. Colours come from the brush overrides
+         in M3.Surfaces.xaml / M3.Accent.xaml (DynamicResource), so these
+         styles automatically follow the active (dark M3 / light / accent)
+         palette. Merged statically in App.xaml AFTER MaterialDesignMy.xaml.
+
+         Component styles are KEYED (opt-in) — screens reference M3.* so we
+         never silently restyle a control before its screen pass is reviewed.
+         Implicit-safe globals: ToolTip only.
+         ============================================================ -->
+
+    <!-- ============ Radii tokens ============ -->
+    <CornerRadius x:Key="M3.Radius.8">8</CornerRadius>
+    <CornerRadius x:Key="M3.Radius.16">16</CornerRadius>
+    <CornerRadius x:Key="M3.Radius.20">20</CornerRadius>
+    <CornerRadius x:Key="M3.Radius.24">24</CornerRadius>
+    <CornerRadius x:Key="M3.Radius.28">28</CornerRadius>
+    <CornerRadius x:Key="M3.Radius.Pill">999</CornerRadius>
+
+    <!-- ============ Buttons — pill 20, weight 500, flat at rest ============ -->
+    <Style x:Key="M3.FilledButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="20" />
+        <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp0" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Background" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+        <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary.Foreground}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp2" />
+                <Setter Property="Background" Value="{DynamicResource MaterialDesign.Brush.Primary.Light}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="M3.TonalButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="20" />
+        <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp0" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Background" Value="{DynamicResource MaterialDesign.Brush.Secondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Secondary.Foreground}" />
+    </Style>
+
+    <Style x:Key="M3.OutlinedButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignOutlinedButton}">
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="20" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesignDivider}" />
+        <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+    </Style>
+
+    <Style x:Key="M3.TextButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignFlatButton}">
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="20" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+    </Style>
+
+    <!-- ============ IconButton — round, M3 touch sizes ============ -->
+    <Style x:Key="M3.IconButton" TargetType="Button" BasedOn="{StaticResource MaterialDesignIconButton}">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="20" />
+    </Style>
+    <Style x:Key="M3.IconButton.Small" TargetType="Button" BasedOn="{StaticResource M3.IconButton}">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="materialDesign:ButtonAssist.CornerRadius" Value="18" />
+    </Style>
+
+    <!-- ============ Switch (M3) — on-track follows the rose primary container automatically.
+         Geometry refinements (bordered off-track, growing thumb) are applied in the Settings pass
+         once the live MDIX 5.3.1 switch template is confirmed. ============ -->
+    <Style x:Key="M3.Switch" TargetType="ToggleButton" BasedOn="{StaticResource MaterialDesignSwitchToggleButton}" />
+
+    <!-- ============ Card — flat, radius 16, hairline border ============ -->
+    <Style x:Key="M3.Card" TargetType="materialDesign:Card">
+        <Setter Property="UniformCornerRadius" Value="16" />
+        <Setter Property="materialDesign:ElevationAssist.Elevation" Value="Dp0" />
+        <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}" />
+        <Setter Property="BorderBrush" Value="#0AFFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- ============ ToolTip — M3 surface (implicit, safe) ============ -->
+    <Style TargetType="ToolTip" BasedOn="{StaticResource MaterialDesignToolTip}">
+        <Setter Property="Background" Value="{DynamicResource MaterialDesignChipBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+    </Style>
+
+</ResourceDictionary>

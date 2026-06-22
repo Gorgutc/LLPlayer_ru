@@ -29,9 +29,8 @@
 
             <Border
                 Grid.Column="0"
-                Background="{DynamicResource MaterialDesignPaper}"
-                BorderBrush="{DynamicResource MaterialDesignDivider}"
-                BorderThickness="0 0 1 0">
+                Background="{DynamicResource MaterialDesignToolBarBackground}"
+                BorderThickness="0">
                 <DockPanel>
                     <!-- E8b: live filter over the settings tree (matches section label or key). -->
                     <TextBox
@@ -191,6 +190,7 @@
 
                         <Style TargetType="GroupBox" BasedOn="{StaticResource MaterialDesignGroupBox}">
                             <Setter Property="Margin" Value="8" />
+                            <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}" />
 
                             <Setter Property="HeaderTemplate">
                                 <Setter.Value>
@@ -232,7 +232,7 @@
                         Content="Save &amp; Close"
                         Command="{Binding CmdCloseDialog}"
                         CommandParameter="Save"
-                        Style="{StaticResource MaterialDesignRaisedSecondaryButton}"
+                        Style="{StaticResource M3.FilledButton}"
                         ToolTip="Writes to the config file and closes the dialog."
                         Margin="0 0 10 0"/>
 
@@ -241,6 +241,7 @@
                         Content="Close without saving"
                         Command="{Binding CmdCloseDialog}"
                         CommandParameter="Close"
+                        Style="{StaticResource M3.TextButton}"
                         ToolTip="Close the dialog without saving to the config file. The changes are reflected until restart." />
                 </StackPanel>
             </Grid>

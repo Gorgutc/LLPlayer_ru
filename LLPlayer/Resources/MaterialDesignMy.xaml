@@ -58,12 +58,14 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             Background="{TemplateBinding Background}"
+                            CornerRadius="16"
                             SnapsToDevicePixels="True" />
                         <Border
                             x:Name="BackgroundRoot"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             Background="{DynamicResource MaterialDesign.Brush.Primary}"
+                            CornerRadius="16"
                             SnapsToDevicePixels="True"
                             Opacity="0" />
                         <materialDesign:Ripple
@@ -197,7 +199,7 @@
                                 x:Name="SubMenuBorder"
                                 Background="{DynamicResource MaterialDesign.Brush.Background}"
                                 Effect="{DynamicResource MaterialDesignShadowDepth1}"
-                                CornerRadius="6">
+                                CornerRadius="16">
 
                                 <Border
                                     Background="Transparent">
@@ -467,7 +469,7 @@
                             <Border
                                 Background="{TemplateBinding Background}"
                                 Margin="0"
-                                CornerRadius="6"
+                                CornerRadius="16"
                                 Effect="{DynamicResource MaterialDesignShadowDepth1}"></Border>
 
                             <Border

@@ -50,22 +50,23 @@
                 Content="Download"
                 Command="{Binding CmdDownloadEngine}"
                 Width="150"
-                Height="30"
+                Height="36"
+                Style="{StaticResource M3.FilledButton}"
                 Visibility="{Binding CmdDownloadEngine.IsExecuting, Converter={StaticResource BooleanToVisibilityInvertConv}}" />
 
             <Button
                 Content="Cancel"
                 Command="{Binding CmdCancelDownloadEngine}"
                 Width="150"
-                Height="30"
-                Style="{StaticResource MaterialDesignPaperButton}"
+                Height="36"
+                Style="{StaticResource M3.OutlinedButton}"
                 Visibility="{Binding CmdDownloadEngine.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}"/>
 
             <Button
                 Command="{Binding CmdDeleteEngine}"
                 Width="100"
-                Height="30"
-                Style="{StaticResource MaterialDesignFlatButton}"
+                Height="36"
+                Style="{StaticResource M3.TextButton}"
                 Margin="10 0 0 0">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Kind="Delete" Width="20" Height="20" VerticalAlignment="Center" />
@@ -75,25 +76,30 @@
 
             <Button
                 ToolTip="Open Folder"
-                Style="{StaticResource MaterialDesignIconButton}"
+                Style="{StaticResource M3.IconButton.Small}"
                 HorizontalAlignment="Center"
-                Width="30"
-                Height="30"
+                Width="36"
+                Height="36"
                 Command="{Binding CmdOpenFolder}">
                 <materialDesign:PackIcon Kind="Folder" />
             </Button>
         </StackPanel>
 
         <!-- Progress bar (hidden) -->
-        <ProgressBar
+        <Border
             Grid.Row="2"
-            Height="6"
-            Visibility="{Binding CmdDownloadEngine.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}"
+            CornerRadius="{StaticResource M3.Radius.Pill}"
+            ClipToBounds="True"
             Margin="0 0 0 10"
-            Minimum="0"
-            Maximum="{Binding TotalSize}"
-            Value="{Binding DownloadedSize}"
-            IsIndeterminate="{Binding IsIndeterminateDownload}" />
+            Visibility="{Binding CmdDownloadEngine.IsExecuting, Converter={StaticResource BooleanToVisibilityConv}}">
+            <ProgressBar
+                Height="6"
+                Foreground="{DynamicResource MaterialDesign.Brush.Primary}"
+                Minimum="0"
+                Maximum="{Binding TotalSize}"
+                Value="{Binding DownloadedSize}"
+                IsIndeterminate="{Binding IsIndeterminateDownload}" />
+        </Border>
 
         <!-- Download Size -->
         <StackPanel
@@ -109,8 +115,23 @@
         </StackPanel>
 
         <!-- Status -->
-        <TextBlock Grid.Row="4"
-                   Text="{Binding StatusText}"
-                   TextWrapping="Wrap"/>
+        <Border Grid.Row="4"
+                CornerRadius="{StaticResource M3.Radius.16}"
+                Padding="14 12"
+                VerticalAlignment="Top">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="{DynamicResource MaterialDesignCardBackground}"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding StatusText}" Value="">
+                            <Setter Property="Background" Value="Transparent"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <TextBlock
+                Text="{Binding StatusText}"
+                TextWrapping="Wrap"/>
+        </Border>
     </Grid>
 </UserControl>

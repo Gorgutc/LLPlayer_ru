@@ -67,11 +67,12 @@
                 Width="80"
                 Content="Apply"
                 FontWeight="ExtraBold"
-                Style="{StaticResource MaterialDesignRaisedSecondaryButton}"
+                Style="{StaticResource M3.FilledButton}"
                 Click="ApplyButton_Click"/>
             <Button
                 Width="80"
                 Content="Cancel"
+                Style="{StaticResource M3.TextButton}"
                 Click="CancelButton_Click" />
         </StackPanel>
     </StackPanel>

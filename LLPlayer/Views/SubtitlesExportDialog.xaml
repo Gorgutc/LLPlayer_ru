@@ -6,6 +6,7 @@
              xmlns:local="clr-namespace:LLPlayer.Views"
              xmlns:vm="clr-namespace:LLPlayer.ViewModels"
              xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:SubtitlesExportDialogVM}"
              d:Foreground="White"
@@ -31,6 +32,8 @@
             <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
                 <Label Content="Subtitle" Width="80" />
                 <ComboBox
+                    Style="{StaticResource MaterialDesignFilledComboBox}"
+                    materialDesign:TextFieldAssist.TextFieldCornerRadius="16 16 0 0"
                     ItemsSource="{Binding SubIndexList}"
                     SelectedItem="{Binding SelectedSubIndex}"
                     Width="180">
@@ -45,6 +48,8 @@
             <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
                 <Label Content="Translated" Width="80" />
                 <ComboBox
+                    Style="{StaticResource MaterialDesignFilledComboBox}"
+                    materialDesign:TextFieldAssist.TextFieldCornerRadius="16 16 0 0"
                     ItemsSource="{Binding Source={StaticResource TranslateExportOptionsEnum}}"
                     SelectedItem="{Binding SelectedTranslateOpts}"
                     Width="180" />
@@ -66,6 +71,7 @@
 
         <Button
             Grid.Row="2"
+            Style="{StaticResource M3.FilledButton}"
             Content="Export"
             HorizontalAlignment="Right"
             Width="100"

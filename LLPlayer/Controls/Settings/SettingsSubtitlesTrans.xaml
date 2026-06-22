@@ -67,7 +67,7 @@
                             Margin="10 0 0 0"
                             Content="Reset"
                             Command="{Binding CmdSetDefaultEndpoint}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}" />
+                            Style="{StaticResource M3.OutlinedButton}" />
                     </Grid>
                 </DockPanel>
 
@@ -129,7 +129,7 @@
                             Margin="10 0 0 0"
                             Content="Reset"
                             Command="{Binding CmdSetDefaultEndpoint}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}" />
+                            Style="{StaticResource M3.OutlinedButton}" />
                     </Grid>
                 </DockPanel>
 
@@ -191,7 +191,7 @@
                             Margin="10 0 0 0"
                             Content="Reset"
                             Command="{Binding CmdSetDefaultEndpoint}"
-                            Style="{StaticResource MaterialDesignOutlinedButton}" />
+                            Style="{StaticResource M3.OutlinedButton}" />
                     </Grid>
                 </DockPanel>
 
@@ -358,7 +358,7 @@
                         Margin="10 0 0 0"
                         Content="Reset"
                         Command="{Binding CmdSetDefaultChatPath}"
-                        Style="{StaticResource MaterialDesignOutlinedButton}" />
+                        Style="{StaticResource M3.OutlinedButton}" />
                 </StackPanel>
 
                 <transControl:OpenAIBaseTranslateControl />
@@ -633,6 +633,7 @@
                                 Command="{Binding CmdSetDefaultPromptKeepContext}"
                                 HorizontalAlignment="Left"
                                 Content="Set Default"
+                                Style="{StaticResource M3.TonalButton}"
                                 Margin="10 10 0 0" />
                         </StackPanel>
                     </DockPanel>
@@ -679,6 +680,7 @@
                                 Command="{Binding CmdSetDefaultPromptOneByOne}"
                                 HorizontalAlignment="Left"
                                 Content="Set Default"
+                                Style="{StaticResource M3.TonalButton}"
                                 Margin="10 10 0 0" />
                         </StackPanel>
                     </DockPanel>

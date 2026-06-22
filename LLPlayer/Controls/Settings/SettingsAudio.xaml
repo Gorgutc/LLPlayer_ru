@@ -82,6 +82,7 @@
                         Margin="0 15 0 0"
                         MaxWidth="150"
                         Content="Configure"
+                        Style="{StaticResource M3.TonalButton}"
                         Command="{Binding CmdConfigureLanguage}" />
 
                     <TextBlock Margin="5 10 5 0">

@@ -1,0 +1,36 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         M3 — Primary "container" + Secondary tonal accents.
+         Material You stops using the saturated seed (#D23D6F) as a FILL.
+         Filled surfaces (FAB, play, chips, switch-on, active states, seek
+         fill, menu icons) use the lighter primary CONTAINER tone #ECB3C4
+         on dark-rose #5A1B2C. The seed #D23D6F stays as the HCT palette
+         generator in App.xaml (CustomColorTheme), unchanged.
+
+         This dictionary is TOGGLED at runtime by AppConfigTheme: present
+         only when the effective theme is Dark AND the user has neither
+         enabled accent-sync nor picked a custom Primary/Secondary colour —
+         so the accent-sync and colour-picker features keep working (their
+         chosen colour flows through the stock palette instead).
+         ============================================================ -->
+
+    <!-- Primary container (light rose fill) + on-primary -->
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary" Color="#ECB3C4" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary.Foreground" Color="#5A1B2C" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary.Light" Color="#F3C6D3" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary.Light.Foreground" Color="#5A1B2C" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary.Dark" Color="#D99FB2" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Primary.Dark.Foreground" Color="#5A1B2C" />
+
+    <!-- Ripple / flat-button click overlay -->
+    <SolidColorBrush x:Key="MaterialDesignFlatButtonClick" Color="#33ECB3C4" />
+
+    <!-- Secondary tonal cyan + on-secondary -->
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Secondary" Color="#7FD8E6" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Secondary.Foreground" Color="#00363F" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Secondary.Light" Color="#A6E6F0" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Secondary.Dark" Color="#5FC4D4" />
+
+</ResourceDictionary>
