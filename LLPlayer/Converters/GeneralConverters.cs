@@ -331,3 +331,26 @@ public class HalfConverter : IValueConverter
         return value;
     }
 }
+
+[ValueConversion(typeof(double), typeof(Visibility))]
+public class WidthToVisibilityConverter : IValueConverter
+{
+    // Collapse the bound element below a width threshold (px) given via ConverterParameter (default 620).
+    // Used so the volume slider drops out on a narrow player bar instead of clipping the edge controls.
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not double width)
+            return Visibility.Visible;
+
+        double threshold = 620;
+        if (parameter is string s && double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out double parsed))
+            threshold = parsed;
+        else if (parameter is double pd)
+            threshold = pd;
+
+        return width >= threshold ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}

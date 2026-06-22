@@ -150,11 +150,13 @@
                 </StackPanel>
             </GroupBox>
 
+            <!-- The tab follows the Whisper Engine combo above. OneWay so a tab click only views that engine's
+                 settings and can NEVER write back to the ASREngine config field (TwoWay/SelectedIndex would). -->
             <TabControl
-                SelectedIndex="{Binding ActiveEngineTabNo, Mode=OneTime}"
                 Margin="20"
                 materialDesign:ColorZoneAssist.Mode="SecondaryMid" >
-                <TabItem Header="whisper.cpp">
+                <TabItem Header="whisper.cpp"
+                         IsSelected="{Binding FL.PlayerConfig.Subtitles.ASREngine, Converter={StaticResource EnumToBooleanConv}, ConverterParameter={x:Static flyleaf:SubASREngineType.WhisperCpp}, Mode=OneWay}">
                     <StackPanel Margin="0 10 0 0">
                         <GroupBox Header="whisper.cpp config">
                             <StackPanel>
@@ -542,7 +544,8 @@
                         </GroupBox>
                     </StackPanel>
                 </TabItem>
-                <TabItem Header="faster-whisper">
+                <TabItem Header="faster-whisper"
+                         IsSelected="{Binding FL.PlayerConfig.Subtitles.ASREngine, Converter={StaticResource EnumToBooleanConv}, ConverterParameter={x:Static flyleaf:SubASREngineType.FasterWhisper}, Mode=OneWay}">
                     <StackPanel Margin="0 10 0 0">
                         <GroupBox Header="faster-whisper config">
                             <StackPanel>

@@ -378,6 +378,26 @@
                         </DataTemplate>
                     </DataTemplate.Resources>
 
+                    <!-- Left-accent border marks the currently-playing cue, reusing the EXACT signal the
+                         Play button uses (SubIsPlayingConv). Rows stay non-selectable; no auto-scroll change. -->
+                    <Border BorderThickness="3 0 0 0">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="Transparent" />
+                                <Style.Triggers>
+                                    <DataTrigger Value="True">
+                                        <DataTrigger.Binding>
+                                            <MultiBinding Converter="{StaticResource SubIsPlayingConv}">
+                                                <Binding Path="Index" />
+                                                <Binding ElementName="SubtitleListBox" Path="DataContext.SubManager.CurrentIndex" />
+                                                <Binding ElementName="SubtitleListBox" Path="DataContext.SubManager.IsDisplaying" />
+                                            </MultiBinding>
+                                        </DataTrigger.Binding>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                     <Grid Margin="0 5 1 5">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
@@ -433,9 +453,38 @@
                                 Height="20" />
                         </Button>
                     </Grid>
+                    </Border>
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+
+        <!-- Empty state: no subtitle track loaded / zero cues. Click/scroll-through (IsHitTestVisible=False);
+             ANDed with !IsLoading so it never flashes before the spinner during the brief load window. -->
+        <StackPanel Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                    IsHitTestVisible="False" Margin="16">
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding SubManager.Subs.Count}" Value="0" />
+                                <Condition Binding="{Binding SubManager.IsLoading}" Value="False" />
+                            </MultiDataTrigger.Conditions>
+                            <Setter Property="Visibility" Value="Visible" />
+                        </MultiDataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
+            <materialDesign:PackIcon Kind="SubtitlesOutline" Width="48" Height="48"
+                                     HorizontalAlignment="Center" Opacity="0.5"
+                                     Foreground="{DynamicResource MaterialDesignBody}" />
+            <TextBlock Text="No subtitles" HorizontalAlignment="Center" Margin="0 8 0 0"
+                       FontSize="14" Opacity="0.7" Foreground="{DynamicResource MaterialDesignBody}" />
+            <TextBlock Text="Pick a subtitle stream or run ASR" HorizontalAlignment="Center"
+                       Margin="0 4 0 0" FontSize="12" Opacity="0.6" TextWrapping="Wrap"
+                       TextAlignment="Center" Foreground="{DynamicResource MaterialDesignBody}" />
+        </StackPanel>
 
         <!-- Spinner (when loading subs / OCR / ASR) -->
         <ProgressBar
