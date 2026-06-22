@@ -450,6 +450,7 @@ public class AppActions
             switch (e.PropertyName)
             {
                 case nameof(_config.IsDarkTitlebar):
+                case nameof(_config.MicaBackdrop):
                 case nameof(_player.Config.Subtitles.WhisperCppConfig.RuntimeLibraries):
                     requiredRestart = true;
                     break;

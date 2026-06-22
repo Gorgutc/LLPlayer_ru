@@ -68,7 +68,8 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
     public ContextMenu? PopupContextMenu { get; set => Set(ref field, value); }
     public ContextMenu? WordContextMenu { get; set => Set(ref field, value); }
 
-    public bool IsSidebar { get; set; }
+    // INPC-backed so the XAML theme triggers (Border background / translation foreground) react to it.
+    public bool IsSidebar { get; set => Set(ref field, value); }
 
     private void SubtitlesOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -398,6 +399,22 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
     private void CloseButton_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         IsOpen = false;
+    }
+
+    // Keyboard activation (Space/Enter) of the close button; the mouse path uses the preview handler above.
+    private void CloseButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        IsOpen = false;
+    }
+
+    // Esc dismisses the popup when keyboard focus is inside it (e.g. while selecting the translated text).
+    private void Border_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            IsOpen = false;
+            e.Handled = true;
+        }
     }
 
     private void SourceText_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)

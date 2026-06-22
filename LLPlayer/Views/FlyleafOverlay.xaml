@@ -52,12 +52,35 @@
                     <TextBlock Text="Open File" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
-            <TextBlock Text="Press Ctrl+O to open a file"
-                       Margin="0 12 0 0"
+            <!-- Feature teaser: signposts the core language-learning features for first-time users. -->
+            <TextBlock Text="Dual subtitles  ·  Speech-to-text  ·  Click a word to translate"
+                       Margin="0 18 0 0"
                        HorizontalAlignment="Center"
                        FontSize="12"
                        Foreground="{DynamicResource MaterialDesignBody}"
-                       Opacity="0.45" />
+                       Opacity="0.7" />
+            <!-- Let the user reach Settings / shortcuts before opening any media (e.g. to set up ASR). -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0 8 0 0">
+                <Button Style="{StaticResource MaterialDesignFlatButton}"
+                        Command="{Binding FL.Action.CmdOpenWindowSettings}"
+                        ToolTip="Open Settings (Ctrl+,)"
+                        AutomationProperties.Name="Open Settings">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="SettingsOutline" VerticalAlignment="Center" Margin="0 0 6 0" />
+                        <TextBlock Text="Settings" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource MaterialDesignFlatButton}"
+                        Command="{Binding FL.Action.CmdOpenWindowCheatSheet}"
+                        ToolTip="Keyboard shortcuts (F1)"
+                        AutomationProperties.Name="Keyboard shortcuts"
+                        Margin="8 0 0 0">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="KeyboardOutline" VerticalAlignment="Center" Margin="0 0 6 0" />
+                        <TextBlock Text="Shortcuts" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
         </StackPanel>
 
         <Grid Margin="6 4 6 4">

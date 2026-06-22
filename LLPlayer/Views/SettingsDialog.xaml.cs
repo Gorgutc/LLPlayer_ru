@@ -1,12 +1,26 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using LLPlayer.Controls.Settings;
 using LLPlayer.ViewModels;
+using MaterialDesignThemes.Wpf;
 
 namespace LLPlayer.Views;
 
 public partial class SettingsDialog : UserControl
 {
+    // MDIX 5.3.1 DialogHost has no built-in Escape handling, and the colour-picker sub-dialog only closes via
+    // its own Apply/Cancel buttons. Without this, the UserControl-level Esc InputBinding would close the WHOLE
+    // Settings dialog while the picker is still open. Swallow Esc (tunneling, so it wins over the bubbling
+    // InputBinding regardless of focus) whenever an inner dialog is open; the picker is dismissed via its buttons.
+    private void SettingsDialog_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && DialogHost.IsDialogOpen("SettingsDialog_RootDialog"))
+        {
+            e.Handled = true;
+        }
+    }
+
     // Tracks the single open instance (this is a ShowSingleton dialog) so an external caller can deep-link
     // to a settings section, plus a remembered target applied once the dialog has loaded.
     private static SettingsDialog? _current;

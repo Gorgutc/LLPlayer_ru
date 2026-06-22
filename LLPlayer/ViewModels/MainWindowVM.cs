@@ -64,17 +64,13 @@ public class MainWindowVM : Bindable
             {
                 Log.Error($"Known error occurred in Flyleaf: {args.Message} ({args.ErrorType.ToString()})");
 
-                // Recoverable configuration errors with a known settings section are shown as an actionable
-                // snackbar (with a deep-link) instead of a modal. Everything else (e.g. live-stream ASR, or
-                // a Configuration error without a target) keeps the topmost modal so it stays visible.
+                // Only the recoverable "missing ASR model" case is surfaced as a non-blocking actionable
+                // snackbar with a DOWNLOAD deep-link. Every other known error — including translation/OCR
+                // configuration failures that carry a SettingsTab — keeps the topmost modal so the user
+                // cannot miss it (owner decision 2026-06-22: ASR → snackbar, everything else → modal).
                 if (args.ErrorType == KnownErrorType.Configuration && args.ActionHint == KnownErrorActionKeys.DownloadWhisperModel)
                 {
                     FL.MessageQueue.Enqueue(args.Message, "DOWNLOAD", () => FL.Action.OpenWhisperModelDownload());
-                }
-                else if (args.ErrorType == KnownErrorType.Configuration && !string.IsNullOrEmpty(args.SettingsTab))
-                {
-                    string tab = args.SettingsTab;
-                    FL.MessageQueue.Enqueue(args.Message, "OPEN SETTINGS", () => FL.Action.OpenSettingsAt(tab));
                 }
                 else
                 {
@@ -89,6 +85,16 @@ public class MainWindowVM : Bindable
             {
                 Log.Error($"Unknown error occurred in Flyleaf: {args.Message}: {args.Exception}");
                 ErrorDialogHelper.ShowUnknownErrorPopup(args.Message, args.ErrorType, args.Exception);
+            });
+        };
+
+        // ASR (speech-to-text) finishes on a background task and previously only played a sound. Surface a
+        // short non-blocking confirmation as well (only on the non-cancelled completion path; see SubtitlesASR).
+        FL.Player.ASRCompleted += (sender, args) =>
+        {
+            Utils.UI(() =>
+            {
+                FL.MessageQueue.Enqueue("Speech-to-text finished");
             });
         };
 

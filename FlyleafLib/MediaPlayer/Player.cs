@@ -457,6 +457,13 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     public event        EventHandler<KnownErrorOccurredEventArgs> KnownErrorOccurred;
     public event        EventHandler<UnknownErrorOccurredEventArgs> UnknownErrorOccurred;
 
+    /// <summary>
+    /// Raised once when subtitle ASR (speech-to-text) finishes successfully (not on cancellation). The UI
+    /// can use it for a non-blocking completion notification. Handlers run on the raising thread; marshal
+    /// to the UI thread before touching UI.
+    /// </summary>
+    public event        EventHandler ASRCompleted;
+
     bool decoderHasEnded => (VideoDecoder.Status == MediaFramework.Status.Ended || (VideoDecoder.Disposed && AudioDecoder.Status == MediaFramework.Status.Ended));
     #endregion
 
@@ -706,6 +713,11 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
             SettingsTab = settingsTab,
             ActionHint = actionHint
         });
+    }
+
+    internal void RaiseASRCompleted()
+    {
+        ASRCompleted?.Invoke(this, EventArgs.Empty);
     }
 
     internal void RaiseUnknownErrorOccurred(string message, UnknownErrorType errorType, Exception exception = null)
