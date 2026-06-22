@@ -156,6 +156,15 @@
                                 <Setter Property="Padding" Value="0" />
                             </Style>
                         </DataGridTemplateColumn.CellStyle>
+                        <!-- Mirror the cell centering on the header: without this the select-all checkbox
+                             inherits the default column-header left padding and is clipped (left half hidden)
+                             in this narrow 44px column. -->
+                        <DataGridTemplateColumn.HeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource MaterialDesignDataGridColumnHeader}">
+                                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                                <Setter Property="Padding" Value="0" />
+                            </Style>
+                        </DataGridTemplateColumn.HeaderStyle>
                         <DataGridTemplateColumn.Header>
                             <CheckBox
                                 HorizontalAlignment="Center"
