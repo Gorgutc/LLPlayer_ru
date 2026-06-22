@@ -34,4 +34,15 @@ public class ParseChatResponseTests
         Action act = () => OpenAIBaseTranslateService.ParseChatResponse(json, Svc, reasonStripRequired: true);
         act.Should().Throw<TranslationException>();
     }
+
+    [Fact]
+    public void ParseChatResponse_ClassifiesTruncatedReply_AsTruncatedKind()
+    {
+        // A reply cut off by the token cap (finish_reason=length) must be classified Truncated so the
+        // anti-loop recovery treats it as a probable loop and retries, instead of surfacing a hard error.
+        string json = "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"partial\"},\"finish_reason\":\"length\"}]}";
+        Action act = () => OpenAIBaseTranslateService.ParseChatResponse(json, Svc, reasonStripRequired: false);
+        act.Should().Throw<TranslationException>()
+            .Which.Kind.Should().Be(TranslationFailureKind.Truncated);
+    }
 }

@@ -210,6 +210,12 @@ public static class TranslateServiceHelper
 
 public class TranslationException : Exception
 {
+    /// <summary>
+    /// Classifies the failure so recovery logic (e.g. the LLM anti-loop retry) can react to a
+    /// truncated/looping reply without parsing the (locale-stable but still brittle) message text.
+    /// </summary>
+    public TranslationFailureKind Kind { get; init; } = TranslationFailureKind.Generic;
+
     public TranslationException()
     {
     }
@@ -223,6 +229,21 @@ public class TranslationException : Exception
         : base(message, inner)
     {
     }
+}
+
+/// <summary>
+/// Why an LLM translation reply was rejected. Used to drive the degeneration/anti-loop recovery in
+/// <see cref="OpenAIBaseTranslateService"/>: a reply capped by the token limit (<see cref="Truncated"/>)
+/// or detected as a repeating loop (<see cref="Degenerate"/>) is retried once with anti-loop sampling,
+/// instead of being surfaced or cached as-is.
+/// </summary>
+public enum TranslationFailureKind
+{
+    Generic,
+    EmptyResponse,
+    NullContent,
+    Truncated,
+    Degenerate,
 }
 
 public class TranslationConfigException : Exception

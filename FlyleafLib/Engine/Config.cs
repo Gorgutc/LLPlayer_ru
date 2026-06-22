@@ -181,6 +181,16 @@ public class Config : NotifyPropertyChanged
                 Player.KeyBindings.Keys.Add(new KeyBinding { Ctrl = true, Key = System.Windows.Input.Key.A, IsKeyUp = true, Action = KeyBindingAction.Custom, ActionName = "ToggleSubsAutoTextCopy" });
             }
         }
+
+        if (!parsed || loadedVer <= System.Version.Parse("0.3.0"))
+        {
+            // Frozen default flip 1.5: default whisper.cpp NoContext to ON (condition_on_previous_text OFF) so
+            // a hallucinated/looping window at the start of a video stops propagating a repetition loop across
+            // the rest of the transcript. New configs already default to true via WhisperCppConfig; migrate
+            // existing ones here once. Re-applies until the config is saved with the new app version, after
+            // which a user who deliberately turns it back off is respected.
+            Subtitles.WhisperCppConfig.NoContext = true;
+        }
     }
 
     internal void SetPlayer(Player player)

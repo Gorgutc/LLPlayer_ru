@@ -253,7 +253,13 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         }
         catch (TranslationException ex)
         {
-            ErrorDialogHelper.ShowUnknownErrorPopup(ex.Message, UnknownErrorType.Translation, ex);
+            // A looping/degenerate or token-truncated reply is a recoverable per-word failure on this
+            // high-frequency interactive path; fall back to the source word silently rather than popping a
+            // modal. Keep the modal for genuine (config/transport/empty-response) failures.
+            if (ex.Kind is not (TranslationFailureKind.Degenerate or TranslationFailureKind.Truncated))
+            {
+                ErrorDialogHelper.ShowUnknownErrorPopup(ex.Message, UnknownErrorType.Translation, ex);
+            }
 
             return text;
         }

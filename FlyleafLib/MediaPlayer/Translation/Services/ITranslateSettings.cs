@@ -268,7 +268,10 @@ public abstract class OpenAIBaseTranslateSettings : NotifyPropertyChanged, ITran
         }
     } = 0.0;
 
-    public bool TemperatureManual { get; set => Set(ref field, value); } = true;
+    // Default OFF: do not force a hardcoded greedy temperature=0 on the backend, which makes local models
+    // prone to deterministic repetition loops. When off, the backend's own default sampling temperature is
+    // used. (Frozen default flip 1.3 — applies to new configs; existing saved configs keep their value.)
+    public bool TemperatureManual { get; set => Set(ref field, value); } = false;
 
     public double TopP
     {
@@ -295,6 +298,15 @@ public abstract class OpenAIBaseTranslateSettings : NotifyPropertyChanged, ITran
         get;
         set => Set(ref field, value is <= 0 ? null : value);
     }
+
+    /// <summary>
+    /// Code-level fallback cap applied to max_tokens when the user has set neither MaxTokens nor
+    /// MaxCompletionTokens. Bounds generation so a runaway repetition loop fails fast (finish_reason=length,
+    /// recoverable) instead of running to the HTTP timeout. Null for cloud backends (sending max_tokens can
+    /// break o-series models); local OpenAI-compatible backends override it. Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    internal virtual int? DefaultMaxTokensFallback => null;
 
     // Anti-repetition penalties. Opt-in (Manual=false by default) so existing behavior is unchanged;
     // when enabled they are sent to OpenAI-compatible backends to discourage degenerate token loops.
@@ -492,20 +504,24 @@ public class OllamaTranslateSettings : OpenAIBaseTranslateSettings
 {
     public OllamaTranslateSettings()
     {
-        TimeoutMs = 20000;
+        // Local models can be slow to load/respond on the first request; 20s caused false timeouts.
+        TimeoutMs = 60000;
     }
 
     [JsonIgnore]
     public override TranslateServiceType ServiceType => TranslateServiceType.Ollama;
     [JsonIgnore]
     public override string DefaultEndpoint => "http://127.0.0.1:11434";
+    [JsonIgnore]
+    internal override int? DefaultMaxTokensFallback => 2048;
 }
 
 public class LMStudioTranslateSettings : OpenAIBaseTranslateSettings
 {
     public LMStudioTranslateSettings()
     {
-        TimeoutMs = 20000;
+        // Local models can be slow to load/respond on the first request; 20s caused false timeouts.
+        TimeoutMs = 60000;
     }
 
     [JsonIgnore]
@@ -514,13 +530,16 @@ public class LMStudioTranslateSettings : OpenAIBaseTranslateSettings
     public override string DefaultEndpoint => "http://127.0.0.1:1234";
     [JsonIgnore]
     public override bool ModelRequired => false;
+    [JsonIgnore]
+    internal override int? DefaultMaxTokensFallback => 2048;
 }
 
 public class KoboldCppTranslateSettings : OpenAIBaseTranslateSettings
 {
     public KoboldCppTranslateSettings()
     {
-        TimeoutMs = 20000;
+        // Local models can be slow to load/respond on the first request; 20s caused false timeouts.
+        TimeoutMs = 60000;
     }
 
     [JsonIgnore]
@@ -534,6 +553,8 @@ public class KoboldCppTranslateSettings : OpenAIBaseTranslateSettings
 
     [JsonIgnore]
     public override bool ModelRequired => false;
+    [JsonIgnore]
+    internal override int? DefaultMaxTokensFallback => 2048;
 }
 
 public class OpenAITranslateSettings : OpenAIBaseTranslateSettings
