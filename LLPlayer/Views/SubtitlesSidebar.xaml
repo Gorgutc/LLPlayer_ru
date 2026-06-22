@@ -126,6 +126,7 @@
                 materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=Numeric2BoxMultipleOutline}"
                 Content="{materialDesign:PackIcon Kind=Numeric1BoxMultipleOutline}"
                 ToolTip="Toggle Primary / Secondary"
+                AutomationProperties.Name="Toggle Primary / Secondary subtitles"
                 Command="{Binding FL.Action.CmdToggleSidebarShowSecondary}"
                 IsChecked="{Binding FL.Config.SidebarShowSecondary, Mode=OneWay}" />
 
@@ -140,6 +141,7 @@
                 StaysOpen="True"
                 Style="{StaticResource MaterialDesignMultiFloatingActionPopupBox}"
                 ToolTip="Change Font Size"
+                AutomationProperties.Name="Change Font Size"
                 ToolTipService.Placement="Right">
                 <materialDesign:PopupBox.ToggleContent>
                     <materialDesign:PackIcon
@@ -157,6 +159,7 @@
                             CommandParameter="-1"
                             Background="{DynamicResource MaterialDesignToolBarBackground}"
                             ToolTip="Font size decrease"
+                            AutomationProperties.Name="Font size decrease"
                             Content="{materialDesign:PackIcon Kind=FormatFontSizeDecrease}" />
 
                     <Button Style="{StaticResource IconButton}"
@@ -164,6 +167,7 @@
                             CommandParameter="1"
                             Background="{DynamicResource MaterialDesignToolBarBackground}"
                             ToolTip="Font size increase"
+                            AutomationProperties.Name="Font size increase"
                             Content="{materialDesign:PackIcon Kind=FormatFontSizeIncrease}" />
                 </StackPanel>
             </materialDesign:PopupBox>
@@ -174,6 +178,7 @@
                 materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=EyeOffOutline}"
                 Content="{materialDesign:PackIcon Kind=EyeOutline}"
                 ToolTip="Toggle hiding after current subtitles"
+                AutomationProperties.Name="Toggle hiding after current subtitles (spoiler mask)"
                 Command="{Binding CmdSubTextMaskToggle}"
                 IsChecked="{Binding FL.Config.SidebarTextMask, Mode=OneWay}" />
 
@@ -183,6 +188,7 @@
                 materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=TranslateOff}"
                 Content="{materialDesign:PackIcon Kind=Translate}"
                 ToolTip="Toggle to show original text when translating enabled"
+                AutomationProperties.Name="Toggle original / translated text"
                 Command="{Binding FL.Action.CmdToggleSidebarShowOriginalText}"
                 IsChecked="{Binding FL.Config.SidebarShowOriginalText, Mode=OneWay}" />
 
@@ -190,29 +196,34 @@
             <Button Style="{StaticResource IconButton}"
                     Command="{Binding CmdShowDownloadSubsDialog}"
                     ToolTip="Download subtitles"
+                    AutomationProperties.Name="Download subtitles"
                     Content="{materialDesign:PackIcon Kind=Download}" />
 
             <!-- Subtitles Exporter -->
             <Button Style="{StaticResource IconButton}"
                     Command="{Binding CmdShowExportSubsDialog}"
                     ToolTip="Export subtitles as srt"
+                    AutomationProperties.Name="Export subtitles as SRT"
                     Content="{materialDesign:PackIcon Kind=FileExportOutline}" />
 
             <!-- Batch Subtitles -->
             <Button Style="{StaticResource IconButton}"
                     Command="{Binding FL.Action.CmdOpenWindowBatchSubtitles}"
                     ToolTip="Batch ASR and translate subtitles"
+                    AutomationProperties.Name="Batch ASR and translate subtitles"
                     Content="{materialDesign:PackIcon Kind=PlaylistPlay}" />
 
             <!-- Sidebar Left Toggle -->
             <Button Style="{StaticResource IconButton}"
                     Command="{Binding CmdSwapSidebarPosition}"
                     ToolTip="Swap sidebar position"
+                    AutomationProperties.Name="Swap sidebar position"
                     Content="{materialDesign:PackIcon Kind=SwapHorizontal}" />
 
             <!-- Subtitle Search -->
             <Button Style="{StaticResource IconButton}"
                     ToolTip="Search (Ctrl+F)"
+                    AutomationProperties.Name="Search subtitles"
                     Command="{Binding FL.Action.CmdActivateSubsSearch}"
                     Content="{materialDesign:PackIcon Kind=Magnify}" />
 
@@ -250,6 +261,7 @@
                 Style="{StaticResource IconButton}"
                 Margin="2 0 0 0"
                 ToolTip="Clear search (Esc)"
+                AutomationProperties.Name="Clear search"
                 Command="{Binding CmdClearSearch}">
                 <materialDesign:PackIcon
                     Kind="CloseCircle"

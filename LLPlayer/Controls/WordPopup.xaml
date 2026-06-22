@@ -49,6 +49,7 @@
                 <TextBlock
                     Grid.Column="0"
                     x:Name="SourceText"
+                    AutomationProperties.Name="Looked-up word"
                     Margin="0 0 8 0"
                     TextWrapping="Wrap"
                     Cursor="Hand"
@@ -90,6 +91,8 @@
 
             <TextBox
                 x:Name="TranslationText"
+                AutomationProperties.Name="Translation"
+                AutomationProperties.LiveSetting="Polite"
                 IsReadOnly="True"
                 TextWrapping="Wrap"
                 HorizontalAlignment="Center"
