@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Data;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer.Batch;
 using LLPlayer.Extensions;
@@ -30,9 +31,22 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         _initializing = false;
 
         Jobs.CollectionChanged += JobsOnCollectionChanged;
+
+        // Group the batch list by sub-folder so a recursive scan visibly runs folder-by-folder
+        // (folder header + per-folder file count). Grouping is presentational only — scan order and
+        // processing behaviour are unchanged. Use a dedicated view (NOT CollectionViewSource.GetDefaultView,
+        // which would mutate the process-wide default view of Jobs) so grouping never leaks to other
+        // consumers. Group contiguity follows the scanner's natural path sort (BatchVideoScanner ->
+        // Utils.GetMoviesSorted).
+        JobsView = new CollectionViewSource { Source = Jobs }.View;
+        JobsView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(BatchSubtitleJob.FolderDisplay)));
     }
 
     public ObservableCollection<BatchSubtitleJob> Jobs { get; } = new();
+
+    // Grouped (by FolderDisplay) view over Jobs; the DataGrid binds to this so files appear under their
+    // sub-folder with a header + count when a recursive scan spans multiple folders.
+    public ICollectionView JobsView { get; }
 
     public BatchSubtitleJob? SelectedJob
     {
@@ -191,7 +205,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             Jobs.Clear();
             foreach ((string mediaPath, bool hasTranslation) in scanned)
             {
-                BatchSubtitleJob job = new(mediaPath);
+                BatchSubtitleJob job = new(mediaPath, FolderPath);
                 if (hasTranslation)
                 {
                     // Already translated — show it as done. Unless overwriting, drop it from the

@@ -28,14 +28,39 @@ public sealed class BatchSubtitleOptions
 
 public sealed class BatchSubtitleJob : NotifyPropertyChanged
 {
-    public BatchSubtitleJob(string mediaPath)
+    public BatchSubtitleJob(string mediaPath, string? rootFolder = null)
     {
         MediaPath = mediaPath;
         OutputPath = SubtitleOutputPathBuilder.BuildRussianSrtPath(mediaPath);
+        FolderDisplay = BuildFolderDisplay(mediaPath, rootFolder);
     }
 
     public string MediaPath { get; }
     public string OutputPath { get; }
+
+    // The sub-folder this file lives in, relative to the scanned root — used to GROUP the batch list by
+    // folder so a recursive scan visibly runs folder-by-folder. A file directly in the scanned root is
+    // labelled with the root folder's own name; deeper files show the relative sub-folder path. Falls back
+    // to the full directory when no root is known (e.g. unit tests construct jobs without a root).
+    public string FolderDisplay { get; }
+
+    private static string BuildFolderDisplay(string mediaPath, string? rootFolder)
+    {
+        string dir = Path.GetDirectoryName(mediaPath) ?? string.Empty;
+
+        if (string.IsNullOrEmpty(rootFolder))
+        {
+            return dir;
+        }
+
+        string rel = Path.GetRelativePath(rootFolder, dir);
+        if (rel is "." or "")
+        {
+            return Path.GetFileName(rootFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        }
+
+        return rel;
+    }
 
     // UI selection: whether this file is processed when the batch runs. Default true.
     // Auto-cleared at scan time for files that already have a translation.
