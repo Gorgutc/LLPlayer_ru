@@ -78,6 +78,7 @@
                     Margin="0 0 18 0"
                     VerticalAlignment="Center"
                     Content="Recursive"
+                    ToolTip="Also scan every sub-folder for videos. Results are grouped by folder."
                     IsChecked="{Binding Recursive}" />
 
                 <CheckBox
@@ -104,14 +105,35 @@
 
             <DataGrid
                 Grid.Column="0"
-                ItemsSource="{Binding Jobs}"
+                ItemsSource="{Binding JobsView}"
                 SelectedItem="{Binding SelectedJob}"
                 AutoGenerateColumns="False"
                 CanUserAddRows="False"
                 CanUserDeleteRows="False"
+                CanUserSortColumns="False"
                 IsReadOnly="True"
                 GridLinesVisibility="Horizontal"
-                SelectionMode="Single">
+                SelectionMode="Single"
+                VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                VirtualizingPanel.VirtualizationMode="Recycling">
+                <!-- Group rows by sub-folder (FolderDisplay) so a recursive scan reads folder-by-folder,
+                     with a folder header + file count above each group. -->
+                <DataGrid.GroupStyle>
+                    <GroupStyle>
+                        <GroupStyle.HeaderTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal" Margin="2 8 0 2">
+                                    <materialDesign:PackIcon Kind="FolderOutline" VerticalAlignment="Center" Margin="0 0 6 0" />
+                                    <TextBlock FontWeight="Bold" VerticalAlignment="Center" Text="{Binding Name}" />
+                                    <TextBlock VerticalAlignment="Center" Margin="8 0 0 0"
+                                               Foreground="{DynamicResource MaterialDesignBodyLight}">
+                                        <Run Text="{Binding ItemCount, Mode=OneWay}" /><Run Text=" file(s)" />
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </GroupStyle.HeaderTemplate>
+                    </GroupStyle>
+                </DataGrid.GroupStyle>
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
                         <Style.Triggers>
