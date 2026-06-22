@@ -127,6 +127,11 @@ public class CheatSheetDialogVM : Bindable, IDialogAware
         key.ActionInternal.Invoke();
     });
 
+    public DelegateCommand CmdClose => field ??= new(() =>
+    {
+        RequestClose.Invoke(ButtonResult.Cancel);
+    });
+
     #region IDialogAware
     public string Title { get; set => Set(ref field, value); } = $"CheatSheet - {App.Name}";
     public double WindowWidth { get; set => Set(ref field, value); } = 1000;

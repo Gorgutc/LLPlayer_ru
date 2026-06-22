@@ -10,6 +10,7 @@
              xmlns:materialDesignInternal="clr-namespace:MaterialDesignThemes.Wpf.Internal;assembly=MaterialDesignThemes.Wpf"
              xmlns:helpers="clr-namespace:LLPlayer.Extensions"
              Loaded="OnLoaded"
+             PreviewKeyDown="Root_OnPreviewKeyDown"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:CheatSheetDialogVM}"
              d:Foreground="White"
