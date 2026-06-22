@@ -46,7 +46,8 @@
                     HorizontalAlignment="Center"
                     Style="{StaticResource MaterialDesignRaisedButton}"
                     Command="{Binding FL.Player.Commands.OpenFromFileDialog}"
-                    ToolTip="Open a media file (Ctrl+O)">
+                    ToolTip="Open a media file (Ctrl+O)"
+                    AutomationProperties.Name="Open File">
                 <StackPanel Orientation="Horizontal">
                     <materialDesign:PackIcon Kind="FolderOutline" VerticalAlignment="Center" Margin="0 0 8 0" />
                     <TextBlock Text="Open File" VerticalAlignment="Center" />

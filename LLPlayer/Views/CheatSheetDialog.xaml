@@ -45,7 +45,8 @@
                                 <GridViewColumn.CellTemplate>
                                     <DataTemplate DataType="{x:Type vm:KeyBindingCS}">
                                         <Button
-                                            ToolTip="Do Action"
+                                            ToolTip="{Binding Description, StringFormat='Run {0}'}"
+                                            AutomationProperties.Name="{Binding Description, StringFormat='Run {0}'}"
                                             Style="{StaticResource MaterialDesignIconButton}"
                                             Width="20"
                                             Height="20"
