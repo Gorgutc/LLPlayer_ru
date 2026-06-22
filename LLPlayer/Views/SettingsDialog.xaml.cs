@@ -97,6 +97,14 @@ public partial class SettingsDialog : UserControl
             NavigateToTab(_pendingTab);
             _pendingTab = null;
         }
+        else if (SettingsContent.Content == null
+                 && SettingsTreeView.SelectedItem is TreeViewItem { Tag: string tag })
+        {
+            // The default-selected node's SelectedItemChanged fires during InitializeComponent — before the
+            // SettingsContent ContentControl exists — so LoadPage no-ops and the first page (Player) stays
+            // blank. Load the selected page now that the content host is ready.
+            LoadPage(tag);
+        }
     }
 
     private void OnHostClosed(object? sender, EventArgs e)
