@@ -26,6 +26,9 @@ public class AppConfig : Bindable
     {
         FL = fl;
         Loaded = true;
+        // Allow the theme setters to apply to the live palette only after load; the startup apply happens
+        // explicitly in App.OnInitialized. Without this, every AppConfig.Load() would mutate the global palette.
+        Theme.Loaded = true;
 
         Subs.Initialize(this, fl);
 
@@ -900,6 +903,14 @@ public class AppConfigTheme : Bindable
 {
     private readonly PaletteHelper _paletteHelper = new();
 
+    /// <summary>
+    /// Set true once config load completes (see <see cref="AppConfig.Initialize"/>) so JSON deserialization
+    /// only populates fields without touching the live global MDIX palette. The single intentional apply runs
+    /// in App.OnInitialized. Mirrors <see cref="AppConfig.Loaded"/>.
+    /// </summary>
+    [JsonIgnore]
+    public bool Loaded { get; internal set; }
+
     /// <summary>App theme mode. Dark is the default; Light and FollowOS are opt-in.</summary>
     public ThemeMode Mode
     {
@@ -908,7 +919,8 @@ public class AppConfigTheme : Bindable
         {
             if (Set(ref field, value))
             {
-                ApplyBaseTheme();
+                if (Loaded)
+                    ApplyBaseTheme();
                 OnPropertyChanged(nameof(EffectiveDark));
             }
         }
@@ -961,7 +973,7 @@ public class AppConfigTheme : Bindable
         get;
         set
         {
-            if (Set(ref field, value))
+            if (Set(ref field, value) && Loaded)
             {
                 Theme cur = _paletteHelper.GetTheme();
                 cur.SetPrimaryColor(value);
@@ -978,7 +990,7 @@ public class AppConfigTheme : Bindable
         get;
         set
         {
-            if (Set(ref field, value))
+            if (Set(ref field, value) && Loaded)
             {
                 Theme cur = _paletteHelper.GetTheme();
                 cur.SetSecondaryColor(value);
@@ -987,11 +999,15 @@ public class AppConfigTheme : Bindable
         }
     } = (Color)ColorConverter.ConvertFromString("#00B8D4"); // Cyan
 
-    /// <summary>Applies the OS accent as the MDIX primary colour WITHOUT mutating the persisted PrimaryColor.</summary>
+    /// <summary>
+    /// Applies the OS accent as the MDIX primary colour (the persisted PrimaryColor is left untouched) and
+    /// re-applies the stored SecondaryColor so it survives the palette swap.
+    /// </summary>
     internal void ApplyAccentSync(Color accent)
     {
         Theme cur = _paletteHelper.GetTheme();
         cur.SetPrimaryColor(accent);
+        cur.SetSecondaryColor(SecondaryColor);
         _paletteHelper.SetTheme(cur);
     }
 
@@ -1000,6 +1016,19 @@ public class AppConfigTheme : Bindable
     {
         Theme cur = _paletteHelper.GetTheme();
         cur.SetPrimaryColor(PrimaryColor);
+        _paletteHelper.SetTheme(cur);
+    }
+
+    /// <summary>
+    /// Pushes the stored Primary + Secondary colours to the live palette. Called once at startup
+    /// (App.OnInitialized) because the colour setters are now gated by <see cref="Loaded"/>: config
+    /// deserialization no longer applies them, so without this the saved colours are lost on every launch.
+    /// </summary>
+    internal void ApplyUserColors()
+    {
+        Theme cur = _paletteHelper.GetTheme();
+        cur.SetPrimaryColor(PrimaryColor);
+        cur.SetSecondaryColor(SecondaryColor);
         _paletteHelper.SetTheme(cur);
     }
 }

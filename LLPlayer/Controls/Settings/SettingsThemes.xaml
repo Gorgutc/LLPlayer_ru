@@ -39,7 +39,10 @@
                         </ComboBox>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
+                    <!-- While accent sync is on, the OS accent overrides the primary colour, so disable this
+                         row — otherwise the user edits a value that silently reverts on the next OS colour change. -->
+                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16"
+                                IsEnabled="{Binding FL.Config.AccentColorSync, Converter={StaticResource InvertBooleanConv}}">
                         <TextBlock
                             Width="180"
                             Text="Primary Color" />
@@ -138,7 +141,7 @@
                             <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
                                 <ToolTipService.ToolTip>
                                     <TextBlock
-                                        Text="Use the Windows accent color as the app primary color (live). Turn off to restore your chosen Primary Color."
+                                        Text="Use the Windows accent color as the app primary color (live). While on, this overrides and disables the Primary Color picker; turn off to restore your chosen Primary Color. (On Windows 10 the accent may differ slightly from Settings.)"
                                         TextWrapping="Wrap"
                                         MaxWidth="400" />
                                 </ToolTipService.ToolTip>
@@ -147,7 +150,7 @@
                         </TextBlock>
                         <ToggleButton
                             AutomationProperties.Name="Sync Accent Color"
-                            AutomationProperties.HelpText="Use the Windows accent color as the app primary color (live). Turn off to restore your chosen Primary Color."
+                            AutomationProperties.HelpText="Use the Windows accent color as the app primary color (live). While on, this overrides and disables the Primary Color picker; turn off to restore your chosen Primary Color. (On Windows 10 the accent may differ slightly from Settings.)"
                             IsChecked="{Binding FL.Config.AccentColorSync}" />
                     </StackPanel>
 

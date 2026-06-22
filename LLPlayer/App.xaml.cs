@@ -97,9 +97,16 @@ public partial class App : PrismApplication
         {
             var fl = Container.Resolve<FlyleafManager>();
             fl.Config.Theme.ApplyBaseTheme();
+            // The colour setters are gated by AppConfigTheme.Loaded (so config load no longer mutates the
+            // global palette), so the stored Primary/Secondary colours must be pushed explicitly at startup.
             if (fl.Config.AccentColorSync)
             {
+                // Accent sync overrides primary with the OS accent and applies the stored secondary.
                 fl.Config.Theme.ApplyAccentSync(AccentColorService.GetWindowsAccentColor());
+            }
+            else
+            {
+                fl.Config.Theme.ApplyUserColors();
             }
         }
         catch (Exception ex)
