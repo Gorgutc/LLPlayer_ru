@@ -38,6 +38,11 @@ public sealed class BatchSubtitleJob : NotifyPropertyChanged
     public string MediaPath { get; }
     public string OutputPath { get; }
 
+    // Just the file name (no directory) for the list — the containing folder is already shown in the group
+    // header, so the full path only made the actual name unreadable. Full paths remain available as tooltips.
+    public string FileName => Path.GetFileName(MediaPath);
+    public string OutputFileName => Path.GetFileName(OutputPath);
+
     // The sub-folder this file lives in, relative to the scanned root — used to GROUP the batch list by
     // folder so a recursive scan visibly runs folder-by-folder. A file directly in the scanned root is
     // labelled with the root folder's own name; deeper files show the relative sub-folder path. Falls back

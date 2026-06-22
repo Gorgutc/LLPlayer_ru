@@ -100,7 +100,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="3*" MinWidth="320" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="1.2*" MinWidth="200" />
+                <ColumnDefinition Width="1*" MinWidth="200" />
             </Grid.ColumnDefinitions>
 
             <DataGrid
@@ -113,11 +113,12 @@
                 CanUserSortColumns="False"
                 IsReadOnly="True"
                 GridLinesVisibility="Horizontal"
-                SelectionMode="Single"
-                VirtualizingPanel.IsVirtualizingWhenGrouping="True"
-                VirtualizingPanel.VirtualizationMode="Recycling">
+                SelectionMode="Single">
                 <!-- Group rows by sub-folder (FolderDisplay) so a recursive scan reads folder-by-folder,
-                     with a folder header + file count above each group. -->
+                     with a folder header + file count above each group.
+                     Do NOT set VirtualizingPanel.IsVirtualizingWhenGrouping="True": under DataGrid grouping it
+                     breaks DataGridRow cell rendering (rows show only the first column / blank cells). Grouped
+                     content is therefore not row-virtualized — fine for batch sizes (dozens to a few hundred). -->
                 <DataGrid.GroupStyle>
                     <GroupStyle>
                         <GroupStyle.HeaderTemplate>
@@ -136,6 +137,8 @@
                 </DataGrid.GroupStyle>
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                        <!-- Full source path on row hover (the File column now shows only the file name). -->
+                        <Setter Property="ToolTip" Value="{Binding MediaPath}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding Include}" Value="False">
                                 <Setter Property="Opacity" Value="0.45" />
@@ -144,7 +147,7 @@
                     </Style>
                 </DataGrid.RowStyle>
                 <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="56" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+                    <DataGridTemplateColumn Width="44" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                         <!-- Center the cell content (and give the column enough width) so the checkbox and its
                              hover ripple are fully visible and easy to click, not clipped to a sliver. -->
                         <DataGridTemplateColumn.CellStyle>
@@ -175,9 +178,9 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Phase" Binding="{Binding Status}" Width="120" />
+                    <DataGridTextColumn Header="Phase" Binding="{Binding Status}" Width="110" />
                     <DataGridTextColumn Header="Subs" Binding="{Binding SubtitleCount}" Width="60" />
-                    <DataGridTemplateColumn Header="Progress" Width="190">
+                    <DataGridTemplateColumn Header="Progress" Width="160">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <Grid VerticalAlignment="Center" Margin="2 0">
@@ -215,9 +218,9 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="File" Binding="{Binding MediaPath}" Width="2*" />
-                    <DataGridTextColumn Header="Output" Binding="{Binding OutputPath}" Width="2*" />
-                    <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
+                    <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="340" />
+                    <DataGridTextColumn Header="Output" Binding="{Binding OutputFileName}" Width="280" />
+                    <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="140" />
                     <DataGridTemplateColumn Header="" Width="44" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
