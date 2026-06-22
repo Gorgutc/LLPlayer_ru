@@ -248,7 +248,9 @@ public class AppConfig : Bindable
 public class AppConfigBatchSubtitles : Bindable
 {
     public string LastFolder { get; set => Set(ref field, value); } = string.Empty;
-    public bool Recursive { get; set => Set(ref field, value); }
+    // Default ON: batch subtitle generation is most useful across a whole lesson tree of sub-folders.
+    // (Existing configs keep their saved value; this only changes the default for new/untouched configs.)
+    public bool Recursive { get; set => Set(ref field, value); } = true;
     public bool OverwriteExisting { get; set => Set(ref field, value); }
 }
 

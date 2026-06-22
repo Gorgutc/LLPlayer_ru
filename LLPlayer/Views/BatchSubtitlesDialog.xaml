@@ -113,11 +113,12 @@
                 CanUserSortColumns="False"
                 IsReadOnly="True"
                 GridLinesVisibility="Horizontal"
-                SelectionMode="Single"
-                VirtualizingPanel.IsVirtualizingWhenGrouping="True"
-                VirtualizingPanel.VirtualizationMode="Recycling">
+                SelectionMode="Single">
                 <!-- Group rows by sub-folder (FolderDisplay) so a recursive scan reads folder-by-folder,
-                     with a folder header + file count above each group. -->
+                     with a folder header + file count above each group.
+                     Do NOT set VirtualizingPanel.IsVirtualizingWhenGrouping="True": under DataGrid grouping it
+                     breaks DataGridRow cell rendering (rows show only the first column / blank cells). Grouped
+                     content is therefore not row-virtualized — fine for batch sizes (dozens to a few hundred). -->
                 <DataGrid.GroupStyle>
                     <GroupStyle>
                         <GroupStyle.HeaderTemplate>
