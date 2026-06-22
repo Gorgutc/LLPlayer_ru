@@ -164,15 +164,14 @@
                 Height="50"
                 Style="{StaticResource MaterialDesignCircularProgressBar}"
                 Foreground="{DynamicResource MaterialDesign.Brush.Primary}"
+                AutomationProperties.Name="Opening media"
                 Visibility="{Binding FL.Player.IsOpening, Converter={StaticResource BooleanToVisibilityConv}}" />
 
-            <!--Error Message-->
-            <TextBox VerticalAlignment="Center" HorizontalAlignment="Center" Margin="10" d:Text="Error Message" FontSize="16" IsReadOnly="True" BorderThickness="0" Text="{Binding FL.Player.LastError}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" TextWrapping="Wrap">
-                <TextBox.Background>
-                    <SolidColorBrush Color="{Binding FL.PlayerConfig.Video.BackColor}" Opacity="0.15" />
-                </TextBox.Background>
-                <TextBox.Style>
-                    <Style TargetType="{x:Type TextBox}">
+            <!--Error Message + recovery actions. Like the empty state, only the rendered controls are
+                hit-testable; the surrounding area stays click/drag-through (no panel Background).-->
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="10" MaxWidth="640">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
                         <Setter Property="Visibility" Value="Visible" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding FL.Player.LastError}" Value="{x:Null}" d:Value="notnull">
@@ -180,8 +179,52 @@
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
-                </TextBox.Style>
-            </TextBox>
+                </StackPanel.Style>
+                <!-- Cap the height so a long error never balloons the panel into the bottom bar / subtitle zone.
+                     LiveSetting=Assertive so a screen reader announces the error when it appears; IsTabStop=False
+                     so the read-only box does not become a tab stop that swallows overlay shortcuts. -->
+                <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <TextBox HorizontalAlignment="Center" d:Text="Error Message" FontSize="16" IsReadOnly="True" IsTabStop="False" BorderThickness="0" Text="{Binding FL.Player.LastError}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" TextWrapping="Wrap" AutomationProperties.Name="Playback error" AutomationProperties.LiveSetting="Assertive">
+                        <TextBox.Background>
+                            <SolidColorBrush Color="{Binding FL.PlayerConfig.Video.BackColor}" Opacity="0.15" />
+                        </TextBox.Background>
+                    </TextBox>
+                </ScrollViewer>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0 14 0 0">
+                    <!-- Retry the item that failed. ReopenAction no-ops on null, but hide it when there is
+                         nothing selected to reopen so the only offered action is meaningful. -->
+                    <Button Command="{Binding FL.Player.Commands.Reopen}"
+                            CommandParameter="{Binding FL.Player.Playlist.Selected}"
+                            ToolTip="Reopen the current item"
+                            AutomationProperties.Name="Retry">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignRaisedButton}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding FL.Player.Playlist.Selected}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Refresh" VerticalAlignment="Center" Margin="0 0 6 0" />
+                            <TextBlock Text="Retry" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <!-- Fallback: always offer a way to open a different file. -->
+                    <Button Style="{StaticResource MaterialDesignOutlinedButton}"
+                            Margin="8 0 0 0"
+                            Command="{Binding FL.Player.Commands.OpenFromFileDialog}"
+                            ToolTip="Open a different media file (Ctrl+O)"
+                            AutomationProperties.Name="Open File">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="FolderOutline" VerticalAlignment="Center" Margin="0 0 6 0" />
+                            <TextBlock Text="Open File" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </StackPanel>
 
             <!--Flyleaf Bar-->
             <controls:FlyleafBar />
