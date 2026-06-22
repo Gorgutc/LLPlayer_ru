@@ -354,3 +354,59 @@ public class WidthToVisibilityConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
 }
+
+[ValueConversion(typeof(double), typeof(Visibility))]
+public class InverseWidthToVisibilityConverter : IValueConverter
+{
+    // Visible when the bound width is BELOW the threshold (px) given via ConverterParameter (default 620).
+    // The inverse of WidthToVisibilityConverter — used to show an overflow control on a narrow bar.
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not double width)
+            return Visibility.Collapsed;
+
+        double threshold = 620;
+        if (parameter is string s && double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out double parsed))
+            threshold = parsed;
+        else if (parameter is double pd)
+            threshold = pd;
+
+        return width < threshold ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+[ValueConversion(typeof(Brush), typeof(Brush))]
+public class OnColorForegroundConverter : IValueConverter
+{
+    // Given a background Brush (e.g. the themed Primary), return a black or white foreground brush
+    // chosen for legibility by the background's relative luminance. Keeps white-on-Primary chrome
+    // readable when a synced OS accent is pale, WITHOUT distorting the accent colour itself.
+    private static readonly SolidColorBrush Black = CreateFrozen(Colors.Black);
+    private static readonly SolidColorBrush White = CreateFrozen(Colors.White);
+
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not SolidColorBrush brush)
+            return White;
+
+        Color c = brush.Color;
+        // Perceived (BT.601-weighted) luminance, 0..1. Light backgrounds get black text, dark ones white.
+        // 0.5 cutoff sits just above the default accent (pink ~0.44, Windows blue ~0.37 -> white) and flips
+        // pale/grey/yellow accents to black; ~0.465 is the true neutral-grey crossover.
+        double luminance = (0.299 * c.R + 0.587 * c.G + 0.114 * c.B) / 255.0;
+        return luminance > 0.5 ? Black : White;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+
+    private static SolidColorBrush CreateFrozen(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+}

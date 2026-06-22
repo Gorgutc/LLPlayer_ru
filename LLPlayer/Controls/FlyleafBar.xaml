@@ -6,6 +6,7 @@
              xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
              xmlns:local="clr-namespace:LLPlayer.Controls"
              xmlns:resources="clr-namespace:LLPlayer.Resources"
+             xmlns:sys="clr-namespace:System;assembly=System.Runtime"
              mc:Ignorable="d"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              d:DataContext="{d:DesignInstance local:FlyleafBar}"
@@ -17,7 +18,11 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="/Resources/Slider.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/MaterialDesignThemes.Wpf;component/Themes/MaterialDesignTheme.PopupBox.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <!-- Single source of truth for the narrow-bar overflow breakpoint (owner-tunable). Keep it BELOW
+                 the 620px volume-slider collapse so volume drops first, then these buttons collapse. -->
+            <sys:Double x:Key="BarOverflowThresholdPx">520</sys:Double>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -91,6 +96,7 @@
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
@@ -193,9 +199,11 @@
                             Background="{DynamicResource MaterialDesign.Brush.Primary}"
                             ToolTip="ASR (speech-to-text) is transcribing"
                             Visibility="{Binding FL.Player.IsASRRunning, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                        <!-- Foreground adapts (black/white) to the chip's Primary background so a pale synced
+                             OS accent stays legible; the accent colour itself is unchanged. -->
                         <StackPanel Orientation="Horizontal">
-                            <materialDesign:PackIcon Kind="Microphone" Width="16" Height="16" VerticalAlignment="Center" Foreground="White"/>
-                            <TextBlock Text="ASR" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" FontWeight="Bold" Foreground="White"/>
+                            <materialDesign:PackIcon Kind="Microphone" Width="16" Height="16" VerticalAlignment="Center" Foreground="{Binding Background, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource OnColorForegroundConv}}"/>
+                            <TextBlock Text="ASR" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" FontWeight="Bold" Foreground="{Binding Background, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource OnColorForegroundConv}}"/>
                         </StackPanel>
                     </Border>
                     </StackPanel>
@@ -272,11 +280,11 @@ Right Click: Open Context Menu</ToolTip>
                      edge controls; tune the px threshold via ConverterParameter. -->
                 <Slider Grid.Column="8" Style="{DynamicResource FlyleafSlider}" Cursor="Hand" AutomationProperties.Name="Volume" AutomationProperties.HelpText="Volume level, scroll or drag to adjust" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter=620}" Foreground="{DynamicResource MaterialDesignBody}" Focusable="False" Margin="0,0,6,0" Width="100" VerticalAlignment="Center" Minimum="0" Maximum="{Binding FL.PlayerConfig.Audio.VolumeMax, Mode=OneWay}" d:Maximum="150" d:Value="75" Value="{Binding FL.Player.Audio.Volume}"/>
 
-                <!-- Open Settings Button -->
-                <Button Grid.Column="9" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings" AutomationProperties.Name="Open Settings"/>
+                <!-- Open Settings Button — collapses into the overflow kebab on a narrow bar (after the volume slider). -->
+                <Button Grid.Column="9" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings" AutomationProperties.Name="Open Settings" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}"/>
 
-                <!-- Toggle Sub Sidebar -->
-                <Button Grid.Column="10" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar" AutomationProperties.Name="Toggle Sub Sidebar">
+                <!-- Toggle Sub Sidebar — collapses into the overflow kebab on a narrow bar (after the volume slider). -->
+                <Button Grid.Column="10" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar" AutomationProperties.Name="Toggle Sub Sidebar" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=DockRight}"/>
@@ -289,8 +297,39 @@ Right Click: Open Context Menu</ToolTip>
                     </Button.Style>
                 </Button>
 
+                <!-- Overflow kebab: holds the low-priority actions that collapsed off the narrow bar (shown below
+                     the 520px gate, i.e. after the volume slider drops at 620). Threshold is owner-tunable.
+                     Opened/Closed reuse the existing SetActivity handlers so the bar doesn't auto-hide while open. -->
+                <materialDesign:PopupBox Grid.Column="11"
+                                         VerticalAlignment="Center"
+                                         Focusable="False"
+                                         PlacementMode="TopAndAlignCentres"
+                                         ToolTip="More controls"
+                                         AutomationProperties.Name="More controls"
+                                         Opened="OnContextMenuOnOpened"
+                                         Closed="OnContextMenuOnClosed"
+                                         Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource InverseWidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}">
+                    <materialDesign:PopupBox.ToggleContent>
+                        <materialDesign:PackIcon Kind="DotsVertical" Width="24" Height="24" Foreground="{DynamicResource MaterialDesignBody}" />
+                    </materialDesign:PopupBox.ToggleContent>
+                    <StackPanel Margin="4">
+                        <Button Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Command="{Binding FL.Action.CmdOpenWindowSettings}" AutomationProperties.Name="Open Settings">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="SettingsOutline" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Settings" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource MaterialDesignFlatButton}" HorizontalContentAlignment="Left" Command="{Binding FL.Action.CmdToggleSidebar}" AutomationProperties.Name="Toggle Sub Sidebar">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="DockRight" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <TextBlock Text="Toggle Sidebar" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </materialDesign:PopupBox>
+
                 <!-- Toggle Fullscreen Button -->
-                <ToggleButton Grid.Column="11" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen" AutomationProperties.Name="Toggle Fullscreen"/>
+                <ToggleButton Grid.Column="12" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen" AutomationProperties.Name="Toggle Fullscreen"/>
             </Grid>
         </Grid>
     </materialDesign:Card>

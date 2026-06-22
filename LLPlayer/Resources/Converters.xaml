@@ -38,6 +38,8 @@
     <conv:NullableIntConverter x:Key="NullableIntConv" />
     <conv:HalfConverter x:Key="HalfConv" />
     <conv:WidthToVisibilityConverter x:Key="WidthToVisibilityConv" />
+    <conv:InverseWidthToVisibilityConverter x:Key="InverseWidthToVisibilityConv" />
+    <conv:OnColorForegroundConverter x:Key="OnColorForegroundConv" />
 
     <!--Subtitle Converters-->
     <conv:WidthPercentageMultiConverter x:Key="WidthPercentageMultiConv"/>
