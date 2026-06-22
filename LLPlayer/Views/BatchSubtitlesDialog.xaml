@@ -137,6 +137,8 @@
                 </DataGrid.GroupStyle>
                 <DataGrid.RowStyle>
                     <Style TargetType="DataGridRow" BasedOn="{StaticResource MaterialDesignDataGridRow}">
+                        <!-- Full source path on row hover (the File column now shows only the file name). -->
+                        <Setter Property="ToolTip" Value="{Binding MediaPath}" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding Include}" Value="False">
                                 <Setter Property="Opacity" Value="0.45" />
@@ -216,8 +218,8 @@
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="File" Binding="{Binding MediaPath}" Width="2*" />
-                    <DataGridTextColumn Header="Output" Binding="{Binding OutputPath}" Width="2*" />
+                    <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="3*" />
+                    <DataGridTextColumn Header="Output" Binding="{Binding OutputFileName}" Width="*" />
                     <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="*" />
                     <DataGridTemplateColumn Header="" Width="44" CanUserResize="False" CanUserReorder="False" CanUserSort="False">
                         <DataGridTemplateColumn.CellTemplate>
