@@ -199,7 +199,7 @@
                         </StackPanel>
                     </Border>
                     </StackPanel>
-                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontStyle="Italic" FontSize="14" Margin="5,0,0,0" Text="{Binding FL.Player.Playlist.Selected.Title}" Cursor="Hand" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" AutomationProperties.HelpText="Left-click to open a file; right-click for playlist options">
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" FontStyle="Italic" FontSize="14" Margin="5,0,0,0" Text="{Binding FL.Player.Playlist.Selected.Title, FallbackValue='Open a file…', TargetNullValue='Open a file…'}" Cursor="Hand" TextTrimming="CharacterEllipsis" HorizontalAlignment="Left" AutomationProperties.HelpText="Left-click to open a file; right-click for playlist options">
                         <TextBlock.ToolTip>
                             <ToolTip xml:space="preserve">Left Click: Open File Dialog
 Right Click: Open Context Menu</ToolTip>
