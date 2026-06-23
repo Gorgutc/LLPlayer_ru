@@ -220,6 +220,13 @@ public class SubtitlesASR
 
                 lock (_lockerSubs)
                 {
+                    // Re-segment an over-long ASR cue into short, at-most-2-line cues (proportional timings) so
+                    // a single subtitle does not fill the frame. Gated by the config toggle; cues that already
+                    // fit pass through unchanged.
+                    List<(string Text, TimeSpan Start, TimeSpan End)> cues = _config.Subtitles.ResegmentSubtitles
+                        ? SubtitleSegmenter.Resegment(data.Text, data.StartTime, data.EndTime, _config.Subtitles.SubtitleSegmentOptions)
+                        : [(data.Text, data.StartTime, data.EndTime)];
+
                     foreach (int i in SubIndexSet)
                     {
                         bool isInit = false;
@@ -235,19 +242,23 @@ public class SubtitlesASR
                             _subtitlesManager[i].LanguageSource = Language.Get(data.Language);
                         }
 
-                        SubtitleData sub = new()
+                        foreach ((string text, TimeSpan startTime, TimeSpan endTime) in cues)
                         {
-                            Text = data.Text,
-                            StartTime = data.StartTime,
-                            EndTime = data.EndTime,
+                            SubtitleData sub = new()
+                            {
+                                Text = text,
+                                StartTime = startTime,
+                                EndTime = endTime,
 #if DEBUG
-                            ChunkNo = data.ChunkNo,
-                            StartTimeChunk = data.StartTimeChunk,
-                            EndTimeChunk = data.EndTimeChunk,
+                                ChunkNo = data.ChunkNo,
+                                StartTimeChunk = data.StartTimeChunk,
+                                EndTimeChunk = data.EndTimeChunk,
 #endif
-                        };
+                            };
 
-                        _subtitlesManager[i].Add(sub);
+                            _subtitlesManager[i].Add(sub);
+                        }
+
                         if (isInit)
                         {
                             _subtitlesManager[i].SetCurrentTime(new TimeSpan(_config.Subtitles.player.CurTime));

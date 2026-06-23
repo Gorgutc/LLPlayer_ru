@@ -116,6 +116,13 @@
                 <CheckBox
                     Margin="18 0 0 0"
                     VerticalAlignment="Center"
+                    Content="Prefer Russian audio"
+                    ToolTip="When a video has a Russian audio track, transcribe THAT track so the subtitles come out in Russian and translation is skipped. Videos without a Russian track are transcribed and translated as before. Override the track per file in the list."
+                    IsChecked="{Binding PreferRussianAudio}" />
+
+                <CheckBox
+                    Margin="18 0 0 0"
+                    VerticalAlignment="Center"
                     Content="Generate Russian dub (AI)"
                     ToolTip="After the subtitles, also render a Russian voice-over track (video.ru.dub.flac) beside each video using the local TTS engine. Requires the dub engine to be provisioned first. Runs serialized (no GPU overlap)."
                     IsChecked="{Binding GenerateDubbing}" />
@@ -264,6 +271,21 @@
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <DataGridTextColumn Header="File — double-click to play" Binding="{Binding FileName}" Width="340" />
+                    <DataGridTemplateColumn Header="Audio track" Width="190">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox
+                                    Margin="2"
+                                    VerticalAlignment="Center"
+                                    IsEnabled="{Binding DataContext.IsIdle, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    ItemsSource="{Binding AudioTracks}"
+                                    DisplayMemberPath="Display"
+                                    SelectedValuePath="StreamIndex"
+                                    SelectedValue="{Binding SelectedAudioStreamIndex, UpdateSourceTrigger=PropertyChanged}"
+                                    ToolTip="Which audio track to transcribe. 'Auto' prefers a Russian track, else the configured language order." />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Output" Binding="{Binding OutputFileName}" Width="280" />
                     <DataGridTextColumn Header="Error" Binding="{Binding Error}" Width="140" />
                     <DataGridTemplateColumn Header="" Width="44" CanUserResize="False" CanUserReorder="False" CanUserSort="False">

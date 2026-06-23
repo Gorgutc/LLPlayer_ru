@@ -191,6 +191,23 @@ public class Config : NotifyPropertyChanged
             // which a user who deliberately turns it back off is respected.
             Subtitles.WhisperCppConfig.NoContext = true;
         }
+
+        if (!parsed || loadedVer <= System.Version.Parse("0.3.4"))
+        {
+            // Upgrade the default LLM translation prompts to the improved, accuracy-focused text. Only replace
+            // a prompt the user has NOT customized (it still equals the previous default), so a hand-edited
+            // prompt is preserved. Idempotent: after replacement the prompt equals the NEW default and no
+            // longer matches the legacy text. New configs already start from the new default.
+            TranslateChatConfig chat = Subtitles.TranslateChatConfig;
+            if (chat.PromptOneByOne == TranslateChatConfig.LegacyDefaultPromptOneByOne.ReplaceLineEndings("\n"))
+            {
+                chat.PromptOneByOne = TranslateChatConfig.DefaultPromptOneByOne.ReplaceLineEndings("\n");
+            }
+            if (chat.PromptKeepContext == TranslateChatConfig.LegacyDefaultPromptKeepContext.ReplaceLineEndings("\n"))
+            {
+                chat.PromptKeepContext = TranslateChatConfig.DefaultPromptKeepContext.ReplaceLineEndings("\n");
+            }
+        }
     }
 
     internal void SetPlayer(Player player)
@@ -1307,6 +1324,41 @@ public class Config : NotifyPropertyChanged
         /// In the case of network streams, etc., the size is small and can be divided by specifying the number of seconds.
         /// </summary>
         public int ASRChunkSeconds { get; set => Set(ref field, value); } = 20;
+
+        /// <summary>
+        /// Re-segment generated subtitles (ASR and translation) into short, at-most-2-line cues of about
+        /// <see cref="SubtitleMaxCharsPerLine"/> characters per line, splitting an over-long Whisper segment
+        /// into several sequential cues with proportional timings, so a single cue does not fill the frame.
+        /// Additive/absent-defaulting (a config that predates this key gets it on); applies to both the
+        /// interactive ASR path and batch generation. Cues that already fit are left untouched.
+        /// </summary>
+        public bool ResegmentSubtitles { get; set => Set(ref field, value); } = true;
+
+        /// <summary>Max characters per line for space-separated scripts (Latin/Cyrillic/…) when re-segmenting.</summary>
+        public int SubtitleMaxCharsPerLine { get; set => Set(ref field, value); } = 42;
+
+        /// <summary>Max lines per cue when re-segmenting.</summary>
+        public int SubtitleMaxLinesPerCue { get; set => Set(ref field, value); } = 2;
+
+        /// <summary>Max characters per line for space-less scripts (CJK/Thai) when re-segmenting.</summary>
+        public int SubtitleMaxCjkCharsPerLine { get; set => Set(ref field, value); } = 21;
+
+        /// <summary>A cue longer than this (seconds) is split into more cues when it has enough text. 0 disables.</summary>
+        public double SubtitleMaxCueDurationSec { get; set => Set(ref field, value); } = 6.0;
+
+        /// <summary>Never emit a cue shorter than this (seconds); a sliver is merged into its neighbour. 0 disables.</summary>
+        public double SubtitleMinCueDurationSec { get; set => Set(ref field, value); } = 1.0;
+
+        /// <summary>Snapshot of the re-segmentation tunables for <see cref="SubtitleSegmenter"/>.</summary>
+        [JsonIgnore]
+        public SubtitleSegmentOptions SubtitleSegmentOptions => new()
+        {
+            MaxCharsPerLine = SubtitleMaxCharsPerLine,
+            MaxLinesPerCue = SubtitleMaxLinesPerCue,
+            MaxCjkCharsPerLine = SubtitleMaxCjkCharsPerLine,
+            MaxCueDurationSec = SubtitleMaxCueDurationSec,
+            MinCueDurationSec = SubtitleMinCueDurationSec,
+        };
         #endregion
 
         #region OCR

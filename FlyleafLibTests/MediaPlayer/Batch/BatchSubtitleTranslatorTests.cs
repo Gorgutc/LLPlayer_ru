@@ -219,6 +219,25 @@ public class BatchSubtitleTranslatorTests
         subtitles[1].TranslatedText.Should().BeNull();
     }
 
+    [Fact]
+    public async Task TranslateAsync_ShouldSkipTranslationWhenSourceIsRussian()
+    {
+        // Feature: a Russian audio track is transcribed to Russian subtitles, so no translation is needed.
+        Utils.IsTesting = true;
+        Config config = new(true);
+        config.Subtitles.TranslateServiceType = TranslateServiceType.Ollama;
+
+        var service = new ScriptedTranslateService(TranslateServiceType.Ollama,
+            _ => throw new InvalidOperationException("translation must not be invoked for a Russian source"));
+        BatchSubtitleTranslator translator = new(config.Subtitles, () => service);
+
+        List<SubtitleData> subtitles = [CreateSub("привет"), CreateSub("как дела")];
+
+        await translator.TranslateAsync(subtitles, Language.Get("ru"), CancellationToken.None);
+
+        subtitles.Should().OnlyContain(s => s.TranslatedText == null);
+    }
+
     private static SubtitleData CreateSub(string text) => new()
     {
         Text = text,

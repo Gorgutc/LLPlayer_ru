@@ -20,6 +20,7 @@ namespace LLPlayer.ViewModels;
 public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 {
     private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _probeAudioCts;
     private bool _initializing = true;
     private readonly BatchActivityService _activity;
     private readonly AppTrayService _tray;
@@ -43,6 +44,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
         IdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
         GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
+        PreferRussianAudio = FL.Config.BatchSubtitles.PreferRussianAudio;
         _initializing = false;
 
         // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in
@@ -161,6 +163,22 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             if (Set(ref field, value))
             {
                 FL.Config.BatchSubtitles.GenerateDubbing = value;
+                PersistBatchDefaults();
+            }
+        }
+    }
+
+    // When on, a file with a Russian-tagged audio track has that track transcribed (Russian subtitles, no
+    // translation); files without a Russian track are transcribed + translated as before. A per-file override
+    // in the list always wins. Applied to the next run.
+    public bool PreferRussianAudio
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                FL.Config.BatchSubtitles.PreferRussianAudio = value;
                 PersistBatchDefaults();
             }
         }
@@ -313,6 +331,12 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
             OnPropertyChanged(nameof(AllIncluded));
             UpdateSummary();
+
+            // Populate the per-file audio-track picker in the background so the scan stays fast. Best-effort:
+            // a probe failure just leaves that file's picker at "Auto".
+            _probeAudioCts?.Cancel();
+            _probeAudioCts = new CancellationTokenSource();
+            _ = ProbeAudioTracksAsync(Jobs.Where(j => j.Include).ToList(), _probeAudioCts.Token);
         }
         catch (Exception ex)
         {
@@ -362,6 +386,45 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             ErrorDialogHelper.ShowUnknownErrorPopup($"Cannot open video in player: {ex.Message}", "Batch subtitles", ex);
         }
     });
+
+    // Probe each file's audio tracks off the UI thread and fill its picker. Sequential + best-effort so a
+    // large folder does not spawn many concurrent demuxers and a single unreadable file never breaks the rest.
+    private async Task ProbeAudioTracksAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
+    {
+        foreach (BatchSubtitleJob job in jobs)
+        {
+            if (token.IsCancellationRequested)
+                return;
+
+            try
+            {
+                MediaAudioProbeResult probe = await Task.Run(
+                    () => new MediaAudioProbe(FL.PlayerConfig).Probe(job.MediaPath, token), token);
+
+                // ObservableCollection must be mutated on the UI thread; also re-check the job is still listed
+                // (a re-scan may have replaced it).
+                Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    if (token.IsCancellationRequested || !Jobs.Contains(job))
+                        return;
+
+                    job.AudioTracks.Clear();
+                    // Leading "Auto" sentinel (StreamIndex -1) = automatic selection (prefer Russian).
+                    job.AudioTracks.Add(new MediaAudioTrack(-1, Language.Unknown, "Auto (prefer Russian)", null, 0));
+                    foreach (MediaAudioTrack track in probe.Tracks)
+                        job.AudioTracks.Add(track);
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch
+            {
+                // Best-effort: leave this file's picker at "Auto".
+            }
+        }
+    }
 
     // Shared run path for Start, per-row retry, and "Retry failed". Each call builds its own CTS,
     // processor, and capacity-1 channel, so re-running a subset is safe. Only the jobs in 'toRun'
@@ -481,7 +544,13 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             DubbingConfig dubbingConfig = FL.PlayerConfig.Subtitles.DubbingConfig;
 
             BatchSubtitleProcessor processor = new(
-                new BatchAsrTranscriber(FL.PlayerConfig, monitor.IsUserActive),
+                new BatchAsrTranscriber(
+                    FL.PlayerConfig,
+                    monitor.IsUserActive,
+                    FL.Config.BatchSubtitles.PreferRussianAudio,
+                    mediaPath => uiJobs.TryGetValue(mediaPath, out BatchSubtitleJob? uiJob)
+                        ? uiJob.AudioStreamIndexOverride
+                        : null),
                 new BatchSubtitleTranslator(FL.PlayerConfig.Subtitles),
                 new SrtSubtitleWriter(new UTF8Encoding(FL.Config.Subs.SubsExportUTF8WithBom)),
                 new BatchSubtitleOptions
@@ -570,6 +639,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             persisted.BatchSubtitles.RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
             persisted.BatchSubtitles.ActiveIdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
             persisted.BatchSubtitles.GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
+            persisted.BatchSubtitles.PreferRussianAudio = FL.Config.BatchSubtitles.PreferRussianAudio;
             persisted.Save(App.AppConfigPath);
         }
         catch (Exception ex)
@@ -843,6 +913,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     public void OnDialogClosed()
     {
         _cts?.Cancel();
+        _probeAudioCts?.Cancel();
         UnsubscribeJobs();
         _activity.CancelRequested -= OnAppQuitCancelRequested;
         // Drop the dialog-open flag so the app can leave the tray / restore the player once nothing is

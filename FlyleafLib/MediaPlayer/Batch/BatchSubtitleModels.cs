@@ -103,6 +103,31 @@ public sealed class BatchSubtitleJob : NotifyPropertyChanged
     public TimeSpan? Elapsed { get; set => Set(ref field, value); }
     public TimeSpan? Eta { get; set => Set(ref field, value); }
     public ObservableCollection<string> Transcript { get; } = new();
+
+    // Audio-track picker: the file's audio tracks (populated lazily off-thread at scan time; the first entry is
+    // an "Auto" sentinel with StreamIndex -1), and the user's manual override of which track to transcribe.
+    // Null override = automatic selection (prefer Russian, then the configured language order). Per-file, not persisted.
+    public ObservableCollection<MediaAudioTrack> AudioTracks { get; } = new();
+
+    public int? AudioStreamIndexOverride
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                Raise(nameof(SelectedAudioStreamIndex));
+            }
+        }
+    }
+
+    // ComboBox-friendly view of the override: -1 == Auto (no override), otherwise the chosen stream index.
+    // Lets the picker bind to a plain int (with the "Auto" sentinel track at -1) without a value converter.
+    public int SelectedAudioStreamIndex
+    {
+        get => AudioStreamIndexOverride ?? -1;
+        set => AudioStreamIndexOverride = value < 0 ? null : value;
+    }
 }
 
 public sealed record BatchAsrResult(IReadOnlyList<SubtitleData> Subtitles, Language SourceLanguage);
