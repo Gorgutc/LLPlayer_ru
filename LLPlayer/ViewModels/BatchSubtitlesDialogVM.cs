@@ -24,6 +24,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     private readonly AppTrayService _tray;
     // The set of jobs in the current run — used to compute the overall progress shown on the taskbar + tray.
     private IReadOnlyList<BatchSubtitleJob>? _runScope;
+    // Rough overall "~MM:SS left" estimate, recomputed each heartbeat; embedded in the summary + tray text.
+    private string _overallEtaText = string.Empty;
 
     public FlyleafManager FL { get; }
 
@@ -377,6 +379,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             job.Progress = 0;
             job.IsIndeterminateProgress = false;
             job.Throughput = string.Empty;
+            job.Elapsed = null;
+            job.Eta = null;
             job.Transcript.Clear();
         }
 
@@ -399,11 +403,18 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         DispatcherTimer statusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
         statusTimer.Tick += (_, _) =>
         {
-            bool onCpu = cpuFallbackApplies && IsRunning && monitor.IsUserActive();
-            if (onCpu != IsRunningOnCpu)
+            // 1-second heartbeat: keep the UI moving (elapsed/ETA tick) even between slow ASR segment reports,
+            // so the user can see it's alive and roughly how long is left. IsRunningOnCpu setter no-ops if same.
+            // Cosmetic — must never crash the dispatcher, so swallow any error.
+            try
             {
-                IsRunningOnCpu = onCpu;
+                IsRunningOnCpu = cpuFallbackApplies && IsRunning && monitor.IsUserActive();
+                RefreshLiveEstimates();
                 UpdateSummary();
+            }
+            catch
+            {
+                // ignore — the next tick will refresh
             }
         };
         statusTimer.Start();
@@ -431,6 +442,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                     uiJob.Progress = 0;
                     uiJob.ProcessedTime = null;
                     uiJob.Throughput = string.Empty;
+                    uiJob.Elapsed = null;
+                    uiJob.Eta = null;
                     uiJob.IsIndeterminateProgress = true;
                     ActiveJob = uiJob;
                 }
@@ -619,6 +632,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             return;
         }
 
+        // Refresh overall % + ETA first so the summary line below can include the fresh estimate.
+        UpdateOverallProgress();
+
         int completed = Jobs.Count(job => job.Status == BatchSubtitleStatus.Completed);
         int skipped = Jobs.Count(job => job.Status == BatchSubtitleStatus.Skipped);
         int failed = Jobs.Count(job => job.Status == BatchSubtitleStatus.Failed);
@@ -631,11 +647,10 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
         int included = Jobs.Count(job => job.Include);
         string cpuPrefix = IsRunning && IsRunningOnCpu ? "🖥 ASR on CPU (you're active) — " : "";
-        SummaryText = $"{cpuPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
+        string etaSuffix = string.IsNullOrEmpty(_overallEtaText) ? "" : $" | {_overallEtaText}";
+        SummaryText = $"{cpuPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled{etaSuffix}";
 
         OnPropertyChanged(nameof(CanRetryFailed));
-
-        UpdateOverallProgress();
     }
 
     // Aggregate progress across the current run for the taskbar button + tray icon. Finished files count as
@@ -648,6 +663,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         {
             OverallProgress = 0;
             TaskbarProgressState = TaskbarItemProgressState.None;
+            _overallEtaText = string.Empty;
             _activity.ReportProgress(0, string.Empty);
             return;
         }
@@ -681,8 +697,73 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         OverallProgress = overall;
         // Still progressing (on CPU) when active — Normal, not Paused.
         TaskbarProgressState = TaskbarItemProgressState.Normal;
+        _overallEtaText = ComputeOverallEtaText(scope);
+
         string prefix = IsRunningOnCpu ? "CPU " : "";
-        _activity.ReportProgress(overall, $"{prefix}{done}/{total} • {(int)Math.Round(overall * 100)}%");
+        string etaForTray = string.IsNullOrEmpty(_overallEtaText) ? "" : $" • {_overallEtaText}";
+        _activity.ReportProgress(overall, $"{prefix}{done}/{total} • {(int)Math.Round(overall * 100)}%{etaForTray}");
+    }
+
+    // Per-second heartbeat: refresh the active file's wall-clock elapsed + an approximate ETA so the row keeps
+    // moving even between (slow) ASR segment reports. ETA = remaining audio / the cumulative realtime factor.
+    private void RefreshLiveEstimates()
+    {
+        BatchSubtitleJob? job = ActiveJob;
+        if (job is null || job.Status != BatchSubtitleStatus.RunningASR || job.StartedAt is not { } started)
+            return;
+
+        TimeSpan elapsed = DateTimeOffset.Now - started;
+        job.Elapsed = elapsed;
+
+        if (job.ProcessedTime is { TotalSeconds: > 0 } processed
+            && job.TotalDuration is { Ticks: > 0 } total
+            && elapsed.TotalSeconds >= 1)
+        {
+            double factor = processed.TotalSeconds / elapsed.TotalSeconds; // realtime factor (cumulative = smoother)
+            double remainingAudio = Math.Max(0, total.TotalSeconds - processed.TotalSeconds);
+            job.Eta = factor > 0 ? TimeSpan.FromSeconds(remainingAudio / factor) : null;
+        }
+    }
+
+    // Rough overall ETA: the active file's remaining time + (pending files × average wall-time of files already
+    // finished in this run). Returns "" when there's nothing to estimate. Approximate by design.
+    private string ComputeOverallEtaText(IReadOnlyList<BatchSubtitleJob> scope)
+    {
+        double seconds = 0;
+        bool any = false;
+
+        if (ActiveJob is { Status: BatchSubtitleStatus.RunningASR, Eta: { } eta })
+        {
+            seconds += eta.TotalSeconds;
+            any = true;
+        }
+
+        List<double> finishedWall = scope
+            .Where(j => j.Status is BatchSubtitleStatus.Completed or BatchSubtitleStatus.Skipped
+                or BatchSubtitleStatus.Failed or BatchSubtitleStatus.Canceled
+                && j.StartedAt is { } && j.CompletedAt is { })
+            .Select(j => (j.CompletedAt!.Value - j.StartedAt!.Value).TotalSeconds)
+            .Where(s => s > 0)
+            .ToList();
+        int pending = scope.Count(j => j.Status == BatchSubtitleStatus.Pending);
+
+        if (finishedWall.Count > 0 && pending > 0)
+        {
+            seconds += finishedWall.Average() * pending;
+            any = true;
+        }
+
+        if (!any || seconds <= 0)
+            return string.Empty;
+
+        return $"~{FormatDuration(TimeSpan.FromSeconds(seconds))} left";
+    }
+
+    private static string FormatDuration(TimeSpan t)
+    {
+        if (t.TotalSeconds < 1)
+            return "0:00";
+        return t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
     }
 
     private void OnAppQuitCancelRequested(object? sender, EventArgs e)
@@ -711,17 +792,29 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             return true;
         }
 
-        MessageBoxResult confirm = MessageBox.Show(
-            "Batch subtitles are still running. Cancel and close this window?",
-            "Batch subtitles",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
+        // A batch is running: don't close (closing the dialog would cancel the run). Instead minimize this
+        // window to the system tray and keep processing — consistent with closing the main player window.
+        // To actually stop, use the Cancel button or the tray's Quit.
+        MinimizeOwnWindowToTray();
 
-        if (confirm != MessageBoxResult.Yes)
-            return false;
-
-        _cts?.Cancel();
+        // Returning false sets e.Cancel=true in Prism's Closing handler, so the window is NOT closed/disposed
+        // and OnDialogClosed never runs — the CTS / run / VM survive while the window is merely hidden.
         return false;
+    }
+
+    private void MinimizeOwnWindowToTray()
+    {
+        Window? window = Application.Current.Windows
+            .OfType<Window>()
+            .FirstOrDefault(w => ReferenceEquals(w.DataContext, this));
+
+        // Should always match the open dialog window (Prism sets its DataContext to this VM). Only show the
+        // "running in the tray" hint when we actually hid a window, so the balloon can't lie if it ever misses.
+        if (window == null)
+            return;
+
+        window.Hide();
+        _tray.NotifyBatchMinimizedToTray();
     }
 
     public void OnDialogClosed()

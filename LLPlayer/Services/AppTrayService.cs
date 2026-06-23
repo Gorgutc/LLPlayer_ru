@@ -91,6 +91,19 @@ public sealed class AppTrayService : IDisposable
         UpdateIcon(mainHidden: false);
     }
 
+    /// <summary>The batch window was hidden to the tray while a run continues — keep the icon visible and show
+    /// a one-time hint so the user knows where the window went and how to bring it back.</summary>
+    public void NotifyBatchMinimizedToTray()
+    {
+        UpdateIcon(MainWindow is { IsVisible: false });
+
+        if (!_backgroundHintShown)
+        {
+            _backgroundHintShown = true;
+            TryBalloon("Batch subtitles keeps running in the tray. Reopen it from the tray menu (Batch subtitles…).");
+        }
+    }
+
     private void OnActivityChanged()
     {
         if (_disposed)

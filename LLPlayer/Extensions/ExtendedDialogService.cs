@@ -65,6 +65,12 @@ public static class ExtendedDialogServiceExtensions
             var curWindow = windows.FirstOrDefault(w => w.Content.GetType().Name == name);
             if (curWindow != null && curWindow is Window win)
             {
+                // The window may have been hidden to the tray (e.g. the batch dialog while a run continues);
+                // Show() it again so re-opening from the tray/menu brings it back.
+                if (!win.IsVisible)
+                {
+                    win.Show();
+                }
                 // If minimized, it will not be displayed after Activate, so set it back to Normal in advance.
                 if (win.WindowState == WindowState.Minimized)
                 {

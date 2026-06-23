@@ -247,6 +247,8 @@
                                         <Run Text="{Binding ProcessedTime, Converter={StaticResource TimeSpanShort}, Mode=OneWay}" />
                                         <Run Text="/" />
                                         <Run Text="{Binding TotalDuration, Converter={StaticResource TimeSpanShort}, Mode=OneWay}" />
+                                        <Run Text="  ~" />
+                                        <Run Text="{Binding Eta, Converter={StaticResource TimeSpanShort}, Mode=OneWay}" />
                                         <Run Text="  " />
                                         <Run Text="{Binding Throughput, Mode=OneWay}" />
                                     </TextBlock>
@@ -305,11 +307,36 @@
                     Text="Live transcript" />
                 <TextBlock
                     DockPanel.Dock="Top"
-                    Margin="0 0 0 6"
+                    Margin="0 0 0 4"
                     FontSize="11"
                     TextTrimming="CharacterEllipsis"
                     Foreground="{DynamicResource MaterialDesignBodyLight}"
                     Text="{Binding ActiveJob.MediaPath}" />
+                <!-- Live timing of the active file — ticks every second so it's clearly alive, with an
+                     approximate ETA even when ASR segments arrive slowly. Shown only while transcribing, so it
+                     doesn't linger frozen after the file/run finishes (the transcript list below stays). -->
+                <TextBlock
+                    DockPanel.Dock="Top"
+                    Margin="0 0 0 6"
+                    FontSize="11"
+                    Foreground="{DynamicResource MaterialDesignBodyLight}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ActiveJob.Status}" Value="RunningASR">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                    <Run Text="⏱" />
+                    <Run Text="{Binding ActiveJob.Elapsed, Converter={StaticResource TimeSpanShort}, Mode=OneWay}" />
+                    <Run Text="elapsed  ·  ~" />
+                    <Run Text="{Binding ActiveJob.Eta, Converter={StaticResource TimeSpanShort}, Mode=OneWay}" />
+                    <Run Text="left  ·  " />
+                    <Run Text="{Binding ActiveJob.Throughput, Mode=OneWay}" />
+                </TextBlock>
                 <Border
                     BorderThickness="1"
                     BorderBrush="{DynamicResource MaterialDesignDivider}">

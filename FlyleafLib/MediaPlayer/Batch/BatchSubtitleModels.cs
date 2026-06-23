@@ -90,6 +90,10 @@ public sealed class BatchSubtitleJob : NotifyPropertyChanged
     public double Progress { get; set => Set(ref field, value); }
     public bool IsIndeterminateProgress { get; set => Set(ref field, value); }
     public string Throughput { get; set => Set(ref field, value); } = string.Empty;
+    // Wall-clock elapsed + estimated remaining (ETA) for this file's ASR. Refreshed once per second by the VM
+    // heartbeat so the UI keeps moving even between (slow) ASR segment reports. ETA is approximate.
+    public TimeSpan? Elapsed { get; set => Set(ref field, value); }
+    public TimeSpan? Eta { get; set => Set(ref field, value); }
     public ObservableCollection<string> Transcript { get; } = new();
 }
 
