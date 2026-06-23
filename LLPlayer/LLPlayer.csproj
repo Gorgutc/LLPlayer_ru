@@ -16,7 +16,7 @@
     <ApplicationIcon>LLPlayer.ico</ApplicationIcon>
     <Description>The media player for language learning.</Description>
     <PackageProjectUrl>https://llplayer.com</PackageProjectUrl>
-    <Version>0.3.3</Version>
+    <Version>0.3.4</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
@@ -59,6 +59,18 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="lib\license.7z.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- Ship the AI-dubbing sidecar source beside the exe (DubbingConfig.DefaultServerScript resolves
+         BaseDirectory\dub_sidecar\server.py). The heavy venv + model weights are provisioned on first run;
+         only our committed GPLv3 scripts are bundled. -->
+    <Content Include="..\dub_sidecar\server.py" Link="dub_sidecar\server.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\dub_sidecar\pyproject.toml" Link="dub_sidecar\pyproject.toml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\dub_sidecar\README.md" Link="dub_sidecar\README.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

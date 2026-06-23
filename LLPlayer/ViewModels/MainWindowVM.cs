@@ -206,6 +206,10 @@ public class MainWindowVM : Bindable
                 name = FL.Player.Playlist.Selected.Title;
             }
             Title = $"{name} - {App.Name}";
+
+            // Auto-attach a pre-rendered Russian dub track (video.ru.dub.*) if one sits beside the video,
+            // so it shows up in Audio ▸ External. Best-effort; runs on the UI thread (this handler does).
+            DubbedAudioAutoLoader.TryAttach(FL.Player, args.Url);
             TaskBarProgressValue = 0;
             TaskBarProgressState = TaskbarItemProgressState.Normal;
         };

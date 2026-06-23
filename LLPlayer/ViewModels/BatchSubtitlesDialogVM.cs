@@ -10,6 +10,7 @@ using System.Windows.Shell;
 using System.Windows.Threading;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer.Batch;
+using FlyleafLib.MediaPlayer.Dubbing;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
 using Microsoft.Win32;
@@ -41,6 +42,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
         RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
         IdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
+        GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
         _initializing = false;
 
         // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in
@@ -144,6 +146,21 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             if (Set(ref field, value))
             {
                 FL.Config.BatchSubtitles.RunOnCpuWhenActive = value;
+                PersistBatchDefaults();
+            }
+        }
+    }
+
+    // AI dubbing: after each .ru.srt, also render a Russian dub audio track (video.ru.dub.flac) via the
+    // local TTS sidecar. Opt-in; when on, the run is serialized so the GPU TTS render never overlaps ASR.
+    public bool GenerateDubbing
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                FL.Config.BatchSubtitles.GenerateDubbing = value;
                 PersistBatchDefaults();
             }
         }
@@ -461,6 +478,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 UpdateSummary();
             });
 
+            DubbingConfig dubbingConfig = FL.PlayerConfig.Subtitles.DubbingConfig;
+
             BatchSubtitleProcessor processor = new(
                 new BatchAsrTranscriber(FL.PlayerConfig, monitor.IsUserActive),
                 new BatchSubtitleTranslator(FL.PlayerConfig.Subtitles),
@@ -470,9 +489,12 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                     Recursive = Recursive,
                     OverwriteExisting = OverwriteExisting || forceOverwrite,
                     Utf8Bom = FL.Config.Subs.SubsExportUTF8WithBom,
-                    SerializeAsrAndTranslate = SerializeAsrAndTranslate
+                    SerializeAsrAndTranslate = SerializeAsrAndTranslate,
+                    GenerateDubbing = GenerateDubbing,
+                    DubbingOutputFormat = dubbingConfig.OutputFormat
                 },
-                progress);
+                progress,
+                GenerateDubbing ? new DubbingRenderer(dubbingConfig) : null);
 
             await processor.ProcessAsync(workerJobs, _cts.Token);
         }
@@ -547,6 +569,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             persisted.BatchSubtitles.SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
             persisted.BatchSubtitles.RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
             persisted.BatchSubtitles.ActiveIdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
+            persisted.BatchSubtitles.GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
             persisted.Save(App.AppConfigPath);
         }
         catch (Exception ex)

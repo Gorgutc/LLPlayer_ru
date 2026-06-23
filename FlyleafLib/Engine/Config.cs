@@ -1278,6 +1278,12 @@ public class Config : NotifyPropertyChanged
         public FasterWhisperConfig FasterWhisperConfig { get; set => Set(ref field, value); } = new();
 
         /// <summary>
+        /// AI Dubbing (TTS / voice synthesis) config. Additive; default backend is the local CosyVoice2
+        /// sidecar. See docs/agent/dubbing-contract.md.
+        /// </summary>
+        public DubbingConfig DubbingConfig { get; set => Set(ref field, value); } = new();
+
+        /// <summary>
         /// Chunk size (MB) when processing ASR with audio stream
         /// Increasing size will increase memory usage but may result in more natural subtitle breaks
         /// </summary>

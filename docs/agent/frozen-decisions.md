@@ -13,6 +13,7 @@ These are current decisions, not universal preferences.
 - Dependency and native runtime baseline are frozen in `docs/agent/dependency-baseline.md`.
 - Manual verification expectations are frozen in `docs/agent/manual-smoke-matrix.md`.
 - Required review ownership is frozen in `docs/agent/subagent-review-matrix.md`.
+- AI dubbing feature boundaries are frozen in `docs/agent/dubbing-contract.md` (additive, opt-in, local-first; grows as phases ship).
 - Release packaging is controlled by `.github/actions/build-package/action.yml`.
 - `FFmpeg/*.dll` and `LLPlayer/lib/7z.dll` are tracked required native assets.
 - `yt-dlp.exe` is downloaded for release packaging and is not a normal source artifact.

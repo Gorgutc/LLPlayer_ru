@@ -35,6 +35,7 @@ Before changing product behavior, inspect the matching frozen contract:
 - `docs/agent/dependency-baseline.md`: package/native/runtime dependency baseline and upgrade rules.
 - `docs/agent/manual-smoke-matrix.md`: manual checks for behavior that unit tests do not cover.
 - `docs/agent/subagent-review-matrix.md`: path scopes mapped to required review agents.
+- `docs/agent/dubbing-contract.md`: AI dubbing (TTS / voice synthesis) feature boundaries — additive, opt-in, local-first; spec + roadmap under `docs/agent/dubbing/`.
 
 These contracts document current `main` behavior. Change them only when the user explicitly asks to change the underlying product decision.
 

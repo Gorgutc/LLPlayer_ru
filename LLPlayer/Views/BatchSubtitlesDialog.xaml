@@ -112,6 +112,13 @@
                     VerticalAlignment="Center"
                     Foreground="{DynamicResource MaterialDesignBodyLight}"
                     Text="s idle → GPU" />
+
+                <CheckBox
+                    Margin="18 0 0 0"
+                    VerticalAlignment="Center"
+                    Content="Generate Russian dub (AI)"
+                    ToolTip="After the subtitles, also render a Russian voice-over track (video.ru.dub.flac) beside each video using the local TTS engine. Requires the dub engine to be provisioned first. Runs serialized (no GPU overlap)."
+                    IsChecked="{Binding GenerateDubbing}" />
             </StackPanel>
 
             <TextBlock

@@ -24,7 +24,8 @@ try {
         "config-data-contract.md",
         "dependency-baseline.md",
         "manual-smoke-matrix.md",
-        "subagent-review-matrix.md"
+        "subagent-review-matrix.md",
+        "dubbing-contract.md"
     )
 
     foreach ($doc in $contractDocs) {

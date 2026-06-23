@@ -21,3 +21,4 @@ Frozen product contracts:
 - `dependency-baseline.md`
 - `manual-smoke-matrix.md`
 - `subagent-review-matrix.md`
+- `dubbing-contract.md`

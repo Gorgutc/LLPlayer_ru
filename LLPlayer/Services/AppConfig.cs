@@ -265,6 +265,11 @@ public class AppConfigBatchSubtitles : Bindable
     public bool SerializeAsrAndTranslate { get; set => Set(ref field, value); } = true;
     public bool RunOnCpuWhenActive { get; set => Set(ref field, value); } = true;
     public int ActiveIdleThresholdSeconds { get; set => Set(ref field, value); } = 45;
+
+    // AI dubbing: after each video's .ru.srt is written, also render a Russian dub audio track
+    // (video.ru.dub.flac) beside it via the local TTS sidecar. Additive, default OFF (opt-in). When on,
+    // the batch runs serialized so the GPU TTS render never overlaps the next file's ASR.
+    public bool GenerateDubbing { get; set => Set(ref field, value); }
 }
 
 public class AppConfigSubs : Bindable
