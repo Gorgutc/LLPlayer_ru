@@ -12,44 +12,32 @@ public sealed class BatchSubtitleProcessor
     private readonly IBatchSubtitleWriter _writer;
     private readonly BatchSubtitleOptions _options;
     private readonly IProgress<BatchSubtitleProgress>? _progress;
-    private readonly IBatchThrottle? _throttle;
 
     public BatchSubtitleProcessor(
         IBatchAsrTranscriber asrTranscriber,
         IBatchSubtitleTranslator translator,
         IBatchSubtitleWriter writer,
         BatchSubtitleOptions options,
-        IProgress<BatchSubtitleProgress>? progress = null,
-        IBatchThrottle? throttle = null)
+        IProgress<BatchSubtitleProgress>? progress = null)
     {
         _asrTranscriber = asrTranscriber;
         _translator = translator;
         _writer = writer;
         _options = options;
         _progress = progress;
-        _throttle = throttle;
     }
 
     public async Task ProcessAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
     {
-        // The throttle (when supplied) watches for user activity to suspend/resume a running ASR process and
-        // to hold the queue; Stop() must always run so nothing stays suspended.
-        _throttle?.Start();
-        try
-        {
-            if (_options.SerializeAsrAndTranslate)
-                await ProcessSerialAsync(jobs, token);
-            else
-                await ProcessPipelinedAsync(jobs, token);
-        }
-        finally
-        {
-            _throttle?.Stop();
-        }
+        if (_options.SerializeAsrAndTranslate)
+            await ProcessSerialAsync(jobs, token);
+        else
+            await ProcessPipelinedAsync(jobs, token);
     }
 
     // Background-friendly path: each file is taken fully through ASR -> translate -> save before the next
-    // file's ASR starts, so ASR and translation never run concurrently (no double GPU load).
+    // file's ASR starts, so ASR and translation never run concurrently (no double GPU load). Whether ASR runs
+    // on GPU or CPU is decided per audio chunk inside the engine (see BatchAsrTranscriber's CPU-fallback).
     private async Task ProcessSerialAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
     {
         try
@@ -70,9 +58,6 @@ public sealed class BatchSubtitleProcessor
 
                 try
                 {
-                    // Hold before starting the (GPU-heavy) ASR while the user is active.
-                    await GateAsync(token);
-
                     Report(job, BatchSubtitleStatus.RunningASR, startedAt: DateTimeOffset.Now);
 
                     IProgress<BatchAsrProgress>? asrProgress = _progress is null
@@ -89,9 +74,6 @@ public sealed class BatchSubtitleProcessor
                     }
 
                     Report(job, BatchSubtitleStatus.QueuedForTranslation, subtitleCount: result.Subtitles.Count);
-
-                    // Hold before translation too: a local LLM translator is the other GPU consumer.
-                    await GateAsync(token);
 
                     await TranslateAndSaveAsync(job, result, token);
                 }
@@ -116,12 +98,6 @@ public sealed class BatchSubtitleProcessor
                 }
             }
         }
-    }
-
-    private async Task GateAsync(CancellationToken token)
-    {
-        if (_throttle != null)
-            await _throttle.WaitWhileBlockedAsync(token);
     }
 
     private async Task ProcessPipelinedAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
@@ -159,9 +135,6 @@ public sealed class BatchSubtitleProcessor
 
                 try
                 {
-                    // Hold before starting the (GPU-heavy) ASR while the user is active.
-                    await GateAsync(token);
-
                     Report(job, BatchSubtitleStatus.RunningASR, startedAt: DateTimeOffset.Now);
 
                     IProgress<BatchAsrProgress>? asrProgress = _progress is null

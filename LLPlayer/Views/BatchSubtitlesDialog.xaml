@@ -97,21 +97,21 @@
                 <CheckBox
                     Margin="0 0 8 0"
                     VerticalAlignment="Center"
-                    Content="Pause while I work"
-                    ToolTip="Pause the batch — and suspend a running faster-whisper process — while you actively use the PC; resume once the keyboard/mouse have been idle."
-                    IsChecked="{Binding PauseWhenActive}" />
+                    Content="Run ASR on CPU while I work"
+                    ToolTip="While you actively use the PC, transcribe on CPU instead of the GPU so the GPU stays free; switches back to GPU once the keyboard/mouse have been idle. The chunk in flight finishes on its current device (nothing computed is lost). Applies to the faster-whisper engine."
+                    IsChecked="{Binding RunOnCpuWhenActive}" />
 
                 <TextBox
                     Width="40"
                     VerticalAlignment="Center"
-                    ToolTip="Seconds of keyboard/mouse idle before the batch resumes"
-                    IsEnabled="{Binding PauseWhenActive}"
+                    ToolTip="Seconds of keyboard/mouse idle before ASR switches back to the GPU"
+                    IsEnabled="{Binding RunOnCpuWhenActive}"
                     Text="{Binding IdleThresholdSeconds, UpdateSourceTrigger=LostFocus}" />
                 <TextBlock
                     Margin="4 0 0 0"
                     VerticalAlignment="Center"
                     Foreground="{DynamicResource MaterialDesignBodyLight}"
-                    Text="s idle" />
+                    Text="s idle → GPU" />
             </StackPanel>
 
             <TextBlock

@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
@@ -141,8 +141,11 @@ public sealed class AppTrayService : IDisposable
     {
         if (_activity.IsRunning)
         {
-            int pct = (int)Math.Round(_activity.Progress * 100);
-            string text = $"LLPlayer — Batch {pct}%";
+            // Reuse the detailed status the batch VM publishes (e.g. "CPU 3/7 • 42%"); fall back to a percent.
+            string detail = _activity.ProgressText;
+            string text = string.IsNullOrWhiteSpace(detail)
+                ? $"LLPlayer — Batch {(int)Math.Round(_activity.Progress * 100)}%"
+                : $"LLPlayer — {detail}";
             // NotifyIcon.Text is capped at 63 chars on older shells; the formatted string is always short,
             // so this slice (to the legacy cap) is just a defensive guard and is effectively never taken.
             return text.Length <= 63 ? text : text[..63];

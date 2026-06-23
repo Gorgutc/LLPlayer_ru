@@ -60,7 +60,7 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Pick Quit from the tray (or App ▸ Exit App) while a batch is running and confirm the app exits without a close prompt and the tray icon is removed.
 - Confirm the batch window's own taskbar button shows overall progress while running.
 - With "Smooth (no ASR/translate overlap)" on, run a batch and confirm ASR and translation never run at the same time (status moves file-by-file: RunningASR → QueuedForTranslation → Translating → Saving → Completed → next file's RunningASR), and outputs are still correct.
-- With faster-whisper (CUDA) and "Pause while I work" on, start a run and move the mouse/type: confirm the faster-whisper process is suspended within ~1s (GPU frees, summary/tray show "Paused"), and that it resumes after the idle threshold; confirm cancel works while paused.
+- With faster-whisper (CUDA) and "Run ASR on CPU while I work" on, start a run and keep using the mouse/keyboard: confirm the next chunk runs on CPU (GPU frees; the dialog summary shows "ASR on CPU (you're active)" and the tray tooltip shows a "CPU …%" marker) while progress continues, and that it switches back to GPU after the idle threshold; the chunk in flight finishes on its current device, and the transcript/output is unaffected by the switch.
 
 ## Config
 

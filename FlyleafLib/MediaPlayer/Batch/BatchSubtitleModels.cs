@@ -33,22 +33,6 @@ public sealed class BatchSubtitleOptions
     public bool SerializeAsrAndTranslate { get; init; }
 }
 
-// App-supplied hook that lets a long batch stay friendly to interactive use: it can hold the queue while the
-// user is active and suspend/resume a running ASR process. Implemented in the app layer (Win32 idle + process
-// suspend) so the engine stays UI/policy-neutral. All members must be safe no-ops when throttling is off.
-public interface IBatchThrottle
-{
-    // Begin watching for user activity so a running external ASR process can be suspended/resumed. Idempotent.
-    void Start();
-
-    // Stop watching and resume anything that was suspended. Idempotent; must run even on cancellation.
-    void Stop();
-
-    // Returns once the batch is allowed to start the next unit of work (ASR or translation); awaits while the
-    // user is active. Honours the cancellation token.
-    Task WaitWhileBlockedAsync(CancellationToken token);
-}
-
 public sealed class BatchSubtitleJob : NotifyPropertyChanged
 {
     public BatchSubtitleJob(string mediaPath, string? rootFolder = null)

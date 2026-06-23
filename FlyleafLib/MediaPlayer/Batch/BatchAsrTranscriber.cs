@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 
 namespace FlyleafLib.MediaPlayer.Batch;
 
@@ -7,10 +7,15 @@ namespace FlyleafLib.MediaPlayer.Batch;
 public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 {
     private readonly Config _batchConfig;
+    private readonly Func<bool>? _preferCpu;
 
-    public BatchAsrTranscriber(Config sourceConfig)
+    /// <param name="preferCpu">Optional per-chunk device policy for faster-whisper: when it returns true the
+    /// NEXT audio chunk is transcribed on CPU instead of GPU (the chunk in flight finishes on its current
+    /// device, so nothing computed is lost). Null = always use the configured device.</param>
+    public BatchAsrTranscriber(Config sourceConfig, Func<bool>? preferCpu = null)
     {
         _batchConfig = BatchSubtitleConfigSnapshot.Create(sourceConfig);
+        _preferCpu = preferCpu;
         ValidateAsrConfig(_batchConfig);
     }
 
@@ -24,19 +29,20 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     {
         MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig).Probe(mediaPath, token);
 
-        return TranscribeInternal(_batchConfig, audio, token, asrProgress);
+        return TranscribeInternal(_batchConfig, audio, token, asrProgress, _preferCpu);
     }
 
     private static BatchAsrResult TranscribeInternal(
         Config batchConfig,
         MediaAudioProbeResult audio,
         CancellationToken token,
-        IProgress<BatchAsrProgress>? asrProgress)
+        IProgress<BatchAsrProgress>? asrProgress,
+        Func<bool>? preferCpu)
     {
         List<SubtitleData> subtitles = [];
         Language sourceLanguage = GetInitialSourceLanguage(batchConfig);
 
-        using AudioReader reader = new(batchConfig, 0);
+        using AudioReader reader = new(batchConfig, 0, preferCpu);
         reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
         token.ThrowIfCancellationRequested();
 

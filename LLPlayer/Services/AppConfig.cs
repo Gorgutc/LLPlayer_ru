@@ -259,10 +259,11 @@ public class AppConfigBatchSubtitles : Bindable
     // Background-friendliness (default ON): keep the machine responsive while a long batch runs.
     // - SerializeAsrAndTranslate: never run ASR and translation at the same time, so a GPU ASR engine and a
     //   local LLM translator don't both saturate the GPU at once (trades a little throughput for smoothness).
-    // - PauseWhenActive: pause the batch (and suspend a running faster-whisper process) while you are actively
-    //   using the PC, resuming once the keyboard/mouse have been idle for ActiveIdleThresholdSeconds.
+    // - RunOnCpuWhenActive: while you actively use the PC, transcribe the next audio chunk on CPU (faster-whisper)
+    //   instead of the GPU, so the GPU stays free; switches back to GPU once the keyboard/mouse have been idle
+    //   for ActiveIdleThresholdSeconds. The chunk in flight finishes on its current device (no work lost).
     public bool SerializeAsrAndTranslate { get; set => Set(ref field, value); } = true;
-    public bool PauseWhenActive { get; set => Set(ref field, value); } = true;
+    public bool RunOnCpuWhenActive { get; set => Set(ref field, value); } = true;
     public int ActiveIdleThresholdSeconds { get; set => Set(ref field, value); } = 45;
 }
 

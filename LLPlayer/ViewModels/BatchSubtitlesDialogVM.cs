@@ -7,6 +7,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Shell;
+using System.Windows.Threading;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer.Batch;
 using LLPlayer.Extensions;
@@ -36,7 +37,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         Recursive = FL.Config.BatchSubtitles.Recursive;
         OverwriteExisting = FL.Config.BatchSubtitles.OverwriteExisting;
         SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
-        PauseWhenActive = FL.Config.BatchSubtitles.PauseWhenActive;
+        RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
         IdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
         _initializing = false;
 
@@ -132,21 +133,21 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
     }
 
-    // Pause the batch (and suspend a running faster-whisper process) while you actively use the PC.
-    public bool PauseWhenActive
+    // While you actively use the PC, transcribe the next chunk on CPU (faster-whisper) instead of the GPU.
+    public bool RunOnCpuWhenActive
     {
         get;
         set
         {
             if (Set(ref field, value))
             {
-                FL.Config.BatchSubtitles.PauseWhenActive = value;
+                FL.Config.BatchSubtitles.RunOnCpuWhenActive = value;
                 PersistBatchDefaults();
             }
         }
     }
 
-    // How long the keyboard/mouse must be idle before the batch resumes.
+    // How long the keyboard/mouse must be idle before ASR switches back to the GPU.
     public int IdleThresholdSeconds
     {
         get;
@@ -167,8 +168,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
     }
 
-    // True while the batch is paused because the user is active (drives the summary + tray status).
-    public bool IsPausedByUser { get; private set => Set(ref field, value); }
+    // True while the batch is running ASR on CPU because the user is active (drives the summary + tray status).
+    public bool IsRunningOnCpu { get; private set => Set(ref field, value); }
 
     public bool IsRunning
     {
@@ -387,6 +388,26 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         _activity.SetRunning(true);
         UpdateSummary();
 
+        // While the user is active, faster-whisper transcribes the next chunk on CPU so the GPU stays free.
+        // The monitor is polled per chunk inside the engine; the timer just reflects the state in the UI.
+        // Only faster-whisper supports the device switch, so the "on CPU" status applies to that engine only.
+        bool cpuFallbackApplies = FL.PlayerConfig.Subtitles.ASREngine == SubASREngineType.FasterWhisper;
+        BatchActivityMonitor monitor = new(
+            () => FL.Config.BatchSubtitles.RunOnCpuWhenActive,
+            () => FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds);
+
+        DispatcherTimer statusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+        statusTimer.Tick += (_, _) =>
+        {
+            bool onCpu = cpuFallbackApplies && IsRunning && monitor.IsUserActive();
+            if (onCpu != IsRunningOnCpu)
+            {
+                IsRunningOnCpu = onCpu;
+                UpdateSummary();
+            }
+        };
+        statusTimer.Start();
+
         bool canceled = false;
         try
         {
@@ -427,20 +448,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 UpdateSummary();
             });
 
-            // Keeps the machine responsive during a long run: suspends a running faster-whisper process and
-            // holds the queue while the user is active (config-gated). Lives only for this run.
-            BatchThrottle throttle = new(
-                enabled: () => FL.Config.BatchSubtitles.PauseWhenActive,
-                idleThresholdSeconds: () => FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds,
-                enginePath: GetFasterWhisperEnginePath,
-                onPausedChanged: paused => Utils.UI(() =>
-                {
-                    IsPausedByUser = paused;
-                    UpdateSummary();
-                }));
-
             BatchSubtitleProcessor processor = new(
-                new BatchAsrTranscriber(FL.PlayerConfig),
+                new BatchAsrTranscriber(FL.PlayerConfig, monitor.IsUserActive),
                 new BatchSubtitleTranslator(FL.PlayerConfig.Subtitles),
                 new SrtSubtitleWriter(new UTF8Encoding(FL.Config.Subs.SubsExportUTF8WithBom)),
                 new BatchSubtitleOptions
@@ -450,8 +459,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                     Utf8Bom = FL.Config.Subs.SubsExportUTF8WithBom,
                     SerializeAsrAndTranslate = SerializeAsrAndTranslate
                 },
-                progress,
-                throttle);
+                progress);
 
             await processor.ProcessAsync(workerJobs, _cts.Token);
         }
@@ -467,26 +475,15 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
         finally
         {
+            statusTimer.Stop();
             _cts?.Dispose();
             _cts = null;
             IsRunning = false;
             _runScope = null;
-            IsPausedByUser = false;
+            IsRunningOnCpu = false;
             _activity.SetRunning(false, canceled);
             UpdateSummary();
         }
-    }
-
-    // Full path of the faster-whisper engine exe, so the throttle can find & suspend that child process while
-    // you work. Returns null for whisper.cpp (in-process; only the queue hold applies, not a process suspend).
-    private string? GetFasterWhisperEnginePath()
-    {
-        var subs = FL.PlayerConfig.Subtitles;
-        if (subs.ASREngine != SubASREngineType.FasterWhisper)
-            return null;
-
-        FasterWhisperConfig fw = subs.FasterWhisperConfig;
-        return fw.UseManualEngine ? fw.ManualEnginePath : FasterWhisperConfig.DefaultEnginePath;
     }
 
     public DelegateCommand CmdCancel => field ??= new DelegateCommand(() =>
@@ -535,7 +532,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             persisted.BatchSubtitles.Recursive = FL.Config.BatchSubtitles.Recursive;
             persisted.BatchSubtitles.OverwriteExisting = FL.Config.BatchSubtitles.OverwriteExisting;
             persisted.BatchSubtitles.SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
-            persisted.BatchSubtitles.PauseWhenActive = FL.Config.BatchSubtitles.PauseWhenActive;
+            persisted.BatchSubtitles.RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
             persisted.BatchSubtitles.ActiveIdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
             persisted.Save(App.AppConfigPath);
         }
@@ -633,8 +630,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 or BatchSubtitleStatus.Saving);
 
         int included = Jobs.Count(job => job.Include);
-        string pausedPrefix = IsRunning && IsPausedByUser ? "⏸ Paused (you're active) — " : "";
-        SummaryText = $"{pausedPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
+        string cpuPrefix = IsRunning && IsRunningOnCpu ? "🖥 ASR on CPU (you're active) — " : "";
+        SummaryText = $"{cpuPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
 
         OnPropertyChanged(nameof(CanRetryFailed));
 
@@ -682,8 +679,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
         double overall = Math.Clamp(sum / total, 0, 1);
         OverallProgress = overall;
-        TaskbarProgressState = IsPausedByUser ? TaskbarItemProgressState.Paused : TaskbarItemProgressState.Normal;
-        string prefix = IsPausedByUser ? "⏸ " : "";
+        // Still progressing (on CPU) when active — Normal, not Paused.
+        TaskbarProgressState = TaskbarItemProgressState.Normal;
+        string prefix = IsRunningOnCpu ? "CPU " : "";
         _activity.ReportProgress(overall, $"{prefix}{done}/{total} • {(int)Math.Round(overall * 100)}%");
     }
 

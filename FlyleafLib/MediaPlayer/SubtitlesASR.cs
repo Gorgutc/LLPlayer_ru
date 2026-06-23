@@ -347,6 +347,7 @@ public class AudioReader : IDisposable
 {
     private readonly Config _config;
     private readonly int _subIndex;
+    private readonly Func<bool>? _preferCpu;
 
     private Demuxer? _demuxer;
     private AudioDecoder? _decoder;
@@ -360,10 +361,14 @@ public class AudioReader : IDisposable
 
     private readonly LogHandler Log;
 
-    public AudioReader(Config config, int subIndex)
+    /// <param name="preferCpu">Optional per-chunk device policy for the faster-whisper engine (batch only):
+    /// when it returns true a chunk is transcribed on CPU instead of the configured GPU device. Null keeps
+    /// the configured device (the interactive ASR path passes nothing, so its behaviour is unchanged).</param>
+    public AudioReader(Config config, int subIndex, Func<bool>? preferCpu = null)
     {
         _config = config;
         _subIndex = subIndex;
+        _preferCpu = preferCpu;
         Log = new LogHandler(("[#1]").PadRight(8, ' ') + " [AudioReader   ] ");
     }
 
@@ -476,7 +481,7 @@ public class AudioReader : IDisposable
             await using IASRService asrService = _config.Subtitles.ASREngine switch
             {
                 SubASREngineType.WhisperCpp => new WhisperCppASRService(_config),
-                SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config),
+                SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config, _preferCpu),
                 _ => throw new InvalidOperationException()
             };
 
@@ -1079,11 +1084,16 @@ public partial class FasterWhisperASRService : IASRService
 {
     private readonly Config _config;
 
-    public FasterWhisperASRService(Config config)
+    public FasterWhisperASRService(Config config, Func<bool>? preferCpu = null)
     {
         _config = config;
+        _preferCpu = preferCpu;
 
         _cmdBase = BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig);
+        // CPU variant for the per-chunk background fallback (batch only). Built once; selected per chunk in Do.
+        _cmdBaseCpu = preferCpu == null
+            ? _cmdBase
+            : BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig, forceCpu: true);
 
         if (_config.Subtitles.FasterWhisperConfig.IsEnglishModel)
         {
@@ -1104,6 +1114,8 @@ public partial class FasterWhisperASRService : IASRService
     }
 
     private readonly Command _cmdBase;
+    private readonly Command _cmdBaseCpu;
+    private readonly Func<bool>? _preferCpu;
     private readonly bool _isLanguageDetect;
     private readonly string _manualLanguage;
     private string? _detectedLanguage;
@@ -1126,7 +1138,7 @@ public partial class FasterWhisperASRService : IASRService
         return ValueTask.CompletedTask;
     }
 
-    public static Command BuildCommand(FasterWhisperConfig config, WhisperConfig commonConfig)
+    public static Command BuildCommand(FasterWhisperConfig config, WhisperConfig commonConfig, bool forceCpu = false)
     {
         string tempFolder = Path.GetTempPath();
         string enginePath = config.UseManualEngine ? config.ManualEnginePath! : FasterWhisperConfig.DefaultEnginePath;
@@ -1160,6 +1172,11 @@ public partial class FasterWhisperASRService : IASRService
             arguments += $" {config.ExtraArguments}";
         }
 
+        if (forceCpu)
+        {
+            arguments = ForceCpuDevice(arguments);
+        }
+
         Command cmd = Cli.Wrap(enginePath)
             .WithArguments(arguments)
             .WithValidation(CommandResultValidation.None);
@@ -1171,6 +1188,44 @@ public partial class FasterWhisperASRService : IASRService
         }
 
         return cmd;
+    }
+
+    // Rewrites the faster-whisper args to run on CPU for the background fallback, keeping the rest of the
+    // user's flags. Swaps the device to cpu and fixes GPU-only compute types (float16 / int8_float16 are not
+    // valid on CPU in CTranslate2; map them to float32 / int8). Handles both the space and '=' arg forms
+    // (--device cuda / --device=cuda). Rewrites only the parts OUTSIDE double-quoted segments, so a quoted
+    // value such as --initial_prompt "..." is never touched. The two compute_type rules are independent
+    // (each is anchored to --compute_type, so the float16 rule cannot match an int8_float16 token).
+    private static string ForceCpuDevice(string arguments)
+    {
+        string[] segments = arguments.Split('"');
+        bool anyDevice = false;
+
+        // Even indices are outside double quotes; odd indices are inside a quoted value (leave untouched).
+        for (int i = 0; i < segments.Length; i += 2)
+        {
+            string seg = segments[i];
+
+            if (Regex.IsMatch(seg, @"--device[\s=]+\S+", RegexOptions.IgnoreCase))
+            {
+                anyDevice = true;
+                seg = Regex.Replace(seg, @"--device[\s=]+\S+", "--device cpu", RegexOptions.IgnoreCase);
+            }
+
+            seg = Regex.Replace(seg, @"--compute_type[\s=]+int8_float16", "--compute_type int8", RegexOptions.IgnoreCase);
+            seg = Regex.Replace(seg, @"--compute_type[\s=]+float16", "--compute_type float32", RegexOptions.IgnoreCase);
+
+            segments[i] = seg;
+        }
+
+        string result = string.Join('"', segments);
+
+        if (!anyDevice)
+        {
+            result = $"{result} --device cpu";
+        }
+
+        return result.Trim();
     }
 
     private static TimeSpan ParseTime(ReadOnlySpan<char> time, bool isLong)
@@ -1230,7 +1285,11 @@ public partial class FasterWhisperASRService : IASRService
             args.Add(tempFilePath);
             string addedArgs = args.Build();
 
-            Command cmd = _cmdBase.WithArguments($"{_cmdBase.Arguments} {addedArgs}");
+            // Per-chunk device selection: when the app reports the user is active, this chunk runs on CPU so
+            // the GPU stays free. The chunk in flight always finishes on its chosen device — switching only
+            // affects the next chunk, so nothing already computed is lost.
+            Command baseCmd = _preferCpu?.Invoke() == true ? _cmdBaseCpu : _cmdBase;
+            Command cmd = baseCmd.WithArguments($"{baseCmd.Arguments} {addedArgs}");
 
             await foreach (var cmdEvent in cmd.ListenAsync(Encoding.Default, Encoding.Default, forceCts.Token, token))
             {
