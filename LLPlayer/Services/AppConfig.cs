@@ -266,6 +266,12 @@ public class AppConfigBatchSubtitles : Bindable
     public bool RunOnCpuWhenActive { get; set => Set(ref field, value); } = true;
     public int ActiveIdleThresholdSeconds { get; set => Set(ref field, value); } = 45;
 
+    // Default ON: when a file has a Russian-tagged audio track, transcribe THAT track so Whisper produces
+    // Russian subtitles directly and translation is skipped (no ru->ru). Files without a Russian track fall
+    // back to the configured language order and are translated as before. A per-file manual override in the
+    // batch list always wins. Additive/absent-defaulting (existing configs keep their saved value).
+    public bool PreferRussianAudio { get; set => Set(ref field, value); } = true;
+
     // AI dubbing: after each video's .ru.srt is written, also render a Russian dub audio track
     // (video.ru.dub.flac) beside it via the local TTS sidecar. Additive, default OFF (opt-in). When on,
     // the batch runs serialized so the GPU TTS render never overlaps the next file's ASR.

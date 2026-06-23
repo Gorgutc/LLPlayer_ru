@@ -39,6 +39,10 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             .Where(s => !s.IsTranslated && !string.IsNullOrWhiteSpace(s.Text))
             .ToList();
 
+        // When re-segmentation is on, keep the translated text within the same at-most-2-line shape as the
+        // (already re-segmented) source cue. Null = leave the translation as the model returned it.
+        SubtitleSegmentOptions? wrapOpt = _config.ResegmentSubtitles ? _config.SubtitleSegmentOptions : null;
+
         int concurrency = _config.TranslateMaxConcurrency;
         if (concurrency > 1 &&
             service.ServiceType.IsLLM() &&
@@ -52,7 +56,7 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             foreach (SubtitleData sub in translateSubs)
             {
                 token.ThrowIfCancellationRequested();
-                await TranslateSubAsync(service, sub, token);
+                await TranslateSubAsync(service, sub, wrapOpt, token);
             }
 
             return;
@@ -67,12 +71,13 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         await Parallel.ForEachAsync(
             translateSubs,
             parallelOptions,
-            async (sub, ct) => await TranslateSubAsync(service, sub, ct));
+            async (sub, ct) => await TranslateSubAsync(service, sub, wrapOpt, ct));
     }
 
     private static async Task TranslateSubAsync(
         ITranslateService service,
         SubtitleData sub,
+        SubtitleSegmentOptions? wrapOpt,
         CancellationToken token)
     {
         Debug.Assert(!string.IsNullOrWhiteSpace(sub.Text));
@@ -90,7 +95,9 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
                 return;
             }
 
-            sub.TranslatedText = translated;
+            sub.TranslatedText = wrapOpt != null
+                ? SubtitleSegmenter.WrapTwoLines(translated, wrapOpt)
+                : translated;
         }
         // A per-line CONTENT failure (a degenerate/looping reply, a truncated reply, or an empty/null reply
         // from a server that DID respond) must not fail the whole file: leave the source text for this single

@@ -8,14 +8,27 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 {
     private readonly Config _batchConfig;
     private readonly Func<bool>? _preferCpu;
+    private readonly bool _preferRussianAudio;
+    private readonly Func<string, int?>? _forcedStreamIndexResolver;
 
     /// <param name="preferCpu">Optional per-chunk device policy for faster-whisper: when it returns true the
     /// NEXT audio chunk is transcribed on CPU instead of GPU (the chunk in flight finishes on its current
     /// device, so nothing computed is lost). Null = always use the configured device.</param>
-    public BatchAsrTranscriber(Config sourceConfig, Func<bool>? preferCpu = null)
+    /// <param name="preferRussianAudio">When true, a file that has a Russian-tagged audio track has that track
+    /// transcribed (so ASR yields Russian and translation is skipped) before falling back to the configured
+    /// language order.</param>
+    /// <param name="forcedStreamIndexResolver">Optional per-file manual audio-track override: given the media
+    /// path, returns the audio stream index to force (or null for automatic selection).</param>
+    public BatchAsrTranscriber(
+        Config sourceConfig,
+        Func<bool>? preferCpu = null,
+        bool preferRussianAudio = false,
+        Func<string, int?>? forcedStreamIndexResolver = null)
     {
         _batchConfig = BatchSubtitleConfigSnapshot.Create(sourceConfig);
         _preferCpu = preferCpu;
+        _preferRussianAudio = preferRussianAudio;
+        _forcedStreamIndexResolver = forcedStreamIndexResolver;
         ValidateAsrConfig(_batchConfig);
     }
 
@@ -27,7 +40,9 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 
     private BatchAsrResult Transcribe(string mediaPath, CancellationToken token, IProgress<BatchAsrProgress>? asrProgress)
     {
-        MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig).Probe(mediaPath, token);
+        int? forced = _forcedStreamIndexResolver?.Invoke(mediaPath);
+        MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig)
+            .Probe(mediaPath, token, forced, _preferRussianAudio);
 
         return TranscribeInternal(_batchConfig, audio, token, asrProgress, _preferCpu);
     }
@@ -80,14 +95,35 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         }, token);
         token.ThrowIfCancellationRequested();
 
-        subtitles = subtitles
-            .OrderBy(s => s.StartTime)
-            .Select((s, index) =>
-            {
-                s.Index = index;
-                return s;
-            })
-            .ToList();
+        subtitles = subtitles.OrderBy(s => s.StartTime).ToList();
+
+        // Re-segment over-long Whisper cues into short, at-most-2-line cues (proportional timings) so a single
+        // subtitle does not fill the frame. Engine-agnostic, gated by the config toggle. Cues that already fit
+        // pass through unchanged.
+        if (batchConfig.Subtitles.ResegmentSubtitles)
+        {
+            SubtitleSegmentOptions segOpt = batchConfig.Subtitles.SubtitleSegmentOptions;
+            subtitles = subtitles
+                .SelectMany(s => SubtitleSegmenter
+                    .Resegment(s.Text ?? string.Empty, s.StartTime, s.EndTime, segOpt)
+                    .Select(c => new SubtitleData
+                    {
+                        Text = c.Text,
+                        StartTime = c.Start,
+                        EndTime = c.End,
+#if DEBUG
+                        ChunkNo = s.ChunkNo,
+                        StartTimeChunk = s.StartTimeChunk,
+                        EndTimeChunk = s.EndTimeChunk,
+#endif
+                    }))
+                .ToList();
+        }
+
+        for (int i = 0; i < subtitles.Count; i++)
+        {
+            subtitles[i].Index = i;
+        }
 
         return new BatchAsrResult(subtitles, sourceLanguage);
     }
