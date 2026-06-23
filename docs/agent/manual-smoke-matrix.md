@@ -17,6 +17,9 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Enable primary and secondary subtitles together.
 - Use subtitle seek, sidebar current/previous/next behavior, and sidebar search.
 - Confirm overlay subtitle placement, separator, sizing, and bitmap positioning.
+- Place a sidecar subtitle file beside a video (e.g. `movie.ru.srt`, `movie.en.ass`), open the video, and confirm it is auto-detected and appears under External files with its language/source.
+- Open the right-click Subtitles ▸ Subtitle Tracks menu and confirm BOTH Primary (1st) and Secondary (2nd) submenus list Embedded / External files / ASR; assign tracks to each slot.
+- Open the sidebar "Subtitle tracks" quick switcher and confirm it lists embedded + external + ASR with language/source; assign ① primary / ② secondary and use per-slot Off; confirm the checked state follows the active selection.
 
 ## Sidebar And Word Actions
 
@@ -52,6 +55,10 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Include a no-audio video and confirm it fails in the queue while later files continue.
 - Open a generated `video.ru.srt` in LLPlayer and confirm playback/sidebar/subtitle UI still works.
 - Restart LLPlayer and confirm batch last folder, recursive scan, and overwrite policy are restored.
+- Start a batch run, then CLOSE the main video window: confirm the app does not quit, a tray icon appears showing overall progress, the batch keeps running, and `video.ru.srt` files still appear; double-click the tray icon (or pick Open) to bring the player back.
+- With the player minimized to the tray, double-click a video row in the batch list and confirm the player reopens and plays that file (with its `video.ru.srt` picked up).
+- Pick Quit from the tray (or App ▸ Exit App) while a batch is running and confirm the app exits without a close prompt and the tray icon is removed.
+- Confirm the batch window's own taskbar button shows overall progress while running.
 
 ## Config
 
@@ -60,6 +67,7 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Check key binding edit/apply/load workflows when shortcut code changes.
 - In Settings Keys, add/clone/delete a row, capture a key, commit with Enter, create and clear a duplicate, confirm Apply is blocked only while duplicates exist.
 - Open CheatSheet with F1, switch Keyboard/Mouse tabs, search by shortcut/description, and execute an action button.
+- On a fresh config (no `LLPlayer.Config.json`), confirm the Win11 Mica backdrop is on by default (Settings ▸ Themes shows it checked); toggle it off, `Save & Close`, restart, and confirm it stays off (the migration does not re-enable a saved-off value). On Windows 10 confirm the app still launches normally (Mica no-ops).
 
 ## Packaging
 

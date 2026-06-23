@@ -2,6 +2,11 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using LLPlayer.ViewModels;
 
@@ -20,7 +25,55 @@ public partial class BatchSubtitlesDialog : UserControl
         DataContext = _vm;
 
         _vm.PropertyChanged += OnVmPropertyChanged;
+        Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+    }
+
+    // Show overall batch progress on this dialog window's own taskbar button (so it is visible even when the
+    // main player window is closed / minimized to the tray).
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        Window? win = Window.GetWindow(this);
+        if (win == null)
+            return;
+
+        win.TaskbarItemInfo ??= new TaskbarItemInfo();
+        BindingOperations.SetBinding(win.TaskbarItemInfo, TaskbarItemInfo.ProgressValueProperty,
+            new Binding(nameof(BatchSubtitlesDialogVM.OverallProgress)) { Source = _vm });
+        BindingOperations.SetBinding(win.TaskbarItemInfo, TaskbarItemInfo.ProgressStateProperty,
+            new Binding(nameof(BatchSubtitlesDialogVM.TaskbarProgressState)) { Source = _vm });
+    }
+
+    // Double-click a video row to play it in the main player. Ignored when the click lands on the row's
+    // interactive content (the include checkbox or the retry button).
+    private void OnJobDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject src)
+            return;
+
+        // Only react to double-clicks on an actual data row — not group/column headers or empty space (the
+        // list is grouped, so those regions are reachable) — and not on the row's interactive controls
+        // (include checkbox / retry button).
+        if (FindAncestor<DataGridRow>(src) == null || FindAncestor<ButtonBase>(src) != null)
+            return;
+
+        if (_vm.SelectedJob is { } job)
+            _vm.CmdOpenInPlayer.Execute(job);
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? node) where T : DependencyObject
+    {
+        while (node != null)
+        {
+            if (node is T match)
+                return match;
+
+            node = node is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(node)
+                : LogicalTreeHelper.GetParent(node);
+        }
+
+        return null;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

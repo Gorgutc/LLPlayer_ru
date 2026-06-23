@@ -43,6 +43,17 @@ public class FlyleafManager
 
                 if (config.Version != App.Version)
                 {
+                    // One-shot default migrations keyed on the config's previous version, applied before the
+                    // version is stamped + saved below (so they run at most once per upgrade).
+                    // 0.3.2: Mica backdrop now defaults ON. Flip it on for configs created before 0.3.2; the
+                    // value is then persisted at 0.3.2, so a user who later turns it off is respected. An
+                    // empty/unparseable version (configs from before version stamping was added) is treated as
+                    // older than 0.3.2 so the flip is applied consistently rather than relying on the default.
+                    if (!Version.TryParse(config.Version, out Version? prev) || prev < new Version(0, 3, 2))
+                    {
+                        config.MicaBackdrop = true;
+                    }
+
                     config.Version = App.Version;
                     config.Save(App.AppConfigPath);
                 }

@@ -44,6 +44,10 @@ public partial class App : PrismApplication
             .Register<Player>(FlyleafLoader.CreateFlyleafPlayer)
             .RegisterSingleton<FlyleafManager>()
             .RegisterSingleton<AccentColorService>()
+            // Background batch activity + system-tray presence: keep the app alive in the tray when the main
+            // window is closed during a batch run (see AppTrayService / BatchActivityService).
+            .RegisterSingleton<BatchActivityService>()
+            .RegisterSingleton<AppTrayService>()
             .RegisterSingleton<IDialogService, ExtendedDialogService>();
 
         // Single app-wide snackbar queue (notifications + actionable config errors), hosted in FlyleafOverlay.
@@ -114,6 +118,33 @@ public partial class App : PrismApplication
         {
             Log.Error($"Failed to apply startup theme: {ex}");
         }
+
+        // Create the tray service now (after the shell exists) so it can subscribe to batch activity. It is
+        // what keeps the app alive in the tray when the main window is closed mid-batch. The tray icon stays
+        // hidden until it is actually needed. Cosmetic infra — must never crash startup.
+        try
+        {
+            Container.Resolve<AppTrayService>();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to initialize tray service: {ex}");
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // Remove the tray icon on exit so it does not linger in the notification area.
+        try
+        {
+            Container.Resolve<AppTrayService>().Dispose();
+        }
+        catch
+        {
+            // best-effort tray cleanup
+        }
+
+        base.OnExit(e);
     }
 
     private void App_OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

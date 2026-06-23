@@ -4,7 +4,7 @@ This document freezes the current WPF/UI design decisions from `main`.
 
 ## Visual Style
 
-- Dark MaterialDesign2 theme is the default. Light and Follow-Windows theme modes, a Win11 Mica backdrop, and Windows accent-color sync are opt-in (Settings ▸ Themes); all default off so the dark MaterialDesign2 look is the shipped default. Theme mode applies live via `PaletteHelper`; Mica is restart-to-apply and, due to the FlyleafHost DirectX child-HWND airspace, only affects chrome/borders (never the video surface).
+- Dark MaterialDesign2 theme is the default. Light and Follow-Windows theme modes and Windows accent-color sync are opt-in (Settings ▸ Themes) and default off, so the dark MaterialDesign2 look is the shipped default. The Win11 Mica backdrop defaults **on** as of 0.3.2 (toggle in Settings ▸ Themes); theme mode applies live via `PaletteHelper`, while Mica is restart-to-apply and, due to the FlyleafHost DirectX child-HWND airspace, only affects chrome/borders (never the video surface) and gracefully no-ops on Windows 10 / non-Win11.
 - App colors originate from `App.xaml` and app theme settings.
 - MaterialDesign PackIcon is the primary icon language for toolbar and menu actions.
 - Resource dictionaries under `LLPlayer/Resources` and `LLPlayer/Themes` are shared UI infrastructure, not per-view decoration.
@@ -17,6 +17,7 @@ This document freezes the current WPF/UI design decisions from `main`.
 - Sidebar can be left or right, has configurable width, and collapses with its `GridSplitter`.
 - Fullscreen/video focus workflows must not be broken by dialogs or sidebar search.
 - Taskbar progress and play/pause thumbnail action are owned by `MainWindowVM`.
+- App shutdown is `OnExplicitShutdown`. `MainWindow.OnClosing` diverts to the system tray (hides the window, pauses playback, keeps the process + player alive) instead of quitting **only while a batch is active** (running or its window open); otherwise the main window closes, the player is disposed, and the app shuts down. `AppTrayService` (a WinForms `NotifyIcon`, no extra dependency) and `BatchActivityService` own this: the tray icon appears only when needed (a batch is running or the window is hidden), shows overall batch progress, exposes Open LLPlayer / Batch subtitles… / Quit, restores the player on double-click, and is removed on exit. Explicit quits (tray Quit, App ▸ Exit App) route through `BatchActivityService.RequestQuit` so an in-flight batch is cancelled without a close prompt.
 - A single app-wide MaterialDesign `Snackbar` (top-centre, hosted in `FlyleafOverlay`) carries non-blocking notifications and actionable config-error deep-links; ASR completion also enqueues a short confirmation here. It must not overlap the bottom `FlyleafBar` or the subtitle interaction area.
 
 ## Dialogs
@@ -67,8 +68,9 @@ A search box above the TreeView filters sections by label/key (hiding non-matche
 
 ## Subtitle UI
 
-- Sidebar toolbar includes primary/secondary toggle, font size, spoiler mask, original/translated toggle, download/export/batch subtitles, side swap, and search.
-- Batch subtitles is a non-modal singleton dialog opened through `AppActions`. It owns folder selection, scan, queue progress, cancel, and output-folder access without redesigning existing subtitle settings or sidebar behavior.
+- Sidebar toolbar includes primary/secondary toggle, a subtitle-tracks quick switcher, font size, spoiler mask, original/translated toggle, download/export/batch subtitles, side swap, and search.
+- Subtitle track switching is surfaced in two ways over the same engine streams + `OpenSubtitles`/`SubtitlesOff` commands: (1) the right-click Subtitles ▸ Subtitle Tracks menu exposes BOTH the Primary (1st) and Secondary (2nd) slots (previously only primary), each grouping Embedded (in video) / External files / ASR with source icons; (2) the sidebar toolbar "Subtitle tracks" `PopupBox` lists every available track (embedded, external files auto-detected beside the video or downloaded, and ASR) with its language + source and one-click ① primary / ② secondary assignment plus per-slot Off. Both are additive over the frozen dual-subtitle model and must not bypass `SubtitlesSelectedHelper`.
+- Batch subtitles is a non-modal singleton dialog opened through `AppActions`. It owns folder selection, scan, queue progress, cancel, and output-folder access without redesigning existing subtitle settings or sidebar behavior. A batch run is decoupled from the player: it keeps running when the main video window is closed (the app minimizes to the system tray instead of quitting — see Main Window Layout), shows overall progress on its own taskbar button + the tray icon, and a video row can be double-clicked to play that file in the main player (restoring it from the tray if hidden).
 - Sidebar list remains virtualized/recycling and supports text and bitmap templates.
 - Search behavior: Ctrl+F activates search, Esc clears, Enter/Shift+Enter navigate matches, focus returns to video after clear.
 - Overlay supports primary/secondary text, bitmap absolute positioning, separator, word-click popups, and separate primary/secondary hover colors.

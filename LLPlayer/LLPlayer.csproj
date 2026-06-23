@@ -7,15 +7,27 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- Enabled for the System.Windows.Forms.NotifyIcon system-tray icon (batch background progress).
+         WinForms was already pulled in transitively via FlyleafLib; this declares it on the app project. -->
+    <UseWindowsForms>true</UseWindowsForms>
     <Authors>umlx5h</Authors>
     <Copyright>umlx5h © 2026</Copyright>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
     <ApplicationIcon>LLPlayer.ico</ApplicationIcon>
     <Description>The media player for language learning.</Description>
     <PackageProjectUrl>https://llplayer.com</PackageProjectUrl>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
+
+  <!-- UseWindowsForms (for the tray NotifyIcon) injects implicit global usings for System.Windows.Forms and
+       System.Drawing, which collide with WPF types (Binding/ContextMenu/UserControl/TextBox/Pen/KeyEventArgs)
+       across the existing code. Drop those implicit usings; AppTrayService references them explicitly (a
+       WinForms alias + a scoped System.Drawing using) so WinForms stays available without the global clash. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Flyleaf.FFmpeg.Bindings" Version="8.0.1" />

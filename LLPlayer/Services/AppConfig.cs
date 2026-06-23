@@ -114,8 +114,11 @@ public class AppConfig : Bindable
         }
     }
 
-    /// <summary>Opt-in: request a Win11 Mica window backdrop (applied at startup). Default off.</summary>
-    public bool MicaBackdrop { get; set => Set(ref field, value); }
+    /// <summary>Request a Win11 Mica window backdrop (applied at startup; chrome/borders only — the DirectX
+    /// video surface is unaffected by airspace). Default ON as of 0.3.2; existing pre-0.3.2 configs are
+    /// migrated once in <see cref="FlyleafManager"/> (a user who later turns it off is then respected).
+    /// Gracefully no-ops on Windows 10 / non-Win11.</summary>
+    public bool MicaBackdrop { get; set => Set(ref field, value); } = true;
 
     /// <summary>One-shot flag: set true after the first-run ASR onboarding hint is shown (E6). Persisted.</summary>
     public bool AsrOnboardingShown { get; set => Set(ref field, value); }

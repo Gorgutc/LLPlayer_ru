@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -166,10 +167,62 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
+    private AppTrayService? _tray;
+    private bool _playerDisposed;
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel)
+        {
+            return;
+        }
+
+        // If a batch is running (or its window is open), don't quit: hide to the tray and keep the app — and
+        // the batch — alive. The player is NOT disposed on this path so it can be brought back instantly.
+        try
+        {
+            _tray ??= ((App)Application.Current).Container.Resolve<AppTrayService>();
+            if (_tray.TryMinimizeToTrayOnClose())
+            {
+                e.Cancel = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            // Never let tray/lifetime logic block a normal close.
+            System.Diagnostics.Debug.WriteLine($"Minimize-to-tray on close failed: {ex}");
+        }
+    }
+
     protected override void OnClosed(EventArgs e)
     {
-        _accent?.Dispose();
-        base.OnClosed(e);
+        // Reached only on a real close (the minimize-to-tray path cancels Closing above).
+        // ShutdownMode is OnExplicitShutdown, so closing the (real) main window must end the app itself —
+        // the Shutdown() in finally is the single auto-quit guarantee, so it must run even if a disposal throws.
+        try
+        {
+            try { _accent?.Dispose(); } catch { /* cosmetic; ignore */ }
+
+            if (!_playerDisposed)
+            {
+                _playerDisposed = true;
+                try
+                {
+                    ((App)Application.Current).Container.Resolve<FlyleafManager>().Player.Dispose();
+                }
+                catch
+                {
+                    // best-effort; teardown must not throw
+                }
+            }
+
+            base.OnClosed(e);
+        }
+        finally
+        {
+            Application.Current.Shutdown();
+        }
     }
     #endregion
 

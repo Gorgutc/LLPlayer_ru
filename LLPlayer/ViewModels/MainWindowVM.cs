@@ -225,8 +225,6 @@ public class MainWindowVM : Bindable
         }
     });
 
-    public DelegateCommand CmdOnClosing => field ??= new(() =>
-    {
-        FL.Player.Dispose();
-    });
+    // NOTE: window-close handling (dispose player, divert to tray during a batch, explicit app shutdown)
+    // lives in MainWindow.OnClosing/OnClosed so it can cancel the close; see MainWindow.xaml.cs.
 }
