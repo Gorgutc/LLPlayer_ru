@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using FlyleafLib.MediaPlayer.Translation;
 
 namespace FlyleafLib.MediaPlayer.Batch;
@@ -24,6 +24,13 @@ public sealed class BatchSubtitleOptions
     public bool OverwriteExisting { get; init; }
     public bool Utf8Bom { get; init; } = true;
     public TargetLanguage TargetLanguage { get; init; } = TargetLanguage.Russian;
+
+    // Background-friendly mode: process each file fully (ASR -> translate -> save) before starting the next
+    // file's ASR, instead of overlapping translation of one file with ASR of the next. This guarantees ASR
+    // and translation never run at the same time, so a GPU ASR engine and a local-LLM translator do not both
+    // saturate the GPU at once. Default false (library default = the faster pipelined behaviour); the app
+    // turns it on via config.
+    public bool SerializeAsrAndTranslate { get; init; }
 }
 
 public sealed class BatchSubtitleJob : NotifyPropertyChanged

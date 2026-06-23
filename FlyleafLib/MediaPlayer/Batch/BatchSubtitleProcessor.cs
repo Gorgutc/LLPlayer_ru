@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Threading.Channels;
 
 namespace FlyleafLib.MediaPlayer.Batch;
@@ -28,6 +28,79 @@ public sealed class BatchSubtitleProcessor
     }
 
     public async Task ProcessAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
+    {
+        if (_options.SerializeAsrAndTranslate)
+            await ProcessSerialAsync(jobs, token);
+        else
+            await ProcessPipelinedAsync(jobs, token);
+    }
+
+    // Background-friendly path: each file is taken fully through ASR -> translate -> save before the next
+    // file's ASR starts, so ASR and translation never run concurrently (no double GPU load). Whether ASR runs
+    // on GPU or CPU is decided per audio chunk inside the engine (see BatchAsrTranscriber's CPU-fallback).
+    private async Task ProcessSerialAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
+    {
+        try
+        {
+            foreach (BatchSubtitleJob job in jobs)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    MarkCanceled(job);
+                    continue;
+                }
+
+                if (!_options.OverwriteExisting && SubtitleOutputPathBuilder.OutputExists(job.OutputPath))
+                {
+                    Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
+                    continue;
+                }
+
+                try
+                {
+                    Report(job, BatchSubtitleStatus.RunningASR, startedAt: DateTimeOffset.Now);
+
+                    IProgress<BatchAsrProgress>? asrProgress = _progress is null
+                        ? null
+                        : new AsrProgressForwarder(job, _progress);
+
+                    BatchAsrResult result = await _asrTranscriber.TranscribeAsync(job.MediaPath, token, asrProgress);
+                    token.ThrowIfCancellationRequested();
+
+                    if (result.Subtitles.Count == 0)
+                    {
+                        Report(job, BatchSubtitleStatus.Skipped, error: "No speech detected.", completedAt: DateTimeOffset.Now);
+                        continue;
+                    }
+
+                    Report(job, BatchSubtitleStatus.QueuedForTranslation, subtitleCount: result.Subtitles.Count);
+
+                    await TranslateAndSaveAsync(job, result, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    MarkCanceled(job);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    MarkFailed(job, ex);
+                }
+            }
+        }
+        finally
+        {
+            if (token.IsCancellationRequested)
+            {
+                foreach (BatchSubtitleJob pending in jobs.Where(j => j.Status == BatchSubtitleStatus.Pending))
+                {
+                    MarkCanceled(pending);
+                }
+            }
+        }
+    }
+
+    private async Task ProcessPipelinedAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
     {
         Channel<(BatchSubtitleJob Job, BatchAsrResult Result)> channel =
             Channel.CreateBounded<(BatchSubtitleJob, BatchAsrResult)>(
@@ -117,30 +190,7 @@ public sealed class BatchSubtitleProcessor
         {
             try
             {
-                token.ThrowIfCancellationRequested();
-
-                if (result.SourceLanguage == Language.Unknown)
-                    throw new InvalidOperationException("ASR could not detect source language.");
-
-                List<SubtitleData> subtitles = result.Subtitles
-                    .OrderBy(s => s.StartTime)
-                    .Select((s, index) =>
-                    {
-                        s.Index = index;
-                        return s;
-                    })
-                    .ToList();
-
-                if (result.SourceLanguage.ISO6391 != TargetLanguageRussianIso)
-                {
-                    Report(job, BatchSubtitleStatus.Translating);
-                    await _translator.TranslateAsync(subtitles, result.SourceLanguage, token);
-                }
-
-                Report(job, BatchSubtitleStatus.Saving);
-                await _writer.WriteAsync(subtitles, job.OutputPath, _options.OverwriteExisting, token);
-
-                Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
+                await TranslateAndSaveAsync(job, result, token);
             }
             catch (OperationCanceledException)
             {
@@ -151,6 +201,36 @@ public sealed class BatchSubtitleProcessor
                 MarkFailed(job, ex);
             }
         }
+    }
+
+    // Translate (unless already Russian) then write the .ru.srt. Throws on error/cancel; callers map that to
+    // Failed/Canceled. Shared by the pipelined worker and the serial path.
+    private async Task TranslateAndSaveAsync(BatchSubtitleJob job, BatchAsrResult result, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+
+        if (result.SourceLanguage == Language.Unknown)
+            throw new InvalidOperationException("ASR could not detect source language.");
+
+        List<SubtitleData> subtitles = result.Subtitles
+            .OrderBy(s => s.StartTime)
+            .Select((s, index) =>
+            {
+                s.Index = index;
+                return s;
+            })
+            .ToList();
+
+        if (result.SourceLanguage.ISO6391 != TargetLanguageRussianIso)
+        {
+            Report(job, BatchSubtitleStatus.Translating);
+            await _translator.TranslateAsync(subtitles, result.SourceLanguage, token);
+        }
+
+        Report(job, BatchSubtitleStatus.Saving);
+        await _writer.WriteAsync(subtitles, job.OutputPath, _options.OverwriteExisting, token);
+
+        Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
     }
 
     private static string TargetLanguageRussianIso => "ru";

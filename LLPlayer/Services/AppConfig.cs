@@ -114,8 +114,11 @@ public class AppConfig : Bindable
         }
     }
 
-    /// <summary>Opt-in: request a Win11 Mica window backdrop (applied at startup). Default off.</summary>
-    public bool MicaBackdrop { get; set => Set(ref field, value); }
+    /// <summary>Request a Win11 Mica window backdrop (applied at startup; chrome/borders only — the DirectX
+    /// video surface is unaffected by airspace). Default ON as of 0.3.2; existing pre-0.3.2 configs are
+    /// migrated once in <see cref="FlyleafManager"/> (a user who later turns it off is then respected).
+    /// Gracefully no-ops on Windows 10 / non-Win11.</summary>
+    public bool MicaBackdrop { get; set => Set(ref field, value); } = true;
 
     /// <summary>One-shot flag: set true after the first-run ASR onboarding hint is shown (E6). Persisted.</summary>
     public bool AsrOnboardingShown { get; set => Set(ref field, value); }
@@ -252,6 +255,16 @@ public class AppConfigBatchSubtitles : Bindable
     // (Existing configs keep their saved value; this only changes the default for new/untouched configs.)
     public bool Recursive { get; set => Set(ref field, value); } = true;
     public bool OverwriteExisting { get; set => Set(ref field, value); }
+
+    // Background-friendliness (default ON): keep the machine responsive while a long batch runs.
+    // - SerializeAsrAndTranslate: never run ASR and translation at the same time, so a GPU ASR engine and a
+    //   local LLM translator don't both saturate the GPU at once (trades a little throughput for smoothness).
+    // - RunOnCpuWhenActive: while you actively use the PC, transcribe the next audio chunk on CPU (faster-whisper)
+    //   instead of the GPU, so the GPU stays free; switches back to GPU once the keyboard/mouse have been idle
+    //   for ActiveIdleThresholdSeconds. The chunk in flight finishes on its current device (no work lost).
+    public bool SerializeAsrAndTranslate { get; set => Set(ref field, value); } = true;
+    public bool RunOnCpuWhenActive { get; set => Set(ref field, value); } = true;
+    public int ActiveIdleThresholdSeconds { get; set => Set(ref field, value); } = 45;
 }
 
 public class AppConfigSubs : Bindable

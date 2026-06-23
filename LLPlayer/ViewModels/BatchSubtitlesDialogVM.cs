@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -6,6 +6,8 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Shell;
+using System.Windows.Threading;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer.Batch;
 using LLPlayer.Extensions;
@@ -18,17 +20,29 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 {
     private CancellationTokenSource? _cts;
     private bool _initializing = true;
+    private readonly BatchActivityService _activity;
+    private readonly AppTrayService _tray;
+    // The set of jobs in the current run — used to compute the overall progress shown on the taskbar + tray.
+    private IReadOnlyList<BatchSubtitleJob>? _runScope;
 
     public FlyleafManager FL { get; }
 
-    public BatchSubtitlesDialogVM(FlyleafManager fl)
+    public BatchSubtitlesDialogVM(FlyleafManager fl, BatchActivityService activity, AppTrayService tray)
     {
         FL = fl;
+        _activity = activity;
+        _tray = tray;
 
         FolderPath = FL.Config.BatchSubtitles.LastFolder;
         Recursive = FL.Config.BatchSubtitles.Recursive;
         OverwriteExisting = FL.Config.BatchSubtitles.OverwriteExisting;
+        SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
+        RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
+        IdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
         _initializing = false;
+
+        // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in
+        // OnDialogClosed) so subscribe/unsubscribe stay symmetric across the actual open/close lifecycle.
 
         Jobs.CollectionChanged += JobsOnCollectionChanged;
 
@@ -104,6 +118,59 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
     }
 
+    // Background-friendliness: never run ASR + translation at once (so a GPU ASR engine and a local-LLM
+    // translator don't both saturate the GPU). Applied to the next run, not a run already in progress.
+    public bool SerializeAsrAndTranslate
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                FL.Config.BatchSubtitles.SerializeAsrAndTranslate = value;
+                PersistBatchDefaults();
+            }
+        }
+    }
+
+    // While you actively use the PC, transcribe the next chunk on CPU (faster-whisper) instead of the GPU.
+    public bool RunOnCpuWhenActive
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                FL.Config.BatchSubtitles.RunOnCpuWhenActive = value;
+                PersistBatchDefaults();
+            }
+        }
+    }
+
+    // How long the keyboard/mouse must be idle before ASR switches back to the GPU.
+    public int IdleThresholdSeconds
+    {
+        get;
+        set
+        {
+            int clamped = Math.Clamp(value, 5, 600);
+            if (Set(ref field, clamped))
+            {
+                FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds = field;
+                PersistBatchDefaults();
+            }
+            else if (clamped != value)
+            {
+                // Out-of-range input coerced to the value already stored — re-push so the TextBox doesn't
+                // keep showing the stale out-of-range text.
+                OnPropertyChanged(nameof(IdleThresholdSeconds));
+            }
+        }
+    }
+
+    // True while the batch is running ASR on CPU because the user is active (drives the summary + tray status).
+    public bool IsRunningOnCpu { get; private set => Set(ref field, value); }
+
     public bool IsRunning
     {
         get;
@@ -136,6 +203,11 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     }
 
     public string SummaryText { get; set => Set(ref field, value); } = string.Empty;
+
+    // Overall progress of the current run (0..1) + taskbar state, shown on the batch window's taskbar button
+    // and mirrored to the tray icon so the user can watch progress with the player window closed.
+    public double OverallProgress { get; private set => Set(ref field, value); }
+    public TaskbarItemProgressState TaskbarProgressState { get; private set => Set(ref field, value); } = TaskbarItemProgressState.None;
 
     public bool CanScan => !IsRunning && !IsScanning && Directory.Exists(FolderPath);
     public bool CanStart => IsIdle && Jobs.Any(j => j.Include);
@@ -253,6 +325,25 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         _ = RunAsync([job], forceOverwrite: true);
     }).ObservesCanExecute(() => IsIdle);
 
+    // Double-click a row (or pick it from the row's context menu) to play that video in the main player.
+    // Brings the player window back from the tray if it was minimized, then opens the file — the generated
+    // <name>.ru.srt beside it is picked up automatically by the local-subtitle search.
+    public DelegateCommand<BatchSubtitleJob> CmdOpenInPlayer => field ??= new DelegateCommand<BatchSubtitleJob>(job =>
+    {
+        if (job is null)
+            return;
+
+        try
+        {
+            _tray.RestoreMainWindow();
+            FL.Player.OpenAsync(job.MediaPath);
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogHelper.ShowUnknownErrorPopup($"Cannot open video in player: {ex.Message}", "Batch subtitles", ex);
+        }
+    });
+
     // Shared run path for Start, per-row retry, and "Retry failed". Each call builds its own CTS,
     // processor, and capacity-1 channel, so re-running a subset is safe. Only the jobs in 'toRun'
     // are reset, preserving scan-time Completed/Include marks on the rows left alone.
@@ -293,8 +384,31 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
         _cts = new CancellationTokenSource();
         IsRunning = true;
+        _runScope = toRun;
+        _activity.SetRunning(true);
         UpdateSummary();
 
+        // While the user is active, faster-whisper transcribes the next chunk on CPU so the GPU stays free.
+        // The monitor is polled per chunk inside the engine; the timer just reflects the state in the UI.
+        // Only faster-whisper supports the device switch, so the "on CPU" status applies to that engine only.
+        bool cpuFallbackApplies = FL.PlayerConfig.Subtitles.ASREngine == SubASREngineType.FasterWhisper;
+        BatchActivityMonitor monitor = new(
+            () => FL.Config.BatchSubtitles.RunOnCpuWhenActive,
+            () => FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds);
+
+        DispatcherTimer statusTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+        statusTimer.Tick += (_, _) =>
+        {
+            bool onCpu = cpuFallbackApplies && IsRunning && monitor.IsUserActive();
+            if (onCpu != IsRunningOnCpu)
+            {
+                IsRunningOnCpu = onCpu;
+                UpdateSummary();
+            }
+        };
+        statusTimer.Start();
+
+        bool canceled = false;
         try
         {
             Progress<BatchSubtitleProgress> progress = new(update =>
@@ -335,14 +449,15 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             });
 
             BatchSubtitleProcessor processor = new(
-                new BatchAsrTranscriber(FL.PlayerConfig),
+                new BatchAsrTranscriber(FL.PlayerConfig, monitor.IsUserActive),
                 new BatchSubtitleTranslator(FL.PlayerConfig.Subtitles),
                 new SrtSubtitleWriter(new UTF8Encoding(FL.Config.Subs.SubsExportUTF8WithBom)),
                 new BatchSubtitleOptions
                 {
                     Recursive = Recursive,
                     OverwriteExisting = OverwriteExisting || forceOverwrite,
-                    Utf8Bom = FL.Config.Subs.SubsExportUTF8WithBom
+                    Utf8Bom = FL.Config.Subs.SubsExportUTF8WithBom,
+                    SerializeAsrAndTranslate = SerializeAsrAndTranslate
                 },
                 progress);
 
@@ -350,6 +465,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
         catch (OperationCanceledException)
         {
+            canceled = true;
             MarkPendingCanceled(toRun);
             UpdateSummary();
         }
@@ -359,9 +475,13 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
         finally
         {
+            statusTimer.Stop();
             _cts?.Dispose();
             _cts = null;
             IsRunning = false;
+            _runScope = null;
+            IsRunningOnCpu = false;
+            _activity.SetRunning(false, canceled);
             UpdateSummary();
         }
     }
@@ -411,6 +531,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             persisted.BatchSubtitles.LastFolder = FL.Config.BatchSubtitles.LastFolder;
             persisted.BatchSubtitles.Recursive = FL.Config.BatchSubtitles.Recursive;
             persisted.BatchSubtitles.OverwriteExisting = FL.Config.BatchSubtitles.OverwriteExisting;
+            persisted.BatchSubtitles.SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
+            persisted.BatchSubtitles.RunOnCpuWhenActive = FL.Config.BatchSubtitles.RunOnCpuWhenActive;
+            persisted.BatchSubtitles.ActiveIdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
             persisted.Save(App.AppConfigPath);
         }
         catch (Exception ex)
@@ -507,9 +630,64 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 or BatchSubtitleStatus.Saving);
 
         int included = Jobs.Count(job => job.Include);
-        SummaryText = $"{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
+        string cpuPrefix = IsRunning && IsRunningOnCpu ? "🖥 ASR on CPU (you're active) — " : "";
+        SummaryText = $"{cpuPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
 
         OnPropertyChanged(nameof(CanRetryFailed));
+
+        UpdateOverallProgress();
+    }
+
+    // Aggregate progress across the current run for the taskbar button + tray icon. Finished files count as
+    // full; the file actively transcribing contributes its ASR fraction; files in the translate/save tail
+    // count as nearly done. Mirrored to the BatchActivityService so the tray shows it with the window hidden.
+    private void UpdateOverallProgress()
+    {
+        IReadOnlyList<BatchSubtitleJob>? scope = _runScope;
+        if (!IsRunning || scope is null || scope.Count == 0)
+        {
+            OverallProgress = 0;
+            TaskbarProgressState = TaskbarItemProgressState.None;
+            _activity.ReportProgress(0, string.Empty);
+            return;
+        }
+
+        int total = scope.Count;
+        int done = 0;
+        double sum = 0;
+        foreach (BatchSubtitleJob job in scope)
+        {
+            switch (job.Status)
+            {
+                case BatchSubtitleStatus.Completed:
+                case BatchSubtitleStatus.Skipped:
+                case BatchSubtitleStatus.Failed:
+                case BatchSubtitleStatus.Canceled:
+                    sum += 1;
+                    done++;
+                    break;
+                case BatchSubtitleStatus.RunningASR:
+                    sum += Math.Clamp(job.Progress, 0, 1);
+                    break;
+                case BatchSubtitleStatus.QueuedForTranslation:
+                case BatchSubtitleStatus.Translating:
+                case BatchSubtitleStatus.Saving:
+                    sum += 0.95; // ASR done, finishing up (translate + write)
+                    break;
+            }
+        }
+
+        double overall = Math.Clamp(sum / total, 0, 1);
+        OverallProgress = overall;
+        // Still progressing (on CPU) when active — Normal, not Paused.
+        TaskbarProgressState = TaskbarItemProgressState.Normal;
+        string prefix = IsRunningOnCpu ? "CPU " : "";
+        _activity.ReportProgress(overall, $"{prefix}{done}/{total} • {(int)Math.Round(overall * 100)}%");
+    }
+
+    private void OnAppQuitCancelRequested(object? sender, EventArgs e)
+    {
+        _cts?.Cancel();
     }
 
     #region IDialogAware
@@ -525,6 +703,13 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     {
         if (!IsRunning)
             return true;
+
+        // App is quitting (tray "Quit" / Exit App): cancel silently and allow the close, no prompt.
+        if (_activity.IsShuttingDown)
+        {
+            _cts?.Cancel();
+            return true;
+        }
 
         MessageBoxResult confirm = MessageBox.Show(
             "Batch subtitles are still running. Cancel and close this window?",
@@ -543,10 +728,19 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     {
         _cts?.Cancel();
         UnsubscribeJobs();
+        _activity.CancelRequested -= OnAppQuitCancelRequested;
+        // Drop the dialog-open flag so the app can leave the tray / restore the player once nothing is
+        // running. If a run was in progress, the cancellation above lets RunAsync's finally clear IsRunning
+        // (best-effort — on an app quit the process may exit before that continuation runs).
+        _activity.SetDialogOpen(false);
     }
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
+        // Marks the batch surface as open so closing the main window keeps the app alive in the tray, and
+        // subscribes to the app-quit cancel signal (paired with the -= in OnDialogClosed).
+        _activity.SetDialogOpen(true);
+        _activity.CancelRequested += OnAppQuitCancelRequested;
     }
     #endregion IDialogAware
 }

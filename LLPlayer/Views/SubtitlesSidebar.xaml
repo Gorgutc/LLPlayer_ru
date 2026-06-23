@@ -7,6 +7,7 @@
              xmlns:vm="clr-namespace:LLPlayer.ViewModels"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:helpers="clr-namespace:LLPlayer.Extensions"
+             xmlns:mediaStream="clr-namespace:FlyleafLib.MediaFramework.MediaStream;assembly=FlyleafLib"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:SubtitlesSidebarVM}"
              d:Foreground="White"
@@ -129,6 +130,215 @@
                 AutomationProperties.Name="Toggle Primary / Secondary subtitles"
                 Command="{Binding FL.Action.CmdToggleSidebarShowSecondary}"
                 IsChecked="{Binding FL.Config.SidebarShowSecondary, Mode=OneWay}" />
+
+            <!-- Subtitle Tracks quick switcher: one place that lists every available track (embedded in the
+                 video, external files found beside it / downloaded, and ASR) with its language + source, and
+                 assigns it to slot ① primary or ② secondary in a single click. Mirrors the right-click
+                 Subtitles ▸ Subtitle Tracks menu but stays open for fast switching. -->
+            <materialDesign:PopupBox
+                Margin="6 0"
+                Width="20"
+                Height="20"
+                Background="{x:Null}"
+                StaysOpen="True"
+                PlacementMode="BottomAndAlignCentres"
+                ToolTip="Subtitle tracks — switch primary / secondary"
+                AutomationProperties.Name="Subtitle tracks switcher"
+                ToolTipService.Placement="Right">
+                <materialDesign:PopupBox.ToggleContent>
+                    <materialDesign:PackIcon
+                        Width="16"
+                        Height="16"
+                        Foreground="{DynamicResource MaterialDesignBody}"
+                        Kind="FormatListBulletedType" />
+                </materialDesign:PopupBox.ToggleContent>
+
+                <Border Background="{DynamicResource MaterialDesignPaper}" Padding="10" MaxWidth="460" MinWidth="300">
+                    <StackPanel>
+                        <DockPanel Margin="0 0 0 6">
+                            <TextBlock Text="Subtitle tracks" FontWeight="Bold" VerticalAlignment="Center" />
+                            <TextBlock DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}"
+                                       Text="① primary   ② secondary" />
+                        </DockPanel>
+
+                        <!-- Embedded (in the video container) -->
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding FL.Player.Subtitles.Streams.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="In video (embedded)" FontSize="11" Margin="0 2"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}" />
+                            <ItemsControl ItemsSource="{Binding FL.Player.Subtitles.Streams}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0 1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <materialDesign:PackIcon Grid.Column="0" Kind="MovieOpenOutline"
+                                                                     Width="16" Height="16" VerticalAlignment="Center"
+                                                                     Foreground="{DynamicResource MaterialDesignBodyLight}" />
+                                            <TextBlock Grid.Column="1" Margin="6 0" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding DisplayMember}" />
+                                            <ToggleButton Grid.Column="2" Style="{StaticResource ToggleButton}" Tag="0"
+                                                          Content="1" ToolTip="Set as primary (1st)"
+                                                          AutomationProperties.Name="Set as primary subtitle"
+                                                          IsChecked="{Binding EnabledPrimarySubtitle, Mode=OneWay}"
+                                                          Command="{Binding DataContext.FL.Player.Commands.OpenSubtitles, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                                <ToggleButton.CommandParameter>
+                                                    <MultiBinding Converter="{StaticResource Tuple3Conv}">
+                                                        <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
+                                                        <Binding Path="." />
+                                                        <Binding Source="{x:Static mediaStream:SelectSubMethod.Original}" />
+                                                    </MultiBinding>
+                                                </ToggleButton.CommandParameter>
+                                            </ToggleButton>
+                                            <ToggleButton Grid.Column="3" Style="{StaticResource ToggleButton}" Tag="1"
+                                                          Content="2" ToolTip="Set as secondary (2nd)"
+                                                          AutomationProperties.Name="Set as secondary subtitle"
+                                                          IsChecked="{Binding EnabledSecondarySubtitle, Mode=OneWay}"
+                                                          Command="{Binding DataContext.FL.Player.Commands.OpenSubtitles, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                                <ToggleButton.CommandParameter>
+                                                    <MultiBinding Converter="{StaticResource Tuple3Conv}">
+                                                        <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
+                                                        <Binding Path="." />
+                                                        <Binding Source="{x:Static mediaStream:SelectSubMethod.Original}" />
+                                                    </MultiBinding>
+                                                </ToggleButton.CommandParameter>
+                                            </ToggleButton>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <!-- External: subtitle files auto-detected beside the video or downloaded -->
+                        <StackPanel>
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding FL.Player.Playlist.Selected.ExternalSubtitlesStreamsAll.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="Files (beside video / downloaded)" FontSize="11" Margin="0 6 0 2"
+                                       Foreground="{DynamicResource MaterialDesignBodyLight}" />
+                            <ItemsControl ItemsSource="{Binding FL.Player.Playlist.Selected.ExternalSubtitlesStreamsAll}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0 1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <materialDesign:PackIcon Grid.Column="0" Kind="FileDocumentOutline"
+                                                                     Width="16" Height="16" VerticalAlignment="Center"
+                                                                     Foreground="{DynamicResource MaterialDesignBodyLight}" />
+                                            <TextBlock Grid.Column="1" Margin="6 0" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Text="{Binding DisplayMember}" />
+                                            <ToggleButton Grid.Column="2" Style="{StaticResource ToggleButton}" Tag="0"
+                                                          Content="1" ToolTip="Set as primary (1st)"
+                                                          AutomationProperties.Name="Set as primary subtitle"
+                                                          IsChecked="{Binding EnabledPrimarySubtitle, Mode=OneWay}"
+                                                          Command="{Binding DataContext.FL.Player.Commands.OpenSubtitles, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                                <ToggleButton.CommandParameter>
+                                                    <MultiBinding Converter="{StaticResource Tuple3Conv}">
+                                                        <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
+                                                        <Binding Path="." />
+                                                        <Binding Source="{x:Static mediaStream:SelectSubMethod.Original}" />
+                                                    </MultiBinding>
+                                                </ToggleButton.CommandParameter>
+                                            </ToggleButton>
+                                            <ToggleButton Grid.Column="3" Style="{StaticResource ToggleButton}" Tag="1"
+                                                          Content="2" ToolTip="Set as secondary (2nd)"
+                                                          AutomationProperties.Name="Set as secondary subtitle"
+                                                          IsChecked="{Binding EnabledSecondarySubtitle, Mode=OneWay}"
+                                                          Command="{Binding DataContext.FL.Player.Commands.OpenSubtitles, RelativeSource={RelativeSource AncestorType=ItemsControl}}">
+                                                <ToggleButton.CommandParameter>
+                                                    <MultiBinding Converter="{StaticResource Tuple3Conv}">
+                                                        <Binding Path="Tag" RelativeSource="{RelativeSource Self}" />
+                                                        <Binding Path="." />
+                                                        <Binding Source="{x:Static mediaStream:SelectSubMethod.Original}" />
+                                                    </MultiBinding>
+                                                </ToggleButton.CommandParameter>
+                                            </ToggleButton>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+
+                        <Separator Margin="0 6" />
+
+                        <!-- Speech-to-text (ASR) per slot + clear a slot -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Button Grid.Row="0" Grid.Column="0" Margin="0 2 2 2"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Command="{Binding FL.Player.Commands.OpenSubtitlesASR}" CommandParameter="0"
+                                    ToolTip="Generate primary subtitles with speech-to-text">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Microphone" Margin="0 0 4 0" VerticalAlignment="Center" />
+                                    <TextBlock Text="ASR ①" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Row="0" Grid.Column="1" Margin="2 2 0 2"
+                                    Style="{StaticResource MaterialDesignOutlinedButton}"
+                                    Command="{Binding FL.Player.Commands.OpenSubtitlesASR}" CommandParameter="1"
+                                    ToolTip="Generate secondary subtitles with speech-to-text">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="Microphone" Margin="0 0 4 0" VerticalAlignment="Center" />
+                                    <TextBlock Text="ASR ②" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Row="1" Grid.Column="0" Margin="0 2 2 2"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Command="{Binding FL.Player.Commands.SubtitlesOff}" CommandParameter="0"
+                                    ToolTip="Turn off the primary subtitle">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="CloseCircleOutline" Margin="0 0 4 0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Off ①" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Grid.Row="1" Grid.Column="1" Margin="2 2 0 2"
+                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                    Command="{Binding FL.Player.Commands.SubtitlesOff}" CommandParameter="1"
+                                    ToolTip="Turn off the secondary subtitle">
+                                <StackPanel Orientation="Horizontal">
+                                    <materialDesign:PackIcon Kind="CloseCircleOutline" Margin="0 0 4 0" VerticalAlignment="Center" />
+                                    <TextBlock Text="Off ②" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </materialDesign:PopupBox>
 
             <!-- Font Size -->
             <materialDesign:PopupBox

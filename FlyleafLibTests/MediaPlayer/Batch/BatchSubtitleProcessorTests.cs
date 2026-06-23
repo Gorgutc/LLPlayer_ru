@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using AwesomeAssertions;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Translation;
@@ -7,8 +7,10 @@ namespace FlyleafLib.MediaPlayer;
 
 public class BatchSubtitleProcessorTests
 {
-    [Fact]
-    public async Task ProcessAsync_ShouldCompleteExistingOutputAndContinueAfterFileFailure()
+    [Theory]
+    [InlineData(false)] // pipelined
+    [InlineData(true)]  // serialized (no-overlap) — same status/skip/failure handling must hold
+    public async Task ProcessAsync_ShouldCompleteExistingOutputAndContinueAfterFileFailure(bool serialize)
     {
         string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -44,7 +46,7 @@ public class BatchSubtitleProcessorTests
                 asr,
                 new FakeBatchTranslator(),
                 writer,
-                new BatchSubtitleOptions { OverwriteExisting = false });
+                new BatchSubtitleOptions { OverwriteExisting = false, SerializeAsrAndTranslate = serialize });
 
             await processor.ProcessAsync(jobs, CancellationToken.None);
 
@@ -267,6 +269,71 @@ public class BatchSubtitleProcessorTests
             segments[^1].SubtitleCount.Should().Be(2);
             segments[^1].ProcessedTime.Should().Be(TimeSpan.FromSeconds(2));
             segments[^1].TotalDuration.Should().Be(TimeSpan.FromSeconds(10));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Serialized_ShouldNotStartNextAsrUntilTranslationDone()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string firstVideo = Path.Combine(tempDir, "first.mkv");
+            string secondVideo = Path.Combine(tempDir, "second.mkv");
+            File.WriteAllText(firstVideo, "");
+            File.WriteAllText(secondVideo, "");
+
+            TaskCompletionSource firstTranslationStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource allowFirstTranslation = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource secondAsrStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var asr = new FakeAsrTranscriber(path =>
+            {
+                if (path == secondVideo)
+                    secondAsrStarted.SetResult();
+
+                return Task.FromResult(new BatchAsrResult(
+                    [CreateSub(Path.GetFileNameWithoutExtension(path))],
+                    Language.English));
+            });
+
+            var translator = new FakeBatchTranslator(async (subtitles, _, token) =>
+            {
+                if (subtitles[0].Text == "first")
+                {
+                    firstTranslationStarted.SetResult();
+                    await allowFirstTranslation.Task.WaitAsync(token);
+                }
+
+                subtitles[0].TranslatedText = "translated " + subtitles[0].Text;
+            });
+
+            var processor = new BatchSubtitleProcessor(
+                asr,
+                translator,
+                new MemorySubtitleWriter(),
+                new BatchSubtitleOptions { SerializeAsrAndTranslate = true });
+
+            Task processing = processor.ProcessAsync(
+                [new BatchSubtitleJob(firstVideo), new BatchSubtitleJob(secondVideo)],
+                CancellationToken.None);
+
+            await firstTranslationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            // Serialized: the second file's ASR must NOT have started while the first file is still translating.
+            // (Positive control — that pipelined mode WOULD start it here — is
+            // ProcessAsync_ShouldStartNextAsrWhilePreviousFileIsTranslating above.)
+            secondAsrStarted.Task.IsCompleted.Should().BeFalse();
+
+            allowFirstTranslation.SetResult();
+            await processing.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            secondAsrStarted.Task.IsCompleted.Should().BeTrue();
         }
         finally
         {

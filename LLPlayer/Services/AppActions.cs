@@ -568,7 +568,16 @@ public class AppActions
 
     public DelegateCommand CmdAppExit => field ??= new(() =>
     {
-        Application.Current.Shutdown();
+        // Route through the lifetime service so an in-flight batch is cancelled (without a close prompt) and
+        // the main-window close handler does not divert to the tray. Falls back to a plain shutdown.
+        try
+        {
+            ((App)Application.Current).Container.Resolve<BatchActivityService>().RequestQuit();
+        }
+        catch
+        {
+            Application.Current.Shutdown();
+        }
     });
     #endregion
 

@@ -23,9 +23,8 @@
         <i:EventTrigger EventName="Loaded">
             <prism:InvokeCommandAction Command="{Binding CmdOnLoaded}" />
         </i:EventTrigger>
-        <i:EventTrigger EventName="Closing">
-            <prism:InvokeCommandAction Command="{Binding CmdOnClosing}" />
-        </i:EventTrigger>
+        <!-- Closing is handled in code-behind (OnClosing/OnClosed) so it can divert to the system tray when a
+             batch is running instead of quitting; the player is disposed only on a real close. -->
     </i:Interaction.Triggers>
 
     <!-- Progress display of taskbar icon -->
