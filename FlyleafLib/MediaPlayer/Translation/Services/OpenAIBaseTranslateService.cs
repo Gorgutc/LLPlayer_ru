@@ -112,9 +112,11 @@ public class OpenAIBaseTranslateService : ITranslateService
 
         // On a looping/truncated reply, retry once from a clean context (drop the possibly-poisoned history),
         // clearing the queue first. SendChatWithRecovery returns only a sane reply or throws a recoverable failure.
+        // Pass the raw subtitle `text` as the source so the degeneration check is source-aware (a faithful
+        // translation of a legitimately repetitive line is not mistaken for a loop).
         OpenAIMessage[] retryMessages = [systemMessage, newMessage];
         string reply = await SendChatWithRecovery(
-            messages.ToArray(), retryMessages, onBeforeRetry: _messageQueue.Clear, token);
+            messages.ToArray(), retryMessages, onBeforeRetry: _messageQueue.Clear, source: text, token);
 
         // Anti-poisoning gate: only feed a sane (non-degenerate) reply back into the context window, so a
         // looping reply cannot prime the model to repeat the same pattern on the following subtitles.
@@ -137,7 +139,9 @@ public class OpenAIBaseTranslateService : ITranslateService
         ];
 
         // OneByOne has no context to poison, but the model can still loop on a given line; recover the same way.
-        return await SendChatWithRecovery(messages, messages, onBeforeRetry: null, token);
+        // Source is the raw subtitle `text` (NOT the prompt-wrapped string) so the degeneration budget is
+        // measured against the actual line, not the instruction boilerplate.
+        return await SendChatWithRecovery(messages, messages, onBeforeRetry: null, source: text, token);
     }
 
     /// <summary>
@@ -148,17 +152,20 @@ public class OpenAIBaseTranslateService : ITranslateService
     /// recoverable <see cref="TranslationFailureKind.Degenerate"/> failure if it still loops, so the caller
     /// falls back to the source text instead of returning/caching the loop. The token cap is what keeps the
     /// first attempt from running to the HTTP timeout when the model loops.
+    /// <paramref name="source"/> is the raw subtitle line being translated; it makes the degeneration check
+    /// source-aware so a faithful translation of a legitimately repetitive source is not flagged as a loop.
     /// </summary>
     private async Task<string> SendChatWithRecovery(
         OpenAIMessage[] initialMessages,
         OpenAIMessage[] retryMessages,
         Action? onBeforeRetry,
+        string? source,
         CancellationToken token)
     {
         try
         {
             string reply = await SendChatRequest(_httpClient, _settings, initialMessages, token);
-            if (!ChatReplyParser.IsDegenerate(reply))
+            if (!ChatReplyParser.IsDegenerate(reply, source))
             {
                 return reply;
             }
@@ -185,7 +192,7 @@ public class OpenAIBaseTranslateService : ITranslateService
             };
         }
 
-        if (ChatReplyParser.IsDegenerate(retry))
+        if (ChatReplyParser.IsDegenerate(retry, source))
         {
             throw new TranslationException(
                 $"Degenerate (looping) reply from {_settings.ServiceType} after retry")
@@ -481,16 +488,36 @@ public static class ChatReplyParser
 
     /// <summary>
     /// Heuristically detects a degenerate (looping) model reply: the same short word n-gram repeated
-    /// consecutively many times. Used to avoid feeding a looping reply back into the chat context,
-    /// which would prime the model to keep repeating on subsequent subtitles. Thresholds are
-    /// deliberately conservative to avoid flagging legitimately repetitive subtitles.
+    /// consecutively many times, or a whole sentence/paragraph block repeated many times. Used to avoid
+    /// feeding a looping reply back into the chat context (which would prime the model to keep repeating on
+    /// subsequent subtitles) and, in batch, to fall back to the source text for that line. This source-blind
+    /// overload uses the original conservative thresholds; prefer <see cref="IsDegenerate(string, string?)"/>
+    /// when the source subtitle text is available so a faithful translation of a repetitive source is not
+    /// misclassified as a loop.
     /// </summary>
-    public static bool IsDegenerate(string text)
+    public static bool IsDegenerate(string text) => IsDegenerate(text, null);
+
+    /// <summary>
+    /// Source-aware degeneration check. A faithful translation of a legitimately repetitive source line
+    /// (e.g. a shouted "quick, quick, quick, quick, quick, quick") repeats just as much as the source, so it
+    /// must NOT be flagged as a loop. The reply's allowed repetition therefore scales with the source's own
+    /// repetition: a calm source keeps the original conservative thresholds, while a repetitive source widens
+    /// the budget, bounded by <see cref="MaxSourceBudget"/> so a pathological/looping source cannot disable
+    /// detection. A null/empty <paramref name="source"/> reproduces the original source-blind thresholds exactly.
+    /// </summary>
+    public static bool IsDegenerate(string text, string? source)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length < 40)
         {
             return false;
         }
+
+        // How much consecutive repetition the source itself contains. The reply is allowed at least
+        // DefaultMaxRepeat consecutive n-grams, plus headroom over whatever the source legitimately repeats,
+        // capped at MaxSourceBudget. Source null/empty -> srcNgramRepeat 0 -> allowedRepeat == DefaultMaxRepeat
+        // (byte-for-byte the original threshold).
+        int srcNgramRepeat = MaxConsecutiveNgramRepeat(source);
+        int allowedRepeat = Math.Min(MaxSourceBudget, Math.Max(DefaultMaxRepeat, srcNgramRepeat + RepeatSourceHeadroom));
 
         // Short consecutive n-gram loop (n = 1..3). Only runs when a whitespace split yields enough tokens;
         // spaceless scripts (CJK/Thai) collapse to a few tokens, so for those the block scan below is the
@@ -499,8 +526,7 @@ public static class ChatReplyParser
         string[] words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
         if (words.Length >= 8)
         {
-            // More than `maxRepeat` consecutive identical n-grams (n = 1..3) is treated as a loop.
-            const int maxRepeat = 4;
+            // More than `allowedRepeat` consecutive identical n-grams (n = 1..3) is treated as a loop.
             for (int n = 1; n <= 3; n++)
             {
                 int repeat = 1;
@@ -519,7 +545,7 @@ public static class ChatReplyParser
                     if (same)
                     {
                         repeat++;
-                        if (repeat > maxRepeat)
+                        if (repeat > allowedRepeat)
                         {
                             return true;
                         }
@@ -536,17 +562,22 @@ public static class ChatReplyParser
         // separator lines like "---". The short n-gram scan above misses these (the repeat period in words
         // far exceeds 3) and is skipped entirely for spaceless scripts, so this runs regardless of word
         // count. Split into content blocks (dropping blank / separator-only / trivially short lines) and
-        // flag when one block dominates the reply by repetition.
+        // flag when one block dominates the reply by repetition — again scaled by the source's own blocks so
+        // a faithfully-translated repeated cue (e.g. repeated SDH lines) is not mistaken for a loop.
         List<string> blocks = SplitContentBlocks(text);
         if (blocks.Count >= 3)
         {
-            // 3+ consecutive identical blocks, e.g. "X\n---\nX\n---\nX"
+            List<string> srcBlocks = source is null ? [] : SplitContentBlocks(source);
+            int allowedBlockRun = Math.Min(MaxSourceBudget, Math.Max(3, MaxConsecutiveBlockRun(srcBlocks) + RepeatSourceHeadroom));
+            int srcTopCount = MaxBlockMultiplicity(srcBlocks);
+
+            // `allowedBlockRun`+ consecutive identical blocks, e.g. "X\n---\nX\n---\nX" (>= 3 by default).
             int run = 1;
             for (int i = 1; i < blocks.Count; i++)
             {
                 if (string.Equals(blocks[i], blocks[i - 1], StringComparison.OrdinalIgnoreCase))
                 {
-                    if (++run >= 3)
+                    if (++run >= allowedBlockRun)
                     {
                         return true;
                     }
@@ -559,17 +590,114 @@ public static class ChatReplyParser
 
             // A single block repeated and dominating the reply when separators break adjacency. Require the
             // dominant block to be >= 2/3 of all content blocks (and >= 3 occurrences) so an interleaved
-            // refrain like "A B A B A" (3-of-5) is not mistaken for a loop.
+            // refrain like "A B A B A" (3-of-5) is not mistaken for a loop, AND require it to repeat strictly
+            // more than the source's own dominant block so a faithful repeated-cue translation is not flagged.
             int topCount = blocks
                 .GroupBy(b => b, StringComparer.OrdinalIgnoreCase)
                 .Max(g => g.Count());
-            if (topCount >= 3 && topCount * 3 >= blocks.Count * 2)
+            if (topCount >= 3 && topCount * 3 >= blocks.Count * 2 && topCount > srcTopCount + 1)
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    // Conservative thresholds, deliberately set to avoid flagging legitimately repetitive subtitles.
+    private const int DefaultMaxRepeat = 4;      // max consecutive identical n-grams tolerated for a calm source
+    private const int RepeatSourceHeadroom = 2;  // extra repeats allowed over what the source itself repeats
+    private const int MaxSourceBudget = 16;      // hard cap so a pathological/looping source cannot disable detection
+
+    // Max number of consecutive identical word n-grams (n = 1..3) in the text, using the SAME whitespace
+    // tokenization (punctuation stays attached) and case-insensitive comparison as the reply scan above, so a
+    // source budget is measured on the same footing as the reply. Returns 0 for null/empty/too-short input.
+    private static int MaxConsecutiveNgramRepeat(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return 0;
+        }
+
+        string[] words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        int best = 0;
+        for (int n = 1; n <= 3; n++)
+        {
+            if (words.Length < 2 * n)
+            {
+                continue;
+            }
+
+            int repeat = 1;
+            for (int i = n; i + n <= words.Length; i += n)
+            {
+                bool same = true;
+                for (int j = 0; j < n; j++)
+                {
+                    if (!string.Equals(words[i + j], words[i - n + j], StringComparison.OrdinalIgnoreCase))
+                    {
+                        same = false;
+                        break;
+                    }
+                }
+
+                if (same)
+                {
+                    repeat++;
+                    if (repeat > best)
+                    {
+                        best = repeat;
+                    }
+                }
+                else
+                {
+                    repeat = 1;
+                }
+            }
+        }
+
+        return best;
+    }
+
+    // Longest run of consecutive identical content blocks; 0 when there are no content blocks.
+    private static int MaxConsecutiveBlockRun(List<string> blocks)
+    {
+        if (blocks.Count == 0)
+        {
+            return 0;
+        }
+
+        int best = 1;
+        int run = 1;
+        for (int i = 1; i < blocks.Count; i++)
+        {
+            if (string.Equals(blocks[i], blocks[i - 1], StringComparison.OrdinalIgnoreCase))
+            {
+                if (++run > best)
+                {
+                    best = run;
+                }
+            }
+            else
+            {
+                run = 1;
+            }
+        }
+
+        return best;
+    }
+
+    // Highest multiplicity of any single content block; 0 when there are no content blocks.
+    private static int MaxBlockMultiplicity(List<string> blocks)
+    {
+        if (blocks.Count == 0)
+        {
+            return 0;
+        }
+
+        return blocks
+            .GroupBy(b => b, StringComparer.OrdinalIgnoreCase)
+            .Max(g => g.Count());
     }
 
     // Splits a reply into normalized content lines, dropping blank lines, separator-only lines (---, ***,
