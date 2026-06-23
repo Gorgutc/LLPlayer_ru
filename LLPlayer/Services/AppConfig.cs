@@ -255,6 +255,15 @@ public class AppConfigBatchSubtitles : Bindable
     // (Existing configs keep their saved value; this only changes the default for new/untouched configs.)
     public bool Recursive { get; set => Set(ref field, value); } = true;
     public bool OverwriteExisting { get; set => Set(ref field, value); }
+
+    // Background-friendliness (default ON): keep the machine responsive while a long batch runs.
+    // - SerializeAsrAndTranslate: never run ASR and translation at the same time, so a GPU ASR engine and a
+    //   local LLM translator don't both saturate the GPU at once (trades a little throughput for smoothness).
+    // - PauseWhenActive: pause the batch (and suspend a running faster-whisper process) while you are actively
+    //   using the PC, resuming once the keyboard/mouse have been idle for ActiveIdleThresholdSeconds.
+    public bool SerializeAsrAndTranslate { get; set => Set(ref field, value); } = true;
+    public bool PauseWhenActive { get; set => Set(ref field, value); } = true;
+    public int ActiveIdleThresholdSeconds { get; set => Set(ref field, value); } = 45;
 }
 
 public class AppConfigSubs : Bindable

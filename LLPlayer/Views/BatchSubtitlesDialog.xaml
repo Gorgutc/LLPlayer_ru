@@ -86,6 +86,32 @@
                     VerticalAlignment="Center"
                     Content="Overwrite existing"
                     IsChecked="{Binding OverwriteExisting}" />
+
+                <CheckBox
+                    Margin="0 0 18 0"
+                    VerticalAlignment="Center"
+                    Content="Smooth (no ASR/translate overlap)"
+                    ToolTip="Don't run ASR and translation at the same time, so a GPU ASR engine and a local LLM translator don't both load the GPU at once. Slightly slower throughput, much smoother for working."
+                    IsChecked="{Binding SerializeAsrAndTranslate}" />
+
+                <CheckBox
+                    Margin="0 0 8 0"
+                    VerticalAlignment="Center"
+                    Content="Pause while I work"
+                    ToolTip="Pause the batch — and suspend a running faster-whisper process — while you actively use the PC; resume once the keyboard/mouse have been idle."
+                    IsChecked="{Binding PauseWhenActive}" />
+
+                <TextBox
+                    Width="40"
+                    VerticalAlignment="Center"
+                    ToolTip="Seconds of keyboard/mouse idle before the batch resumes"
+                    IsEnabled="{Binding PauseWhenActive}"
+                    Text="{Binding IdleThresholdSeconds, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock
+                    Margin="4 0 0 0"
+                    VerticalAlignment="Center"
+                    Foreground="{DynamicResource MaterialDesignBodyLight}"
+                    Text="s idle" />
             </StackPanel>
 
             <TextBlock

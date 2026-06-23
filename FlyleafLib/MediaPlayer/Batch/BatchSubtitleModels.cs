@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using FlyleafLib.MediaPlayer.Translation;
 
 namespace FlyleafLib.MediaPlayer.Batch;
@@ -24,6 +24,29 @@ public sealed class BatchSubtitleOptions
     public bool OverwriteExisting { get; init; }
     public bool Utf8Bom { get; init; } = true;
     public TargetLanguage TargetLanguage { get; init; } = TargetLanguage.Russian;
+
+    // Background-friendly mode: process each file fully (ASR -> translate -> save) before starting the next
+    // file's ASR, instead of overlapping translation of one file with ASR of the next. This guarantees ASR
+    // and translation never run at the same time, so a GPU ASR engine and a local-LLM translator do not both
+    // saturate the GPU at once. Default false (library default = the faster pipelined behaviour); the app
+    // turns it on via config.
+    public bool SerializeAsrAndTranslate { get; init; }
+}
+
+// App-supplied hook that lets a long batch stay friendly to interactive use: it can hold the queue while the
+// user is active and suspend/resume a running ASR process. Implemented in the app layer (Win32 idle + process
+// suspend) so the engine stays UI/policy-neutral. All members must be safe no-ops when throttling is off.
+public interface IBatchThrottle
+{
+    // Begin watching for user activity so a running external ASR process can be suspended/resumed. Idempotent.
+    void Start();
+
+    // Stop watching and resume anything that was suspended. Idempotent; must run even on cancellation.
+    void Stop();
+
+    // Returns once the batch is allowed to start the next unit of work (ASR or translation); awaits while the
+    // user is active. Honours the cancellation token.
+    Task WaitWhileBlockedAsync(CancellationToken token);
 }
 
 public sealed class BatchSubtitleJob : NotifyPropertyChanged

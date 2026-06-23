@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using AwesomeAssertions;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Translation;
@@ -272,6 +272,128 @@ public class BatchSubtitleProcessorTests
         {
             Directory.Delete(tempDir, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task ProcessAsync_Serialized_ShouldNotStartNextAsrUntilTranslationDone()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string firstVideo = Path.Combine(tempDir, "first.mkv");
+            string secondVideo = Path.Combine(tempDir, "second.mkv");
+            File.WriteAllText(firstVideo, "");
+            File.WriteAllText(secondVideo, "");
+
+            TaskCompletionSource firstTranslationStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource allowFirstTranslation = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource secondAsrStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var asr = new FakeAsrTranscriber(path =>
+            {
+                if (path == secondVideo)
+                    secondAsrStarted.SetResult();
+
+                return Task.FromResult(new BatchAsrResult(
+                    [CreateSub(Path.GetFileNameWithoutExtension(path))],
+                    Language.English));
+            });
+
+            var translator = new FakeBatchTranslator(async (subtitles, _, token) =>
+            {
+                if (subtitles[0].Text == "first")
+                {
+                    firstTranslationStarted.SetResult();
+                    await allowFirstTranslation.Task.WaitAsync(token);
+                }
+
+                subtitles[0].TranslatedText = "translated " + subtitles[0].Text;
+            });
+
+            var processor = new BatchSubtitleProcessor(
+                asr,
+                translator,
+                new MemorySubtitleWriter(),
+                new BatchSubtitleOptions { SerializeAsrAndTranslate = true });
+
+            Task processing = processor.ProcessAsync(
+                [new BatchSubtitleJob(firstVideo), new BatchSubtitleJob(secondVideo)],
+                CancellationToken.None);
+
+            await firstTranslationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            // Serialized: the second file's ASR must NOT have started while the first file is still translating.
+            // (Positive control — that pipelined mode WOULD start it here — is
+            // ProcessAsync_ShouldStartNextAsrWhilePreviousFileIsTranslating above.)
+            secondAsrStarted.Task.IsCompleted.Should().BeFalse();
+
+            allowFirstTranslation.SetResult();
+            await processing.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            secondAsrStarted.Task.IsCompleted.Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldStartAndStopThrottleAndGateBeforeAsr()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string video = Path.Combine(tempDir, "video.mkv");
+            File.WriteAllText(video, "");
+
+            TaskCompletionSource releaseGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource asrStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var asr = new FakeAsrTranscriber(_ =>
+            {
+                asrStarted.SetResult();
+                // Russian source -> translation is skipped, so this isolates the pre-ASR gate.
+                return Task.FromResult(new BatchAsrResult([CreateSub("x")], Language.Russian));
+            });
+
+            var throttle = new FakeThrottle(releaseGate.Task);
+            var processor = new BatchSubtitleProcessor(
+                asr,
+                new FakeBatchTranslator(),
+                new MemorySubtitleWriter(),
+                new BatchSubtitleOptions { SerializeAsrAndTranslate = true },
+                progress: null,
+                throttle: throttle);
+
+            Task processing = processor.ProcessAsync([new BatchSubtitleJob(video)], CancellationToken.None);
+
+            // The gate is awaited before ASR — asrStarted cannot complete until the gate is released.
+            asrStarted.Task.IsCompleted.Should().BeFalse();
+            throttle.Started.Should().BeTrue();
+
+            releaseGate.SetResult();
+            await processing.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            asrStarted.Task.IsCompleted.Should().BeTrue();
+            throttle.Stopped.Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    private sealed class FakeThrottle(Task gate) : IBatchThrottle
+    {
+        public bool Started { get; private set; }
+        public bool Stopped { get; private set; }
+
+        public void Start() => Started = true;
+        public void Stop() => Stopped = true;
+        public Task WaitWhileBlockedAsync(CancellationToken token) => gate.WaitAsync(token);
     }
 
     private static SubtitleData CreateSub(string text) => new()

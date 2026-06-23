@@ -35,6 +35,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         FolderPath = FL.Config.BatchSubtitles.LastFolder;
         Recursive = FL.Config.BatchSubtitles.Recursive;
         OverwriteExisting = FL.Config.BatchSubtitles.OverwriteExisting;
+        SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
+        PauseWhenActive = FL.Config.BatchSubtitles.PauseWhenActive;
+        IdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
         _initializing = false;
 
         // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in
@@ -113,6 +116,59 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             }
         }
     }
+
+    // Background-friendliness: never run ASR + translation at once (so a GPU ASR engine and a local-LLM
+    // translator don't both saturate the GPU). Applied to the next run, not a run already in progress.
+    public bool SerializeAsrAndTranslate
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                FL.Config.BatchSubtitles.SerializeAsrAndTranslate = value;
+                PersistBatchDefaults();
+            }
+        }
+    }
+
+    // Pause the batch (and suspend a running faster-whisper process) while you actively use the PC.
+    public bool PauseWhenActive
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                FL.Config.BatchSubtitles.PauseWhenActive = value;
+                PersistBatchDefaults();
+            }
+        }
+    }
+
+    // How long the keyboard/mouse must be idle before the batch resumes.
+    public int IdleThresholdSeconds
+    {
+        get;
+        set
+        {
+            int clamped = Math.Clamp(value, 5, 600);
+            if (Set(ref field, clamped))
+            {
+                FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds = field;
+                PersistBatchDefaults();
+            }
+            else if (clamped != value)
+            {
+                // Out-of-range input coerced to the value already stored — re-push so the TextBox doesn't
+                // keep showing the stale out-of-range text.
+                OnPropertyChanged(nameof(IdleThresholdSeconds));
+            }
+        }
+    }
+
+    // True while the batch is paused because the user is active (drives the summary + tray status).
+    public bool IsPausedByUser { get; private set => Set(ref field, value); }
 
     public bool IsRunning
     {
@@ -371,6 +427,18 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 UpdateSummary();
             });
 
+            // Keeps the machine responsive during a long run: suspends a running faster-whisper process and
+            // holds the queue while the user is active (config-gated). Lives only for this run.
+            BatchThrottle throttle = new(
+                enabled: () => FL.Config.BatchSubtitles.PauseWhenActive,
+                idleThresholdSeconds: () => FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds,
+                enginePath: GetFasterWhisperEnginePath,
+                onPausedChanged: paused => Utils.UI(() =>
+                {
+                    IsPausedByUser = paused;
+                    UpdateSummary();
+                }));
+
             BatchSubtitleProcessor processor = new(
                 new BatchAsrTranscriber(FL.PlayerConfig),
                 new BatchSubtitleTranslator(FL.PlayerConfig.Subtitles),
@@ -379,9 +447,11 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 {
                     Recursive = Recursive,
                     OverwriteExisting = OverwriteExisting || forceOverwrite,
-                    Utf8Bom = FL.Config.Subs.SubsExportUTF8WithBom
+                    Utf8Bom = FL.Config.Subs.SubsExportUTF8WithBom,
+                    SerializeAsrAndTranslate = SerializeAsrAndTranslate
                 },
-                progress);
+                progress,
+                throttle);
 
             await processor.ProcessAsync(workerJobs, _cts.Token);
         }
@@ -401,9 +471,22 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             _cts = null;
             IsRunning = false;
             _runScope = null;
+            IsPausedByUser = false;
             _activity.SetRunning(false, canceled);
             UpdateSummary();
         }
+    }
+
+    // Full path of the faster-whisper engine exe, so the throttle can find & suspend that child process while
+    // you work. Returns null for whisper.cpp (in-process; only the queue hold applies, not a process suspend).
+    private string? GetFasterWhisperEnginePath()
+    {
+        var subs = FL.PlayerConfig.Subtitles;
+        if (subs.ASREngine != SubASREngineType.FasterWhisper)
+            return null;
+
+        FasterWhisperConfig fw = subs.FasterWhisperConfig;
+        return fw.UseManualEngine ? fw.ManualEnginePath : FasterWhisperConfig.DefaultEnginePath;
     }
 
     public DelegateCommand CmdCancel => field ??= new DelegateCommand(() =>
@@ -451,6 +534,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             persisted.BatchSubtitles.LastFolder = FL.Config.BatchSubtitles.LastFolder;
             persisted.BatchSubtitles.Recursive = FL.Config.BatchSubtitles.Recursive;
             persisted.BatchSubtitles.OverwriteExisting = FL.Config.BatchSubtitles.OverwriteExisting;
+            persisted.BatchSubtitles.SerializeAsrAndTranslate = FL.Config.BatchSubtitles.SerializeAsrAndTranslate;
+            persisted.BatchSubtitles.PauseWhenActive = FL.Config.BatchSubtitles.PauseWhenActive;
+            persisted.BatchSubtitles.ActiveIdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
             persisted.Save(App.AppConfigPath);
         }
         catch (Exception ex)
@@ -547,7 +633,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 or BatchSubtitleStatus.Saving);
 
         int included = Jobs.Count(job => job.Include);
-        SummaryText = $"{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
+        string pausedPrefix = IsRunning && IsPausedByUser ? "⏸ Paused (you're active) — " : "";
+        SummaryText = $"{pausedPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled";
 
         OnPropertyChanged(nameof(CanRetryFailed));
 
@@ -595,8 +682,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
         double overall = Math.Clamp(sum / total, 0, 1);
         OverallProgress = overall;
-        TaskbarProgressState = TaskbarItemProgressState.Normal;
-        _activity.ReportProgress(overall, $"{done}/{total} • {(int)Math.Round(overall * 100)}%");
+        TaskbarProgressState = IsPausedByUser ? TaskbarItemProgressState.Paused : TaskbarItemProgressState.Normal;
+        string prefix = IsPausedByUser ? "⏸ " : "";
+        _activity.ReportProgress(overall, $"{prefix}{done}/{total} • {(int)Math.Round(overall * 100)}%");
     }
 
     private void OnAppQuitCancelRequested(object? sender, EventArgs e)
