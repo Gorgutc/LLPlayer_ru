@@ -78,6 +78,43 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         Debug.Assert(!string.IsNullOrWhiteSpace(sub.Text));
 
         string text = SubtitleTextUtil.FlattenText(sub.Text!);
-        sub.TranslatedText = await service.TranslateAsync(text, token);
+        try
+        {
+            string translated = await service.TranslateAsync(text, token);
+
+            // Parity with interactive SubTranslator: never cache an empty/whitespace reply as a successful
+            // translation. Leaving TranslatedText unset keeps IsTranslated false, so the writer falls back to
+            // the source line instead of emitting a blank line.
+            if (string.IsNullOrWhiteSpace(translated))
+            {
+                return;
+            }
+
+            sub.TranslatedText = translated;
+        }
+        // A per-line CONTENT failure (a degenerate/looping reply, a truncated reply, or an empty/null reply
+        // from a server that DID respond) must not fail the whole file: leave the source text for this single
+        // line and keep going — exactly as interactive playback does (SubTranslator.TranslateSubAsync). This
+        // also honours the product contract, which says a still-looping reply "falls back to the source text
+        // for that line". Network/timeout/HTTP errors (Kind=Generic), config/auth errors
+        // (TranslationConfigException) and cancellation (OperationCanceledException) are deliberately NOT caught
+        // here, so they still propagate and the batch processor marks the file Failed/Canceled instead of
+        // silently writing an all-source output. A positive allow-list is used so any future failure kind
+        // defaults to propagate (fail-safe), not to swallow.
+        catch (TranslationException ex) when (IsRecoverableContentFailure(ex.Kind))
+        {
+            // Intentionally swallowed: TranslatedText is left unset so the writer falls back to the source
+            // line for this subtitle, and the batch run continues to the next line. (Not logged here to keep
+            // the batch core decoupled from the WPF-coupled Logger; the degraded-line trade-off is documented
+            // in product-behavior-contract.md.)
+        }
     }
+
+    // Per-line content failures that fall back to the source text for that one line instead of failing the
+    // whole file. Everything else (Generic network/HTTP errors, config/auth, cancellation) propagates.
+    private static bool IsRecoverableContentFailure(TranslationFailureKind kind) =>
+        kind is TranslationFailureKind.Degenerate
+             or TranslationFailureKind.Truncated
+             or TranslationFailureKind.EmptyResponse
+             or TranslationFailureKind.NullContent;
 }
