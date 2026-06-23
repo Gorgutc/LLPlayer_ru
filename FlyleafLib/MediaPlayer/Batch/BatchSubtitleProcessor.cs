@@ -1,5 +1,6 @@
 ﻿using System.Linq;
 using System.Threading.Channels;
+using FlyleafLib.MediaPlayer.Dubbing;
 
 namespace FlyleafLib.MediaPlayer.Batch;
 
@@ -12,24 +13,31 @@ public sealed class BatchSubtitleProcessor
     private readonly IBatchSubtitleWriter _writer;
     private readonly BatchSubtitleOptions _options;
     private readonly IProgress<BatchSubtitleProgress>? _progress;
+    private readonly IDubbingRenderer? _dubber;
 
     public BatchSubtitleProcessor(
         IBatchAsrTranscriber asrTranscriber,
         IBatchSubtitleTranslator translator,
         IBatchSubtitleWriter writer,
         BatchSubtitleOptions options,
-        IProgress<BatchSubtitleProgress>? progress = null)
+        IProgress<BatchSubtitleProgress>? progress = null,
+        IDubbingRenderer? dubber = null)
     {
         _asrTranscriber = asrTranscriber;
         _translator = translator;
         _writer = writer;
         _options = options;
         _progress = progress;
+        _dubber = dubber;
     }
+
+    private bool DubbingEnabled => _options.GenerateDubbing && _dubber is not null;
 
     public async Task ProcessAsync(IReadOnlyList<BatchSubtitleJob> jobs, CancellationToken token)
     {
-        if (_options.SerializeAsrAndTranslate)
+        // Force serialize-mode when dubbing is on: the GPU TTS render must never overlap the next file's
+        // ASR (that would re-create the ASR/translate GPU contention the serialize/CPU-fallback work removed).
+        if (_options.SerializeAsrAndTranslate || DubbingEnabled)
             await ProcessSerialAsync(jobs, token);
         else
             await ProcessPipelinedAsync(jobs, token);
@@ -50,14 +58,14 @@ public sealed class BatchSubtitleProcessor
                     continue;
                 }
 
-                if (!_options.OverwriteExisting && SubtitleOutputPathBuilder.OutputExists(job.OutputPath))
-                {
-                    Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
-                    continue;
-                }
-
                 try
                 {
+                    // Already done? (SRT exists, and the dub too when dubbing is on.) When the SRT exists
+                    // but the dub is missing, this renders the dub from the existing SRT without re-running
+                    // ASR/translate. Inside the try so a dub-render error/cancel is per-job, not whole-batch.
+                    if (await TryCompleteFromExistingAsync(job, token))
+                        continue;
+
                     Report(job, BatchSubtitleStatus.RunningASR, startedAt: DateTimeOffset.Now);
 
                     IProgress<BatchAsrProgress>? asrProgress = _progress is null
@@ -125,16 +133,14 @@ public sealed class BatchSubtitleProcessor
                     continue;
                 }
 
-                if (!_options.OverwriteExisting && SubtitleOutputPathBuilder.OutputExists(job.OutputPath))
-                {
-                    // A usable translation already exists — report Completed (not Skipped) so the dialog
-                    // shows the file as done. Skipped is reserved for "no speech detected" below.
-                    Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
-                    continue;
-                }
-
                 try
                 {
+                    // A usable translation already exists — report Completed (not Skipped) so the dialog
+                    // shows the file as done. (Dubbing forces the serial path, so the dub-from-existing
+                    // branch never triggers here; kept for parity. Skipped is reserved for "no speech".)
+                    if (await TryCompleteFromExistingAsync(job, token))
+                        continue;
+
                     Report(job, BatchSubtitleStatus.RunningASR, startedAt: DateTimeOffset.Now);
 
                     IProgress<BatchAsrProgress>? asrProgress = _progress is null
@@ -230,7 +236,56 @@ public sealed class BatchSubtitleProcessor
         Report(job, BatchSubtitleStatus.Saving);
         await _writer.WriteAsync(subtitles, job.OutputPath, _options.OverwriteExisting, token);
 
+        await DubIfEnabledAsync(job, subtitles, token);
+
         Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
+    }
+
+    // When the .ru.srt already exists (overwrite off), the file is "done" for subtitles. Returns true and
+    // reports Completed in that case — but first, if dubbing is on and the dub is still missing, renders the
+    // dub FROM the existing SRT (no re-ASR/translate), so "translate now, dub later" works on a re-run.
+    // Returns false when the job still needs full ASR/translate processing. Throws on dub error/cancel
+    // (the caller's per-job try/catch maps that to Failed/Canceled).
+    private async Task<bool> TryCompleteFromExistingAsync(BatchSubtitleJob job, CancellationToken token)
+    {
+        if (_options.OverwriteExisting || !SubtitleOutputPathBuilder.OutputExists(job.OutputPath))
+            return false;
+
+        if (DubbingEnabled)
+        {
+            string dubPath = DubbingOutputPathBuilder.BuildRussianDubPath(job.MediaPath, _options.DubbingOutputFormat);
+            if (!DubbingOutputPathBuilder.OutputExists(dubPath))
+            {
+                List<SubtitleData> existing = DubbingSrtReader.ParseFile(job.OutputPath);
+                if (existing.Count > 0)
+                    await DubIfEnabledAsync(job, existing, token);
+            }
+        }
+
+        Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
+        return true;
+    }
+
+    // Optional dub render after the .ru.srt is written, gated on its OWN .ru.dub output (independent of the
+    // .srt overwrite check). Throws on error/cancel; the caller maps that to Failed/Canceled.
+    private async Task DubIfEnabledAsync(BatchSubtitleJob job, IReadOnlyList<SubtitleData> subtitles, CancellationToken token)
+    {
+        if (!DubbingEnabled)
+            return;
+
+        token.ThrowIfCancellationRequested();
+
+        string dubPath = DubbingOutputPathBuilder.BuildRussianDubPath(job.MediaPath, _options.DubbingOutputFormat);
+        if (!_options.OverwriteExisting && DubbingOutputPathBuilder.OutputExists(dubPath))
+            return;
+
+        Report(job, BatchSubtitleStatus.Dubbing);
+
+        IProgress<DubbingProgress>? dubProgress = _progress is null
+            ? null
+            : new DubProgressForwarder(job, _progress);
+
+        await _dubber!.RenderAsync(subtitles, job.MediaPath, dubPath, dubProgress, token);
     }
 
     private static string TargetLanguageRussianIso => "ru";
@@ -284,5 +339,16 @@ public sealed class BatchSubtitleProcessor
             AsrSegmentText: p.Text,
             ProcessedTime: p.Position,
             TotalDuration: p.Duration));
+    }
+
+    // Forwards dub-render progress through the same UI-thread IProgress sink so the row/tray shows
+    // "Dubbing N/M" liveness instead of a frozen status (mirrors AsrProgressForwarder).
+    private sealed class DubProgressForwarder(BatchSubtitleJob job, IProgress<BatchSubtitleProgress> sink)
+        : IProgress<DubbingProgress>
+    {
+        public void Report(DubbingProgress p) => sink.Report(new BatchSubtitleProgress(
+            job,
+            BatchSubtitleStatus.Dubbing,
+            AsrSegmentText: $"{p.Phase} {p.CompletedLines}/{p.TotalLines}"));
     }
 }

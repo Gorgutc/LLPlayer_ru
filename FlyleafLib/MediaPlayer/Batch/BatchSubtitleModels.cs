@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using FlyleafLib.MediaPlayer.Dubbing;
 using FlyleafLib.MediaPlayer.Translation;
 
 namespace FlyleafLib.MediaPlayer.Batch;
@@ -12,6 +13,7 @@ public enum BatchSubtitleStatus
     QueuedForTranslation,
     Translating,
     Saving,
+    Dubbing,
     Completed,
     Skipped,
     Failed,
@@ -31,6 +33,12 @@ public sealed class BatchSubtitleOptions
     // saturate the GPU at once. Default false (library default = the faster pipelined behaviour); the app
     // turns it on via config.
     public bool SerializeAsrAndTranslate { get; init; }
+
+    // AI dubbing: after the .ru.srt is written, also render a Russian dub audio track (video.ru.dub.flac)
+    // beside the video. Requires a non-null IDubbingRenderer to be supplied to the processor. When on, the
+    // processor forces serialize-mode so the GPU TTS render never overlaps the next file's ASR.
+    public bool GenerateDubbing { get; init; }
+    public string DubbingOutputFormat { get; init; } = DubbingOutputPathBuilder.DefaultExtension;
 }
 
 public sealed class BatchSubtitleJob : NotifyPropertyChanged

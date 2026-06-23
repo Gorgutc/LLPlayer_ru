@@ -361,3 +361,9 @@ whispermodels/
 Whisper/
 tesseractmodels/
 .env*
+
+# AI dubbing runtime data (engine venv, model weights, rendered dub tracks) — never tracked.
+# NOTE: dub_sidecar/ (server.py, pyproject.toml, uv.lock) IS committed source.
+DubEngine/
+dubmodels/
+*.ru.dub.*

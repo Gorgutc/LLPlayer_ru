@@ -1,0 +1,27 @@
+[project]
+name = "llplayer-dub-sidecar"
+version = "0.1.0"
+description = "LLPlayer AI dubbing sidecar (local TTS + DSP). GPLv3 — part of LLPlayer's Corresponding Source."
+requires-python = ">=3.10,<3.13"
+
+# All deps below are GPLv3-compatible AND run in a SEPARATE PROCESS (the sidecar) communicating with the
+# GPLv3 app over localhost HTTP (mere aggregation / arms-length IPC). The `--mock` path needs NONE of
+# these (it is pure Python stdlib), so an off-GPU C#-pipeline smoke runs on a bare interpreter.
+#
+# torch must be installed from the CUDA 12.8 index for the RTX 5090 (Blackwell / sm_120):
+#   uv pip install torch>=2.7.0 --index-url https://download.pytorch.org/whl/cu128
+dependencies = [
+    "torch>=2.7.0",       # BSD-3 — install cu128 wheels (sm_120) for the 5090
+    "soundfile>=0.12",    # BSD-3 — WAV/FLAC encode
+    "numpy>=1.26",        # BSD-3 — bed assembly / mix
+    "librosa>=0.10",      # ISC — phase-vocoder time-stretch (NOT GPL rubberband) + resample
+    "av>=12",             # PyAV, BSD-3 over LGPL libav wheels — decode the original audio
+    # CosyVoice2-0.5B (Apache-2.0). Installed from the upstream repo during provisioning; see README.md.
+    # "cosyvoice @ git+https://github.com/FunAudioLLM/CosyVoice.git@<pinned>",
+]
+
+# DELIBERATELY EXCLUDED — non-commercial / unvetted / GPLv3-incompatible. The build gate
+# (scripts/codex/check-dub-licenses.ps1) FAILS if any of these appear in pyproject.toml or uv.lock:
+#   TTS, coqui-tts, xtts, f5-tts, f5_tts, nemo_toolkit, nemo-toolkit, audeering, ttsfrd
+#
+# Generate the pinned lockfile during provisioning:  uv lock   (commit the resulting uv.lock)
