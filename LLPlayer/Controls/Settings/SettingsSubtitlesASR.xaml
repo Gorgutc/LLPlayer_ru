@@ -737,6 +737,38 @@
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock
                                         Width="180">
+                                        Anti-Hallucination
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400">
+                                                    <Run Text="Recommended. Appends decoding flags that suppress garbled/repeated hallucinations and stop dropping speech that plays over background music:"/>
+                                                    <LineBreak />
+                                                    <LineBreak />
+                                                    --condition_on_previous_text False
+                                                    <LineBreak />
+                                                    --no_speech_threshold 0.4
+                                                    <LineBreak />
+                                                    --vad_threshold 0.35
+                                                    <LineBreak />
+                                                    <LineBreak />
+                                                    Any flag you set yourself in Extra Arguments takes precedence (it is not added twice).
+                                                </TextBlock>
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
+                                    <ToggleButton
+                                        IsChecked="{Binding FL.PlayerConfig.Subtitles.FasterWhisperConfig.AntiHallucination}" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock
+                                        Width="180">
                                         Process Priority
                                         <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
                                             <ToolTipService.ToolTip>

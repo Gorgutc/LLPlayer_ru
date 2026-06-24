@@ -93,6 +93,54 @@ public class BatchSubtitleTranslatorTests
     }
 
     [Fact]
+    public async Task TranslateAsync_ShouldForceSequentialRequestsForLlmContextWindow()
+    {
+        // ContextWindow is stateless but is deliberately collapsed to one concurrent request for LLM providers
+        // (so a single local model is not hammered, and the optional grammar pass does not double the parallel
+        // load). This pins that guard, which the KeepContext test does not exercise.
+        Utils.IsTesting = true;
+        Config config = new(true);
+        config.Subtitles.TranslateServiceType = TranslateServiceType.Ollama;
+        config.Subtitles.TranslateMaxConcurrency = 4;
+        config.Subtitles.TranslateChatConfig.TranslateMethod = ChatTranslateMethod.ContextWindow;
+
+        // Counts concurrency via the string overload; the context overload falls through to it by default.
+        var service = new ConcurrentCountingTranslateService(TranslateServiceType.Ollama);
+        BatchSubtitleTranslator translator = new(config.Subtitles, () => service);
+
+        List<SubtitleData> subtitles = [CreateSub("one"), CreateSub("two"), CreateSub("three")];
+
+        await translator.TranslateAsync(subtitles, Language.English, CancellationToken.None);
+
+        service.MaxConcurrent.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task TranslateAsync_ContextWindow_PassesSurroundingSourceLinesAsContext()
+    {
+        Utils.IsTesting = true;
+        Config config = new(true);
+        config.Subtitles.TranslateServiceType = TranslateServiceType.Ollama;
+        config.Subtitles.TranslateChatConfig.TranslateMethod = ChatTranslateMethod.ContextWindow;
+        config.Subtitles.TranslateChatConfig.ContextWindowBefore = 2;
+        config.Subtitles.TranslateChatConfig.ContextWindowAfter = 1;
+        config.Subtitles.ResegmentSubtitles = false;
+
+        var service = new CapturingContextTranslateService(TranslateServiceType.Ollama);
+        BatchSubtitleTranslator translator = new(config.Subtitles, () => service);
+
+        List<SubtitleData> subtitles = [CreateSub("l0"), CreateSub("l1"), CreateSub("l2"), CreateSub("l3")];
+
+        await translator.TranslateAsync(subtitles, Language.English, CancellationToken.None);
+
+        // Focal "l2" (index 2): before window 2 → [l0, l1]; after window 1 → [l3].
+        SubtitleTranslationContext ctx = service.Captured.Single(c => c.Text == "l2");
+        ctx.Before.Should().Equal("l0", "l1");
+        ctx.After.Should().Equal("l3");
+        subtitles.Select(s => s.TranslatedText).Should().Equal("ru:l0", "ru:l1", "ru:l2", "ru:l3");
+    }
+
+    [Fact]
     public async Task TranslateAsync_ShouldRejectUnknownSourceLanguage()
     {
         Utils.IsTesting = true;
@@ -259,6 +307,26 @@ public class BatchSubtitleTranslatorTests
             token.ThrowIfCancellationRequested();
             await Task.Yield();
             return translate(text);
+        }
+
+        public void Dispose() { }
+    }
+
+    // Captures the SubtitleTranslationContext passed to the context-aware overload so a test can assert the
+    // window the translator built (which surrounding lines, in which order).
+    private sealed class CapturingContextTranslateService(TranslateServiceType serviceType) : ITranslateService
+    {
+        public TranslateServiceType ServiceType { get; } = serviceType;
+        public List<SubtitleTranslationContext> Captured { get; } = new();
+
+        public void Initialize(Language src, TargetLanguage target) { }
+
+        public Task<string> TranslateAsync(string text, CancellationToken token) => Task.FromResult("ru:" + text);
+
+        public Task<string> TranslateAsync(SubtitleTranslationContext context, CancellationToken token)
+        {
+            Captured.Add(context);
+            return Task.FromResult("ru:" + context.Text);
         }
 
         public void Dispose() { }

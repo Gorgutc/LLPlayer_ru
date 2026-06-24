@@ -30,6 +30,7 @@ public class OpenAIBaseTranslateService : ITranslateService
     }
 
     private string? _basePrompt;
+    private string? _grammarPrompt;
     private readonly ConcurrentQueue<OpenAIMessage> _messageQueue = new();
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -49,17 +50,28 @@ public class OpenAIBaseTranslateService : ITranslateService
     {
         (TranslateLanguage srcLang, TranslateLanguage targetLang) = this.TryGetLanguage(src, target);
 
-        // setup prompt
-        string prompt = !_wordMode && TranslateMethod == ChatTranslateMethod.KeepContext
-            ? _chatConfig.PromptKeepContext
-            : _chatConfig.PromptOneByOne;
-
         string targetLangName = _chatConfig.IncludeTargetLangRegion
             ? target.DisplayName() : targetLang.Name;
 
-        _basePrompt = prompt
+        // setup prompt: word lookups always use the one-by-one prompt; subtitle translation picks the prompt
+        // for the configured method.
+        string prompt = !_wordMode
+            ? TranslateMethod switch
+            {
+                ChatTranslateMethod.ContextWindow => _chatConfig.PromptContextWindow,
+                ChatTranslateMethod.KeepContext => _chatConfig.PromptKeepContext,
+                _ => _chatConfig.PromptOneByOne,
+            }
+            : _chatConfig.PromptOneByOne;
+
+        string ApplyLangs(string template) => template
             .Replace("{source_lang}", srcLang.Name)
             .Replace("{target_lang}", targetLangName);
+
+        _basePrompt = ApplyLangs(prompt);
+        // The grammar-check prompt is prepared regardless of mode; it is only used when ContextWindow +
+        // GrammarCheckEnabled are both on (see DoContextWindow).
+        _grammarPrompt = ApplyLangs(_chatConfig.PromptGrammarCheck);
     }
 
     public async Task<string> TranslateAsync(string text, CancellationToken token)
@@ -70,6 +82,18 @@ public class OpenAIBaseTranslateService : ITranslateService
         }
 
         return await DoOneByOne(text, token);
+    }
+
+    public async Task<string> TranslateAsync(SubtitleTranslationContext context, CancellationToken token)
+    {
+        // Only LLM ContextWindow mode uses the surrounding lines; word mode and the other methods translate the
+        // focal line exactly as the string overload does.
+        if (_wordMode || TranslateMethod != ChatTranslateMethod.ContextWindow)
+        {
+            return await TranslateAsync(context.Text, token);
+        }
+
+        return await DoContextWindow(context, token);
     }
 
     // Anti-loop retry sampling. A deterministic argmax loop (temperature 0) reproduces the SAME loop on a
@@ -142,6 +166,100 @@ public class OpenAIBaseTranslateService : ITranslateService
         // Source is the raw subtitle `text` (NOT the prompt-wrapped string) so the degeneration budget is
         // measured against the actual line, not the instruction boilerplate.
         return await SendChatWithRecovery(messages, messages, onBeforeRetry: null, source: text, token);
+    }
+
+    // Context-window translation: one stateless request per line whose user message carries the surrounding
+    // source lines as read-only context (so the model can pick the correct inflected form for a sentence that
+    // spans cues), while still returning exactly one translated line. No chat history is accumulated, so there is
+    // no context-poisoning and the request is identical on retry.
+    private async Task<string> DoContextWindow(SubtitleTranslationContext context, CancellationToken token)
+    {
+        if (_basePrompt == null)
+            throw new InvalidOperationException("must be initialized");
+
+        string userContent = BuildContextWindowUserMessage(context.Before, context.Text, context.After);
+
+        OpenAIMessage[] messages =
+        [
+            new() { role = "system", content = _basePrompt },
+            new() { role = "user", content = userContent },
+        ];
+
+        // Source is the raw focal line so the degeneration check is source-aware (a faithful translation of a
+        // legitimately repetitive line is not mistaken for a loop).
+        string reply = await SendChatWithRecovery(messages, messages, onBeforeRetry: null, source: context.Text, token);
+
+        if (_chatConfig.GrammarCheckEnabled)
+        {
+            reply = await DoGrammarCheck(context.Text, reply, token);
+        }
+
+        return reply;
+    }
+
+    // Optional second pass: ask the model to fix target-language grammar/agreement/fluency in the first-pass
+    // translation without changing meaning. Best-effort — ANY content failure (degenerate/truncated/empty) or an
+    // empty correction keeps the first-pass translation, so the corrector can only improve, never lose, a good
+    // line. Cancellation still propagates.
+    private async Task<string> DoGrammarCheck(string source, string draft, CancellationToken token)
+    {
+        if (_grammarPrompt == null || string.IsNullOrWhiteSpace(draft))
+        {
+            return draft;
+        }
+
+        OpenAIMessage[] messages =
+        [
+            new() { role = "system", content = _grammarPrompt },
+            new() { role = "user", content = $"Source: {source}\nTranslation to correct: {draft}" },
+        ];
+
+        try
+        {
+            // `source: draft` — the correction's repetition budget scales against the draft it is polishing.
+            string corrected = await SendChatWithRecovery(messages, messages, onBeforeRetry: null, source: draft, token);
+            return string.IsNullOrWhiteSpace(corrected) ? draft : corrected;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (TranslationException)
+        {
+            // Corrector failed or still looped: keep the first-pass translation rather than dropping the line.
+            return draft;
+        }
+    }
+
+    /// <summary>
+    /// Formats the ContextWindow user message: the surrounding source lines as labelled, read-only context
+    /// around the single line to translate. Empty context sides render as "(none)". Public for unit testing.
+    /// </summary>
+    public static string BuildContextWindowUserMessage(IReadOnlyList<string> before, string focal, IReadOnlyList<string> after)
+    {
+        StringBuilder sb = new();
+        sb.Append("Context before:\n");
+        AppendContextLines(sb, before);
+        sb.Append("\nLine to translate:\n");
+        sb.Append(focal);
+        sb.Append("\n\nContext after:\n");
+        AppendContextLines(sb, after);
+        return sb.ToString();
+
+        static void AppendContextLines(StringBuilder sb, IReadOnlyList<string>? lines)
+        {
+            if (lines is null || lines.Count == 0)
+            {
+                sb.Append("(none)\n");
+                return;
+            }
+
+            foreach (string line in lines)
+            {
+                sb.Append(line);
+                sb.Append('\n');
+            }
+        }
     }
 
     /// <summary>

@@ -290,10 +290,12 @@ public class SubTranslator
             int concurrency = _config.TranslateMaxConcurrency;
 
             if (concurrency > 1 && _config.TranslateServiceType.IsLLM() &&
-                _config.TranslateChatConfig.TranslateMethod == ChatTranslateMethod.KeepContext)
+                _config.TranslateChatConfig.TranslateMethod
+                    is ChatTranslateMethod.KeepContext or ChatTranslateMethod.ContextWindow)
             {
-                // fixed to 1
-                // it must be sequential because of maintaining context
+                // fixed to 1: KeepContext must be sequential to preserve chat-history order; ContextWindow is
+                // kept sequential so a single local LLM is not hit with concurrent requests (the optional
+                // grammar pass already doubles the request count per line).
                 concurrency = 1;
             }
 
@@ -361,7 +363,8 @@ public class SubTranslator
             string translateText = SubtitleTextUtil.FlattenText(text);
             if (CanDebug) Log.Debug($"Translation Start {sub.Index} - {translateText}");
             EnsureTranslationService();
-            string translated = await _translateService!.TranslateAsync(translateText, token);
+            SubtitleTranslationContext context = BuildTranslationContext(sub, translateText);
+            string translated = await _translateService!.TranslateAsync(context, token);
 
             // Do not cache an empty/whitespace result as a successful translation. Leaving
             // TranslatedText null keeps IsTranslated false, so DisplayText falls back to the source
@@ -403,5 +406,31 @@ public class SubTranslator
             // Skip this subtitle instead of disabling the whole track; it will be retried later.
             if (CanDebug) Log.Debug($"Translation skipped {sub.Index}: {ex.Message}");
         }
+    }
+
+    // Builds the read-only context window (surrounding source lines) for the focal subtitle. Only LLM
+    // ContextWindow mode consumes it; for every other provider/method an empty-context request is returned
+    // (the service then translates the focal line exactly as before). The neighbour snapshot is taken under
+    // SubManager's subs lock (GetContextWindow), so it cannot tear against concurrent ASR streaming.
+    private SubtitleTranslationContext BuildTranslationContext(SubtitleData sub, string focalText)
+    {
+        var chat = _config.TranslateChatConfig;
+
+        if (!_config.TranslateServiceType.IsLLM() || chat.TranslateMethod != ChatTranslateMethod.ContextWindow)
+        {
+            return new SubtitleTranslationContext { Text = focalText };
+        }
+
+        int before = Math.Max(0, chat.ContextWindowBefore);
+        int after = Math.Max(0, chat.ContextWindowAfter);
+
+        (List<string> rawBefore, List<string> rawAfter) = _subManager.GetContextWindow(sub, before, after);
+
+        return new SubtitleTranslationContext
+        {
+            Text = focalText,
+            Before = rawBefore.Select(SubtitleTextUtil.FlattenText).ToList(),
+            After = rawAfter.Select(SubtitleTextUtil.FlattenText).ToList(),
+        };
     }
 }

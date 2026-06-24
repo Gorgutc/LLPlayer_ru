@@ -1178,6 +1178,18 @@ public partial class FasterWhisperASRService : IASRService
 
         string arguments = args.Build();
 
+        // Append anti-hallucination decoding defaults (condition_on_previous_text off + more permissive
+        // speech/VAD thresholds) BEFORE ExtraArguments so an explicit user value still wins, and de-duplicated
+        // so no flag is ever passed twice (a duplicate/unknown flag would fail the whole faster-whisper run).
+        if (config.AntiHallucination)
+        {
+            string anti = AntiHallucinationArgsFor(config.ExtraArguments);
+            if (!string.IsNullOrWhiteSpace(anti))
+            {
+                arguments += $" {anti}";
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(config.ExtraArguments))
         {
             arguments += $" {config.ExtraArguments}";
@@ -1199,6 +1211,44 @@ public partial class FasterWhisperASRService : IASRService
         }
 
         return cmd;
+    }
+
+    // Anti-hallucination / don't-drop-speech-under-music decoding defaults for faster-whisper-xxl. Deliberately
+    // limited to widely-supported, standard flags so a default-on append cannot break the run on a user's build:
+    //  - condition_on_previous_text False: the main repetition-loop driver (mirrors whisper.cpp NoContext, flip 1.5).
+    //  - no_speech_threshold 0.4 (down from 0.6): stop discarding audible speech that co-occurs with music as silence.
+    //  - vad_threshold 0.35 (down from ~0.45): more permissive VAD so music-masked speech is kept.
+    internal static readonly (string Flag, string Value)[] AntiHallucinationFlags =
+    [
+        ("--condition_on_previous_text", "False"),
+        ("--no_speech_threshold", "0.4"),
+        ("--vad_threshold", "0.35"),
+    ];
+
+    /// <summary>
+    /// Returns the anti-hallucination flags NOT already present (by flag name) in <paramref name="extraArguments"/>,
+    /// as a single argument string (empty when the user already set them all). Matching is case-insensitive and
+    /// handles both "--flag value" and "--flag=value" forms, so a default flag is never duplicated.
+    /// </summary>
+    public static string AntiHallucinationArgsFor(string? extraArguments)
+    {
+        string extra = extraArguments ?? string.Empty;
+        List<string> parts = new();
+        foreach ((string flag, string value) in AntiHallucinationFlags)
+        {
+            if (ContainsFlag(extra, flag))
+            {
+                continue;
+            }
+            parts.Add($"{flag} {value}");
+        }
+        return string.Join(' ', parts);
+    }
+
+    private static bool ContainsFlag(string arguments, string flag)
+    {
+        // A flag token is bounded by start/whitespace on the left and whitespace, '=' or end on the right.
+        return Regex.IsMatch(arguments, $@"(^|\s){Regex.Escape(flag)}($|[\s=])", RegexOptions.IgnoreCase);
     }
 
     // Rewrites the faster-whisper args to run on CPU for the background fallback, keeping the rest of the

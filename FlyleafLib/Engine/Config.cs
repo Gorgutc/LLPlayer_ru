@@ -208,6 +208,21 @@ public class Config : NotifyPropertyChanged
                 chat.PromptKeepContext = TranslateChatConfig.DefaultPromptKeepContext.ReplaceLineEndings("\n");
             }
         }
+
+        if (!parsed || loadedVer <= System.Version.Parse("0.3.5"))
+        {
+            // Switch the default LLM chat method from KeepContext (the prior default) to the new ContextWindow
+            // method (surrounding-line context + optional grammar pass) which produces more accurate, naturally
+            // inflected translations. Only a config still on the OLD default is migrated; an explicit OneByOne
+            // choice is preserved. New configs already default to ContextWindow via TranslateChatConfig.
+            // Re-applies on load until the config is saved with the new app version, after which a user who
+            // deliberately switches back to KeepContext is respected. The new ContextWindow/GrammarCheck fields
+            // are additive and absent-defaulting, so no migration is needed for them.
+            if (Subtitles.TranslateChatConfig.TranslateMethod == ChatTranslateMethod.KeepContext)
+            {
+                Subtitles.TranslateChatConfig.TranslateMethod = ChatTranslateMethod.ContextWindow;
+            }
+        }
     }
 
     internal void SetPlayer(Player player)

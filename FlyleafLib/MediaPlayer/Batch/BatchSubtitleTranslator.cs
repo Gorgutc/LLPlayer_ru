@@ -35,28 +35,44 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         using ITranslateService service = _createService();
         service.Initialize(sourceLanguage, TargetLanguage.Russian);
 
-        List<SubtitleData> translateSubs = subtitles
-            .Where(s => !s.IsTranslated && !string.IsNullOrWhiteSpace(s.Text))
-            .ToList();
+        // Indices (into the full list) of the lines that still need translation. Indices — not a filtered
+        // sublist — so the ContextWindow neighbours can be read from the full, in-order list (including lines
+        // that were already translated or skipped).
+        List<int> targetIndices = new();
+        for (int i = 0; i < subtitles.Count; i++)
+        {
+            SubtitleData s = subtitles[i];
+            if (!s.IsTranslated && !string.IsNullOrWhiteSpace(s.Text))
+            {
+                targetIndices.Add(i);
+            }
+        }
 
         // When re-segmentation is on, keep the translated text within the same at-most-2-line shape as the
         // (already re-segmented) source cue. Null = leave the translation as the model returned it.
         SubtitleSegmentOptions? wrapOpt = _config.ResegmentSubtitles ? _config.SubtitleSegmentOptions : null;
 
+        bool useWindow = service.ServiceType.IsLLM() &&
+                         _config.TranslateChatConfig.TranslateMethod == ChatTranslateMethod.ContextWindow;
+
         int concurrency = _config.TranslateMaxConcurrency;
         if (concurrency > 1 &&
             service.ServiceType.IsLLM() &&
-            _config.TranslateChatConfig.TranslateMethod == ChatTranslateMethod.KeepContext)
+            _config.TranslateChatConfig.TranslateMethod
+                is ChatTranslateMethod.KeepContext or ChatTranslateMethod.ContextWindow)
         {
+            // KeepContext must be sequential to preserve chat-history order; ContextWindow is kept sequential so
+            // a single local LLM is not hit with concurrent requests (the optional grammar pass already doubles
+            // the per-line request count).
             concurrency = 1;
         }
 
         if (concurrency <= 1)
         {
-            foreach (SubtitleData sub in translateSubs)
+            foreach (int i in targetIndices)
             {
                 token.ThrowIfCancellationRequested();
-                await TranslateSubAsync(service, sub, wrapOpt, token);
+                await TranslateSubAsync(service, subtitles, i, _config, useWindow, wrapOpt, token);
             }
 
             return;
@@ -69,23 +85,31 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         };
 
         await Parallel.ForEachAsync(
-            translateSubs,
+            targetIndices,
             parallelOptions,
-            async (sub, ct) => await TranslateSubAsync(service, sub, wrapOpt, ct));
+            async (i, ct) => await TranslateSubAsync(service, subtitles, i, _config, useWindow, wrapOpt, ct));
     }
 
     private static async Task TranslateSubAsync(
         ITranslateService service,
-        SubtitleData sub,
+        IList<SubtitleData> subtitles,
+        int index,
+        Config.SubtitlesConfig config,
+        bool useWindow,
         SubtitleSegmentOptions? wrapOpt,
         CancellationToken token)
     {
+        SubtitleData sub = subtitles[index];
         Debug.Assert(!string.IsNullOrWhiteSpace(sub.Text));
 
         string text = SubtitleTextUtil.FlattenText(sub.Text!);
+        SubtitleTranslationContext context = useWindow
+            ? BuildContext(subtitles, index, text, config.TranslateChatConfig)
+            : new SubtitleTranslationContext { Text = text };
+
         try
         {
-            string translated = await service.TranslateAsync(text, token);
+            string translated = await service.TranslateAsync(context, token);
 
             // Parity with interactive SubTranslator: never cache an empty/whitespace reply as a successful
             // translation. Leaving TranslatedText unset keeps IsTranslated false, so the writer falls back to
@@ -114,6 +138,37 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             // line for this subtitle, and the batch run continues to the next line. (Not logged here to keep
             // the batch core decoupled from the WPF-coupled Logger; the degraded-line trade-off is documented
             // in product-behavior-contract.md.)
+        }
+    }
+
+    // Builds the read-only ContextWindow window (surrounding source lines) for the focal subtitle at `index`,
+    // drawn from the full in-order list. Mirrors the interactive path (SubTranslator.BuildTranslationContext).
+    private static SubtitleTranslationContext BuildContext(
+        IList<SubtitleData> subtitles, int index, string focalText, TranslateChatConfig chat)
+    {
+        int before = Math.Max(0, chat.ContextWindowBefore);
+        int after = Math.Max(0, chat.ContextWindowAfter);
+
+        return new SubtitleTranslationContext
+        {
+            Text = focalText,
+            Before = Collect(subtitles, index - before, index - 1),
+            After = Collect(subtitles, index + 1, index + after),
+        };
+
+        static List<string> Collect(IList<SubtitleData> subs, int from, int to)
+        {
+            List<string> list = new();
+            from = Math.Max(0, from);
+            to = Math.Min(subs.Count - 1, to);
+            for (int i = from; i <= to; i++)
+            {
+                string? t = subs[i].Text;
+                if (string.IsNullOrWhiteSpace(t))
+                    continue;
+                list.Add(SubtitleTextUtil.FlattenText(t));
+            }
+            return list;
         }
     }
 
