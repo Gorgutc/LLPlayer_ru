@@ -48,10 +48,16 @@ public static class DubbingOutputPathBuilder
             if (string.IsNullOrWhiteSpace(directory))
                 directory = Directory.GetCurrentDirectory();
 
-            return Directory
-                .EnumerateFiles(directory, $"{fileName}.ru.dub.*", SearchOption.TopDirectoryOnly)
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault(OutputExists);
+            string[] paths = Directory.GetFiles(directory, $"{fileName}.ru.dub.*", SearchOption.TopDirectoryOnly);
+            System.Array.Sort(paths, System.StringComparer.OrdinalIgnoreCase);
+
+            foreach (string path in paths)
+            {
+                if (OutputExists(path))
+                    return path;
+            }
+
+            return null;
         }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }

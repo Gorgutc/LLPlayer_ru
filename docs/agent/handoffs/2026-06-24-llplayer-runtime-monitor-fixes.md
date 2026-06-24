@@ -3,6 +3,25 @@
 Run time: 2026-06-24T15:47:35+03:00
 Branch: `codex/llplayer-runtime-monitor-fixes`
 
+## Update: 2026-06-24T16:06:46+03:00
+
+The .NET SDK was installed at `C:\Program Files\dotnet\dotnet.exe` and verified as SDK `10.0.301`. The active Codex
+process still did not see `dotnet` through its inherited `PATH`, so verification commands were run with
+`C:\Program Files\dotnet` prepended to `PATH` for the command process.
+
+Full verification initially exposed a compile error in `DubbingOutputPathBuilder.ResolveExistingRussianDubPath`: the
+new `.OrderBy(...).FirstOrDefault(...)` chain needed LINQ. The follow-up branch
+`codex/llplayer-dotnet-verify-fix` replaces that chain with `Directory.GetFiles` plus `System.Array.Sort`, avoiding a
+new `using` and preserving deterministic file selection.
+
+Verified after the follow-up fix:
+
+- `git diff --check`
+- `powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $env:Path = 'C:\Program Files\dotnet;' + $env:Path; & .\scripts\codex\verify-fast.ps1 }"`
+- `powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $env:Path = 'C:\Program Files\dotnet;' + $env:Path; & .\scripts\codex\verify.ps1 }"`
+
+Full gate result: `LLPlayer full verification completed.` Tests: `168` passed, `0` failed, `0` skipped.
+
 ## What Changed
 
 - Fixed WPF dispatcher access around dubbed audio auto-load so `ExternalAudioStreams` is updated on the UI thread and stale selected media is ignored.
