@@ -15,22 +15,32 @@ public class SubtitleSegmenterTests
         MinCueDurationSec = 1.0,
     };
 
+    // Three-line cap with the 0.3.7 relaxed defaults.
+    private static readonly SubtitleSegmentOptions Opt3 = new()
+    {
+        MaxCharsPerLine = 48,
+        MaxLinesPerCue = 3,
+        MaxCjkCharsPerLine = 24,
+        MaxCueDurationSec = 7.0,
+        MinCueDurationSec = 1.0,
+    };
+
     private static string Normalize(string s) =>
         string.Join(' ', s.Replace('\n', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries));
 
     [Fact]
-    public void WrapTwoLines_ShortText_ReturnedUnchangedWithoutBreak()
+    public void WrapLines_ShortText_ReturnedUnchangedWithoutBreak()
     {
-        string result = SubtitleSegmenter.WrapTwoLines("Hello there my friend.", Opt);
+        string result = SubtitleSegmenter.WrapLines("Hello there my friend.", Opt);
         result.Should().Be("Hello there my friend.");
         result.Should().NotContain("\n");
     }
 
     [Fact]
-    public void WrapTwoLines_LongText_SplitsIntoTwoBalancedLines()
+    public void WrapLines_LongText_SplitsIntoTwoBalancedLines()
     {
         string input = "The quick brown fox jumps over the lazy dog near the river.";
-        string result = SubtitleSegmenter.WrapTwoLines(input, Opt);
+        string result = SubtitleSegmenter.WrapLines(input, Opt);
 
         string[] lines = result.Split('\n');
         lines.Should().HaveCount(2);
@@ -39,10 +49,10 @@ public class SubtitleSegmenterTests
     }
 
     [Fact]
-    public void WrapTwoLines_SingleOverlongWord_NotSplitMidWord()
+    public void WrapLines_SingleOverlongWord_NotSplitMidWord()
     {
         string input = "Supercalifragilisticexpialidocioussupercalifragilisticword";
-        string result = SubtitleSegmenter.WrapTwoLines(input, Opt);
+        string result = SubtitleSegmenter.WrapLines(input, Opt);
         result.Should().Be(input); // cannot break a single word; returned as-is, no crash
     }
 
@@ -151,12 +161,12 @@ public class SubtitleSegmenterTests
     }
 
     [Fact]
-    public void WrapTwoLines_MixedLatinAndCjk_NeverSplitsInsideLatinWord()
+    public void WrapLines_MixedLatinAndCjk_NeverSplitsInsideLatinWord()
     {
         // CJK-dominant cue with an embedded Latin word: the break must land at the word boundary, never inside
         // "internationalization".
         string input = "internationalization " + new string('字', 12);
-        string result = SubtitleSegmenter.WrapTwoLines(input, Opt);
+        string result = SubtitleSegmenter.WrapLines(input, Opt);
 
         result.Should().NotContain("internationaliza\n");
         result.Replace("\n", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries)
@@ -184,5 +194,70 @@ public class SubtitleSegmenterTests
     {
         var cues = SubtitleSegmenter.Resegment("   ", TimeSpan.Zero, TimeSpan.FromSeconds(1), Opt);
         cues.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Defaults_AreThreeLineRelaxed()
+    {
+        SubtitleSegmentOptions o = new();
+        o.MaxLinesPerCue.Should().Be(3);
+        o.MaxCharsPerLine.Should().Be(48);
+        o.MaxCjkCharsPerLine.Should().Be(24);
+        o.MaxCueDurationSec.Should().Be(7.0);
+        o.MinCueDurationSec.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void WrapLines_ThreeLineCap_LongText_UsesThreeBalancedLines_NoWordSplit()
+    {
+        // ~120 chars: cannot fit in two <=48 lines (>96), so it must use the third line.
+        string input =
+            "The quick brown fox jumps over the lazy dog while the curious cat watches " +
+            "silently from the old wooden fence nearby today.";
+
+        string result = SubtitleSegmenter.WrapLines(input, Opt3);
+
+        string[] lines = result.Split('\n');
+        lines.Should().HaveCount(3);
+        lines.Should().OnlyContain(l => l.Length <= Opt3.MaxCharsPerLine);
+        Normalize(result).Should().Be(Normalize(input)); // no text lost, no word split
+    }
+
+    [Fact]
+    public void WrapLines_ThreeLineCap_TextThatFitsInTwo_DoesNotUseThirdLine()
+    {
+        // Fits in two <=48 lines, so even with a 3-line budget it should NOT be padded out to 3 lines.
+        string input = "Hello there my dear old friend, how are you doing on this fine sunny morning?";
+
+        string result = SubtitleSegmenter.WrapLines(input, Opt3);
+
+        result.Split('\n').Length.Should().BeLessThanOrEqualTo(2);
+        Normalize(result).Should().Be(Normalize(input));
+    }
+
+    [Fact]
+    public void WrapLines_ThreeLineCap_SingleOverlongWord_NotSplit()
+    {
+        string input = "Supercalifragilisticexpialidocioussupercalifragilisticwordthatisextremelylong";
+        SubtitleSegmenter.WrapLines(input, Opt3).Should().Be(input); // no break opportunity -> single line
+    }
+
+    [Fact]
+    public void Resegment_ThreeLineCap_CuesAreAtMostThreeLines_NoTextLost()
+    {
+        string input =
+            "Hello there my friend, how are you doing today? I really hope that you are " +
+            "having a wonderful and pleasant afternoon out there in the bright sunshine.";
+
+        var cues = SubtitleSegmenter.Resegment(input, TimeSpan.Zero, TimeSpan.FromSeconds(8), Opt3);
+
+        foreach (var cue in cues)
+        {
+            string[] lines = cue.Text.Split('\n');
+            lines.Length.Should().BeLessThanOrEqualTo(3);
+            lines.Should().OnlyContain(l => l.Length <= Opt3.MaxCharsPerLine);
+        }
+
+        Normalize(string.Join(' ', cues.Select(c => c.Text))).Should().Be(Normalize(input));
     }
 }

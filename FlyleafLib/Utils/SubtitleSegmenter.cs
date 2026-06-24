@@ -14,16 +14,16 @@ namespace FlyleafLib;
 public sealed class SubtitleSegmentOptions
 {
     /// <summary>Max characters per line for space-separated (Latin/Cyrillic/…) scripts.</summary>
-    public int MaxCharsPerLine { get; init; } = 42;
+    public int MaxCharsPerLine { get; init; } = 48;
 
     /// <summary>Max lines per subtitle cue.</summary>
-    public int MaxLinesPerCue { get; init; } = 2;
+    public int MaxLinesPerCue { get; init; } = 3;
 
     /// <summary>Max characters per line for space-less scripts (CJK, Thai, …).</summary>
-    public int MaxCjkCharsPerLine { get; init; } = 21;
+    public int MaxCjkCharsPerLine { get; init; } = 24;
 
     /// <summary>A cue longer than this (seconds) is split into more cues when it has enough text to do so. 0 disables.</summary>
-    public double MaxCueDurationSec { get; init; } = 6.0;
+    public double MaxCueDurationSec { get; init; } = 7.0;
 
     /// <summary>Never emit a cue shorter than this (seconds); a too-short sliver is merged into its neighbour. 0 disables.</summary>
     public double MinCueDurationSec { get; init; } = 1.0;
@@ -48,9 +48,9 @@ public static class SubtitleSegmenter
     /// <summary>
     /// Wrap a single cue's text into at most <see cref="SubtitleSegmentOptions.MaxLinesPerCue"/> lines using
     /// '\n'. Returns the text unchanged when it already fits on one line. Never splits inside a word and never
-    /// drops text.
+    /// drops text. (Was <c>WrapTwoLines</c>; renamed once the cap became configurable — 2 was hardcoded.)
     /// </summary>
-    public static string WrapTwoLines(string text, SubtitleSegmentOptions opt)
+    public static string WrapLines(string text, SubtitleSegmentOptions opt)
     {
         string norm = Normalize(text);
         if (norm.Length == 0)
@@ -62,8 +62,8 @@ public static class SubtitleSegmenter
 
     /// <summary>
     /// Split <paramref name="text"/> spanning [<paramref name="start"/>, <paramref name="end"/>] into one or
-    /// more cues, each wrapped to at most 2 lines, with times redistributed by character proportion. Returns
-    /// at least one cue and never loses text.
+    /// more cues, each wrapped to at most <see cref="SubtitleSegmentOptions.MaxLinesPerCue"/> lines, with times
+    /// redistributed by character proportion. Returns at least one cue and never loses text.
     /// </summary>
     public static List<(string Text, TimeSpan Start, TimeSpan End)> Resegment(
         string text, TimeSpan start, TimeSpan end, SubtitleSegmentOptions opt)
@@ -207,13 +207,25 @@ public static class SubtitleSegmenter
 
     // ---- wrapping & cue splitting (break-opportunity based) ------------------------------------------
 
-    // Wrap into at most `maxLines` lines, breaking only at valid break opportunities, balancing line lengths.
+    // Wrap into at most `maxLines` lines, breaking only at valid break opportunities, never inside a word.
+    // maxLines <= 2 keeps the original single-break behaviour byte-for-byte; maxLines >= 3 uses a balanced
+    // multi-line packer (fewest lines that keep each line within perLine, then minimise the widest line).
     private static string Wrap(string text, int perLine, int maxLines)
     {
         text = text.Trim();
         if (text.Length <= perLine || maxLines <= 1)
             return text;
 
+        return maxLines == 2
+            ? WrapSingleBreak(text, perLine)
+            : WrapBalanced(text, perLine, maxLines);
+    }
+
+    // The original two-line wrap: pick the single break opportunity that best balances the two lines (feasible
+    // within perLine wins, then a punctuation break, then the smallest max-line). Unchanged from the 0.3.5
+    // behaviour so existing 2-line output is preserved exactly.
+    private static string WrapSingleBreak(string text, int perLine)
+    {
         int best = -1;
         int bestScore = int.MaxValue;
         bool bestFeasible = false;
@@ -264,6 +276,96 @@ public static class SubtitleSegmenter
         string top = text[..best].TrimEnd();
         string bottom = text[best..].TrimStart();
         return top + "\n" + bottom;
+    }
+
+    // Balanced multi-line wrap (used for maxLines >= 3). Uses the FEWEST lines that keep every line within
+    // perLine (so a short cue still uses 1-2 lines, only a long one uses the extra line), then minimises the
+    // widest line so the lines are evenly balanced rather than top-heavy. Breaks only at valid break
+    // opportunities and never inside a word; a single over-long word is left on its own (overflowing) line.
+    private static string WrapBalanced(string text, int perLine, int maxLines)
+    {
+        // Candidate boundaries: 0, every legal break opportunity, end.
+        List<int> cuts = [0];
+        for (int i = 1; i < text.Length; i++)
+        {
+            if (CanBreakBefore(text, i))
+                cuts.Add(i);
+        }
+        cuts.Add(text.Length);
+
+        if (cuts.Count <= 2)
+            return text; // no legal internal break -> keep as one line, never cut a word
+
+        // Longest unbreakable unit (a line can never be narrower than this) and the total trimmed width.
+        int need = 0;
+        for (int k = 0; k + 1 < cuts.Count; k++)
+            need = Math.Max(need, TrimmedLen(text, cuts[k], cuts[k + 1]));
+        int total = TrimmedLen(text, 0, text.Length);
+
+        // Fewest lines that keep each line within perLine, capped at maxLines.
+        int target = Math.Min(PackLines(text, cuts, perLine).Count, maxLines);
+
+        // Smallest max-line-width that still fits in `target` lines -> evenly balanced lines.
+        int lo = Math.Max(1, need);
+        int hi = Math.Max(lo, total);
+        int bestWidth = hi;
+        while (lo <= hi)
+        {
+            int mid = lo + ((hi - lo) / 2);
+            if (PackLines(text, cuts, mid).Count <= target)
+            {
+                bestWidth = mid;
+                hi = mid - 1;
+            }
+            else
+            {
+                lo = mid + 1;
+            }
+        }
+
+        return string.Join("\n", PackLines(text, cuts, bestWidth));
+    }
+
+    // Greedily pack the break-delimited tokens of `text` (boundaries in `cuts`) into lines whose trimmed width
+    // is at most `width`. A token wider than `width` is placed alone (overflowing) rather than split. Returns
+    // the trimmed line strings; the concatenation (with the original spacing at the breaks) loses no text.
+    private static List<string> PackLines(string text, List<int> cuts, int width)
+    {
+        List<string> lines = [];
+        int lineStart = cuts[0];
+        int lastCut = cuts[0];
+
+        for (int ci = 1; ci < cuts.Count; ci++)
+        {
+            int cut = cuts[ci];
+            bool nothingPlaced = lastCut == lineStart;
+
+            if (nothingPlaced || TrimmedLen(text, lineStart, cut) <= width)
+            {
+                // Extend the current line to this break (always place at least one token per line).
+                lastCut = cut;
+            }
+            else
+            {
+                // Close the current line at the last fitting break, then start the next line with this token.
+                lines.Add(text[lineStart..lastCut].Trim());
+                lineStart = lastCut;
+                lastCut = cut;
+            }
+        }
+
+        lines.Add(text[lineStart..cuts[^1]].Trim());
+        return lines;
+    }
+
+    // Trimmed length of text[a..b] (ignores leading/trailing whitespace inside the slice).
+    private static int TrimmedLen(string text, int a, int b)
+    {
+        while (a < b && char.IsWhiteSpace(text[a]))
+            a++;
+        while (b > a && char.IsWhiteSpace(text[b - 1]))
+            b--;
+        return b - a;
     }
 
     // Split into `cues` contiguous substrings at valid break opportunities near evenly spaced character
