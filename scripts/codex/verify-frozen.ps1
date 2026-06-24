@@ -56,6 +56,7 @@ try {
     Require-Text ".\scripts\codex\ship.ps1" "yt-dlp\.exe_here" "Ship smoke must create yt-dlp placeholder."
     Require-Text ".\scripts\codex\ship.ps1" "LLPlayer\\lib\\7z\.dll" "Ship smoke must verify publish output contains LLPlayer/lib/7z.dll."
     Require-Text ".\scripts\codex\ship.ps1" "dub_sidecar\\server\.py" "Ship smoke must verify committed dubbing sidecar source is published."
+    Require-Text ".\scripts\codex\ship.ps1" "dub_sidecar\\uv\.lock" "Ship smoke must verify committed dubbing lockfile is published."
     Require-Text ".\scripts\codex\ship.ps1" "DubEngine" "Ship smoke must verify dubbing runtime engine is not published."
     Require-Text ".\scripts\codex\ship.ps1" "\*\.ru\.dub\.\*" "Ship smoke must verify rendered dub outputs are not published."
     Require-Text ".\scripts\codex\ship.ps1" "7-Zip is not installed" "Ship smoke must document local 7-Zip dry-run fallback."
@@ -85,6 +86,9 @@ try {
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "Open CheatSheet with F1" "Manual smoke matrix must cover CheatSheet workflow."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "verification_reviewer" "Subagent review matrix must require verification review."
     Require-Text ".\.codex\config.toml" "LLPlayer_ru" ".codex/config.toml must describe LLPlayer_ru."
+    Require-Text ".\LLPlayer\LLPlayer.csproj" "dub_sidecar\\uv\.lock" "LLPlayer publish items must include dub_sidecar/uv.lock."
+    Require-Text ".\dub_sidecar\pyproject.toml" "pytorch-cu128" "Dubbing sidecar must pin torch to the CUDA 12.8 PyTorch index."
+    Require-Text ".\dub_sidecar\uv.lock" "https://download\.pytorch\.org/whl/cu128" "Dubbing lockfile must resolve torch from the CUDA 12.8 PyTorch index."
 
     $forbidden = @(
         "package.json",
@@ -142,7 +146,8 @@ try {
         "FFmpeg/swscale-9.dll",
         "LLPlayer/lib/7z.dll",
         "LLPlayer/lib/license.7z.txt",
-        "Plugins/YoutubeDL/Libs/yt-dlp.exe_here"
+        "Plugins/YoutubeDL/Libs/yt-dlp.exe_here",
+        "dub_sidecar/uv.lock"
     )
     foreach ($asset in $expectedTrackedAssets) {
         Require-TrackedPath $asset

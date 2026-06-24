@@ -18,11 +18,12 @@ Runtime data (NOT committed): the venv (`DubEngine/`), model weights (`dubmodels
 
 ```powershell
 # 1. Get uv (https://docs.astral.sh/uv) — shipped beside the app or installed once.
-# 2. Create the dedicated dub venv next to the exe (separate from the ASR env):
-uv venv "DubEngine"
-# 3. Install the CUDA 12.8 build of torch (sm_120) FIRST, then the rest:
-uv pip install --python "DubEngine\Scripts\python.exe" torch>=2.7.0 --index-url https://download.pytorch.org/whl/cu128
-uv pip install --python "DubEngine\Scripts\python.exe" soundfile numpy librosa av
+# 2. Create/sync the dedicated dub venv next to the exe (separate from the ASR env):
+$env:UV_PROJECT_ENVIRONMENT = "DubEngine"
+# 3. Install the locked base sidecar dependencies into DubEngine.
+#    pyproject.toml pins torch to https://download.pytorch.org/whl/cu128 for sm_120.
+uv sync --locked --no-install-project --python 3.12
+Remove-Item Env:UV_PROJECT_ENVIRONMENT
 # 4. Install CosyVoice2 (Apache-2.0) from upstream and download the 0.5B weights into dubmodels\.
 #    (Pin a commit; see https://github.com/FunAudioLLM/CosyVoice and huggingface.co/FunAudioLLM/CosyVoice2-0.5B)
 # 5. Smoke the contract WITHOUT the GPU stack (pure stdlib mock):
