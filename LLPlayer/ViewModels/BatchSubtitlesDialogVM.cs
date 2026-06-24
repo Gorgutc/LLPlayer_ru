@@ -305,25 +305,21 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         try
         {
             bool overwrite = OverwriteExisting;
-            List<(string Path, bool HasTranslation)> scanned = await Task.Run(() =>
+            bool generateDubbing = GenerateDubbing;
+            List<(string Path, bool HasTranslation, bool HasDub)> scanned = await Task.Run(() =>
                 BatchVideoScanner.Scan(FolderPath, Recursive)
-                    .Select(path => (path, HasTranslation: SubtitleOutputPathBuilder.TranslationExists(path)))
+                    .Select(path => (
+                        path,
+                        HasTranslation: SubtitleOutputPathBuilder.TranslationExists(path),
+                        HasDub: DubbingOutputPathBuilder.DubExistsAnyFormat(path)))
                     .ToList());
 
             UnsubscribeJobs();
             Jobs.Clear();
-            foreach ((string mediaPath, bool hasTranslation) in scanned)
+            foreach ((string mediaPath, bool hasTranslation, bool hasDub) in scanned)
             {
                 BatchSubtitleJob job = new(mediaPath, FolderPath);
-                if (hasTranslation)
-                {
-                    // Already translated — show it as done. Unless overwriting, drop it from the
-                    // default run so Start only processes the not-yet-translated files.
-                    job.Status = BatchSubtitleStatus.Completed;
-                    job.CompletedAt = DateTimeOffset.Now;
-                    if (!overwrite)
-                        job.Include = false;
-                }
+                BatchSubtitleScanPolicy.ApplyOutputState(job, hasTranslation, hasDub, overwrite, generateDubbing);
 
                 job.PropertyChanged += OnJobPropertyChanged;
                 Jobs.Add(job);
@@ -500,6 +496,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         statusTimer.Start();
 
         bool canceled = false;
+        IDubbingRenderer? dubber = null;
         try
         {
             Progress<BatchSubtitleProgress> progress = new(update =>
@@ -542,6 +539,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             });
 
             DubbingConfig dubbingConfig = FL.PlayerConfig.Subtitles.DubbingConfig;
+            dubber = GenerateDubbing ? new DubbingRenderer(dubbingConfig) : null;
 
             BatchSubtitleProcessor processor = new(
                 new BatchAsrTranscriber(
@@ -563,7 +561,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                     DubbingOutputFormat = dubbingConfig.OutputFormat
                 },
                 progress,
-                GenerateDubbing ? new DubbingRenderer(dubbingConfig) : null);
+                dubber);
 
             await processor.ProcessAsync(workerJobs, _cts.Token);
         }
@@ -579,6 +577,16 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         }
         finally
         {
+            try
+            {
+                if (dubber is not null)
+                    await dubber.DisposeAsync();
+            }
+            catch
+            {
+                // Best-effort sidecar cleanup must not prevent the batch UI/activity state from resetting.
+            }
+
             statusTimer.Stop();
             _cts?.Dispose();
             _cts = null;
@@ -736,7 +744,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             job.Status is BatchSubtitleStatus.RunningASR
                 or BatchSubtitleStatus.QueuedForTranslation
                 or BatchSubtitleStatus.Translating
-                or BatchSubtitleStatus.Saving);
+                or BatchSubtitleStatus.Saving
+                or BatchSubtitleStatus.Dubbing);
 
         int included = Jobs.Count(job => job.Include);
         string cpuPrefix = IsRunning && IsRunningOnCpu ? "🖥 ASR on CPU (you're active) — " : "";
@@ -781,7 +790,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 case BatchSubtitleStatus.QueuedForTranslation:
                 case BatchSubtitleStatus.Translating:
                 case BatchSubtitleStatus.Saving:
-                    sum += 0.95; // ASR done, finishing up (translate + write)
+                case BatchSubtitleStatus.Dubbing:
+                    sum += 0.95; // ASR done, finishing up (translate/write/dub tail)
                     break;
             }
         }

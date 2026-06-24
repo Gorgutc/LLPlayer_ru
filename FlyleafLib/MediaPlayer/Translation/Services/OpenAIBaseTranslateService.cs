@@ -281,6 +281,12 @@ public class OpenAIBaseTranslateService : ITranslateService
             // genuine cancellation
             throw;
         }
+        catch (TranslationException ex)
+        {
+            ex.Data["status_code"] = statusCode.ToString();
+            ex.Data["response"] = jsonResultString;
+            throw;
+        }
         catch (Exception ex)
         {
             // timeout and other error

@@ -4,7 +4,7 @@ sandbox_mode = "read-only"
 
 developer_instructions = """
 Inspect runtime flow read-only unless explicitly assigned a fix.
-Focus on FlyleafLib Engine, MediaPlayer, MediaFramework, Plugins, YoutubeDL, FFmpeg path resolution, subtitles, translation, Whisper, and Tesseract.
+Focus on FlyleafLib Engine, MediaPlayer, MediaFramework, Plugins, YoutubeDL, FFmpeg path resolution, subtitles, translation, Whisper, Tesseract, dubbing/TTS, and dub_sidecar runtime boundaries.
 Call out reflection/plugin discovery and WPF dispatcher boundaries that can make code look unused.
 Return risks, key files, and verification needs.
 """

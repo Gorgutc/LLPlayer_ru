@@ -33,6 +33,31 @@ public static class DubbingOutputPathBuilder
         return OutputExists(BuildRussianDubPath(mediaPath, extension));
     }
 
+    /// <summary>True when any non-empty "video.ru.dub.*" exists beside the media.</summary>
+    public static bool DubExistsAnyFormat(string mediaPath) => ResolveExistingRussianDubPath(mediaPath) is not null;
+
+    /// <summary>First non-empty "video.ru.dub.*" beside the media, or null.</summary>
+    public static string? ResolveExistingRussianDubPath(string mediaPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(mediaPath);
+
+        try
+        {
+            string? directory = Path.GetDirectoryName(mediaPath);
+            string fileName = Path.GetFileNameWithoutExtension(mediaPath);
+            if (string.IsNullOrWhiteSpace(directory))
+                directory = Directory.GetCurrentDirectory();
+
+            return Directory
+                .EnumerateFiles(directory, $"{fileName}.ru.dub.*", SearchOption.TopDirectoryOnly)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault(OutputExists);
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+        catch (System.Security.SecurityException) { return null; }
+    }
+
     /// <summary>True when the given OUTPUT path exists and is non-empty. Fail-safe: I/O errors → false.</summary>
     public static bool OutputExists(string outputPath)
     {

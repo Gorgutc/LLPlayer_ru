@@ -64,7 +64,7 @@ These tracked files are intentional release/runtime assets:
 - `LLPlayer/lib/license.7z.txt`
 - `Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
 
-Do not add downloaded `yt-dlp.exe`, Whisper/faster-whisper engines or models, Tesseract data, runtime JSON, crash logs, dumps, recordings, snapshots, publish output, `bin`, or `obj` as tracked files.
+Do not add downloaded `yt-dlp.exe`, Whisper/faster-whisper engines or models, Tesseract data, dubbing runtime data (`DubEngine/`, `dubmodels/`, `*.ru.dub.*`), runtime JSON, crash logs, dumps, recordings, snapshots, publish output, `bin`, or `obj` as tracked files.
 
 ## VC++ Redistributable
 

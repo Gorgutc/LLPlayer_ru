@@ -16,6 +16,8 @@ Runtime assets are part of app behavior.
 
 ## Do Not Commit
 
-Downloaded `yt-dlp.exe`, Whisper models, faster-whisper engines, Tesseract data, logs, dumps, local runtime configs, and publish output.
+Downloaded `yt-dlp.exe`, Whisper models, faster-whisper engines, Tesseract data, dubbing engine venvs (`DubEngine/`), dubbing model weights (`dubmodels/`), rendered dub tracks (`*.ru.dub.*`), logs, dumps, local runtime configs, and publish output.
+
+`dub_sidecar/` is committed GPLv3 source; its runtime venv/model/output files are not.
 
 Check `DO_NOT_PUSH.md` before adding any binary.

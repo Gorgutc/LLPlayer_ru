@@ -39,6 +39,23 @@ try {
     if (-not (Test-Path (Join-Path $appPublish "LLPlayer.exe"))) {
         throw "Publish smoke did not produce LLPlayer.exe."
     }
+    if (-not (Test-Path (Join-Path $appPublish "lib\7z.dll"))) {
+        throw "Publish smoke is missing LLPlayer\lib\7z.dll."
+    }
+    foreach ($sidecarSource in @("dub_sidecar\server.py", "dub_sidecar\pyproject.toml", "dub_sidecar\README.md")) {
+        if (-not (Test-Path (Join-Path $appPublish $sidecarSource))) {
+            throw "Publish smoke is missing committed dubbing sidecar source $sidecarSource."
+        }
+    }
+    foreach ($forbiddenDubRuntime in @("DubEngine", "dubmodels")) {
+        if (Test-Path (Join-Path $appPublish $forbiddenDubRuntime)) {
+            throw "Publish smoke must not include dubbing runtime data $forbiddenDubRuntime."
+        }
+    }
+    $publishedDubOutputs = @(Get-ChildItem $appPublish -Filter "*.ru.dub.*" -Recurse -ErrorAction SilentlyContinue)
+    if ($publishedDubOutputs.Count -gt 0) {
+        throw "Publish smoke must not include rendered dub output(s): $($publishedDubOutputs.FullName -join ', ')."
+    }
 
     $pathsToRemove = @(
         "runtimes\noavx\linux-x64",

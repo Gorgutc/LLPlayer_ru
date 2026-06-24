@@ -22,6 +22,7 @@ dependencies = [
 
 # DELIBERATELY EXCLUDED — non-commercial / unvetted / GPLv3-incompatible. The build gate
 # (scripts/codex/check-dub-licenses.ps1) FAILS if any of these appear in pyproject.toml or uv.lock:
-#   TTS, coqui-tts, xtts, f5-tts, f5_tts, nemo_toolkit, nemo-toolkit, audeering, ttsfrd
+#   TTS, coqui-tts, xtts, f5-tts, f5_tts, nemo_toolkit, nemo-toolkit, indextts,
+#   index-tts, audeering, nllb, nllb-200, ttsfrd
 #
 # Generate the pinned lockfile during provisioning:  uv lock   (commit the resulting uv.lock)

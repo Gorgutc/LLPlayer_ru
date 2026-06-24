@@ -135,6 +135,71 @@ public class DubbingHookTests
         }
     }
 
+    [Fact]
+    public async Task ProcessAsync_DubbingEnabled_DoesNotDisposeInjectedRendererWhenRunEnds()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string first = Path.Combine(dir, "first.mkv");
+            string second = Path.Combine(dir, "second.mkv");
+            File.WriteAllText(first, "video");
+            File.WriteAllText(second, "video");
+
+            var renderer = new FakeDubbingRenderer();
+            var processor = new BatchSubtitleProcessor(
+                new FakeAsr(path => Task.FromResult(new BatchAsrResult([CreateSub(Path.GetFileNameWithoutExtension(path))], Language.Russian))),
+                new NoopTranslator(),
+                new NoopWriter(),
+                new BatchSubtitleOptions { GenerateDubbing = true, DubbingOutputFormat = "flac" },
+                progress: null,
+                dubber: renderer);
+
+            await processor.ProcessAsync(
+                [new BatchSubtitleJob(first), new BatchSubtitleJob(second)],
+                TestContext.Current.CancellationToken);
+
+            renderer.Calls.Should().HaveCount(2);
+            renderer.DisposeCount.Should().Be(0);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ProcessAsync_DubbingEnabled_DoesNotDisposeInjectedRendererAfterFailure()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string video = Path.Combine(dir, "movie.mkv");
+            File.WriteAllText(video, "video");
+
+            var renderer = new FakeDubbingRenderer { ThrowOnRender = true };
+            var processor = new BatchSubtitleProcessor(
+                new FakeAsr(_ => Task.FromResult(new BatchAsrResult([CreateSub("привет")], Language.Russian))),
+                new NoopTranslator(),
+                new NoopWriter(),
+                new BatchSubtitleOptions { GenerateDubbing = true, DubbingOutputFormat = "flac" },
+                progress: null,
+                dubber: renderer);
+
+            BatchSubtitleJob job = new(video);
+            await processor.ProcessAsync([job], TestContext.Current.CancellationToken);
+
+            job.Status.Should().Be(BatchSubtitleStatus.Failed);
+            renderer.DisposeCount.Should().Be(0);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private static SubtitleData CreateSub(string text) => new()
     {
         Text = text,
@@ -161,6 +226,8 @@ public class DubbingHookTests
     private sealed class FakeDubbingRenderer : IDubbingRenderer
     {
         public List<(string Media, string Output, int Count)> Calls { get; } = [];
+        public int DisposeCount { get; private set; }
+        public bool ThrowOnRender { get; init; }
 
         public Task RenderAsync(
             IReadOnlyList<SubtitleData> translatedSubtitles,
@@ -169,8 +236,17 @@ public class DubbingHookTests
             IProgress<DubbingProgress>? progress,
             CancellationToken token)
         {
+            if (ThrowOnRender)
+                throw new InvalidOperationException("dub failed");
+
             Calls.Add((mediaPath, outputPath, translatedSubtitles.Count));
             return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            DisposeCount++;
+            return ValueTask.CompletedTask;
         }
     }
 }

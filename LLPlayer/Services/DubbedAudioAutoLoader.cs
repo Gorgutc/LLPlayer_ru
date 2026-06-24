@@ -4,6 +4,7 @@ using FlyleafLib.MediaFramework.MediaPlaylist;
 using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Dubbing;
+using System.Windows;
 
 namespace LLPlayer.Services;
 
@@ -13,23 +14,28 @@ namespace LLPlayer.Services;
 /// When a local media file opens, auto-attaches a pre-rendered Russian dub track (video.ru.dub.*) that
 /// sits beside it as a selectable external audio stream — it then appears under the existing
 /// "Audio ▸ External" menu. Best-effort convenience: any failure is swallowed (the user can still open
-/// the dub manually). Must be called on the UI thread (the ExternalAudioStreams collection is UI-bound);
-/// the OpenCompleted handler that calls it already runs there.
+/// the dub manually). The ExternalAudioStreams collection is UI-bound, so the loader marshals itself to
+/// the WPF dispatcher before touching the selected playlist item.
 /// </summary>
 public static class DubbedAudioAutoLoader
 {
     private const string PluginName = "Dubbing";
 
-    // The configured default is FLAC, but accept any common container a user might have chosen.
-    private static readonly string[] CandidateExtensions = ["flac", "m4a", "opus", "mka", "aac", "wav"];
-
     public static void TryAttach(Player? player, string? mediaUrl)
     {
         try
         {
+            if (Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+            {
+                _ = dispatcher.BeginInvoke(new Action(() => TryAttach(player, mediaUrl)));
+                return;
+            }
+
             if (player?.Playlist?.Selected is not { } item)
                 return;
             if (string.IsNullOrWhiteSpace(mediaUrl) || !File.Exists(mediaUrl))
+                return;
+            if (!IsSelectedMedia(item, mediaUrl))
                 return;
 
             string? dubPath = ResolveDubPath(mediaUrl);
@@ -60,13 +66,30 @@ public static class DubbedAudioAutoLoader
     /// <summary>First existing "video.ru.dub.&lt;ext&gt;" beside the media, or null.</summary>
     public static string? ResolveDubPath(string mediaPath)
     {
-        foreach (string ext in CandidateExtensions)
-        {
-            string candidate = DubbingOutputPathBuilder.BuildRussianDubPath(mediaPath, ext);
-            if (DubbingOutputPathBuilder.OutputExists(candidate))
-                return candidate;
-        }
+        return DubbingOutputPathBuilder.ResolveExistingRussianDubPath(mediaPath);
+    }
 
-        return null;
+    private static bool IsSelectedMedia(PlaylistItem item, string mediaPath)
+    {
+        return SameLocalPath(item.Url, mediaPath)
+            || SameLocalPath(item.DirectUrl, mediaPath);
+    }
+
+    private static bool SameLocalPath(string? candidate, string mediaPath)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        try
+        {
+            return string.Equals(
+                Path.GetFullPath(candidate),
+                Path.GetFullPath(mediaPath),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return string.Equals(candidate, mediaPath, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

@@ -8,6 +8,8 @@ Use explicit spawned subagents. If no spawn tool is available, notify the user a
 - `LLPlayer/Services/AppConfig.cs`, `FlyleafLib/Engine/Config.cs`, settings controls, key bindings: `dotnet_quality_guardian`, `instruction_drift_auditor`, `verification_reviewer`.
 - `FlyleafLib/Engine/**`, `FlyleafLib/MediaPlayer/**`, `FlyleafLib/MediaFramework/**`: `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`.
 - `FlyleafLib/MediaPlayer/Translation/**`: `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`.
+- `FlyleafLib/MediaPlayer/Dubbing/**`: `media_runtime_mapper`, `dotnet_quality_guardian`, `native_dependency_auditor`, `verification_reviewer`.
+- `dub_sidecar/**`: `media_runtime_mapper`, `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer`.
 - `Plugins/YoutubeDL/**`: `media_runtime_mapper`, `packaging_release_reviewer`, `verification_reviewer`.
 - `FFmpeg/**`, `LLPlayer/lib/**`, publish profiles, `.github/actions/build-package/action.yml`: `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer`.
 - `docs/agent/product-behavior-contract.md`: `wpf_xaml_reviewer`, `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`.
@@ -16,6 +18,7 @@ Use explicit spawned subagents. If no spawn tool is available, notify the user a
 - `docs/agent/config-data-contract.md`: `dotnet_quality_guardian`, `instruction_drift_auditor`, `verification_reviewer`.
 - `docs/agent/dependency-baseline.md`: `tech_stack_cartographer`, `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer`.
 - `docs/agent/manual-smoke-matrix.md`: `wpf_xaml_reviewer`, `media_runtime_mapper`, `packaging_release_reviewer`, `verification_reviewer`.
+- `docs/agent/dubbing-contract.md`, `docs/agent/dubbing/**`: `media_runtime_mapper`, `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer`.
 - `AGENTS.md`, `.codex/**`, `Plugins/llplayer-codex/**`, `docs/agent/**`, `scripts/codex/**`: `codex_infra_architect`, `instruction_drift_auditor`, `verification_reviewer`.
 
 ## Review Rules

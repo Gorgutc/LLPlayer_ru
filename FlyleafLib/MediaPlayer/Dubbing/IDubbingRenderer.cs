@@ -12,7 +12,7 @@ public sealed record DubbingProgress(int CompletedLines, int TotalLines, string?
 /// Implementations own no GPU state of their own — they drive an <see cref="ITtsService"/> for neural
 /// synthesis and the bundled FFmpeg for all DSP (assemble / time-stretch / duck / mix / encode).
 /// </summary>
-public interface IDubbingRenderer
+public interface IDubbingRenderer : IAsyncDisposable
 {
     /// <summary>
     /// Synthesize + assemble the dub for <paramref name="mediaPath"/> from the already-translated

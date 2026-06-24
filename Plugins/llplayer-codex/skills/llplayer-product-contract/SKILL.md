@@ -14,6 +14,7 @@ Before changing product behavior, read the matching frozen contract:
 - `docs/agent/dependency-baseline.md`
 - `docs/agent/manual-smoke-matrix.md`
 - `docs/agent/subagent-review-matrix.md`
+- `docs/agent/dubbing-contract.md`
 
 ## Rule
 
