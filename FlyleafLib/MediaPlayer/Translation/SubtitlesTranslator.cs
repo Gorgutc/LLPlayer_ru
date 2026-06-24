@@ -375,10 +375,11 @@ public class SubTranslator
                 return;
             }
 
-            // Keep the translation within the same at-most-2-line shape as the (re-segmented) source cue.
+            // Keep the translation within the same at-most-SubtitleMaxLinesPerCue-line shape as the
+            // (re-segmented) source cue.
             if (_config.ResegmentSubtitles)
             {
-                translated = SubtitleSegmenter.WrapTwoLines(translated, _config.SubtitleSegmentOptions);
+                translated = SubtitleSegmenter.WrapLines(translated, _config.SubtitleSegmentOptions);
             }
 
             sub.TranslatedText = translated;

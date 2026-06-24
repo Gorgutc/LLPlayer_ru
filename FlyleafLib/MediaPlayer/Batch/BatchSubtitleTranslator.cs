@@ -48,8 +48,8 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             }
         }
 
-        // When re-segmentation is on, keep the translated text within the same at-most-2-line shape as the
-        // (already re-segmented) source cue. Null = leave the translation as the model returned it.
+        // When re-segmentation is on, keep the translated text within the same at-most-SubtitleMaxLinesPerCue-line
+        // shape as the (already re-segmented) source cue. Null = leave the translation as the model returned it.
         SubtitleSegmentOptions? wrapOpt = _config.ResegmentSubtitles ? _config.SubtitleSegmentOptions : null;
 
         bool useWindow = service.ServiceType.IsLLM() &&
@@ -120,7 +120,7 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             }
 
             sub.TranslatedText = wrapOpt != null
-                ? SubtitleSegmenter.WrapTwoLines(translated, wrapOpt)
+                ? SubtitleSegmenter.WrapLines(translated, wrapOpt)
                 : translated;
         }
         // A per-line CONTENT failure (a degenerate/looping reply, a truncated reply, or an empty/null reply

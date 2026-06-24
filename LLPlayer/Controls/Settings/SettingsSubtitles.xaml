@@ -173,6 +173,148 @@
                 </StackPanel>
             </GroupBox>
 
+            <GroupBox Header="Subtitles Re-segmentation (ASR &amp; translation)">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180">
+                            Re-segment Subtitles
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Split an over-long generated cue (ASR / translation) into short, at-most-N-line cues so a single subtitle does not fill the frame. Cues that already fit are left untouched. Applies to interactive ASR and batch."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon
+                                    Kind="Information"
+                                    Width="16" Height="16"
+                                    Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton
+                            IsChecked="{Binding FL.PlayerConfig.Subtitles.ResegmentSubtitles}" />
+                    </StackPanel>
+
+                    <StackPanel Visibility="{Binding FL.PlayerConfig.Subtitles.ResegmentSubtitles, Converter={StaticResource BooleanToVisibilityConv}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Max Lines Per Cue
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="Maximum number of lines a single subtitle cue may occupy (default 3). A higher value lets a phrase that spans cues fit without being cut off, but covers more of the video."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <TextBox
+                                Width="100"
+                                Text="{Binding FL.PlayerConfig.Subtitles.SubtitleMaxLinesPerCue}"
+                                helpers:TextBoxHelper.OnlyNumeric="Uint" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Max Chars Per Line
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="Maximum characters per line for space-separated scripts (Latin/Cyrillic). Default 48 (the broadcast norm is ~42); a higher value shows more text per line."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <TextBox
+                                Width="100"
+                                Text="{Binding FL.PlayerConfig.Subtitles.SubtitleMaxCharsPerLine}"
+                                helpers:TextBoxHelper.OnlyNumeric="Uint" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Max CJK Chars Per Line
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="Maximum characters per line for space-less scripts (CJK / Thai). Default 24."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <TextBox
+                                Width="100"
+                                Text="{Binding FL.PlayerConfig.Subtitles.SubtitleMaxCjkCharsPerLine}"
+                                helpers:TextBoxHelper.OnlyNumeric="Uint" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Max Cue Duration (sec)
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="A cue longer than this is split into more cues when it has enough text to do so. Default 7. Set 0 to disable splitting by duration."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <TextBox
+                                Width="100"
+                                Text="{Binding FL.PlayerConfig.Subtitles.SubtitleMaxCueDurationSec}"
+                                helpers:TextBoxHelper.OnlyNumeric="Double" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Min Cue Duration (sec)
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="Never emit a cue shorter than this; a too-short sliver is merged into its neighbour. Default 1. Set 0 to disable."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <TextBox
+                                Width="100"
+                                Text="{Binding FL.PlayerConfig.Subtitles.SubtitleMinCueDurationSec}"
+                                helpers:TextBoxHelper.OnlyNumeric="Double" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
             <GroupBox Header="Subtitles Fonts">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal">
