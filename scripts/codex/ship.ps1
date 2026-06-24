@@ -42,7 +42,7 @@ try {
     if (-not (Test-Path (Join-Path $appPublish "lib\7z.dll"))) {
         throw "Publish smoke is missing LLPlayer\lib\7z.dll."
     }
-    foreach ($sidecarSource in @("dub_sidecar\server.py", "dub_sidecar\pyproject.toml", "dub_sidecar\README.md")) {
+    foreach ($sidecarSource in @("dub_sidecar\server.py", "dub_sidecar\pyproject.toml", "dub_sidecar\uv.lock", "dub_sidecar\README.md")) {
         if (-not (Test-Path (Join-Path $appPublish $sidecarSource))) {
             throw "Publish smoke is missing committed dubbing sidecar source $sidecarSource."
         }

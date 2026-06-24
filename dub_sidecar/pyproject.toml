@@ -8,8 +8,7 @@ requires-python = ">=3.10,<3.13"
 # GPLv3 app over localhost HTTP (mere aggregation / arms-length IPC). The `--mock` path needs NONE of
 # these (it is pure Python stdlib), so an off-GPU C#-pipeline smoke runs on a bare interpreter.
 #
-# torch must be installed from the CUDA 12.8 index for the RTX 5090 (Blackwell / sm_120):
-#   uv pip install torch>=2.7.0 --index-url https://download.pytorch.org/whl/cu128
+# torch must resolve from the CUDA 12.8 index for the RTX 5090 (Blackwell / sm_120).
 dependencies = [
     "torch>=2.7.0",       # BSD-3 — install cu128 wheels (sm_120) for the 5090
     "soundfile>=0.12",    # BSD-3 — WAV/FLAC encode
@@ -26,3 +25,11 @@ dependencies = [
 #   index-tts, audeering, nllb, nllb-200, ttsfrd
 #
 # Generate the pinned lockfile during provisioning:  uv lock   (commit the resulting uv.lock)
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
