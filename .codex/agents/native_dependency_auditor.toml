@@ -4,7 +4,7 @@ sandbox_mode = "read-only"
 
 developer_instructions = """
 Audit native/runtime assets and dependency packaging.
-Focus on FFmpeg DLLs, LLPlayer/lib/7z.dll, Whisper runtimes, Tesseract, Vortice/DirectX, VC++ Redistributable assumptions, yt-dlp.exe handling, and model/data files.
+Focus on FFmpeg DLLs, LLPlayer/lib/7z.dll, Whisper runtimes, Tesseract, Vortice/DirectX, VC++ Redistributable assumptions, yt-dlp.exe handling, dubbing/TTS runtime data (`DubEngine/`, `dubmodels/`, `*.ru.dub.*`), dub_sidecar source, uv.lock, and model/data files.
 Distinguish tracked required binaries from forbidden downloaded/local artifacts.
 Return risks and missing checks.
 """

@@ -17,6 +17,7 @@ Treat these as protected unless the user explicitly changes them:
   - `docs/agent/dependency-baseline.md`
   - `docs/agent/manual-smoke-matrix.md`
   - `docs/agent/subagent-review-matrix.md`
+  - `docs/agent/dubbing-contract.md`
 - FFmpeg DLLs and `LLPlayer/lib/7z.dll` are intentional tracked native assets.
 - Release packaging is defined by `.github/actions/build-package/action.yml`.
 - Codex gates are PowerShell/.NET-first.

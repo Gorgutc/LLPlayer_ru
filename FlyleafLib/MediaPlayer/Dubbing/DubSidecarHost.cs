@@ -45,6 +45,12 @@ public sealed class DubSidecarHost : ITtsService
         return new DubSidecarHost(DubbingSnapshot.From(config), mock);
     }
 
+    internal static DubSidecarHost Create(DubbingSnapshot snapshot, bool mock = false)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return new DubSidecarHost(snapshot, mock);
+    }
+
     /// <summary>The localhost port the sidecar bound to (reported on its stdout as <c>DUB_PORT=</c>).</summary>
     public int Port { get; private set; }
 

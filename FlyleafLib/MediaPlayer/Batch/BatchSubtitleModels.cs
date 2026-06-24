@@ -132,6 +132,34 @@ public sealed class BatchSubtitleJob : NotifyPropertyChanged
 
 public sealed record BatchAsrResult(IReadOnlyList<SubtitleData> Subtitles, Language SourceLanguage);
 
+public static class BatchSubtitleScanPolicy
+{
+    public static void ApplyOutputState(
+        BatchSubtitleJob job,
+        bool hasTranslation,
+        bool hasDub,
+        bool overwriteExisting,
+        bool generateDubbing)
+    {
+        if (!hasTranslation)
+            return;
+
+        bool needsDubOnly = generateDubbing && !hasDub;
+        if (needsDubOnly && !overwriteExisting)
+        {
+            job.Status = BatchSubtitleStatus.Pending;
+            job.Include = true;
+            job.CompletedAt = null;
+            return;
+        }
+
+        job.Status = BatchSubtitleStatus.Completed;
+        job.CompletedAt = DateTimeOffset.Now;
+        if (!overwriteExisting)
+            job.Include = false;
+    }
+}
+
 // Incremental per-segment progress reported during ASR so the UI can show live feedback.
 public sealed record BatchAsrProgress(
     string MediaPath,

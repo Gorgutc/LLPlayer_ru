@@ -54,6 +54,10 @@ try {
     Require-Text ".\scripts\codex\ship.ps1" "Publish cleanup target\(s\) missing" "Ship smoke must fail if release cleanup targets drift."
     Require-Text ".\scripts\codex\ship.ps1" "Release dry-run" "Ship smoke must dry-run release-only packaging tail."
     Require-Text ".\scripts\codex\ship.ps1" "yt-dlp\.exe_here" "Ship smoke must create yt-dlp placeholder."
+    Require-Text ".\scripts\codex\ship.ps1" "LLPlayer\\lib\\7z\.dll" "Ship smoke must verify publish output contains LLPlayer/lib/7z.dll."
+    Require-Text ".\scripts\codex\ship.ps1" "dub_sidecar\\server\.py" "Ship smoke must verify committed dubbing sidecar source is published."
+    Require-Text ".\scripts\codex\ship.ps1" "DubEngine" "Ship smoke must verify dubbing runtime engine is not published."
+    Require-Text ".\scripts\codex\ship.ps1" "\*\.ru\.dub\.\*" "Ship smoke must verify rendered dub outputs are not published."
     Require-Text ".\scripts\codex\ship.ps1" "7-Zip is not installed" "Ship smoke must document local 7-Zip dry-run fallback."
     Require-Text ".\docs\agent\frozen-decisions.md" "product-behavior-contract\.md" "Frozen decisions must link product behavior contract."
     Require-Text ".\docs\agent\frozen-decisions.md" "wpf-design-contract\.md" "Frozen decisions must link WPF design contract."
@@ -118,6 +122,9 @@ try {
         "whispermodels/",
         "Whisper/",
         "tesseractmodels/",
+        "DubEngine/",
+        "dubmodels/",
+        "*.ru.dub.*",
         ".env*"
     )) {
         if ($gitignore -notmatch [regex]::Escape($pattern)) {
@@ -174,6 +181,9 @@ try {
         ":(glob)**/whispermodels/**" `
         ":(glob)**/Whisper/**" `
         ":(glob)**/tesseractmodels/**" `
+        ":(glob)**/DubEngine/**" `
+        ":(glob)**/dubmodels/**" `
+        ":(glob)**/*.ru.dub.*" `
         ":(glob)**/bin/**" `
         ":(glob)**/obj/**" `
         ":(glob)**/publish/**")

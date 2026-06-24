@@ -68,4 +68,25 @@ public class DubbingOutputPathBuilderTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void ResolveExistingRussianDubPath_FindsAnyNonEmptyDubExtension()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string media = Path.Combine(dir, "movie.mkv");
+            string dub = Path.Combine(dir, "movie.ru.dub.opus");
+            File.WriteAllText(media, "video");
+            File.WriteAllText(dub, "dub");
+
+            DubbingOutputPathBuilder.ResolveExistingRussianDubPath(media).Should().Be(dub);
+            DubbingOutputPathBuilder.DubExistsAnyFormat(media).Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

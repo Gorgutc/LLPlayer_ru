@@ -253,8 +253,7 @@ public sealed class BatchSubtitleProcessor
 
         if (DubbingEnabled)
         {
-            string dubPath = DubbingOutputPathBuilder.BuildRussianDubPath(job.MediaPath, _options.DubbingOutputFormat);
-            if (!DubbingOutputPathBuilder.OutputExists(dubPath))
+            if (!DubbingOutputPathBuilder.DubExistsAnyFormat(job.MediaPath))
             {
                 List<SubtitleData> existing = DubbingSrtReader.ParseFile(job.OutputPath);
                 if (existing.Count > 0)
@@ -276,7 +275,7 @@ public sealed class BatchSubtitleProcessor
         token.ThrowIfCancellationRequested();
 
         string dubPath = DubbingOutputPathBuilder.BuildRussianDubPath(job.MediaPath, _options.DubbingOutputFormat);
-        if (!_options.OverwriteExisting && DubbingOutputPathBuilder.OutputExists(dubPath))
+        if (!_options.OverwriteExisting && DubbingOutputPathBuilder.DubExistsAnyFormat(job.MediaPath))
             return;
 
         Report(job, BatchSubtitleStatus.Dubbing);

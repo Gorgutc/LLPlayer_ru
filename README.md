@@ -297,15 +297,17 @@ https://github.com/umlx5h/LLPlayer/wiki/Browser-Extensions-Integration
 
 #### Q: How do I update yt-dlp.exe?
 
-`yt-dlp.exe` is located in the following path.
+For local development, `yt-dlp.exe` is runtime data. Put the downloaded executable in the plugin runtime folder used by your local run; do not commit it.
 
-`Plugins/YoutubeDL/yt-dlp.exe`
+The repository intentionally tracks only this placeholder:
+
+`Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
+
+Release packaging downloads the real executable into the published `Plugins/YoutubeDL` folder from `.github/actions/build-package/action.yml`.
 
 You can download latest version executable from the following.
 
 https://github.com/yt-dlp/yt-dlp/releases/
-
-If you want to update, please download and copy it to the specified path.
 
 #### Q: What is the difference between VLC and LLPlayer?
 

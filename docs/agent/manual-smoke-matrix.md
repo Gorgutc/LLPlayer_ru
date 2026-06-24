@@ -73,8 +73,19 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Open CheatSheet with F1, switch Keyboard/Mouse tabs, search by shortcut/description, and execute an action button.
 - On a fresh config (no `LLPlayer.Config.json`), confirm the Win11 Mica backdrop is on by default (Settings ▸ Themes shows it checked); toggle it off, `Save & Close`, restart, and confirm it stays off (the migration does not re-enable a saved-off value). On Windows 10 confirm the app still launches normally (Mica no-ops).
 
+## Dubbing
+
+- First-run provisioning UX: confirm the user opts in before local TTS engine/model setup and no model weights are committed.
+- Start a dubbing batch on real media and confirm ASR -> translate -> save SRT -> dub -> completed runs serially when `GenerateDubbing=true`.
+- Run a multi-file dubbing batch and confirm the local sidecar/model is started once for the run, then stopped at the end.
+- Kill/cancel during dubbing and confirm no orphan Python process remains, VRAM is released, and no partial `video.ru.dub.*` output remains.
+- Open a video with an existing non-empty `video.ru.dub.flac`; confirm it appears under Audio ▸ External and plays in sync at 0:00, mid-video, and near the end.
+- Re-run batch with an existing `video.ru.srt` but no `video.ru.dub.*`; confirm the default run renders the dub from the existing SRT without re-running ASR/translation.
+- Ear-test CosyVoice2 Russian on real content: voice is Russian, ducking is audible, and the original audio remains present.
+- Launch the published `.exe` on the target RTX 5090 machine with `GenerateDubbing=false`, then run one mock/real dubbing smoke if the local engine is provisioned.
+
 ## Packaging
 
 - Run `scripts/codex/ship.ps1`.
-- Confirm publish output contains `LLPlayer.exe`, copied `FFmpeg`, `Plugins/YoutubeDL/YoutubeDL.dll`, and `YoutubeDL.pdb`.
+- Confirm publish output contains `LLPlayer.exe`, `LLPlayer/lib/7z.dll`, copied `FFmpeg`, `Plugins/YoutubeDL/YoutubeDL.dll`, and `YoutubeDL.pdb`.
 - Do not require network download of `yt-dlp.exe` for local smoke unless explicitly shipping a release.

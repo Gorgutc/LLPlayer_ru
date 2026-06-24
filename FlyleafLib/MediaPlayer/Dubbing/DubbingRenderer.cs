@@ -6,19 +6,22 @@ namespace FlyleafLib.MediaPlayer.Dubbing;
 #nullable enable
 
 /// <summary>
-/// Default dub renderer. Owns a run-scoped <see cref="DubSidecarHost"/> for one render: synthesizes
-/// each translated line, computes the isochrony fit + timeline placement in C# (the unit-tested
+/// Default dub renderer. Owns a run-scoped <see cref="DubSidecarHost"/> across all renders in one run.
+/// It synthesizes each translated line, computes the isochrony fit + timeline placement in C# (the unit-tested
 /// <see cref="DubbingIsochrony"/> math), then asks the sidecar to assemble + duck + encode the track.
 /// </summary>
 public sealed class DubbingRenderer : IDubbingRenderer
 {
-    private readonly DubbingConfig _config;
     private readonly string _voiceId;
     private readonly double _atempoMin;
     private readonly double _atempoMax;
     private readonly int _duckingPercent;
     private readonly string _outputFormat;
     private readonly bool _mock;
+    private readonly DubSidecarHost.DubbingSnapshot _sidecarSnapshot;
+    private readonly SemaphoreSlim _hostGate = new(1, 1);
+    private DubSidecarHost? _host;
+    private bool _disposed;
 
     /// <param name="config">Live dubbing config; scalar fields are snapshotted here so a later config
     /// change does not affect an in-flight render.</param>
@@ -26,7 +29,6 @@ public sealed class DubbingRenderer : IDubbingRenderer
     public DubbingRenderer(DubbingConfig config, bool mock = false)
     {
         ArgumentNullException.ThrowIfNull(config);
-        _config = config;
         _voiceId = config.DefaultVoiceId;
         _atempoMin = config.AtempoMin;
         _atempoMax = config.AtempoMax;
@@ -35,6 +37,7 @@ public sealed class DubbingRenderer : IDubbingRenderer
             ? DubbingOutputPathBuilder.DefaultExtension
             : config.OutputFormat.TrimStart('.').Trim().ToLowerInvariant();
         _mock = mock;
+        _sidecarSnapshot = DubSidecarHost.DubbingSnapshot.From(config);
     }
 
     public async Task RenderAsync(
@@ -52,10 +55,7 @@ public sealed class DubbingRenderer : IDubbingRenderer
         if (lines.Count == 0)
             return;
 
-        await using DubSidecarHost host = DubSidecarHost.Create(_config, _mock);
-
-        if (!await host.TryInitializeAsync(token).ConfigureAwait(false))
-            throw new InvalidOperationException("The dubbing sidecar did not become ready.");
+        DubSidecarHost host = await GetHostAsync(token).ConfigureAwait(false);
 
         // 1. Synthesize each line; record the atempo fit and the resulting (post-stretch) duration.
         double[] renderedMs = new double[lines.Count];
@@ -102,6 +102,65 @@ public sealed class DubbingRenderer : IDubbingRenderer
             // as a valid track. Best-effort delete, then rethrow so the caller marks the job Canceled/Failed.
             TryDeleteOutput(outputPath);
             throw;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+            return;
+
+        await _hostGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            if (_host is not null)
+            {
+                await _host.DisposeAsync().ConfigureAwait(false);
+                _host = null;
+            }
+        }
+        finally
+        {
+            _hostGate.Release();
+        }
+    }
+
+    private async Task<DubSidecarHost> GetHostAsync(CancellationToken token)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (_host is not null)
+            return _host;
+
+        await _hostGate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_host is not null)
+                return _host;
+
+            DubSidecarHost host = DubSidecarHost.Create(_sidecarSnapshot, _mock);
+            try
+            {
+                if (!await host.TryInitializeAsync(token).ConfigureAwait(false))
+                    throw new InvalidOperationException("The dubbing sidecar did not become ready.");
+
+                _host = host;
+                return host;
+            }
+            catch
+            {
+                await host.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
+        finally
+        {
+            _hostGate.Release();
         }
     }
 

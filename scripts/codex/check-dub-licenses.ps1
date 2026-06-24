@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 # Dub license gate: the bundled dubbing venv must contain only redistribution-safe (GPLv3-compatible)
-# packages. XTTS-v2, F5-TTS, NeMo, IndexTTS2, NLLB-200, ttsfrd and coqui TTS are non-commercial /
+# packages. XTTS-v2, F5-TTS, NeMo, IndexTTS2, NLLB-200, audeering, ttsfrd and coqui TTS are non-commercial /
 # unvetted and must be USER-INSTALLED ONLY, never bundled. We scan the committed dub_sidecar manifests
 # (the bundled truth): pyproject.toml dependency lines now, uv.lock once generated. See
 # docs/agent/dubbing-contract.md.
@@ -14,6 +14,7 @@ try {
     $forbidden = @(
         "tts", "coqui-tts", "xtts", "f5-tts", "f5_tts",
         "nemo-toolkit", "nemo_toolkit", "indextts", "index-tts",
+        "audeering",
         "nllb", "nllb-200", "ttsfrd"
     )
 

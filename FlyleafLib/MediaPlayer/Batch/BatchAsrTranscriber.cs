@@ -55,7 +55,8 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         Func<bool>? preferCpu)
     {
         List<SubtitleData> subtitles = [];
-        Language sourceLanguage = GetInitialSourceLanguage(batchConfig);
+        Language sourceLanguage = ResolveInitialSourceLanguage(batchConfig, audio);
+        Language selectedAudioLanguage = GetKnownLanguage(audio.Language?.ISO6391);
 
         using AudioReader reader = new(batchConfig, 0, preferCpu);
         reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
@@ -67,8 +68,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
                 return;
 
             Language asrLanguage = GetKnownLanguage(data.Language);
-            if (asrLanguage != Language.Unknown)
-                sourceLanguage = asrLanguage;
+            sourceLanguage = ResolveReportedSourceLanguage(sourceLanguage, selectedAudioLanguage, asrLanguage);
 
             SubtitleData subtitle = new()
             {
@@ -128,24 +128,51 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         return new BatchAsrResult(subtitles, sourceLanguage);
     }
 
-    private static Language GetInitialSourceLanguage(Config batchConfig)
+    internal static Language ResolveInitialSourceLanguage(Config batchConfig, MediaAudioProbeResult audio)
     {
-        if (batchConfig.Subtitles.ASREngine == SubASREngineType.WhisperCpp &&
-            batchConfig.Subtitles.WhisperCppConfig.IsEnglishModel)
-        {
+        if (UsesEnglishOnlyModel(batchConfig))
             return Language.English;
+
+        Language audioLanguage = GetKnownLanguage(audio.Language?.ISO6391);
+        if (audioLanguage != Language.Unknown)
+            return audioLanguage;
+
+        return GetInitialSourceLanguage(batchConfig);
+    }
+
+    internal static Language ResolveReportedSourceLanguage(
+        Language current,
+        Language selectedAudioLanguage,
+        Language asrReportedLanguage)
+    {
+        if (selectedAudioLanguage != Language.Unknown)
+        {
+            if (current != Language.Unknown && current != selectedAudioLanguage)
+                return current;
+
+            return selectedAudioLanguage;
         }
 
-        if (batchConfig.Subtitles.ASREngine == SubASREngineType.FasterWhisper &&
-            batchConfig.Subtitles.FasterWhisperConfig.IsEnglishModel)
-        {
+        return asrReportedLanguage != Language.Unknown ? asrReportedLanguage : current;
+    }
+
+    private static Language GetInitialSourceLanguage(Config batchConfig)
+    {
+        if (UsesEnglishOnlyModel(batchConfig))
             return Language.English;
-        }
 
         if (!batchConfig.Subtitles.WhisperConfig.LanguageDetection)
             return GetKnownLanguage(batchConfig.Subtitles.WhisperConfig.Language);
 
         return Language.Unknown;
+    }
+
+    private static bool UsesEnglishOnlyModel(Config batchConfig)
+    {
+        return (batchConfig.Subtitles.ASREngine == SubASREngineType.WhisperCpp &&
+                batchConfig.Subtitles.WhisperCppConfig.IsEnglishModel)
+               || (batchConfig.Subtitles.ASREngine == SubASREngineType.FasterWhisper &&
+                   batchConfig.Subtitles.FasterWhisperConfig.IsEnglishModel);
     }
 
     private static Language GetKnownLanguage(string? language)
