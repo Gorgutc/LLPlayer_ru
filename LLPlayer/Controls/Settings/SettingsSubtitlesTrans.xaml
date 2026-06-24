@@ -513,6 +513,11 @@
                                     <TextBlock
                                         TextWrapping="Wrap"
                                         MaxWidth="400">
+                                        <Run Text="[ContextWindow] (recommended)"/>
+                                        <LineBreak />
+                                        Each line is translated on its own (exactly one line back), but the surrounding lines (before and after) are sent as read-only context. This gives the most accurate, naturally inflected result for sentences split across cues. Optionally runs a second grammar/fluency pass. Requests are sequential.
+                                        <LineBreak />
+                                        <LineBreak />
                                         <Run Text="[KeepContext]"/>
                                         <LineBreak />
                                         The previous subtitle and the translation result are sent together to the chat.
@@ -535,6 +540,164 @@
                             Width="100"
                             ItemsSource="{Binding Source={StaticResource ChatTranslateMethodEnum}}"
                             SelectedItem="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.TranslateMethod}" />
+                    </StackPanel>
+
+                    <!-- ContextWindow-specific settings: window sizes, prompt, and the optional grammar pass. -->
+                    <StackPanel Visibility="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.TranslateMethod, Converter={StaticResource EnumToVisibilityConv}, ConverterParameter={x:Static flyleafTranslate:ChatTranslateMethod.ContextWindow}}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Context Lines Before
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="Number of preceding subtitle lines sent to the model as read-only context. More context improves accuracy but uses more tokens. 0 disables backward context."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <TextBox
+                                Width="100"
+                                Text="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.ContextWindowBefore}"
+                                helpers:TextBoxHelper.OnlyNumeric="Uint" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Context Lines After
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="Number of following subtitle lines sent to the model as read-only context. Lets the model see how the sentence continues across cues, fixing wrong word endings/forms. 0 disables forward context."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <TextBox
+                                Width="100"
+                                Text="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.ContextWindowAfter}"
+                                helpers:TextBoxHelper.OnlyNumeric="Uint" />
+                        </StackPanel>
+
+                        <DockPanel Margin="0 0 0 8">
+                            <TextBlock
+                                Width="180">
+                                Chat Prompt (ContextWindow)
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400">
+                                            <Run Text="System prompt sent to chat. The surrounding lines are appended automatically as a labelled 'Context before / Line to translate / Context after' block. Certain strings will be replaced by the following."/>
+                                            <LineBreak />
+                                            <LineBreak />
+                                            {source_lang} -> English
+                                            <LineBreak />
+                                            {target_lang} -> Russian
+                                        </TextBlock>
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+
+                            <StackPanel>
+                                <TextBox
+                                    BorderThickness="1"
+                                    Padding="10"
+                                    HorizontalContentAlignment="Left"
+                                    TextAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    VerticalContentAlignment="Top"
+                                    AcceptsReturn="True"
+                                    MaxHeight="300"
+                                    TextWrapping="Wrap"
+                                    Text="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.PromptContextWindow}" />
+                                <Button
+                                    Command="{Binding CmdSetDefaultPromptContextWindow}"
+                                    HorizontalAlignment="Left"
+                                    Content="Set Default"
+                                    Margin="10 10 0 0" />
+                            </StackPanel>
+                        </DockPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock
+                                Width="180">
+                                Grammar Correction Pass
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            Text="When on, a second LLM request proof-reads each translated line for grammar, agreement and fluency. Improves quality but roughly doubles the number of requests. If the correction fails, the first translation is kept."
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400" />
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+                            <ToggleButton
+                                IsChecked="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.GrammarCheckEnabled}" />
+                        </StackPanel>
+
+                        <DockPanel Margin="0 8 0 8" Visibility="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.GrammarCheckEnabled, Converter={StaticResource BooleanToVisibilityConv}}">
+                            <TextBlock
+                                Width="180">
+                                Grammar Correction Prompt
+                                <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                    <ToolTipService.ToolTip>
+                                        <TextBlock
+                                            TextWrapping="Wrap"
+                                            MaxWidth="400">
+                                            <Run Text="System prompt for the grammar/fluency proof-reading pass. The source line and the draft translation are appended automatically. Certain strings will be replaced by the following."/>
+                                            <LineBreak />
+                                            <LineBreak />
+                                            {source_lang} -> English
+                                            <LineBreak />
+                                            {target_lang} -> Russian
+                                        </TextBlock>
+                                    </ToolTipService.ToolTip>
+                                    <materialDesign:PackIcon
+                                        Kind="Information"
+                                        Width="16" Height="16"
+                                        Margin="4 0 0 0" />
+                                </InlineUIContainer>
+                            </TextBlock>
+
+                            <StackPanel>
+                                <TextBox
+                                    BorderThickness="1"
+                                    Padding="10"
+                                    HorizontalContentAlignment="Left"
+                                    TextAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    VerticalContentAlignment="Top"
+                                    AcceptsReturn="True"
+                                    MaxHeight="300"
+                                    TextWrapping="Wrap"
+                                    Text="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.PromptGrammarCheck}" />
+                                <Button
+                                    Command="{Binding CmdSetDefaultPromptGrammarCheck}"
+                                    HorizontalAlignment="Left"
+                                    Content="Set Default"
+                                    Margin="10 10 0 0" />
+                            </StackPanel>
+                        </DockPanel>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Visibility="{Binding FL.PlayerConfig.Subtitles.TranslateChatConfig.TranslateMethod, Converter={StaticResource EnumToVisibilityConv}, ConverterParameter={x:Static flyleafTranslate:ChatTranslateMethod.KeepContext}}">

@@ -281,6 +281,47 @@ public class SubManager : INotifyPropertyChanged
         return null;
     }
 
+    // Snapshots the surrounding subtitle source texts for the focal cue under the same lock that guards every
+    // Subs mutation (_subsLocker), so a context read cannot tear against concurrent ASR Add/Clear/Load on the
+    // background consumer thread. Returns the raw (un-flattened) Text of up to `before` preceding and `after`
+    // following non-empty cues, nearest-first in playback order. Returns empty lists when the focal cue is no
+    // longer at its recorded index (the list was reloaded/cleared). Flattening is left to the caller so the
+    // critical section stays minimal.
+    internal (List<string> before, List<string> after) GetContextWindow(SubtitleData focal, int before, int after)
+    {
+        List<string> beforeList = new();
+        List<string> afterList = new();
+
+        lock (_subsLocker)
+        {
+            int idx = focal.Index;
+            if (idx < 0 || idx >= Subs.Count || !ReferenceEquals(Subs[idx], focal))
+            {
+                return (beforeList, afterList);
+            }
+
+            for (int i = Math.Max(0, idx - before); i < idx; i++)
+            {
+                string? t = Subs[i].Text;
+                if (!string.IsNullOrWhiteSpace(t))
+                {
+                    beforeList.Add(t);
+                }
+            }
+
+            for (int i = idx + 1; i <= Math.Min(Subs.Count - 1, idx + after); i++)
+            {
+                string? t = Subs[i].Text;
+                if (!string.IsNullOrWhiteSpace(t))
+                {
+                    afterList.Add(t);
+                }
+            }
+        }
+
+        return (beforeList, afterList);
+    }
+
     private readonly SubtitleData _searchSub = new();
 
     public SubManager SetCurrentTime(TimeSpan currentTime)

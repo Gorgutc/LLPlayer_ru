@@ -65,6 +65,16 @@ public class SettingsSubtitlesTransVM : Bindable
     {
         FL.PlayerConfig.Subtitles.TranslateChatConfig.PromptOneByOne = TranslateChatConfig.DefaultPromptOneByOne.ReplaceLineEndings("\n");
     });
+
+    public DelegateCommand CmdSetDefaultPromptContextWindow => field ??= new(() =>
+    {
+        FL.PlayerConfig.Subtitles.TranslateChatConfig.PromptContextWindow = TranslateChatConfig.DefaultPromptContextWindow.ReplaceLineEndings("\n");
+    });
+
+    public DelegateCommand CmdSetDefaultPromptGrammarCheck => field ??= new(() =>
+    {
+        FL.PlayerConfig.Subtitles.TranslateChatConfig.PromptGrammarCheck = TranslateChatConfig.DefaultPromptGrammarCheck.ReplaceLineEndings("\n");
+    });
 }
 
 [ValueConversion(typeof(TargetLanguage), typeof(string))]

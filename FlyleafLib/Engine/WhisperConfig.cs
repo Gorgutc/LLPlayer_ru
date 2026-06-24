@@ -259,5 +259,13 @@ public class FasterWhisperConfig : NotifyPropertyChanged
                                         or "distil-large-v3.5";
     public string ExtraArguments { get; set => Set(ref field, value); } = "--device cpu";
 
+    // Default ON since 0.3.6. Appends research-backed anti-hallucination decoding flags to faster-whisper-xxl
+    // (condition_on_previous_text off, plus more permissive no-speech / VAD thresholds) so that (a) garbled
+    // repetition/hallucination on hard audio is suppressed and (b) speech that co-occurs with background music
+    // is not dropped as silence. The exact flags live in FasterWhisperASRService.AntiHallucinationFlags and are
+    // only added when ExtraArguments has not already set that flag, so an explicit user value always wins.
+    // Additive/absent-defaulting; existing configs pick this up on load (no migration needed).
+    public bool AntiHallucination { get; set => Set(ref field, value); } = true;
+
     public ProcessPriorityClass ProcessPriority { get; set => Set(ref field, value); } = ProcessPriorityClass.Normal;
 }

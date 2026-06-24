@@ -1,4 +1,5 @@
-﻿using System.ComponentModel;
+﻿using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace FlyleafLib.MediaPlayer.Translation.Services;
 
@@ -24,6 +25,29 @@ public interface ITranslateService : IDisposable
     /// <exception cref="TranslationException">when translation is failed</exception>
     /// <exception cref="OperationCanceledException"></exception>
     Task<string> TranslateAsync(string text, CancellationToken token);
+
+    /// <summary>
+    /// Context-aware translation: translate <see cref="SubtitleTranslationContext.Text"/> using the surrounding
+    /// subtitle lines as read-only context. Only LLM providers in ContextWindow mode use the context; the default
+    /// implementation ignores it and falls back to the plain <see cref="TranslateAsync(string, CancellationToken)"/>,
+    /// so non-LLM providers (and providers that never see this overload) keep their existing behaviour.
+    /// </summary>
+    /// <exception cref="TranslationException">when translation is failed</exception>
+    /// <exception cref="OperationCanceledException"></exception>
+    Task<string> TranslateAsync(SubtitleTranslationContext context, CancellationToken token)
+        => TranslateAsync(context.Text, token);
+}
+
+/// <summary>
+/// The line to translate plus the surrounding subtitle lines (source text) used as read-only context by
+/// LLM ContextWindow translation. <see cref="Before"/> and <see cref="After"/> are nearest-first relative to
+/// <see cref="Text"/> in playback order (Before[^1] is the immediately preceding line, After[0] the next line).
+/// </summary>
+public sealed class SubtitleTranslationContext
+{
+    public required string Text { get; init; }
+    public IReadOnlyList<string> Before { get; init; } = [];
+    public IReadOnlyList<string> After { get; init; } = [];
 }
 
 [Flags]
