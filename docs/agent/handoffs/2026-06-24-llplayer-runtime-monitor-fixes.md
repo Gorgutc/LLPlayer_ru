@@ -3,6 +3,28 @@
 Run time: 2026-06-24T15:47:35+03:00
 Branch: `codex/llplayer-runtime-monitor-fixes`
 
+## Update: 2026-06-24T17:05:00+03:00
+
+Current `main` includes the monitor fixes and both follow-up merges:
+
+- PR #38 / `f6d8437`: runtime monitor fixes from `codex/llplayer-runtime-monitor-fixes`.
+- PR #39 / `9ab5c29`: .NET verification compile fix from `codex/llplayer-dotnet-verify-fix`.
+- PR #40 / `c6cda2a`: locked dubbing sidecar dependencies from `codex/llplayer-dub-sidecar-lock`.
+
+`dub_sidecar/uv.lock` is no longer a blocker. It is tracked, `torch` is pinned to the explicit
+`pytorch-cu128` index, `ship.ps1` verifies the lockfile is published, and `verify-frozen.ps1` guards
+the tracked lockfile plus CUDA index source. The lockfile work was verified with `check-dub-licenses.ps1`,
+`verify-frozen.ps1`, `verify-fast.ps1`, `verify.ps1`, and `ship.ps1 -SkipVerify`.
+
+Remaining follow-ups after PR #40:
+
+- CosyVoice source/model provenance is still not fully locked. The sidecar lock covers the base Python
+  dependencies, but the upstream CosyVoice repo and model weights are still provisioned as a separate
+  owner/runtime step.
+- DSP/audio assembly still runs in the Python sidecar. The frozen decision remains unchanged: neural TTS
+  belongs in Python; assembly/duck/mix/encode should move to the bundled FFmpeg/runtime boundary in a
+  separate implementation pass.
+
 ## Update: 2026-06-24T16:06:46+03:00
 
 The .NET SDK was installed at `C:\Program Files\dotnet\dotnet.exe` and verified as SDK `10.0.301`. The active Codex
@@ -97,7 +119,7 @@ Spawned reviewer found one Important issue after the first pass: English-only AS
 ## Known Blockers
 
 - Full .NET restore/build/test is verified when `C:\Program Files\dotnet` is prepended to `PATH` for the command process.
-- `dub_sidecar/uv.lock` is generated and checked in on the follow-up branch; it pins `torch` to `pytorch-cu128`.
+- `dub_sidecar/uv.lock` is generated and merged to `main`; it pins `torch` to `pytorch-cu128`.
 - CosyVoice source/model provenance is not fully locked yet; current provisioning still relies on an upstream repo/model step.
 - DSP/audio assembly still runs through the Python sidecar; frozen contract expects bundled FFmpeg DSP boundary. Moving this needs a separate runtime design and test pass.
 
