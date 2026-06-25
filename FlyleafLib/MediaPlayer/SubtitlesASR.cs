@@ -220,7 +220,7 @@ public class SubtitlesASR
 
                 lock (_lockerSubs)
                 {
-                    // Re-segment an over-long ASR cue into short, at-most-2-line cues (proportional timings) so
+                    // Re-segment an over-long ASR cue into short, capped-line cues (proportional timings) so
                     // a single subtitle does not fill the frame. Gated by the config toggle; cues that already
                     // fit pass through unchanged.
                     List<(string Text, TimeSpan Start, TimeSpan End)> cues = _config.Subtitles.ResegmentSubtitles

@@ -137,6 +137,7 @@ try {
         "media-runtime-contract",
         "config-data-contract",
         "dependency-baseline",
+        "dubbing-contract",
         "manual-smoke-matrix",
         "subagent-review-matrix"
     )

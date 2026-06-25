@@ -76,7 +76,7 @@
                         </TreeViewItem.Header>
                     </TreeViewItem>
 
-                    <TreeViewItem Tag="SettingsSubtitles" IsExpanded="True">
+                    <TreeViewItem Tag="SettingsSubtitles" Uid="Re-segmentation Resegmentation ASR translation" IsExpanded="True">
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <materialDesign:PackIcon Kind="ClosedCaption" Width="24" Height="24" Margin="0 0 8 0" />

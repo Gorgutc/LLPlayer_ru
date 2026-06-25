@@ -97,7 +97,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 
         subtitles = subtitles.OrderBy(s => s.StartTime).ToList();
 
-        // Re-segment over-long Whisper cues into short, at-most-2-line cues (proportional timings) so a single
+        // Re-segment over-long Whisper cues into short, capped-line cues (proportional timings) so a single
         // subtitle does not fill the frame. Engine-agnostic, gated by the config toggle. Cues that already fit
         // pass through unchanged.
         if (batchConfig.Subtitles.ResegmentSubtitles)

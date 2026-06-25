@@ -280,7 +280,8 @@ public partial class SettingsDialog : UserControl
         }
 
         bool selfMatch = GetItemLabel(tvi).Contains(query, StringComparison.OrdinalIgnoreCase)
-                         || (tvi.Tag as string ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase);
+                         || (tvi.Tag as string ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase)
+                         || (tvi.Uid ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase);
 
         bool visible = selfMatch || childMatch;
         tvi.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;

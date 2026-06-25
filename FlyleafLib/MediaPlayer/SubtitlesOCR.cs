@@ -324,7 +324,7 @@ public class TesseractOCRService : IOCRService
         using MemoryStream stream = new();
 
         // 32bit -> 24bit conversion
-        Bitmap converted = new Bitmap(bitmap.Width, bitmap.Height, PixelFormat.Format24bppRgb);
+        using Bitmap converted = new Bitmap(bitmap.Width, bitmap.Height, PixelFormat.Format24bppRgb);
         using (Graphics g = Graphics.FromImage(converted))
         {
             g.DrawImage(bitmap, 0, 0);

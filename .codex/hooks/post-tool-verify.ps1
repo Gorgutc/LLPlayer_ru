@@ -26,14 +26,20 @@ $patterns = @(
     '^GEMINI\.md$',
     '^DO_NOT_PUSH\.md$',
     '^RUN_INSTRUCTIONS\.md$',
+    '^\.gitignore$',
     '^\.codex/',
     '^\.agents/',
+    '^\.github/actions/build-package/',
+    '^\.github/workflows/',
     '^docs/agent/',
     '^scripts/codex/',
+    '^dub_sidecar/',
     '^Plugins/llplayer-codex/',
     '^Plugins/YoutubeDL/',
+    '^LLPlayer/Properties/PublishProfiles/',
     '^FFmpeg/',
-    '^LLPlayer/lib/'
+    '^LLPlayer/lib/',
+    '\.pubxml$'
 )
 
 $normalized = $changed |
