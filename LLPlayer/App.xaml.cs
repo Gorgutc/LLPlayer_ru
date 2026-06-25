@@ -227,13 +227,13 @@ public partial class App : PrismApplication
 
         Guards.ThrowIfNull(fvi.ProductVersion);
 
-        var version = fvi.ProductVersion.Split("+");
-        if (version.Length != 2)
-        {
-            throw new InvalidOperationException($"ProductVersion is invalid: {fvi.ProductVersion}");
-        }
-
-        return (version[0], version[1]);
+        // ProductVersion (= AssemblyInformationalVersion) is "<version>" or "<version>+<commitHash>". The
+        // "+<commitHash>" suffix is appended by the SDK only when the build injects a git SHA (Source Link /
+        // a SourceRevisionId MSBuild property); local and agent publish builds omit it. Parse tolerantly so a
+        // SHA-less build (empty commit hash) never throws — App.Version is first read at startup inside the
+        // FlyleafLoader try/catch that calls Environment.Exit(1), so throwing here would block the app from
+        // starting (and previously surfaced as a misleading "ProductVersion is invalid" / "delete the config").
+        return InformationalVersion.Parse(fvi.ProductVersion);
     }
     #endregion
 }
