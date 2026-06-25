@@ -156,7 +156,8 @@ public static class BatchSubtitleConfigSnapshot
             ManualModelDir = source.ManualModelDir,
             Model = source.Model,
             ExtraArguments = RemoveFasterWhisperTaskArgument(source.ExtraArguments),
-            ProcessPriority = source.ProcessPriority
+            ProcessPriority = source.ProcessPriority,
+            AntiHallucination = source.AntiHallucination
         };
     }
 
@@ -179,9 +180,14 @@ public static class BatchSubtitleConfigSnapshot
         {
             PromptOneByOne = source.PromptOneByOne,
             PromptKeepContext = source.PromptKeepContext,
+            PromptContextWindow = source.PromptContextWindow,
+            PromptGrammarCheck = source.PromptGrammarCheck,
             TranslateMethod = source.TranslateMethod,
             SubtitleContextCount = source.SubtitleContextCount,
             ContextRetainPolicy = source.ContextRetainPolicy,
+            ContextWindowBefore = source.ContextWindowBefore,
+            ContextWindowAfter = source.ContextWindowAfter,
+            GrammarCheckEnabled = source.GrammarCheckEnabled,
             IncludeTargetLangRegion = source.IncludeTargetLangRegion
         };
     }

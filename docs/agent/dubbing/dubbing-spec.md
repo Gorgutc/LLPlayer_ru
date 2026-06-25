@@ -268,7 +268,7 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
   `--mock` sidecar enables an optional end-to-end ffmpeg-assembly smoke with a generated tone.
 - **Gates:** `dotnet build -warnaserror` (LLPlayer + Plugins/YoutubeDL); `dotnet test
   FlyleafLibTests`; `verify-fast`/`verify` (frozen) **incl. the new lockfile NC-package gate**;
-  multi-agent `/code-review` (close Critical/Important).
+  multi-agent `/review` (close Critical/Important).
 - **Owner first-run acceptance (NOT a merge gate):** provisioning download; sidecar boot; CosyVoice2
   Russian **ear-test** on real content; dub track appears in Audio ▸ External, plays, ducking
   audible; cancellation mid-dub leaves no orphan/partial; published-.exe launch-test on the 5090.

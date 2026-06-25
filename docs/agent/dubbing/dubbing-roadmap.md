@@ -80,7 +80,7 @@ budget. The MVP is a single-voice *закадровый* voiceover over ducked o
 
 **Definition of done — `.exe` (merge gate):**
 - `dotnet build -warnaserror` 0/0 (LLPlayer + Plugins/YoutubeDL); `dotnet test` green; `verify`
-  (frozen) green **including the new NC-package lockfile gate**; multi-agent `/code-review`
+  (frozen) green **including the new NC-package lockfile gate**; multi-agent `/review`
   Critical/Important closed.
 - Published `.exe` **launches**, and a launch-test with **`GenerateDubbing=false` proves
   byte-for-byte-unchanged** existing behavior (the additive guarantee).

@@ -17,6 +17,12 @@ public class BatchSubtitleTranslatorTests
         config.Subtitles.TranslateServiceType = TranslateServiceType.Ollama;
         config.Subtitles.TranslateTargetLanguage = TargetLanguage.EnglishAmerican;
         config.Subtitles.TranslateChatConfig.TranslateMethod = ChatTranslateMethod.OneByOne;
+        config.Subtitles.TranslateChatConfig.PromptContextWindow = "custom context prompt";
+        config.Subtitles.TranslateChatConfig.PromptGrammarCheck = "custom grammar prompt";
+        config.Subtitles.TranslateChatConfig.ContextWindowBefore = 0;
+        config.Subtitles.TranslateChatConfig.ContextWindowAfter = 2;
+        config.Subtitles.TranslateChatConfig.GrammarCheckEnabled = false;
+        config.Subtitles.FasterWhisperConfig.AntiHallucination = false;
         config.Subtitles.TranslateServiceSettings[TranslateServiceType.Ollama] =
             new OllamaTranslateSettings
             {
@@ -32,7 +38,13 @@ public class BatchSubtitleTranslatorTests
         config.Subtitles.WhisperConfig.Translate.Should().BeTrue();
         snapshot.TranslateTargetLanguage.Should().Be(TargetLanguage.Russian);
         config.Subtitles.TranslateTargetLanguage.Should().Be(TargetLanguage.EnglishAmerican);
+        snapshot.FasterWhisperConfig.AntiHallucination.Should().BeFalse();
         snapshot.TranslateChatConfig.Should().NotBeSameAs(config.Subtitles.TranslateChatConfig);
+        snapshot.TranslateChatConfig.PromptContextWindow.Should().Be("custom context prompt");
+        snapshot.TranslateChatConfig.PromptGrammarCheck.Should().Be("custom grammar prompt");
+        snapshot.TranslateChatConfig.ContextWindowBefore.Should().Be(0);
+        snapshot.TranslateChatConfig.ContextWindowAfter.Should().Be(2);
+        snapshot.TranslateChatConfig.GrammarCheckEnabled.Should().BeFalse();
         snapshot.TranslateServiceSettings[TranslateServiceType.Ollama]
             .Should()
             .NotBeSameAs(config.Subtitles.TranslateServiceSettings[TranslateServiceType.Ollama]);
