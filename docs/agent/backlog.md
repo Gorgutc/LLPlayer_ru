@@ -50,7 +50,14 @@ issues: [#12 export SRT (done)](https://github.com/umlx5h/LLPlayer/issues/12),
 
 ## 1. 🐛 БАГИ (подтверждённые)
 
-### B-01 — Краш `ProductVersion is invalid` (брит­кий парсинг версии) 🔴 ⓢ · TODO · **NEW (скриншот владельца)**
+### B-01 — Краш `ProductVersion is invalid` (брит­кий парсинг версии) 🔴 ⓢ · ✅ **DONE (PR #46, merge `73e95fa`, v0.3.8, 2026-06-25)** · был NEW (скриншот владельца)
+> ✅ **Закрыт.** Толерантный парсер вынесен в `FlyleafLib/Utils/InformationalVersion.cs` (`Parse`: `Split('+', 2)`,
+> commitHash → "" без суффикса, не бросает); `App.GetVersion` делегирует ему, `App.Version` для нормальных сборок
+> байт-идентичен прежнему. Гейты build -warnaserror 0/0 + тесты 199/199 + verify-frozen/doc-coverage/plugin green;
+> 4-линзовое adversarial `/code-review` (0 Critical/Important); `.exe` launch-тест на ТОЧНОМ условии бага (сборка без
+> `+sha`, ProductVersion `"0.3.8"`) — окно плеера открывается, без краша. **Часть 2 (инъекция git-SHA при publish)
+> НЕ понадобилась:** SHA встраивается автоматически при publish из git-чекаута (About уже показывает коммит); крашили
+> именно НЕ-git сборки, которые теперь обрабатываются безопасно. Детали: второй мозг `Sessions/2026-06-25-handoff-b01-productversion-fix.md`.
 **Симптом (скриншот):** диалог «Batch subtitles Unknown Error → Cannot save batch subtitle defaults:
 ProductVersion is invalid: 0.3.7» при сохранении дефолтов в батч-диалоге.
 **Файлы:** [`LLPlayer/App.xaml.cs:223-237`](../../LLPlayer/App.xaml.cs) (метод `GetVersion`),
@@ -388,8 +395,9 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
   одним «ASR-quality» PR. `B-04` — можно приклеить к быстрому PR `B-01`.
 
 ## 6. 🧭 Рекомендуемая последовательность ближайших сессий (мои рассуждения)
-1. **B-01** — отдельным быстрым PR (юзер уже ловит краш на v0.3.7; заодно проверить гипотезу, что
-   version-gated миграции молча не работают — это может объяснить «гигантский субтитр»).
+1. ~~**B-01** — отдельным быстрым PR~~ ✅ **СДЕЛАНО (PR #46, v0.3.8, 2026-06-25).** Гипотеза подтверждена: на старте
+   `FlyleafLoader` читает `App.Version` в `try/catch` с `Environment.Exit(1)` → краш мог блокировать запуск на
+   сборке без SHA с существующим конфигом. Фикс снят. (SHA-инъекция при publish оказалась автоматической на git-сборках.)
 2. **F-01 + B-02 + B-03** — один PR по `SubtitleSegmenter`/`ReadAll` (универсальная ре-сегментация + 2 фикса).
 3. Затем по важности: **T-01** (FFmpeg), **F-05/F-04** (upstream «Now»), **F-06** (быстрый win), далее Tier-1/2.
 **Координация:** ветка дубляжа и PR #31 — не конфликтовать; перед поведенческими правками сверяться с
