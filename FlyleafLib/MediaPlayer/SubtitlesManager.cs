@@ -483,8 +483,16 @@ public class SubManager : INotifyPropertyChanged
                         Log.Info($"Start loading subs... (lang:{lang.TopEnglishName})");
                     }
 
-                    data.Index = subCnt++;
-                    subChunk.Add(data);
+                    // F-01: universal re-segmentation — split an over-long loaded/sidecar/embedded TEXT cue into
+                    // short, capped-line cues (line/character overflow, proportional timings), gated by
+                    // ResegmentSubtitles (default on). Bitmap and styled (ASS) cues pass through unchanged; a cue
+                    // that already fits is left untouched, so well-formatted subtitles keep their authored timing.
+                    foreach (SubtitleData cue in ResegmentLoaded(
+                                 data, _config.Subtitles.ResegmentSubtitles, _config.Subtitles.SubtitleSegmentOptions))
+                    {
+                        cue.Index = subCnt++;
+                        subChunk.Add(cue);
+                    }
 
                     // Large files and network files take time to load to the end.
                     // To prevent frequent UI updates, use AddRange to group files to some extent before adding them.
@@ -514,6 +522,56 @@ public class SubManager : INotifyPropertyChanged
                 Clear();
             }
         }
+    }
+
+    // F-01: decide whether a loaded/sidecar/embedded subtitle cue should be re-segmented and, if so, split it
+    // into short capped-line cues with proportional timings. A bitmap subtitle or a styled (ASS, SubStyles
+    // present) cue is returned unchanged — re-segmenting would drop the bitmap or invalidate the per-character
+    // style offsets; an empty cue is short-circuited by the IsText gate (it never reaches the segmenter) and a
+    // text cue that already fits is left untouched. Output cues stay sorted within the original [Start, End]
+    // (first.Start == Start, last.End == End), so the Subs binary-search invariant is preserved.
+    //
+    // Loaded subtitles keep their AUTHORED timing: they are split only on line/character overflow, NOT on
+    // duration. A hand-authored cue that fits the line/char budget but is deliberately held longer than the
+    // duration cap must not be fragmented into timed pieces (unlike the ASR path, where a long Whisper
+    // "wall of text" should be paced). Forcing MaxCueDurationSec = 0 disables only the duration trigger; a
+    // genuine giant block still overflows the line/char budget and is split.
+    internal static List<SubtitleData> ResegmentLoaded(SubtitleData data, bool enabled, SubtitleSegmentOptions opt)
+    {
+        bool canResegment = enabled && !data.IsBitmap && data.IsText
+                            && (data.SubStyles == null || data.SubStyles.Count == 0);
+        if (!canResegment)
+            return [data];
+
+        SubtitleSegmentOptions loadedOpt = opt.MaxCueDurationSec == 0 ? opt : new SubtitleSegmentOptions
+        {
+            MaxCharsPerLine = opt.MaxCharsPerLine,
+            MaxLinesPerCue = opt.MaxLinesPerCue,
+            MaxCjkCharsPerLine = opt.MaxCjkCharsPerLine,
+            MaxCueDurationSec = 0, // loaded subs: split on line/character overflow only, never on duration
+            MinCueDurationSec = opt.MinCueDurationSec,
+        };
+
+        List<(string Text, TimeSpan Start, TimeSpan End)> cues =
+            SubtitleSegmenter.Resegment(data.Text!, data.StartTime, data.EndTime, loadedOpt);
+
+        if (cues.Count == 1)
+        {
+            // Already fits (or a single wrapped cue) — keep the original object and its fields; only the text
+            // may gain '\n' line breaks. Resegment guarantees the single-cue times equal the input, but assign
+            // them defensively so the data and the cue can never silently diverge.
+            data.Text = cues[0].Text;
+            data.StartTime = cues[0].Start;
+            data.EndTime = cues[0].End;
+            return [data];
+        }
+
+        List<SubtitleData> result = new(cues.Count);
+        foreach ((string text, TimeSpan start, TimeSpan end) in cues)
+        {
+            result.Add(new SubtitleData { Text = text, StartTime = start, EndTime = end });
+        }
+        return result;
     }
 
     public void TryCancelWait()
