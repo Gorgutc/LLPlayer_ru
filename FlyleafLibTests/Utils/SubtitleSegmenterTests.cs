@@ -143,6 +143,31 @@ public class SubtitleSegmenterTests
     }
 
     [Fact]
+    public void Resegment_TooShortFirstGeneratedCue_MergesForward()
+    {
+        string input = "x " + string.Join(' ', Enumerable.Repeat("readable", 80)) + " z";
+
+        var cues = SubtitleSegmenter.Resegment(input, TimeSpan.Zero, TimeSpan.FromSeconds(30), Opt);
+
+        cues.Should().HaveCountGreaterThan(1);
+        cues.Should().OnlyContain(c => (c.End - c.Start) >= TimeSpan.FromSeconds(Opt.MinCueDurationSec));
+        cues[0].Start.Should().Be(TimeSpan.Zero);
+        cues[^1].End.Should().Be(TimeSpan.FromSeconds(30));
+        Normalize(string.Join(' ', cues.Select(c => c.Text))).Should().Be(Normalize(input));
+    }
+
+    [Fact]
+    public void Resegment_ShortStandaloneCue_PreservesRealShortPhrase()
+    {
+        var cues = SubtitleSegmenter.Resegment("Yes.", TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2.4), Opt);
+
+        cues.Should().ContainSingle();
+        cues[0].Text.Should().Be("Yes.");
+        cues[0].Start.Should().Be(TimeSpan.FromSeconds(2));
+        cues[0].End.Should().Be(TimeSpan.FromSeconds(2.4));
+    }
+
+    [Fact]
     public void Resegment_Cjk_SplitsByCharacterCount()
     {
         string input = new string('あ', 50); // space-less, 50 chars
@@ -240,6 +265,24 @@ public class SubtitleSegmenterTests
     {
         string input = "Supercalifragilisticexpialidocioussupercalifragilisticwordthatisextremelylong";
         SubtitleSegmenter.WrapLines(input, Opt3).Should().Be(input); // no break opportunity -> single line
+    }
+
+    [Fact]
+    public void WrapLines_ZeroLineLength_ClampsToOneCharacter()
+    {
+        SubtitleSegmentOptions opt = new()
+        {
+            MaxCharsPerLine = 0,
+            MaxLinesPerCue = 2,
+            MaxCjkCharsPerLine = 0,
+            MaxCueDurationSec = 6.0,
+            MinCueDurationSec = 1.0,
+        };
+
+        string result = SubtitleSegmenter.WrapLines("ab cd", opt);
+
+        result.Split('\n').Should().OnlyContain(line => line.Length >= 1);
+        Normalize(result).Should().Be("ab cd");
     }
 
     [Fact]
