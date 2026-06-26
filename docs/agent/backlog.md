@@ -239,7 +239,12 @@ resume ASR»). **Решение:** управление состоянием ASR
 в дорожной карте upstream; средняя сложность.
 
 ### F-05 — Языковые предпочтения primary/secondary + авто-открытие 🟠 Ⓜ · TODO · (upstream «Now»)
-**Решение:** расширить конфиг и логику открытия субтитров (per-slot язык, автоподбор внешних).
+**Решение:** расширить конфиг и логику открытия субтитров (per-slot язык, автоподбор внешних). **Заодно
+(подтверждено аудитом 2026-06-27, латентный баг из ревью PR #44):** `BatchSubtitleConfigSnapshot.CreateSubtitlesConfig`
+([`:48-91`](../../FlyleafLib/MediaPlayer/Batch/BatchSubtitleConfigSnapshot.cs)) НЕ копирует 5 language-fallback полей
+`SubtitlesConfig` (`Languages` `:1222`, `LanguageAutoDetect` `:1235`, `LanguageFallbackPrimary` `:1240`,
+`LanguageFallbackSecondary` `:1253`, `LanguageFallbackSecondarySame` `:1272`) → батч игнорирует языковые префы
+(тот же класс бага, что чинили PR #44/#55-снапшот). Дешёвый фикс — забандлить с F-05.
 **Рассуждение:** ядро изучения языка; в upstream Roadmap «Now»; средняя сложность.
 
 ### F-06 — Экспорт транскрипта в TXT / VTT 🟡 ⓢ-Ⓜ · TODO
@@ -329,11 +334,11 @@ OPEN, **отложен владельцем**. **Решение:** решить 
 [`SrtExporter.cs:8`](../../LLPlayer/Services/SrtExporter.cs) TODO. Сейчас экспорт теряет курсив/стили.
 
 ### T-08 — ASR fold-back при перемотке назад 🟢 Ⓜ · TODO
-[`SubtitlesASR.cs:610`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO («Fold back and allow the first
+[`SubtitlesASR.cs:616`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO («Fold back and allow the first
 half to run as well»). При seek назад первая половина может не обработаться.
 
 ### T-09 — ASR: дробление чанков по тишине 🟢 Ⓜ · TODO
-[`SubtitlesASR.cs:759`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO («split at the silent part»).
+[`SubtitlesASR.cs:765`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO («split at the silent part»).
 Сейчас чанки режутся по размеру/времени, не по тишине → возможны разрывы фраз.
 
 ### T-10 — Per-segment language detection 🟢 Ⓜ · TODO
