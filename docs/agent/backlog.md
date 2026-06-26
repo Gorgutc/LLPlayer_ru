@@ -122,7 +122,14 @@ flash-frame, без потери текста/краша → понижено hi
 
 > B-02 и B-03 в одном файле → бандлить вместе (и/или в PR F-01). Чип: `task_e97d7f20`.
 
-### B-04 — LM Studio / локальный LLM: таймаут 60s мал для reasoning-моделей 🟠 ⓢ-Ⓜ · TODO · **NEW (скриншот владельца)**
+### B-04 — LM Studio / локальный LLM: таймаут 60s мал для reasoning-моделей 🟠 ⓢ-Ⓜ · ✅ **DONE (PR #51, merge `fa40c45`, v0.3.9, 2026-06-26)**
+> ✅ **Закрыт.** Дефолт `TimeoutMs 60000→180000` для Ollama/LM Studio/KoboldCpp (ctor'ы) + **миграция** существующих
+> конфигов (`Config.UpdateDefault`, гейт `<= 0.3.8`, one-shot через bump `0.3.9`, сохраняет явные значения; вынесена в
+> тестируемый `MigrateLocalLlmTimeoutDefault`). Гейты 0/0, тесты **208/208** (+6, mutation-verified), verify-frozen
+> (+2 гейта), 4-линзовое adversarial `/code-review` (0 Critical/Important), `.exe` launch-тест 0.3.9 зелёный. **Принят
+> «быстрый win» (raise+migration); принципиальное решение (streaming + скользящий read-timeout) — отдельная будущая
+> задача.** Follow-up из ревью: `LiteLLM`/`OpenAILike` остались на базовом `15000` (endpoint может быть облачным) —
+> при нужде поднять headroom и для локально-направленных endpoint'ов. Детали: второй мозг `Sessions/2026-06-26-handoff-b04-llm-timeout.md`.
 **Симптом (скриншот):** «Cannot request to LMStudio: The request was canceled due to the configured
 HttpClient.Timeout of 60 [seconds]». Владелец гоняет перевод через **reasoning-режим** LLM → модель «думает»
 дольше 60s до выдачи перевода.
