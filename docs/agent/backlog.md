@@ -97,7 +97,8 @@ publish-сборки SHA НЕ встраивают → `ProductVersion = "0.3.7"
 сохранить дефолты → нет попапа; открыть About → версия видна, commit пуст/`dev`.
 **Заметка:** код хрупкого парсинга — из upstream (umlx5h/LLPlayer) → стоит завести и upstream-issue/PR.
 
-### B-02 — `SubtitleSegmenter.MergeTooShort` не сливает слишком короткую ПЕРВУЮ реплику 🟠 ⓢ · TODO · chip `task_e97d7f20`
+### B-02 — `SubtitleSegmenter.MergeTooShort` не сливает слишком короткую ПЕРВУЮ реплику 🟠 ⓢ · ✅ **DONE (codex PR #48, merge `37ea200`; тесты усилены PR #49, merge `284da38`)**
+> ✅ **Закрыт 2026-06-26.** Forward-merge короткой первой реплики добавлен в `MergeTooShort` (codex PR #48). Продакшн-фикс корректен — подтверждено 4-агентным adversarial-ревью + fuzz 4000 входов (old=51 sliver-cue, new=0), termination/no-text-loss/contiguity доказаны. **Но тест из #48 был ВАКУУМНЫМ** (вход `"x "+80×"readable"+" z"` не изолировал короткую первую cue) → заменён на предложенный здесь `Resegment("x "+200×'y'+" z", 0s, 8s)` (pre-fix первая cue = 40мс) в тестовом PR #49, проверено RED-without-fix → GREEN-with-fix. Детали: второй мозг `Sessions/2026-06-26-handoff-sync-codex-pr48.md`.
 **Файл:** [`FlyleafLib/Utils/SubtitleSegmenter.cs:490-501`](../../FlyleafLib/Utils/SubtitleSegmenter.cs)
 (гейт `merged.Count>0` на `:492`; контракт в docstring `:28-29` и комментарии `:481`).
 **Проблема:** merge идёт только НАЗАД (в предыдущую реплику). Для первой реплики `merged` пуст → лидирующая
@@ -110,7 +111,8 @@ flash-frame, без потери текста/краша → понижено hi
 `first.Start==start`, `End` второй). + регресс-тест `Resegment("x "+200×'y'+" z", 0s, 8s, Min=1.0)`:
 все длительности ≥ `MinCueDurationSec`.
 
-### B-03 — `perLine` не клампится `Math.Max(1,…)` 🟡 ⓢ · TODO · chip `task_e97d7f20`
+### B-03 — `perLine` не клампится `Math.Max(1,…)` 🟡 ⓢ · ✅ **DONE (codex PR #48, merge `37ea200`)**
+> ✅ **Закрыт 2026-06-26.** Новый `GetEffectivePerLine` клампит `perLine = Math.Max(1, …)` на обоих сайтах (`:59`, `:78`) — codex PR #48. Кламп защитный (наблюдаемый эффект маскируется уже-существующими гейтами `CeilDiv(Math.Max(1,budget))` и пост-merge); тест на `MaxCharsPerLine=0` усилен до наблюдаемой формы в PR #49.
 **Файл:** [`SubtitleSegmenter.cs:59,78`](../../FlyleafLib/Utils/SubtitleSegmenter.cs) (асимметрия с
 `maxLines = Math.Max(1, …)` на `:60,:79`).
 **Проблема:** `MaxCharsPerLine`/`MaxCjkCharsPerLine` = 0 проходит через UI Settings (TextBox
@@ -398,7 +400,9 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 1. ~~**B-01** — отдельным быстрым PR~~ ✅ **СДЕЛАНО (PR #46, v0.3.8, 2026-06-25).** Гипотеза подтверждена: на старте
    `FlyleafLoader` читает `App.Version` в `try/catch` с `Environment.Exit(1)` → краш мог блокировать запуск на
    сборке без SHA с существующим конфигом. Фикс снят. (SHA-инъекция при publish оказалась автоматической на git-сборках.)
-2. **F-01 + B-02 + B-03** — один PR по `SubtitleSegmenter`/`ReadAll` (универсальная ре-сегментация + 2 фикса).
+2. ~~**B-02 + B-03**~~ ✅ **СДЕЛАНО (codex PR #48 + усиленные тесты PR #49, 2026-06-26).** Осталось **F-01** —
+   универсальная ре-сегментация загруженных/sidecar/встроенных субтитров (`SubtitleReader.ReadAll` минует
+   `Resegment`), отдельным PR. **B-04** (LM Studio timeout) codex намеренно оставил для основной машины.
 3. Затем по важности: **T-01** (FFmpeg), **F-05/F-04** (upstream «Now»), **F-06** (быстрый win), далее Tier-1/2.
 **Координация:** ветка дубляжа и PR #31 — не конфликтовать; перед поведенческими правками сверяться с
 frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -warnaserror 0/0 + xUnit) + launch-test `.exe`.
