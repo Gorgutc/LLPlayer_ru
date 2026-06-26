@@ -145,20 +145,27 @@ public class SubtitleSegmenterTests
     [Fact]
     public void Resegment_TooShortFirstGeneratedCue_MergesForward()
     {
-        string input = "x " + string.Join(' ', Enumerable.Repeat("readable", 80)) + " z";
+        // A short leading token before a long UNBREAKABLE run: pre-fix the splitter isolated "x" as a ~40ms
+        // first cue (a sub-MinCueDurationSec sliver, violating the "never emit a sliver" contract). The
+        // forward-merge must fold it into the next cue so EVERY cue is >= MinCueDurationSec, keeping the first
+        // Start and losing no text. (Guard verified RED against the pre-fix segmenter: first cue was 0.040s;
+        // codex's original "x " + 80×"readable" input never produced a short first cue, so it guarded nothing.)
+        string input = "x " + new string('y', 200) + " z";
 
-        var cues = SubtitleSegmenter.Resegment(input, TimeSpan.Zero, TimeSpan.FromSeconds(30), Opt);
+        var cues = SubtitleSegmenter.Resegment(input, TimeSpan.Zero, TimeSpan.FromSeconds(8), Opt);
 
-        cues.Should().HaveCountGreaterThan(1);
         cues.Should().OnlyContain(c => (c.End - c.Start) >= TimeSpan.FromSeconds(Opt.MinCueDurationSec));
+        (cues[0].End - cues[0].Start).Should().BeGreaterThanOrEqualTo(TimeSpan.FromSeconds(Opt.MinCueDurationSec));
         cues[0].Start.Should().Be(TimeSpan.Zero);
-        cues[^1].End.Should().Be(TimeSpan.FromSeconds(30));
+        cues[^1].End.Should().Be(TimeSpan.FromSeconds(8));
         Normalize(string.Join(' ', cues.Select(c => c.Text))).Should().Be(Normalize(input));
     }
 
     [Fact]
     public void Resegment_ShortStandaloneCue_PreservesRealShortPhrase()
     {
+        // A genuine short reply must NOT be stretched or glued to anything. (Pins the fits-as-is fast path for
+        // a single short cue; the forward-merge only ever acts when there is more than one generated cue.)
         var cues = SubtitleSegmenter.Resegment("Yes.", TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2.4), Opt);
 
         cues.Should().ContainSingle();
@@ -281,7 +288,9 @@ public class SubtitleSegmenterTests
 
         string result = SubtitleSegmenter.WrapLines("ab cd", opt);
 
-        result.Split('\n').Should().OnlyContain(line => line.Length >= 1);
+        // Effective per-line width clamps 0 -> 1, so wrapping degrades to one token per line (not a div-by-zero
+        // budget). The observable shape is each token on its own line, with no text lost.
+        result.Split('\n').Should().Equal("ab", "cd");
         Normalize(result).Should().Be("ab cd");
     }
 
