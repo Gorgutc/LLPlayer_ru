@@ -139,7 +139,7 @@ public class Config : NotifyPropertyChanged
         File.WriteAllText(path, JsonSerializer.Serialize(this, jsonOptions));
     }
 
-    private void UpdateDefault()
+    internal void UpdateDefault()
     {
         bool parsed = System.Version.TryParse(Version, out var loadedVer);
 
@@ -239,6 +239,33 @@ public class Config : NotifyPropertyChanged
                 subs.SubtitleMaxCjkCharsPerLine = 24;
             if (subs.SubtitleMaxCueDurationSec == 6.0)
                 subs.SubtitleMaxCueDurationSec = 7.0;
+        }
+
+        if (!parsed || loadedVer <= System.Version.Parse("0.3.8"))
+        {
+            // Raise the default request timeout for local LLM backends (Ollama / LM Studio / KoboldCpp) from
+            // 60s to 180s. Reasoning models can "think" well past 60s before emitting the translation, which
+            // tripped the overall HttpClient timeout ("The request was canceled due to the configured
+            // HttpClient.Timeout of 60 seconds"). Only a service still on the prior 60000 default is migrated;
+            // an explicit user value is preserved. New configs already default to 180000 via the settings
+            // constructors. Re-applies on load until the config is saved with the new app version (hence the
+            // 0.3.9 bump that makes the migration one-shot), after which a deliberate 60000 is respected.
+            MigrateLocalLlmTimeoutDefault(Subtitles.TranslateServiceSettings);
+        }
+    }
+
+    // Bump local LLM (Ollama / LM Studio / KoboldCpp) request timeouts still on the prior 60s default to 180s
+    // so reasoning models are not cancelled mid-thought; an explicit user value is left untouched. See B-04.
+    internal static void MigrateLocalLlmTimeoutDefault(Dictionary<TranslateServiceType, ITranslateSettings> services)
+    {
+        foreach (TranslateServiceType type in new[]
+                 { TranslateServiceType.Ollama, TranslateServiceType.LMStudio, TranslateServiceType.KoboldCpp })
+        {
+            if (services.TryGetValue(type, out var settings) &&
+                settings is OpenAIBaseTranslateSettings openAi && openAi.TimeoutMs == 60000)
+            {
+                openAi.TimeoutMs = 180000;
+            }
         }
     }
 

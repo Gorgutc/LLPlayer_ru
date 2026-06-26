@@ -504,8 +504,11 @@ public class OllamaTranslateSettings : OpenAIBaseTranslateSettings
 {
     public OllamaTranslateSettings()
     {
-        // Local models can be slow to load/respond on the first request; 20s caused false timeouts.
-        TimeoutMs = 60000;
+        // Local models can be slow to load/respond, and reasoning models "think" well past a minute before
+        // emitting the translation; an overall HttpClient timeout that low cancels the request mid-reasoning
+        // ("The request was canceled due to the configured HttpClient.Timeout of 60 seconds"). 180s gives
+        // reasoning models headroom. Editable in Settings ▸ Translate; existing configs are migrated once.
+        TimeoutMs = 180000;
     }
 
     [JsonIgnore]
@@ -520,8 +523,11 @@ public class LMStudioTranslateSettings : OpenAIBaseTranslateSettings
 {
     public LMStudioTranslateSettings()
     {
-        // Local models can be slow to load/respond on the first request; 20s caused false timeouts.
-        TimeoutMs = 60000;
+        // Local models can be slow to load/respond, and reasoning models "think" well past a minute before
+        // emitting the translation; an overall HttpClient timeout that low cancels the request mid-reasoning
+        // ("The request was canceled due to the configured HttpClient.Timeout of 60 seconds"). 180s gives
+        // reasoning models headroom. Editable in Settings ▸ Translate; existing configs are migrated once.
+        TimeoutMs = 180000;
     }
 
     [JsonIgnore]
@@ -538,8 +544,11 @@ public class KoboldCppTranslateSettings : OpenAIBaseTranslateSettings
 {
     public KoboldCppTranslateSettings()
     {
-        // Local models can be slow to load/respond on the first request; 20s caused false timeouts.
-        TimeoutMs = 60000;
+        // Local models can be slow to load/respond, and reasoning models "think" well past a minute before
+        // emitting the translation; an overall HttpClient timeout that low cancels the request mid-reasoning
+        // ("The request was canceled due to the configured HttpClient.Timeout of 60 seconds"). 180s gives
+        // reasoning models headroom. Editable in Settings ▸ Translate; existing configs are migrated once.
+        TimeoutMs = 180000;
     }
 
     [JsonIgnore]
