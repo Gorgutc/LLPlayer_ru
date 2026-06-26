@@ -23,6 +23,8 @@ public class BatchSubtitleTranslatorTests
         config.Subtitles.TranslateChatConfig.ContextWindowAfter = 2;
         config.Subtitles.TranslateChatConfig.GrammarCheckEnabled = false;
         config.Subtitles.FasterWhisperConfig.AntiHallucination = false;
+        config.Subtitles.FasterWhisperConfig.Prompt = "ru sample prompt";
+        config.Subtitles.FixAllCaps = false;
         config.Subtitles.TranslateServiceSettings[TranslateServiceType.Ollama] =
             new OllamaTranslateSettings
             {
@@ -39,6 +41,8 @@ public class BatchSubtitleTranslatorTests
         snapshot.TranslateTargetLanguage.Should().Be(TargetLanguage.Russian);
         config.Subtitles.TranslateTargetLanguage.Should().Be(TargetLanguage.EnglishAmerican);
         snapshot.FasterWhisperConfig.AntiHallucination.Should().BeFalse();
+        snapshot.FasterWhisperConfig.Prompt.Should().Be("ru sample prompt");
+        snapshot.FixAllCaps.Should().BeFalse();
         snapshot.TranslateChatConfig.Should().NotBeSameAs(config.Subtitles.TranslateChatConfig);
         snapshot.TranslateChatConfig.PromptContextWindow.Should().Be("custom context prompt");
         snapshot.TranslateChatConfig.PromptGrammarCheck.Should().Be("custom grammar prompt");

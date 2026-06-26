@@ -1418,6 +1418,14 @@ public class Config : NotifyPropertyChanged
             MaxCueDurationSec = SubtitleMaxCueDurationSec,
             MinCueDurationSec = SubtitleMinCueDurationSec,
         };
+
+        /// <summary>
+        /// Rewrite an ALL-CAPS generated (ASR) cue to sentence-case (default on). Random ALL-CAPS is a known
+        /// faster-whisper(-XXL) artifact (previews/trailers/merged lines); a cue whose letters are predominantly
+        /// uppercase and that has 2+ words is normalized, others are left untouched. Applies to the interactive
+        /// ASR path and batch generation only (NOT to loaded/authored subtitles). Additive/absent-defaulting.
+        /// </summary>
+        public bool FixAllCaps { get; set => Set(ref field, value); } = true;
         #endregion
 
         #region OCR

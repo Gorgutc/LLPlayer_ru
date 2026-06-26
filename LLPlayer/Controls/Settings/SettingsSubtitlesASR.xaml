@@ -694,6 +694,36 @@
                                 <DockPanel>
                                     <TextBlock
                                         Width="180"
+                                        Text="Initial Prompt">
+                                        <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                            <ToolTipService.ToolTip>
+                                                <TextBlock
+                                                    TextWrapping="Wrap"
+                                                    MaxWidth="400">
+                                                    Optional text passed as --initial_prompt. A short, normal-case sample of the expected language biases faster-whisper toward the right language/script and casing (helps reduce foreign-script drift and ALL-CAPS output). De-duplicated against Extra Arguments (an explicit --initial_prompt there wins). Leave empty to disable.
+                                                </TextBlock>
+                                            </ToolTipService.ToolTip>
+                                            <materialDesign:PackIcon
+                                                Kind="Information"
+                                                Width="16" Height="16"
+                                                Margin="4 0 0 0" />
+                                        </InlineUIContainer>
+                                    </TextBlock>
+                                    <TextBox
+                                        BorderThickness="1"
+                                        Padding="10"
+                                        HorizontalContentAlignment="Left"
+                                        TextAlignment="Left"
+                                        VerticalAlignment="Top"
+                                        VerticalContentAlignment="Top"
+                                        MaxHeight="150"
+                                        TextWrapping="Wrap"
+                                        Text="{Binding FL.PlayerConfig.Subtitles.FasterWhisperConfig.Prompt}" />
+                                </DockPanel>
+
+                                <DockPanel>
+                                    <TextBlock
+                                        Width="180"
                                         Text="Extra Arguments">
                                         <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
                                             <ToolTipService.ToolTip>

@@ -196,6 +196,27 @@
                             IsChecked="{Binding FL.PlayerConfig.Subtitles.ResegmentSubtitles}" />
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180">
+                            Fix ALL-CAPS Subtitles
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Rewrite an ALL-CAPS generated (ASR) cue to sentence-case — random ALL-CAPS is a known faster-whisper artifact (often on previews/trailers). A cue that is predominantly uppercase and has two or more words is normalized; others (a short acronym, a single word, normal text) are left untouched. Applies to interactive ASR and batch generation, not to loaded subtitles."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon
+                                    Kind="Information"
+                                    Width="16" Height="16"
+                                    Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton
+                            IsChecked="{Binding FL.PlayerConfig.Subtitles.FixAllCaps}" />
+                    </StackPanel>
+
                     <StackPanel Visibility="{Binding FL.PlayerConfig.Subtitles.ResegmentSubtitles, Converter={StaticResource BooleanToVisibilityConv}}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock

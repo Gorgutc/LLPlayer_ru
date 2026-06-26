@@ -97,6 +97,17 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 
         subtitles = subtitles.OrderBy(s => s.StartTime).ToList();
 
+        // F-18: normalize ALL-CAPS ASR artifacts to sentence-case (gated). Engine-agnostic, applied before
+        // re-segmentation so the split cues carry the corrected casing.
+        if (batchConfig.Subtitles.FixAllCaps)
+        {
+            foreach (SubtitleData s in subtitles)
+            {
+                if (!string.IsNullOrEmpty(s.Text))
+                    s.Text = SubtitleCaseFixer.FixAllCaps(s.Text);
+            }
+        }
+
         // Re-segment over-long Whisper cues into short, capped-line cues (proportional timings) so a single
         // subtitle does not fill the frame. Engine-agnostic, gated by the config toggle. Cues that already fit
         // pass through unchanged.

@@ -220,12 +220,18 @@ public class SubtitlesASR
 
                 lock (_lockerSubs)
                 {
+                    // F-18: normalize an ALL-CAPS ASR artifact (a faster-whisper(-XXL) quirk) to sentence-case
+                    // before re-segmentation. Gated; a non-all-caps cue is returned unchanged.
+                    string? asrText = data.Text;
+                    if (_config.Subtitles.FixAllCaps && !string.IsNullOrEmpty(asrText))
+                        asrText = SubtitleCaseFixer.FixAllCaps(asrText);
+
                     // Re-segment an over-long ASR cue into short, capped-line cues (proportional timings) so
                     // a single subtitle does not fill the frame. Gated by the config toggle; cues that already
                     // fit pass through unchanged.
                     List<(string Text, TimeSpan Start, TimeSpan End)> cues = _config.Subtitles.ResegmentSubtitles
-                        ? SubtitleSegmenter.Resegment(data.Text, data.StartTime, data.EndTime, _config.Subtitles.SubtitleSegmentOptions)
-                        : [(data.Text, data.StartTime, data.EndTime)];
+                        ? SubtitleSegmenter.Resegment(asrText, data.StartTime, data.EndTime, _config.Subtitles.SubtitleSegmentOptions)
+                        : [(asrText, data.StartTime, data.EndTime)];
 
                     foreach (int i in SubIndexSet)
                     {
@@ -1174,6 +1180,15 @@ public partial class FasterWhisperASRService : IASRService
 
             if (!commonConfig.LanguageDetection)
                 args.Add("--language").Add(commonConfig.Language);
+        }
+
+        // F-17/F-18: pass the user's initial prompt (--initial_prompt) to bias the language/script and casing at
+        // the source. De-duplicated against ExtraArguments so an explicit --initial_prompt there wins; the
+        // ArgumentsBuilder quotes the value, so a prompt with spaces is passed as one argument.
+        if (!string.IsNullOrWhiteSpace(config.Prompt) &&
+            !ContainsFlag(config.ExtraArguments ?? string.Empty, "--initial_prompt"))
+        {
+            args.Add("--initial_prompt").Add(config.Prompt);
         }
 
         string arguments = args.Build();

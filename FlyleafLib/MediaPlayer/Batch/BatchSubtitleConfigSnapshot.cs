@@ -69,6 +69,7 @@ public static class BatchSubtitleConfigSnapshot
             SubtitleMaxCjkCharsPerLine = source.SubtitleMaxCjkCharsPerLine,
             SubtitleMaxCueDurationSec = source.SubtitleMaxCueDurationSec,
             SubtitleMinCueDurationSec = source.SubtitleMinCueDurationSec,
+            FixAllCaps = source.FixAllCaps,
             TesseractOcrRegions = new Dictionary<string, string>(source.TesseractOcrRegions),
             MsOcrRegions = new Dictionary<string, string>(source.MsOcrRegions),
             TranslateServiceType = source.TranslateServiceType,
@@ -157,7 +158,8 @@ public static class BatchSubtitleConfigSnapshot
             Model = source.Model,
             ExtraArguments = RemoveFasterWhisperTaskArgument(source.ExtraArguments),
             ProcessPriority = source.ProcessPriority,
-            AntiHallucination = source.AntiHallucination
+            AntiHallucination = source.AntiHallucination,
+            Prompt = source.Prompt
         };
     }
 
