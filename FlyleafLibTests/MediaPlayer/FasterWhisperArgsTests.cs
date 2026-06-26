@@ -64,4 +64,45 @@ public class FasterWhisperArgsTests
         args.Should().NotContain("--condition_on_previous_text");
         args.Should().NotContain("--vad_threshold");
     }
+
+    [Fact]
+    public void BuildCommand_PromptSet_AddsInitialPrompt()
+    {
+        // F-17/F-18: a first-class initial_prompt biases language/script and casing at the source.
+        FasterWhisperConfig config = new()
+        {
+            Prompt = "Это пример русской речи.",
+            ExtraArguments = "--device cuda"
+        };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig()).Arguments;
+
+        args.Should().Contain("--initial_prompt");
+        args.Should().Contain("Это пример русской речи.");
+    }
+
+    [Fact]
+    public void BuildCommand_PromptEmpty_OmitsInitialPrompt()
+    {
+        FasterWhisperConfig config = new() { Prompt = "", ExtraArguments = "--device cuda" };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig()).Arguments;
+
+        args.Should().NotContain("--initial_prompt");
+    }
+
+    [Fact]
+    public void BuildCommand_PromptSet_ButExtraArgumentsAlreadyHasInitialPrompt_NotDuplicated()
+    {
+        FasterWhisperConfig config = new()
+        {
+            Prompt = "from the field",
+            ExtraArguments = "--device cuda --initial_prompt \"explicit override\""
+        };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig()).Arguments;
+
+        args.Should().NotContain("from the field"); // de-duped: explicit ExtraArguments value wins
+        args.Should().Contain("explicit override");
+    }
 }

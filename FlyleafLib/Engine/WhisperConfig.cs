@@ -259,6 +259,12 @@ public class FasterWhisperConfig : NotifyPropertyChanged
                                         or "distil-large-v3.5";
     public string ExtraArguments { get; set => Set(ref field, value); } = "--device cpu";
 
+    // Optional initial_prompt passed to faster-whisper as --initial_prompt. A short, normal-case sample of the
+    // expected language biases the model toward the right language/script and casing (helps F-17 language drift
+    // and F-18 ALL-CAPS at the source). De-duplicated against ExtraArguments (an explicit --initial_prompt there
+    // wins). Empty = not passed. Additive/absent-defaulting.
+    public string Prompt { get; set => Set(ref field, value); } = string.Empty;
+
     // Default ON since 0.3.6. Appends research-backed anti-hallucination decoding flags to faster-whisper-xxl
     // (condition_on_previous_text off, plus more permissive no-speech / VAD thresholds) so that (a) garbled
     // repetition/hallucination on hard audio is suppressed and (b) speech that co-occurs with background music
