@@ -88,4 +88,5 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 
 - Run `scripts/codex/ship.ps1`.
 - Confirm publish output contains `LLPlayer.exe`, `LLPlayer/lib/7z.dll`, copied `FFmpeg`, `Plugins/YoutubeDL/YoutubeDL.dll`, and `YoutubeDL.pdb`.
+- Confirm publish output contains committed dubbing sidecar source (`dub_sidecar/server.py`, `pyproject.toml`, `uv.lock`, `README.md`) and does not contain dubbing runtime/model/output artifacts (`DubEngine`, `dubmodels`, `*.ru.dub.*`).
 - Do not require network download of `yt-dlp.exe` for local smoke unless explicitly shipping a release.

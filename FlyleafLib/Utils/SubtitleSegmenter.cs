@@ -56,7 +56,7 @@ public static class SubtitleSegmenter
         if (norm.Length == 0)
             return text;
 
-        int perLine = IsCjkScript(norm) ? opt.MaxCjkCharsPerLine : opt.MaxCharsPerLine;
+        int perLine = GetEffectivePerLine(norm, opt);
         return Wrap(norm, perLine, Math.Max(1, opt.MaxLinesPerCue));
     }
 
@@ -75,7 +75,7 @@ public static class SubtitleSegmenter
         if (norm.Length == 0)
             return [(text, start, end)];
 
-        int perLine = IsCjkScript(norm) ? opt.MaxCjkCharsPerLine : opt.MaxCharsPerLine;
+        int perLine = GetEffectivePerLine(norm, opt);
         int maxLines = Math.Max(1, opt.MaxLinesPerCue);
         int budget = perLine * maxLines;
 
@@ -478,7 +478,11 @@ public static class SubtitleSegmenter
         return lines.All(line => line.Trim().Length <= perLine);
     }
 
-    // Merge a cue shorter than MinCueDurationSec into the previous cue so we never emit a sliver.
+    private static int GetEffectivePerLine(string text, SubtitleSegmentOptions opt) =>
+        Math.Max(1, IsCjkScript(text) ? opt.MaxCjkCharsPerLine : opt.MaxCharsPerLine);
+
+    // Merge a generated cue shorter than MinCueDurationSec into a neighbour so we never emit a sliver.
+    // Standalone short cues are preserved by the cues.Count <= 1 guard; natural one-word replies can be brief.
     private static List<(string Text, TimeSpan Start, TimeSpan End)> MergeTooShort(
         List<(string Text, TimeSpan Start, TimeSpan End)> cues, SubtitleSegmentOptions opt, int perLine, int maxLines)
     {
@@ -499,6 +503,15 @@ public static class SubtitleSegmenter
             {
                 merged.Add(cue);
             }
+        }
+
+        while (merged.Count > 1 && (merged[0].End - merged[0].Start) < min)
+        {
+            var first = merged[0];
+            var second = merged[1];
+            string combined = StripBreaks(first.Text) + " " + StripBreaks(second.Text);
+            merged[1] = (Wrap(Normalize(combined), perLine, maxLines), first.Start, second.End);
+            merged.RemoveAt(0);
         }
 
         return merged;
