@@ -70,6 +70,8 @@ public static class BatchSubtitleConfigSnapshot
             ASRSilenceSoftFraction = source.ASRSilenceSoftFraction,
             ASRSilenceRmsThreshold = source.ASRSilenceRmsThreshold,
             ASRFoldBack = source.ASRFoldBack,
+            // F-02 denoise applies to batch transcription too (same AudioReader producer / ResampleTo seam).
+            ASRDenoise = source.ASRDenoise,
             ResegmentSubtitles = source.ResegmentSubtitles,
             SubtitleMaxCharsPerLine = source.SubtitleMaxCharsPerLine,
             SubtitleMaxLinesPerCue = source.SubtitleMaxLinesPerCue,
