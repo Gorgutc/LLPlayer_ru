@@ -309,16 +309,33 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 > `SubtitlesExportDialog.xaml` (`SelectedFormat`), SaveFileDialog filter/ext по формату. Старый
 > `LLPlayer/Services/SrtExporter.cs` удалён (заменён). Тесты 250/250 (+13). Включает T-07 (см. ниже).
 
-### F-07 — AI-summary / извлечение лексики из транскрипта 🟡 Ⓜ · TODO
-**Идея-плагин от Buzz** (AI summary). У нас уже есть LLM-интеграция (12 движков) и `PluginBase`. **Решение:**
-действие «суммаризировать транскрипт» + «извлечь ключевую лексику». **Рассуждение:** сильный mission-fit,
-мост к F-10 (Word Management/Anki — upstream «Future» LingQ/Language Reactor).
+### F-07 — AI-summary / извлечение лексики из транскрипта 🟡 Ⓜ · ✅ **DONE (PR #67, merge `9467791`, v0.3.18, 2026-06-27)**
+> ✅ **Закрыт.** Новое действие **AI Insights** (правый клик ▸ Subtitles ▸ AI Insights) суммаризирует транскрипт и/или
+> извлекает ключевую лексику через сконфигурированный LLM, на целевом языке перевода. Чистый тестируемый слой
+> `FlyleafLib/MediaPlayer/AI/`: `AiTranscript` (сборка + char-budget chunking по границе cue, >MaxChunks → сэмплинг +
+> `PartialCoverage`), `AiInsightPrompts` (summary single/map/reduce + vocabulary, язык-параметризованы),
+> `VocabularyParser` (устойчивый pipe-разбор `term|reading|translation|definition|example`, никогда не бросает, + Merge
+> + ToTsv для Anki), `AiInsightService` (оркестратор map-reduce с **инъектируемым `ChatCompletion` делегатом** →
+> map-reduce юнит-тестируем; `ForSettings` фабрика), `AiInsightServiceSelector`/`AiInsightLlmResolver` (выбор LLM:
+> translate→word→первый usable; нет LLM → known-error, БЕЗ не-LLM фолбэка). `OpenAIBaseTranslateService` получил
+> публичный `CompleteAsync` (переиспользует транспорт перевода, минует anti-loop retry) + чистый `ResolveMaxTokens`
+> (translate-путь **byte-identical** при override==null; override шлёт только одно из max_tokens/max_completion_tokens +
+> cloud/local для o-series; user-cap как floor). UI: `AiInsightsDialog` (VM+XAML), wiring App/AppActions/PopupMenu.
+> **Без persisted-config** (переиспользует translate-LLM настройки). **Гарантии:** нет молчаливого truncation
+> (finish_reason=length → known-error попап); длинные транскрипты (фильм 2ч+) → chunking+map-reduce. Гейты build 0/0,
+> тесты **337/337** (+62), verify-frozen green, дизайн-панель (3+судья) + **11-агентное состязательное ревью** (3 находки
+> исправлены: 2 important — `UriFormatException` в probe endpoint → not-configured, override→max_tokens для cloud o-series
+> → max_completion_tokens; 1 nit — guard `CmdSave`; 2 ложные отсеяны), `.exe` launch-тест 0.3.18 чистый. Контракты
+> product-behavior + wpf-design обновлены. **Persistence/Anki → F-10** (5-полевой `VocabularyEntry` — задел под него).
+> Детали: второй мозг `Sessions/2026-06-27-handoff-f07-ai-insights.md`.
 
-### F-08 — Хелпер синхронизации (shift-all / sync-to-current) 🟡 ⓢ-Ⓜ · TODO
-**Идея от SubtitleEdit** (НЕ полный редактор). Сейчас только delay/offset
-([`SubtitlesManager.cs` Delay](../../FlyleafLib/MediaPlayer/SubtitlesManager.cs)). **Решение:** «сдвинуть все
-реплики на X», «синхронизировать по текущей позиции». **Рассуждение:** маленький, помогает рассинхрону
-загруженных субтитров; mission-fit для просмотра.
+### F-08 — Хелпер синхронизации (shift-all / sync-to-current) 🟡 ⓢ-Ⓜ · ✅ **ALREADY DONE (верифицировано 2026-06-27 — отгружено в v0.3.17)**
+> ✅ **Закрыт верификацией (кода не писали).** Многоагентный аудит этой сессии нашёл, что ОБЕ половины F-08 уже
+> реализованы и подключены в UI: **sync-to-current** — `SubtitlesSidebarVM.CmdSubSync` (`:126`, `newDelay = CurTime -
+> StartTime`) с per-row кнопкой в `SubtitlesSidebar.xaml:654`; **shift-all** — per-slot `Delay` как глобальный оффсет
+> (`SubtitlesManager.SetCurrentTime:330`, `Config.cs:1098` + DelayAdd/Remove, `Commands.cs:19-31,233-242`, кейбайндинги,
+> Reset, UI `PopupMenu.xaml:387-418` + Settings ▸ Keys ▸ Offset). Бэклог требовал ровно это («НЕ полный редактор»);
+> деструктивный two-point rate-stretch явно вне скоупа. **Действие:** пометить DONE (опц. ручной smoke кнопки Sync).
 
 ### F-09 — Watch-folder авто-batch 🟢 ⓢ-Ⓜ · TODO
 **Идея от Buzz.** Расширение существующего батча (`Batch*`-классы). **Решение:** режим слежения за папкой →
