@@ -9,6 +9,7 @@ using System.Windows.Data;
 using System.Windows.Shell;
 using System.Windows.Threading;
 using FlyleafLib;
+using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Dubbing;
 using LLPlayer.Extensions;
@@ -434,6 +435,24 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
         if (toRun.Count == 0)
         {
+            UpdateSummary();
+            return;
+        }
+
+        // VC++ preflight (T-02): whisper.cpp loads its native CRT in-process; without the redistributable that
+        // load crashes the app. The transcriber's constructor also guards this, but the throw would surface as
+        // a generic "unknown error" popup. Preflight here so a missing runtime is shown as a clean, actionable
+        // known-error modal (INSTALL → Microsoft download page), matching the interactive ASR snackbar's fix.
+        // The batch dialog is a separate non-modal window, so the main-window snackbar would not reliably cover
+        // it — a Topmost known-error modal is the right surface. faster-whisper (external exe) is not gated.
+        if (BatchAsrTranscriber.RequiresVcRedistPreflight(FL.PlayerConfig) &&
+            !VcRedistChecker.IsRuntimePresent(out _))
+        {
+            ErrorDialogHelper.ShowKnownErrorPopup(
+                VcRedistChecker.BuildMissingMessage("Speech-to-text (whisper.cpp)"),
+                KnownErrorType.Configuration,
+                KnownErrorActionKeys.InstallVcRedist,
+                "INSTALL");
             UpdateSummary();
             return;
         }

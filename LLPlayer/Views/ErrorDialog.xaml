@@ -124,6 +124,17 @@
                     Command="{Binding CmdCopyMessage}"
                     Style="{StaticResource MaterialDesignRaisedButton}" />
 
+                <!-- Optional recoverable action (e.g. INSTALL for a missing VC++ runtime). Hidden unless the
+                     known error carries an action; mirrors the interactive ASR snackbar's one-tap fix. -->
+                <Button
+                    Grid.Column="1"
+                    Margin="8 0 8 0"
+                    HorizontalAlignment="Right"
+                    Content="{Binding ActionContent}"
+                    Command="{Binding CmdAction}"
+                    Visibility="{Binding HasAction, Converter={StaticResource BooleanToVisibilityConv}}"
+                    Style="{StaticResource MaterialDesignRaisedButton}" />
+
                 <Button
                     Grid.Column="2"
                     Content="Close"
