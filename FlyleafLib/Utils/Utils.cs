@@ -243,18 +243,30 @@ public static partial class Utils
 
         for (int i = 0; i < movies.Count; i++)
         {
-            string ext = Path.GetExtension(movies[i]);
-
-            if (ext == null || ext.Trim() == "")
-                continue;
-
-            if (ExtensionsVideo.Contains(ext[1..].ToLower()))
+            if (IsVideoExtension(movies[i]))
                 moviesSorted.Add(movies[i]);
         }
 
         moviesSorted.Sort(new NaturalStringComparer());
 
         return moviesSorted;
+    }
+
+    /// <summary>
+    /// True when the path's extension is a known video container (the same <see cref="ExtensionsVideo"/> list the
+    /// batch scanner uses). Extracted from <see cref="GetMoviesSorted"/> so the scanner and the watch-folder
+    /// watcher share one source of truth for "is this a video file".
+    /// </summary>
+    public static bool IsVideoExtension(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        string ext = Path.GetExtension(path);
+        if (string.IsNullOrWhiteSpace(ext))
+            return false;
+
+        return ExtensionsVideo.Contains(ext[1..].ToLower());
     }
     public sealed class NaturalStringComparer : IComparer<string>
         { public int Compare(string a, string b) => NativeMethods.StrCmpLogicalW(a, b); }

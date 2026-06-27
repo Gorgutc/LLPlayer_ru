@@ -284,6 +284,13 @@ public class AppConfigBatchSubtitles : Bindable
     // (video.ru.dub.flac) beside it via the local TTS sidecar. Additive, default OFF (opt-in). When on,
     // the batch runs serialized so the GPU TTS render never overlaps the next file's ASR.
     public bool GenerateDubbing { get; set => Set(ref field, value); }
+
+    // Watch-folder auto-batch (F-09): when on, the open batch window (or its tray-minimized session) watches the
+    // selected folder and auto-processes new video files as they finish copying — each is added to the list and,
+    // when no run is in progress, processing starts automatically (queued otherwise and drained when the current
+    // run finishes). Respects the same Recursive / Overwrite / friendliness (Smooth, CPU-while-active) settings as
+    // a manual run. Additive, default OFF (opt-in); existing configs keep their saved value.
+    public bool WatchFolder { get; set => Set(ref field, value); }
 }
 
 public class AppConfigSubs : Bindable

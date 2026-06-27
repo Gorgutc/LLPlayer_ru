@@ -22,6 +22,12 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 {
     private CancellationTokenSource? _cts;
     private CancellationTokenSource? _probeAudioCts;
+    // Watch-folder watcher (F-09). Dialog-scoped (created on toggle/open, disposed on close), like _cts.
+    private BatchFolderWatcher? _watcher;
+    // Media paths queued by the folder watcher and awaiting an auto-run. Only these are auto-started/drained, so a
+    // deliberately-not-started manual Scan backlog is never swept up and a job left Pending after an explicit
+    // Cancel is not resurrected by the next arrival.
+    private readonly HashSet<string> _watchQueued = new(StringComparer.OrdinalIgnoreCase);
     private bool _initializing = true;
     private readonly BatchActivityService _activity;
     private readonly AppTrayService _tray;
@@ -46,6 +52,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         IdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
         GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
         PreferRussianAudio = FL.Config.BatchSubtitles.PreferRussianAudio;
+        WatchFolder = FL.Config.BatchSubtitles.WatchFolder;
         _initializing = false;
 
         // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in
@@ -95,6 +102,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 OnPropertyChanged(nameof(CanScan));
                 OnPropertyChanged(nameof(CanOpenOutputFolder));
                 PersistBatchDefaults();
+                if (!_initializing)
+                    UpdateWatcher(); // re-point the watcher at the new folder when watching
             }
         }
     } = string.Empty;
@@ -108,6 +117,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             {
                 FL.Config.BatchSubtitles.Recursive = value;
                 PersistBatchDefaults();
+                if (!_initializing)
+                    UpdateWatcher(); // recursive scope changed → rebuild the watcher when watching
             }
         }
     }
@@ -183,6 +194,38 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 PersistBatchDefaults();
             }
         }
+    }
+
+    // Watch-folder auto-batch (F-09): watch FolderPath for new videos and auto-process them. Toggling rebuilds
+    // the watcher; the watcher itself lives while the dialog VM does (so it keeps running while minimized to tray).
+    private bool _watchFolder;
+    public bool WatchFolder
+    {
+        get => _watchFolder;
+        set => SetWatchFolder(value, persist: true);
+    }
+
+    // A user toggle persists the choice; an internal turn-off (e.g. the watched folder vanished) updates the UI +
+    // watcher WITHOUT touching the persisted config, so a transient failure does not silently disable the opt-in
+    // across restarts. IMPORTANT: when persist is false we must NOT mutate FL.Config.BatchSubtitles.WatchFolder,
+    // because the next unrelated PersistBatchDefaults() (a run, a scan, another setting) would write that live value
+    // to disk. The in-session _watchFolder field is therefore authoritative for behaviour; the live config only
+    // carries the user's persisted intent.
+    private void SetWatchFolder(bool value, bool persist)
+    {
+        if (_watchFolder == value)
+            return;
+
+        _watchFolder = value;
+        OnPropertyChanged(nameof(WatchFolder));
+        if (persist)
+        {
+            FL.Config.BatchSubtitles.WatchFolder = value;
+            PersistBatchDefaults();
+        }
+        if (!_initializing)
+            UpdateWatcher();
+        UpdateSummary();
     }
 
     // How long the keyboard/mouse must be idle before ASR switches back to the GPU.
@@ -317,6 +360,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
             UnsubscribeJobs();
             Jobs.Clear();
+            _watchQueued.Clear(); // a manual rescan rebuilds the list; drop stale watch-queue markers
             foreach ((string mediaPath, bool hasTranslation, bool hasDub) in scanned)
             {
                 BatchSubtitleJob job = new(mediaPath, FolderPath);
@@ -421,6 +465,105 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 // Best-effort: leave this file's picker at "Auto".
             }
         }
+    }
+
+    // ===== Watch-folder auto-batch (F-09) =====
+
+    // Start/stop/re-point the folder watcher to match the current toggle + folder + recursive flag. Called from
+    // the WatchFolder/FolderPath/Recursive setters and from OnDialogOpened. The watcher instance lives for the
+    // VM's lifetime, so it keeps watching while the dialog is minimized to the tray (where OnDialogClosed does NOT
+    // run); it is torn down on toggle-off, real close, or app quit.
+    private void UpdateWatcher()
+    {
+        if (_watchFolder && Directory.Exists(FolderPath))
+        {
+            _watcher ??= CreateWatcher();
+            _watcher.Start(FolderPath, Recursive);
+        }
+        else
+        {
+            _watcher?.Stop();
+        }
+    }
+
+    private BatchFolderWatcher CreateWatcher()
+    {
+        BatchFolderWatcher watcher = new();
+        watcher.FileReady += OnWatchedFileReady;
+        watcher.Error += OnWatchedError;
+        return watcher;
+    }
+
+    // A new video finished copying into the watched folder (raised on the UI thread). Add it with the same rules
+    // as a manual scan, then auto-start if nothing is running.
+    private void OnWatchedFileReady(string path)
+    {
+        bool hasTranslation = SubtitleOutputPathBuilder.TranslationExists(path);
+
+        WatchEnqueueDecision decision = WatchFolderPolicy.ShouldEnqueue(
+            path,
+            Jobs.Select(j => j.MediaPath),
+            Utils.IsVideoExtension,
+            hasTranslation,
+            OverwriteExisting);
+
+        if (decision != WatchEnqueueDecision.Enqueue)
+            return;
+
+        bool hasDub = DubbingOutputPathBuilder.DubExistsAnyFormat(path);
+
+        BatchSubtitleJob job = new(path, FolderPath);
+        BatchSubtitleScanPolicy.ApplyOutputState(job, hasTranslation, hasDub, OverwriteExisting, GenerateDubbing);
+        job.PropertyChanged += OnJobPropertyChanged;
+        Jobs.Add(job);
+        // Only track it for auto-run if it is actually going to be processed. An already-completed output (overwrite
+        // on) is added as Completed by ApplyOutputState; queuing it would just leak in the set (MaybeAutoStartWatch
+        // runs only Pending), so skip it.
+        if (job.Status == BatchSubtitleStatus.Pending)
+            _watchQueued.Add(path);
+
+        OnPropertyChanged(nameof(AllIncluded));
+        UpdateSummary();
+
+        // Fill this file's audio-track picker in the background (best-effort), like CmdScan does. Use a live token
+        // (a prior scan may have cancelled the shared CTS).
+        if (_probeAudioCts == null || _probeAudioCts.IsCancellationRequested)
+            _probeAudioCts = new CancellationTokenSource();
+        _ = ProbeAudioTracksAsync([job], _probeAudioCts.Token);
+
+        MaybeAutoStartWatch();
+    }
+
+    // If watching and idle, start a run for the WATCH-ADDED Pending files only (tracked in _watchQueued — a manual
+    // Scan backlog is left for the explicit Start button). RunAsync's own IsRunning guard is the hard safety net;
+    // this only ever starts a run when none is in progress (otherwise the files wait as Pending and are drained
+    // from RunAsync's finally). Paths are removed from _watchQueued as they enter a run, so a cancelled run does
+    // not leave them to be resurrected by the next arrival.
+    private void MaybeAutoStartWatch()
+    {
+        if (!_watchFolder || !IsIdle)
+            return;
+
+        List<BatchSubtitleJob> pending = Jobs
+            .Where(j => j.Include && j.Status == BatchSubtitleStatus.Pending && _watchQueued.Contains(j.MediaPath))
+            .ToList();
+
+        if (pending.Count == 0)
+            return;
+
+        foreach (BatchSubtitleJob job in pending)
+            _watchQueued.Remove(job.MediaPath);
+
+        _ = RunAsync(pending);
+    }
+
+    private void OnWatchedError(string message)
+    {
+        // The watched folder became inaccessible (deleted/renamed). Stop watching for this session but DON'T persist
+        // the opt-in off — a transient failure (e.g. a network-share blip) should not silently disable the feature
+        // across restarts; reopening (or the folder coming back) re-validates and resumes.
+        SetWatchFolder(false, persist: false);
+        ErrorDialogHelper.ShowKnownErrorPopup($"Folder watch stopped: {message}", "Batch subtitles");
     }
 
     // Shared run path for Start, per-row retry, and "Retry failed". Each call builds its own CTS,
@@ -614,6 +757,16 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             IsRunningOnCpu = false;
             _activity.SetRunning(false, canceled);
             UpdateSummary();
+
+            // Watch-folder (F-09) drain: files that arrived during this run sit as Pending. Start the next run once
+            // this one fully unwinds — BeginInvoke avoids re-entering RunAsync from its own finally. On an explicit
+            // Cancel we drop the watch queue (Cancel means stop — nothing auto-restarts; the rows stay Pending for a
+            // manual Start). Otherwise drain: MaybeAutoStartWatch re-checks IsIdle and filters the watch-queued
+            // Pending files, so it is idempotent and self-terminating.
+            if (canceled)
+                _watchQueued.Clear();
+            else if (_watchFolder)
+                Application.Current?.Dispatcher.BeginInvoke(MaybeAutoStartWatch);
         }
     }
 
@@ -667,6 +820,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             persisted.BatchSubtitles.ActiveIdleThresholdSeconds = FL.Config.BatchSubtitles.ActiveIdleThresholdSeconds;
             persisted.BatchSubtitles.GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
             persisted.BatchSubtitles.PreferRussianAudio = FL.Config.BatchSubtitles.PreferRussianAudio;
+            persisted.BatchSubtitles.WatchFolder = FL.Config.BatchSubtitles.WatchFolder;
             persisted.Save(App.AppConfigPath);
         }
         catch (Exception ex)
@@ -748,7 +902,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     {
         if (Jobs.Count == 0)
         {
-            SummaryText = "0 files";
+            SummaryText = _watchFolder ? "👁 Watching — 0 files" : "0 files";
             return;
         }
 
@@ -767,9 +921,10 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 or BatchSubtitleStatus.Dubbing);
 
         int included = Jobs.Count(job => job.Include);
+        string watchPrefix = _watchFolder ? "👁 Watching — " : "";
         string cpuPrefix = IsRunning && IsRunningOnCpu ? "🖥 ASR on CPU (you're active) — " : "";
         string etaSuffix = string.IsNullOrEmpty(_overallEtaText) ? "" : $" | {_overallEtaText}";
-        SummaryText = $"{cpuPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled{etaSuffix}";
+        SummaryText = $"{watchPrefix}{cpuPrefix}{Jobs.Count} files ({included} selected) | {running} running | {completed} completed | {skipped} skipped | {failed} failed | {canceled} canceled{etaSuffix}";
 
         OnPropertyChanged(nameof(CanRetryFailed));
     }
@@ -891,6 +1046,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     private void OnAppQuitCancelRequested(object? sender, EventArgs e)
     {
         _cts?.Cancel();
+        _watcher?.Stop();
     }
 
     #region IDialogAware
@@ -904,9 +1060,6 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
     public bool CanCloseDialog()
     {
-        if (!IsRunning)
-            return true;
-
         // App is quitting (tray "Quit" / Exit App): cancel silently and allow the close, no prompt.
         if (_activity.IsShuttingDown)
         {
@@ -914,14 +1067,20 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             return true;
         }
 
-        // A batch is running: don't close (closing the dialog would cancel the run). Instead minimize this
-        // window to the system tray and keep processing — consistent with closing the main player window.
-        // To actually stop, use the Cancel button or the tray's Quit.
-        MinimizeOwnWindowToTray();
+        // A batch is running OR folder-watch is active: closing the dialog would cancel the run / stop the watch,
+        // so instead minimize this window to the system tray and keep going — consistent with closing the main
+        // player window. The watch (F-09 owner scope) is meant to survive a tray-minimize; it stops on toggle-off,
+        // the tray's Quit, or app shutdown. Reopen from the main window or the tray menu (Batch subtitles…).
+        if (IsRunning || _watchFolder)
+        {
+            MinimizeOwnWindowToTray();
 
-        // Returning false sets e.Cancel=true in Prism's Closing handler, so the window is NOT closed/disposed
-        // and OnDialogClosed never runs — the CTS / run / VM survive while the window is merely hidden.
-        return false;
+            // Returning false sets e.Cancel=true in Prism's Closing handler, so the window is NOT closed/disposed
+            // and OnDialogClosed never runs — the CTS / run / watcher / VM survive while the window is merely hidden.
+            return false;
+        }
+
+        return true;
     }
 
     private void MinimizeOwnWindowToTray()
@@ -943,6 +1102,10 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     {
         _cts?.Cancel();
         _probeAudioCts?.Cancel();
+        // Real close (not a tray-minimize, which returns false from CanCloseDialog and never reaches here): tear
+        // down the folder watcher so it doesn't outlive the dialog session.
+        _watcher?.Dispose();
+        _watcher = null;
         UnsubscribeJobs();
         _activity.CancelRequested -= OnAppQuitCancelRequested;
         // Drop the dialog-open flag so the app can leave the tray / restore the player once nothing is
@@ -957,6 +1120,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         // subscribes to the app-quit cancel signal (paired with the -= in OnDialogClosed).
         _activity.SetDialogOpen(true);
         _activity.CancelRequested += OnAppQuitCancelRequested;
+
+        // Resume watching if the toggle was persisted on (and re-validate the folder still exists).
+        UpdateWatcher();
     }
     #endregion IDialogAware
 }
