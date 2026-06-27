@@ -255,11 +255,13 @@ resume ASR»). **Решение:** управление состоянием ASR
 **Решение (остаток):** аудит авто-подбора/открытия внешних субтитров (per-slot язык). **Рассуждение:** ядро
 изучения языка; в upstream Roadmap «Now»; остаток мал.
 
-### F-06 — Экспорт транскрипта в TXT / VTT 🟡 ⓢ-Ⓜ · TODO
-Сейчас экспорт только SRT ([`SrtExporter.cs`](../../LLPlayer/Services/SrtExporter.cs),
-[`SubtitlesExportDialogVM.cs`](../../LLPlayer/ViewModels/SubtitlesExportDialogVM.cs)). Buzz/decipher/SE
-умеют TXT/VTT. **Решение:** добавить writer'ы TXT (plain) и WebVTT + выбор формата в диалоге. **Рассуждение:**
-низкий effort, средняя ценность (учащиеся выгружают транскрипты/субтитры для других инструментов).
+### F-06 — Экспорт транскрипта в TXT / VTT 🟡 ⓢ-Ⓜ · ✅ **DONE (этот PR, v0.3.13, 2026-06-27)**
+> ✅ **Закрыт.** Новый чистый тестируемый `FlyleafLib/MediaPlayer/SubtitleExporter.cs` (`Build(lines, format)` для
+> Srt/Vtt/Txt + `SubtitleExportLine` record + `Extension`) — вынесен в FlyleafLib рядом с `SubtitleData`/`SubStyle`,
+> чтобы покрыть юнит-тестами (у LLPlayer нет тест-проекта). TXT = только текст cue (без таймингов/разметки); VTT =
+> `WEBVTT`-хедер + точечный мс-разделитель; SRT = как раньше (запятая, индексы). Выбор формата — ComboBox в
+> `SubtitlesExportDialog.xaml` (`SelectedFormat`), SaveFileDialog filter/ext по формату. Старый
+> `LLPlayer/Services/SrtExporter.cs` удалён (заменён). Тесты 250/250 (+13). Включает T-07 (см. ниже).
 
 ### F-07 — AI-summary / извлечение лексики из транскрипта 🟡 Ⓜ · TODO
 **Идея-плагин от Buzz** (AI summary). У нас уже есть LLM-интеграция (12 движков) и `PluginBase`. **Решение:**
@@ -346,8 +348,13 @@ OPEN, **отложен владельцем**. **Решение:** решить 
 Суффикс `_ru` без локализации приложения; README — английский upstream. **Решение:** явно зафиксировать цель
 форка (агентская инфраструктура vs локализация) либо начать RU-локализацию ресурсов.
 
-### T-07 — `SrtExporter`: поддержка тегов `<i>` 🟢 ⓢ · TODO
-[`SrtExporter.cs:8`](../../LLPlayer/Services/SrtExporter.cs) TODO. Сейчас экспорт теряет курсив/стили.
+### T-07 — `SrtExporter`: поддержка тегов `<i>` 🟢 ⓢ · ✅ **DONE (этот PR, v0.3.13, 2026-06-27, в составе F-06)**
+> ✅ **Закрыт.** `SubtitleExporter.RenderItalic` оборачивает ITALIC-диапазоны `SubStyle` в `<i>…</i>` (тег понимают
+> и SRT, и VTT), вставляя теги с конца строки. Только ITALIC (по букве TODO `<i>`); bold/underline/color/font НЕ
+> эмитятся. Применяется к ОРИГИНАЛЬНОМУ тексту (offsets `SubStyle` индексируют `Text`; для перевода стили не
+> передаются). TXT — всегда plain. `Text` хранит чистый текст (теги уже снесены в `SubStyles` через
+> `SSAtoSubStyles`), поэтому это реконструкция, а не pass-through. Покрыто тестами (whole-cue/disjoint/clamp/
+> non-italic-ignored/null).
 
 ### T-08 — ASR fold-back при перемотке назад 🟢 Ⓜ · TODO
 [`SubtitlesASR.cs:616`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO («Fold back and allow the first

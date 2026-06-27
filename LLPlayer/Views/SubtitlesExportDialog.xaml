@@ -50,6 +50,15 @@
                     Width="180" />
             </StackPanel>
 
+            <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
+                <Label Content="Format" Width="80" />
+                <ComboBox
+                    ItemsSource="{Binding FormatList}"
+                    SelectedItem="{Binding SelectedFormat}"
+                    Width="180"
+                    ToolTip="SRT/VTT keep italics; TXT is plain transcript text only" />
+            </StackPanel>
+
             <TextBlock
                 Visibility="{Binding SubManager.IsLoading, Converter={StaticResource BooleanToVisibilityConv}}"
                 Margin="0 12 0 0"
@@ -70,6 +79,6 @@
             HorizontalAlignment="Right"
             Width="100"
             Command="{Binding CmdExport}"
-            ToolTip="Export subtitles as SRT" />
+            ToolTip="Export subtitles in the selected format" />
     </Grid>
 </UserControl>
