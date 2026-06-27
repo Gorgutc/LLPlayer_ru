@@ -199,6 +199,14 @@ public class AppConfig : Bindable
     [JsonIgnore]
     public bool SidebarSearchActive { get; set => Set(ref field, value); }
 
+    // F-14 sidebar-search options (persisted; all default false = case-insensitive substring, the prior behavior).
+    // Additive/absent-defaulting: an existing config picks them up as false, so search is unchanged until toggled.
+    public bool SidebarSearchMatchCase { get; set => Set(ref field, value); }
+
+    public bool SidebarSearchWholeWord { get; set => Set(ref field, value); }
+
+    public bool SidebarSearchRegex { get; set => Set(ref field, value); }
+
     public string SidebarFontFamily { get; set => Set(ref field, value); } = "Segoe UI";
 
     public double SidebarFontSize { get; set => Set(ref field, value); } = 16;
