@@ -9,6 +9,7 @@ Runtime JSON files live beside the exe/base directory:
 - `LLPlayer.PlayerConfig.json`
 - `LLPlayer.Engine.json`
 - `LLPlayer.Config.json`
+- `LLPlayer.WordList.json` (F-10 global word list; additive — an absent file means an empty list, no migration. Plain `System.Text.Json` array of `SavedWord` records, no polymorphic converters.)
 - `crash.log`
 
 They are user/local state and must not be committed.

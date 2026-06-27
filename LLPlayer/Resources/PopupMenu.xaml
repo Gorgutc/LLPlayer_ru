@@ -494,6 +494,7 @@ AncestorType={x:Type MenuItem}}}">
             <MenuItem Header="Subs Downloader" Command="{Binding FL.Action.CmdOpenWindowSubsDownloader}" Icon="{materialDesign:PackIcon Kind=Download}"/>
             <MenuItem Header="Subs Exporter"   Command="{Binding FL.Action.CmdOpenWindowSubsExporter}" Icon="{materialDesign:PackIcon Kind=FileExport}"/>
             <MenuItem Header="AI Insights"     Command="{Binding FL.Action.CmdOpenWindowAiInsights}" Icon="{materialDesign:PackIcon Kind=TextBoxSearchOutline}"/>
+            <MenuItem Header="Word Manager"    Command="{Binding FL.Action.CmdOpenWindowWordManager}" Icon="{materialDesign:PackIcon Kind=BookOpenPageVariantOutline}"/>
             <MenuItem Header="Batch Subtitles" Command="{Binding FL.Action.CmdOpenWindowBatchSubtitles}" Icon="{materialDesign:PackIcon Kind=PlaylistPlay}"/>
         </MenuItem>
 

@@ -59,22 +59,37 @@
                     FontSize="16"
                     />
 
-                <!-- Close Button -->
-                <Button
-                    x:Name="CloseButton"
-                    Grid.Column="1"
-                    Style="{StaticResource MaterialDesignToolButton}"
-                    Width="24" Height="24"
-                    Margin="0,0,0,0"
-                    AutomationProperties.Name="Close"
-                    ToolTip="Close"
-                    Click="CloseButton_OnClick"
-                    PreviewMouseLeftButtonUp="CloseButton_OnMouseLeftButtonUp">
-                    <materialDesign:PackIcon
-                        Kind="Close"
-                        Foreground="{DynamicResource MaterialDesignBody}"
-                        Width="16" Height="16"/>
-                </Button>
+                <!-- Save + Close buttons -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <!-- F-10: save the looked-up word to the global word list -->
+                    <Button
+                        x:Name="SaveWordButton"
+                        Style="{StaticResource MaterialDesignToolButton}"
+                        Width="24" Height="24"
+                        AutomationProperties.Name="Save word"
+                        ToolTip="Save word to the word list (Subtitles &#x25b8; Word Manager)"
+                        Click="SaveWordButton_OnClick">
+                        <materialDesign:PackIcon
+                            Kind="BookmarkPlusOutline"
+                            Foreground="{DynamicResource MaterialDesignBody}"
+                            Width="16" Height="16"/>
+                    </Button>
+
+                    <Button
+                        x:Name="CloseButton"
+                        Style="{StaticResource MaterialDesignToolButton}"
+                        Width="24" Height="24"
+                        Margin="0,0,0,0"
+                        AutomationProperties.Name="Close"
+                        ToolTip="Close"
+                        Click="CloseButton_OnClick"
+                        PreviewMouseLeftButtonUp="CloseButton_OnMouseLeftButtonUp">
+                        <materialDesign:PackIcon
+                            Kind="Close"
+                            Foreground="{DynamicResource MaterialDesignBody}"
+                            Width="16" Height="16"/>
+                    </Button>
+                </StackPanel>
             </Grid>
 
             <!--Spinner-->

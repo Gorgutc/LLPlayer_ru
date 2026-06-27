@@ -354,6 +354,7 @@ yt-dlp.exe
 LLPlayer.Config.json
 LLPlayer.Engine.json
 LLPlayer.PlayerConfig.json
+LLPlayer.WordList.json
 crash.log
 Recordings/
 Snapshots/

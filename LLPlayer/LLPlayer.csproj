@@ -16,7 +16,7 @@
     <ApplicationIcon>LLPlayer.ico</ApplicationIcon>
     <Description>The media player for language learning.</Description>
     <PackageProjectUrl>https://llplayer.com</PackageProjectUrl>
-    <Version>0.3.23</Version>
+    <Version>0.3.24</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
@@ -34,6 +34,12 @@
     <PackageReference Include="LibNMeCab" Version="0.10.2" />
     <PackageReference Include="LibNMeCab.IpaDicBin" Version="0.10.0" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.1" />
+    <!-- F-10: write Anki .apkg decks (SQLite collection.anki2 + zip). MIT; bundles native e_sqlite3.dll
+         (copied to publish output, same as the other native runtime assets). The explicit bundle pin forces
+         the patched SQLitePCLRaw 3.0.3 (which ships native e_sqlite3 3.50.3); the whole 2.1.x line carries
+         advisory GHSA-2m69-gcr7-jv3q / NU1903 with no 2.1.x fix. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.17" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
     <PackageReference Include="Prism.DryIoc" Version="9.0.537" />
     <PackageReference Include="Squid-Box.SevenZipSharp.Lite" Version="1.6.2.24" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" />

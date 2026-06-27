@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Threading;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
+using FlyleafLib.MediaPlayer.AI;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
 using LLPlayer.Views;
@@ -20,6 +21,8 @@ public partial class App : PrismApplication
     public static string PlayerConfigPath { get; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LLPlayer.PlayerConfig.json");
     public static string EngineConfigPath { get; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LLPlayer.Engine.json");
     public static string AppConfigPath { get; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LLPlayer.Config.json");
+    // F-10: global cumulative word list (additive — absent file means an empty list).
+    public static string WordListPath { get; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LLPlayer.WordList.json");
     public static string CrashLogPath { get; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
 
     private readonly LogHandler Log;
@@ -53,6 +56,14 @@ public partial class App : PrismApplication
         // Single app-wide snackbar queue (notifications + actionable config errors), hosted in FlyleafOverlay.
         containerRegistry.RegisterInstance<ISnackbarMessageQueue>(new SnackbarMessageQueue(TimeSpan.FromSeconds(6)));
 
+        // F-10: the global word list, loaded once from disk beside the exe (absent file → empty list).
+        containerRegistry.RegisterSingleton(typeof(WordListStore), () =>
+        {
+            WordListStore store = new(WordListPath);
+            store.Load();
+            return store;
+        });
+
         containerRegistry.RegisterDialogWindow<MyDialogWindow>();
 
         containerRegistry.RegisterDialog<SettingsDialog>();
@@ -60,6 +71,7 @@ public partial class App : PrismApplication
         containerRegistry.RegisterDialog<SubtitlesDownloaderDialog>();
         containerRegistry.RegisterDialog<SubtitlesExportDialog>();
         containerRegistry.RegisterDialog<AiInsightsDialog>();
+        containerRegistry.RegisterDialog<WordManagerDialog>();
         containerRegistry.RegisterDialog<BatchSubtitlesDialog>();
         containerRegistry.RegisterDialog<CheatSheetDialog>();
         containerRegistry.RegisterDialog<CommandPaletteDialog>();

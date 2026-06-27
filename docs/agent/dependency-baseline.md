@@ -33,6 +33,8 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `LLPlayer` | `LibNMeCab` | `0.10.2` |
 | `LLPlayer` | `LibNMeCab.IpaDicBin` | `0.10.0` |
 | `LLPlayer` | `MaterialDesignThemes` | `5.3.1` |
+| `LLPlayer` | `Microsoft.Data.Sqlite` | `9.0.17` |
+| `LLPlayer` | `SQLitePCLRaw.bundle_e_sqlite3` | `3.0.3` |
 | `LLPlayer` | `Prism.DryIoc` | `9.0.537` |
 | `LLPlayer` | `Squid-Box.SevenZipSharp.Lite` | `1.6.2.24` |
 | `LLPlayer` | `Whisper.net.Runtime` | `1.9.0` |
@@ -48,6 +50,10 @@ Runtime-sensitive package versions are part of the frozen baseline:
 ## Flyleaf.FFmpeg.Bindings alignment
 
 `LLPlayer` and `FlyleafLib` both reference `Flyleaf.FFmpeg.Bindings` `8.0.1`, matching the tracked native FFmpeg 8.0 DLLs shipped under `FFmpeg/` (`avcodec-62`, `avutil-60`, `avformat-62`, `avfilter-11`, `swscale-9`, `swresample-6`, `avdevice-62`).
+
+## SQLite (Anki .apkg export, F-10)
+
+`LLPlayer` references `Microsoft.Data.Sqlite` to write Anki `.apkg` decks (a SQLite `collection.anki2` zipped with a `media` manifest). The native `e_sqlite3.dll` it depends on is supplied by `SQLitePCLRaw.bundle_e_sqlite3`, which `dotnet publish` copies into the output `runtimes/win-x64/native/` folder alongside the other bundled native assets (no manual packaging step needed). This is security-sensitive: the whole `SQLitePCLRaw 2.1.x` line carries advisory GHSA-2m69-gcr7-jv3q (vulnerable bundled SQLite, no 2.1.x fix), so the bundle is pinned to the patched `3.0.3` (which ships native `e_sqlite3` `3.50.3`). NuGet audit (`-warnaserror` / NU1903) fails the build if a vulnerable SQLitePCLRaw is reintroduced; keep these on a non-vulnerable release rather than downgrading.
 
 Historically `FlyleafLib` referenced `7.1.1` while `LLPlayer` referenced `8.0.1`. That was a benign-but-confusing mismatch: with no central package management, NuGet unified the conflicting references **up** to `8.0.1` for the app output, so the actually-shipped managed binding already matched the 8.0 native DLLs; the heavy FFmpeg interop lives in `FlyleafLib`, while `LLPlayer` only consumes managed `LoadProfile`/`LogLevel` enums (no P/Invoke). Task T-01 aligned `FlyleafLib` **up** to `8.0.1` so the compile-time reference matches the runtime-unified binding and the shipped DLLs (verified: `FlyleafLib` + `LLPlayer` build `-warnaserror` 0/0 against `8.0.1`). Down-aligning to `7.1.1` was rejected: it would have forced the unified runtime binding **down** to `7.1.1` against the 8.0 DLLs, replacing a correct pairing with a real mismatch.
 
