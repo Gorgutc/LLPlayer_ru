@@ -334,15 +334,77 @@ public class OpenAIBaseTranslateService : ITranslateService
         return await SendChatRequest(client, settings, messages, CancellationToken.None);
     }
 
+    /// <summary>
+    /// One-shot chat completion for non-translation features (F-07 AI insights). Reuses the translation
+    /// transport (<see cref="SendChatRequest"/> + <see cref="ParseChatResponse"/>: JSON escaping, per-backend
+    /// auth/model rules, reasoning-tag stripping, truncation classification, locale-independent cancellation)
+    /// but deliberately NOT the translation post-processing (<see cref="SendChatWithRecovery"/>'s anti-loop /
+    /// degeneration retry — a long, legitimately non-repetitive summary must not be retried or flagged as a
+    /// "loop"). Throws <see cref="TranslationException"/> with Kind=Truncated on finish_reason=length, so the
+    /// caller can surface a "raise max tokens" message instead of silently accepting a truncated reply.
+    /// <paramref name="maxOutputTokensOverride"/> bounds output generation for long replies; it never lowers a
+    /// user-configured token cap (the cap is used as a floor).
+    /// </summary>
+    public static async Task<string> CompleteAsync(
+        OpenAIBaseTranslateSettings settings,
+        IReadOnlyList<OpenAIMessage> messages,
+        int? maxOutputTokensOverride,
+        CancellationToken token)
+    {
+        using HttpClient client = settings.GetHttpClient();
+        OpenAIMessage[] arr = messages as OpenAIMessage[] ?? messages.ToArray();
+        return await SendChatRequest(client, settings, arr, token, maxOutputTokensOverride: maxOutputTokensOverride);
+    }
+
+    /// <summary>
+    /// Resolves the (max_completion_tokens, max_tokens) request fields. Extracted from <see cref="SendChatRequest"/>
+    /// so the only token-shaping branch is directly unit-testable. With <paramref name="maxOutputTokensOverride"/>
+    /// == null the result is byte-for-byte the prior inline translation behaviour. With an override set (AI
+    /// insights), it honours a user-set cap as a FLOOR (never silently lowered) and sends only ONE of the two
+    /// fields, mirroring the o-series rule the translation path preserves (never send both).
+    /// </summary>
+    internal static (int? maxCompletionTokens, int? maxTokens) ResolveMaxTokens(
+        OpenAIBaseTranslateSettings settings, bool antiLoop, int? maxOutputTokensOverride)
+    {
+        if (maxOutputTokensOverride is int ov)
+        {
+            int cap = Math.Max(ov, Math.Max(settings.MaxCompletionTokens ?? 0, settings.MaxTokens ?? 0));
+            if (settings.MaxCompletionTokens is not null)
+                return (cap, (int?)null);
+            if (settings.MaxTokens is not null)
+                return ((int?)null, cap);
+            // Neither user cap set: mirror the translation path's cloud/local split (DefaultMaxTokensFallback
+            // null == cloud). A cloud backend (e.g. OpenAI) rejects max_tokens on o-series models, so send
+            // max_completion_tokens; a local OpenAI-compatible backend may only understand max_tokens, so send
+            // that. (Sending only ONE field preserves the o-series rule.)
+            return settings.DefaultMaxTokensFallback is null ? (cap, (int?)null) : ((int?)null, cap);
+        }
+
+        int? maxCompletion = settings.MaxCompletionTokens;
+        int? maxTokens = settings.MaxTokens ?? (settings.MaxCompletionTokens is null
+            ? (antiLoop && settings.DefaultMaxTokensFallback is int dc ? dc * 2 : settings.DefaultMaxTokensFallback)
+            : null);
+        return (maxCompletion, maxTokens);
+    }
+
     private static async Task<string> SendChatRequest(
         HttpClient client,
         OpenAIBaseTranslateSettings settings,
         OpenAIMessage[] messages,
         CancellationToken token,
-        bool antiLoop = false)
+        bool antiLoop = false,
+        int? maxOutputTokensOverride = null)
     {
         string jsonResultString = string.Empty;
         int statusCode = -1;
+
+        // Bound generation so a runaway loop fails fast (finish_reason=length -> recoverable) instead of running
+        // to the HTTP timeout. Only inject the fallback cap when the user set NEITHER token limit (an explicit
+        // max_completion_tokens must not be silently overridden, and cloud backends keep the fallback null to
+        // avoid breaking o-series max_tokens rules). The anti-loop retry gets extra headroom so a legitimately
+        // long (e.g. reasoning-model) reply that truncated attempt 1 can finish. maxOutputTokensOverride (AI
+        // insights) supplies a generous explicit cap; see ResolveMaxTokens.
+        (int? maxCompletionTokens, int? maxTokens) = ResolveMaxTokens(settings, antiLoop, maxOutputTokensOverride);
 
         // Create the request payload
         OpenAIRequest request = new()
@@ -362,15 +424,8 @@ public class OpenAIBaseTranslateService : ITranslateService
                 ? AntiLoopFrequencyPenalty
                 : (settings.FrequencyPenaltyManual ? settings.FrequencyPenalty : null),
             presence_penalty = settings.PresencePenaltyManual ? settings.PresencePenalty : null,
-            max_completion_tokens = settings.MaxCompletionTokens,
-            // Bound generation so a runaway loop fails fast (finish_reason=length -> recoverable) instead of
-            // running to the HTTP timeout. Only inject the fallback cap when the user set NEITHER token limit
-            // (an explicit max_completion_tokens must not be silently overridden, and cloud backends keep the
-            // fallback null to avoid breaking o-series max_tokens rules). The anti-loop retry gets extra
-            // headroom so a legitimately long (e.g. reasoning-model) reply that truncated attempt 1 can finish.
-            max_tokens = settings.MaxTokens ?? (settings.MaxCompletionTokens is null
-                ? (antiLoop && settings.DefaultMaxTokensFallback is int cap ? cap * 2 : settings.DefaultMaxTokensFallback)
-                : null),
+            max_completion_tokens = maxCompletionTokens,
+            max_tokens = maxTokens,
         };
 
         if (!settings.ModelRequired && string.IsNullOrWhiteSpace(settings.Model))

@@ -86,6 +86,7 @@ public class AppActions
             [CustomKeyBindingAction.OpenWindowSettings] = CmdOpenWindowSettings.Execute,
             [CustomKeyBindingAction.OpenWindowSubsDownloader] = CmdOpenWindowSubsDownloader.Execute,
             [CustomKeyBindingAction.OpenWindowSubsExporter] = CmdOpenWindowSubsExporter.Execute,
+            [CustomKeyBindingAction.OpenWindowAiInsights] = CmdOpenWindowAiInsights.Execute,
             [CustomKeyBindingAction.OpenWindowBatchSubtitles] = CmdOpenWindowBatchSubtitles.Execute,
             [CustomKeyBindingAction.OpenWindowCheatSheet] = CmdOpenWindowCheatSheet.Execute,
             [CustomKeyBindingAction.OpenCommandPalette] = CmdOpenWindowCommandPalette.Execute,
@@ -532,6 +533,19 @@ public class AppActions
         }, false);
     });
 
+    public DelegateCommand CmdOpenWindowAiInsights => field ??= new(() =>
+    {
+        _player.Activity.ForceFullActive();
+        _dialogService.ShowSingleton(nameof(AiInsightsDialog), _ =>
+        {
+            // Activate as it may be minimized for some reason
+            if (!Application.Current.MainWindow!.IsActive)
+            {
+                Application.Current.MainWindow!.Activate();
+            }
+        }, false);
+    });
+
     public DelegateCommand CmdOpenWindowBatchSubtitles => field ??= new(() =>
     {
         _player.Activity.ForceFullActive();
@@ -812,6 +826,8 @@ public enum CustomKeyBindingAction
     OpenWindowSubsDownloader,
     [Description("Open Subtitles Exporter Window")]
     OpenWindowSubsExporter,
+    [Description("Open AI Insights Window")]
+    OpenWindowAiInsights,
     [Description("Open Batch Subtitles Window")]
     OpenWindowBatchSubtitles,
     [Description("Open Cheat Sheet Window")]
@@ -883,6 +899,7 @@ public static class KeyBindingActionExtensions
             case CustomKeyBindingAction.OpenWindowSettings:
             case CustomKeyBindingAction.OpenWindowSubsDownloader:
             case CustomKeyBindingAction.OpenWindowSubsExporter:
+            case CustomKeyBindingAction.OpenWindowAiInsights:
             case CustomKeyBindingAction.OpenWindowBatchSubtitles:
             case CustomKeyBindingAction.OpenWindowCheatSheet:
             case CustomKeyBindingAction.OpenCommandPalette:

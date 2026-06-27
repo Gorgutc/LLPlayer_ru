@@ -28,6 +28,7 @@ Registered Prism dialogs are part of the product surface:
 - Select language
 - Subtitles downloader
 - Subtitles exporter
+- AI Insights (F-07: transcript summary + vocabulary; non-modal `ShowSingleton`, opened from Subtitles ▸ AI Insights and `CustomKeyBindingAction.OpenWindowAiInsights` in the Window group, no default chord)
 - Batch subtitles
 - CheatSheet
 - Command palette

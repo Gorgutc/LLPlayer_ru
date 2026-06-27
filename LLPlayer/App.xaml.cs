@@ -59,6 +59,7 @@ public partial class App : PrismApplication
         containerRegistry.RegisterDialog<SelectLanguageDialog>();
         containerRegistry.RegisterDialog<SubtitlesDownloaderDialog>();
         containerRegistry.RegisterDialog<SubtitlesExportDialog>();
+        containerRegistry.RegisterDialog<AiInsightsDialog>();
         containerRegistry.RegisterDialog<BatchSubtitlesDialog>();
         containerRegistry.RegisterDialog<CheatSheetDialog>();
         containerRegistry.RegisterDialog<CommandPaletteDialog>();
