@@ -30,6 +30,35 @@ public static class ErrorDialogHelper
         ShowKnownErrorPopup(message, errorType.ToString());
     }
 
+    /// <summary>
+    /// Known-error popup that also offers a single recoverable action button (e.g. INSTALL → open the VC++
+    /// download page). <paramref name="actionKey"/> is a <see cref="KnownErrorActionKeys"/> value the dialog
+    /// maps to a host action; <paramref name="actionContent"/> is the button label. Used by the batch ASR
+    /// path, which is a separate non-modal window where the main-window snackbar would not reliably show.
+    /// </summary>
+    public static void ShowKnownErrorPopup(string message, KnownErrorType errorType, string actionKey, string actionContent)
+    {
+        IDialogService? dialogService = TryResolveDialogService();
+        if (dialogService == null)
+        {
+            // No themed dialog available: the message already carries the download URL, so the plain
+            // fallback box is still actionable even without the button.
+            ShowFallback(message, errorType.ToString());
+            return;
+        }
+
+        DialogParameters p = new()
+        {
+            { "type", "known" },
+            { "message", message },
+            { "errorType", errorType.ToString() },
+            { "actionKey", actionKey },
+            { "actionContent", actionContent },
+        };
+
+        dialogService.ShowDialog(nameof(ErrorDialog), p);
+    }
+
     public static void ShowUnknownErrorPopup(string message, string errorType, Exception? ex = null)
     {
         IDialogService? dialogService = TryResolveDialogService();

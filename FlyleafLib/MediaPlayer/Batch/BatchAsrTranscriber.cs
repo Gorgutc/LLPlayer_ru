@@ -32,6 +32,20 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         ValidateAsrConfig(_batchConfig);
     }
 
+    /// <summary>
+    /// True when the configured ASR engine loads its native CRT in-process and therefore needs the VC++
+    /// redistributable preflight: whisper.cpp (via Whisper.net). faster-whisper is a self-contained external
+    /// exe and is intentionally NOT gated. Pure predicate so the host can preflight
+    /// <see cref="VcRedistChecker.IsRuntimePresent"/> and surface a clean, actionable known-error BEFORE
+    /// constructing the transcriber, instead of the constructor throwing into a generic "unknown error" popup.
+    /// Mirrors the same engine gate the constructor's <see cref="ValidateAsrConfig"/> applies.
+    /// </summary>
+    public static bool RequiresVcRedistPreflight(Config config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        return config.Subtitles.ASREngine == SubASREngineType.WhisperCpp;
+    }
+
     public Task<BatchAsrResult> TranscribeAsync(
         string mediaPath,
         CancellationToken token,
@@ -202,8 +216,9 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         {
             // Same VC++ preflight as the interactive path (SubtitlesASR.CanExecute): whisper.cpp loads its
             // native runtime in-process, so without the redistributable the load aborts the whole process.
-            // Surfacing it as a per-file InvalidOperationException fails just this batch file with a clear
-            // message instead of crashing the app. faster-whisper (external exe) is not checked.
+            // Defense in depth — the batch dialog VM already preflights this via RequiresVcRedistPreflight and
+            // surfaces a clean known-error before constructing the transcriber, so this throw is only a backstop
+            // for any other caller. faster-whisper (external exe) is not checked.
             if (!VcRedistChecker.IsRuntimePresent(out _))
                 throw new InvalidOperationException(VcRedistChecker.BuildMissingMessage("Speech-to-text (whisper.cpp)"));
 
