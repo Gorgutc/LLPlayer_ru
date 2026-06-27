@@ -174,11 +174,25 @@ HttpClient.Timeout of 60 [seconds]». Владелец гоняет перево
 **Бандлить B-02 + B-03** (тот же файл). **Сначала проверить B-01** — миграции/тумблер могут не применяться.
 **Рассуждение:** низкий риск (аддитивно, гейт ON, чистая функция); высокий UX-выигрыш (главная жалоба).
 
-### F-02 — Точность ASR на шумном аудио / под музыку: speech separation / денойз 🟠 Ⓛ · TODO
+### F-02 — Точность ASR на шумном аудио / под музыку: speech separation / денойз 🟠 Ⓛ · ⚙️ **СРЕЗ DONE (PR #76, merge `b5f9221`, v0.3.23, 2026-06-27); полный Demucs ОСТАЁТСЯ TODO**
+> ⚙️ **Лёгкий срез отгружен (PR #76):** opt-in `Subtitles.ASRDenoise` (default OFF → byte-identical) чистит аудио,
+> подаваемое в Whisper, на одном seam в продюсере (`SubtitlesASR.ResampleTo`) → покрывает **оба движка**
+> (whisper.cpp + faster-whisper, общий `waveStream`) **и батч**. Решение владельца (AskUserQuestion): «Оба» —
+> **managed high-pass** (`FlyleafLib/Utils/AsrDenoise.cs` `AsrHighPassFilter`, RBJ biquad Butterworth 80Hz, чистый/
+> тестируемый, 10 юнит-тестов) **+ нативный FFmpeg `afftdn`** (изолированный avfilter-граф в `AudioReader`, зеркало
+> `AudioDecoder.Filters.cs`; graph-per-pass, flush в конце прохода + перед reachedStop-резом; **fail-soft** →
+> managed-high-pass-only при недоступности afftdn). Config `ASRDenoise` (+ батч-снапшот reflection-guard) + UI-тумблер
+> «Denoise ASR Audio» + frozen `media-runtime-contract` +1 предложение. Дизайн-панель (3) + adversarial review
+> (5 линз: native-memory-safety SHIP 0 находок; 1 minor fold-back-стык исправлен; 2 нита acceptable). Гейты 0/0 ×3 +
+> verify.ps1 + тесты **499/499** (+10), `.exe` launch 0.3.23 чистый. **Честно: срез бьёт по СТАЦИОНАРНОМУ шуму**
+> (хисс/гул/рокот), **НЕ разделяет речь/музыку.** afftdn-качество/стыки — owner manual-smoke. Детали: второй мозг
+> `Sessions/2026-06-27-handoff-f02-asr-denoise.md`.
+> **ОСТАЁТСЯ (полный F-02, TODO):** настоящее вокал-разделение «речь под музыку» = **Demucs-сайдкар** (по образцу
+> `dub_sidecar/`), opt-in, крупно (native-deps, провижининг модели, GPU-no-overlap координация).
 **Идея от Buzz** (speech separation перед транскрипцией). Бьёт по нашей известной боли «речь съедается под
-музыку» (частично закрыто anti-hallucination флагами в #42). **Решение:** опц. предобработка аудио
-вокал-изоляцией (Demucs/аналог) в сайдкаре по образцу дубляжа (`dub_sidecar/`), opt-in. **Рассуждение:**
-высокая ценность для качества субтитров; крупно (native-зависимости, сайдкар, GPU-no-overlap инвариант).
+музыку» (частично закрыто anti-hallucination флагами в #42 + теперь стационарный денойз срезом). **Решение
+(полное):** опц. предобработка аудио вокал-изоляцией (Demucs/аналог) в сайдкаре по образцу дубляжа
+(`dub_sidecar/`), opt-in. **Рассуждение:** высокая ценность для качества субтитров; крупно.
 
 ### F-03 — Диаризация (speaker ID) 🟡 Ⓛ · TODO
 **Идея от Buzz.** Метки говорящих → лучше форматирование диалогов и понимание. **Решение:** сайдкар
