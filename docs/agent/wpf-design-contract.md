@@ -29,6 +29,7 @@ Registered Prism dialogs are part of the product surface:
 - Subtitles downloader
 - Subtitles exporter
 - AI Insights (F-07: transcript summary + vocabulary; non-modal `ShowSingleton`, opened from Subtitles ▸ AI Insights and `CustomKeyBindingAction.OpenWindowAiInsights` in the Window group, no default chord)
+- Word Manager (F-10: global word list view/edit/delete + TSV / `.apkg` / AnkiConnect export; non-modal `ShowSingleton`, opened from Subtitles ▸ Word Manager and `CustomKeyBindingAction.OpenWindowWordManager` in the Window group, no default chord)
 - Batch subtitles
 - CheatSheet
 - Command palette

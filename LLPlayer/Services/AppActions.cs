@@ -87,6 +87,7 @@ public class AppActions
             [CustomKeyBindingAction.OpenWindowSubsDownloader] = CmdOpenWindowSubsDownloader.Execute,
             [CustomKeyBindingAction.OpenWindowSubsExporter] = CmdOpenWindowSubsExporter.Execute,
             [CustomKeyBindingAction.OpenWindowAiInsights] = CmdOpenWindowAiInsights.Execute,
+            [CustomKeyBindingAction.OpenWindowWordManager] = CmdOpenWindowWordManager.Execute,
             [CustomKeyBindingAction.OpenWindowBatchSubtitles] = CmdOpenWindowBatchSubtitles.Execute,
             [CustomKeyBindingAction.OpenWindowCheatSheet] = CmdOpenWindowCheatSheet.Execute,
             [CustomKeyBindingAction.OpenCommandPalette] = CmdOpenWindowCommandPalette.Execute,
@@ -546,6 +547,19 @@ public class AppActions
         }, false);
     });
 
+    public DelegateCommand CmdOpenWindowWordManager => field ??= new(() =>
+    {
+        _player.Activity.ForceFullActive();
+        _dialogService.ShowSingleton(nameof(WordManagerDialog), _ =>
+        {
+            // Activate as it may be minimized for some reason
+            if (!Application.Current.MainWindow!.IsActive)
+            {
+                Application.Current.MainWindow!.Activate();
+            }
+        }, false);
+    });
+
     public DelegateCommand CmdOpenWindowBatchSubtitles => field ??= new(() =>
     {
         _player.Activity.ForceFullActive();
@@ -828,6 +842,8 @@ public enum CustomKeyBindingAction
     OpenWindowSubsExporter,
     [Description("Open AI Insights Window")]
     OpenWindowAiInsights,
+    [Description("Open Word Manager Window")]
+    OpenWindowWordManager,
     [Description("Open Batch Subtitles Window")]
     OpenWindowBatchSubtitles,
     [Description("Open Cheat Sheet Window")]
@@ -900,6 +916,7 @@ public static class KeyBindingActionExtensions
             case CustomKeyBindingAction.OpenWindowSubsDownloader:
             case CustomKeyBindingAction.OpenWindowSubsExporter:
             case CustomKeyBindingAction.OpenWindowAiInsights:
+            case CustomKeyBindingAction.OpenWindowWordManager:
             case CustomKeyBindingAction.OpenWindowBatchSubtitles:
             case CustomKeyBindingAction.OpenWindowCheatSheet:
             case CustomKeyBindingAction.OpenCommandPalette:

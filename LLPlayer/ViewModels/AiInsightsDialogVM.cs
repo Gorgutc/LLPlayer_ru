@@ -24,9 +24,12 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
 {
     public FlyleafManager FL { get; }
 
-    public AiInsightsDialogVM(FlyleafManager fl)
+    private readonly WordListStore _wordListStore;
+
+    public AiInsightsDialogVM(FlyleafManager fl, WordListStore wordListStore)
     {
         FL = fl;
+        _wordListStore = wordListStore;
     }
 
     public ObservableCollection<VocabularyEntry> Vocabulary { get; } = new();
@@ -247,6 +250,28 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
             }
         }
     });
+
+    /// <summary>F-10: persist the extracted vocabulary into the global word list (dedup by Term).</summary>
+    public DelegateCommand CmdAddToWordList => field ??= new DelegateCommand(() =>
+    {
+        if (Vocabulary.Count == 0)
+        {
+            return;
+        }
+
+        string sourceLang = SubManager.Language?.ISO6391 ?? string.Empty;
+        string targetLang = FL.PlayerConfig.Subtitles.TranslateTargetLanguage.ToISO6391();
+
+        int added = _wordListStore.MergeVocabulary(
+            Vocabulary.ToList(), sourceLang, targetLang, DateTime.UtcNow.ToString("O"));
+        _wordListStore.Save();
+
+        int skipped = Vocabulary.Count - added;
+        string msg = added > 0
+            ? $"Added {added} word(s) to the word list" + (skipped > 0 ? $" ({skipped} already there)" : "")
+            : "All words are already in the word list";
+        FL.MessageQueue.Enqueue(msg);
+    }, () => HasVocabulary).ObservesProperty(() => HasVocabulary);
 
     public bool HasVocabulary => Vocabulary.Count > 0;
 

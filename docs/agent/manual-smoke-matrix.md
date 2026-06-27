@@ -31,6 +31,7 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Right-click a subtitle word and confirm configured word actions/search/copy menu.
 - Use the configured last-search modifier and confirm it opens the previous search action.
 - Resume playback and confirm open word popups close.
+- Word Manager (F-10): left-click a subtitle word, click the popup's Save (bookmark) button, and confirm a "Saved" snackbar. Open right-click Subtitles ▸ Word Manager and confirm the word appears; edit its Translation/Definition in place and confirm the edit persists across a dialog reopen/restart. In AI Insights, generate vocabulary and click "Add to List", then confirm the words appear in the Word Manager (duplicates by term are skipped). Export TSV and import it into Anki (File ▸ Import). Export `.apkg` and double-click it to import into Anki; confirm the deck/cards appear with the five fields. With Anki running and the AnkiConnect add-on installed, click "Push to Anki" and confirm cards are added; with Anki closed, confirm a clear "could not reach Anki" message rather than a crash.
 
 ## Translation
 

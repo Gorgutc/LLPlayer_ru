@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
+using FlyleafLib.MediaPlayer.AI;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
 using LLPlayer.Extensions;
@@ -29,6 +30,9 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
     private string _clickedWords = string.Empty;
     private string _clickedText = string.Empty;
+    private int _clickedSubIndex;
+    private bool _clickedIsTranslated;
+    private readonly WordListStore _wordListStore;
 
     private CancellationTokenSource? _cts;
     private readonly Dictionary<string, string> _translateCache = new();
@@ -39,6 +43,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         InitializeComponent();
 
         FL = ((App)Application.Current).Container.Resolve<FlyleafManager>();
+        _wordListStore = ((App)Application.Current).Container.Resolve<WordListStore>();
 
         _translateServiceFactory = new TranslateServiceFactory(FL.PlayerConfig.Subtitles);
 
@@ -269,6 +274,8 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
     {
         _clickedWords = e.Words;
         _clickedText = e.Text;
+        _clickedSubIndex = e.SubIndex;
+        _clickedIsTranslated = e.IsTranslated;
 
         if (FL.Player.Status == Status.Playing)
         {
@@ -411,6 +418,54 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
     private void CloseButton_OnClick(object sender, RoutedEventArgs e)
     {
         IsOpen = false;
+    }
+
+    // F-10: save the looked-up word to the global word list (Subtitles > Word Manager). Uses the translation
+    // already shown in the popup; honors IsTranslated (a clicked translated word is stored as-is in the target
+    // language). Reading/Definition are left blank for the user to fill in the Word Manager later.
+    private void SaveWordButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        string term = (_clickedWords ?? string.Empty).Trim();
+        if (term.Length == 0)
+        {
+            return;
+        }
+
+        // Don't save mid-translation: the translation text is still empty until the lookup completes. Tell the
+        // user to wait rather than silently saving a word with a blank translation.
+        if (IsLoading)
+        {
+            FL.MessageQueue.Enqueue("Translation in progress — try Save again in a moment.");
+            return;
+        }
+
+        string targetLang = FL.PlayerConfig.Subtitles.TranslateTargetLanguage.ToISO6391();
+        string translation;
+        string sourceLanguage;
+        if (_clickedIsTranslated)
+        {
+            // The clicked word is already translated text — keep it as the term in the target language.
+            translation = string.Empty;
+            sourceLanguage = targetLang;
+        }
+        else
+        {
+            translation = TranslationText.Text ?? string.Empty;
+            sourceLanguage = FL.Player.SubtitlesManager[_clickedSubIndex].Language?.ISO6391 ?? string.Empty;
+        }
+
+        SavedWord word = new(
+            term, "", translation, "", _clickedText ?? string.Empty,
+            sourceLanguage, targetLang, WordSource.WordClick, DateTime.UtcNow.ToString("O"));
+
+        bool added = _wordListStore.TryAdd(word);
+        if (added)
+        {
+            _wordListStore.Save();
+        }
+        FL.MessageQueue.Enqueue(added
+            ? $"Saved \"{term}\" to the word list"
+            : $"\"{term}\" is already in the word list");
     }
 
     // Esc dismisses the popup when keyboard focus is inside it (e.g. while selecting the translated text).

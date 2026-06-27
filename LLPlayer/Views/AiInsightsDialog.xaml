@@ -73,7 +73,9 @@
                         Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConv}}" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="Copy" Width="70" Command="{Binding CmdCopy}" />
+                <Button Content="Add to List" Width="90" Command="{Binding CmdAddToWordList}"
+                        ToolTip="Add the extracted vocabulary to the global word list (Subtitles &#x25b8; Word Manager)" />
+                <Button Content="Copy" Width="70" Margin="8 0 0 0" Command="{Binding CmdCopy}" />
                 <Button Content="Save..." Width="80" Margin="8 0 0 0" Command="{Binding CmdSave}" />
             </StackPanel>
         </Grid>
