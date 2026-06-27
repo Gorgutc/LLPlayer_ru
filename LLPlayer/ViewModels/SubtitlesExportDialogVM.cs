@@ -39,6 +39,11 @@ public class SubtitlesExportDialogVM : Bindable, IDialogAware
 
     public TranslateExportOptions SelectedTranslateOpts { get; set => Set(ref field, value); }
 
+    public IReadOnlyList<SubtitleExportFormat> FormatList { get; } =
+        [SubtitleExportFormat.Srt, SubtitleExportFormat.Vtt, SubtitleExportFormat.Txt];
+
+    public SubtitleExportFormat SelectedFormat { get; set => Set(ref field, value); } = SubtitleExportFormat.Srt;
+
     public DelegateCommand CmdExport => field ??= new(() =>
     {
         var playlist = FL.Player.Playlist.Selected;
@@ -47,7 +52,9 @@ public class SubtitlesExportDialogVM : Bindable, IDialogAware
             return;
         }
 
-        List<SubtitleLine> lines = FL.Player.SubtitlesManager[SelectedSubIndex].Subs
+        bool exportOriginal = SelectedTranslateOpts == TranslateExportOptions.Original;
+
+        List<SubtitleExportLine> lines = FL.Player.SubtitlesManager[SelectedSubIndex].Subs
             .Where(s =>
             {
                 if (!s.IsText)
@@ -62,13 +69,14 @@ public class SubtitlesExportDialogVM : Bindable, IDialogAware
 
                 return true;
             })
-            .Select(s => new SubtitleLine()
-            {
-                Text = (SelectedTranslateOpts != TranslateExportOptions.Original
-                    ? s.DisplayText : s.Text)!,
-                Start = s.StartTime,
-                End = s.EndTime
-            }).ToList();
+            .Select(s => new SubtitleExportLine(
+                s.StartTime,
+                s.EndTime,
+                (exportOriginal ? s.Text : s.DisplayText)!,
+                // SubStyles offsets index into the original Text; they no longer match once translated, so only
+                // carry them when exporting the original text (italic tags are emitted for SRT/VTT from these).
+                exportOriginal ? s.SubStyles : null))
+            .ToList();
 
         if (lines.Count == 0)
         {
@@ -92,21 +100,33 @@ public class SubtitlesExportDialogVM : Bindable, IDialogAware
             fileName = playlist.Title;
         }
 
+        string ext = SubtitleExporter.Extension(SelectedFormat);
+        string filterName = SelectedFormat switch
+        {
+            SubtitleExportFormat.Srt => "SubRip subtitle",
+            SubtitleExportFormat.Vtt => "WebVTT subtitle",
+            SubtitleExportFormat.Txt => "Plain text",
+            _ => "Subtitle"
+        };
+
+        if (!exportOriginal)
+        {
+            fileName += ".translated";
+        }
+
         SaveFileDialog saveFileDialog = new()
         {
-            Filter = "SRT files (*.srt)|*.srt|All files (*.*)|*.*",
-            FileName = fileName + ".srt",
+            Filter = $"{filterName} (*{ext})|*{ext}|All files (*.*)|*.*",
+            FileName = fileName + ext,
             InitialDirectory = initDir
         };
 
-        if (SelectedTranslateOpts != TranslateExportOptions.Original)
-        {
-            saveFileDialog.FileName = fileName + ".translated.srt";
-        }
-
         if (saveFileDialog.ShowDialog() == true)
         {
-            SrtExporter.ExportSrt(lines, saveFileDialog.FileName, new UTF8Encoding(IsUtf8Bom));
+            File.WriteAllText(
+                saveFileDialog.FileName,
+                SubtitleExporter.Build(lines, SelectedFormat),
+                new UTF8Encoding(IsUtf8Bom));
 
             // open saved file in explorer
             Process.Start("explorer.exe", $@"/select,""{saveFileDialog.FileName}""");
@@ -117,7 +137,7 @@ public class SubtitlesExportDialogVM : Bindable, IDialogAware
     public string Title { get; set => Set(ref field, value); }
         = $"Subtitles Exporter - {App.Name}";
     public double WindowWidth { get; set => Set(ref field, value); } = 350;
-    public double WindowHeight { get; set => Set(ref field, value); } = 240;
+    public double WindowHeight { get; set => Set(ref field, value); } = 280;
 
     public DialogCloseListener RequestClose { get; }
 
