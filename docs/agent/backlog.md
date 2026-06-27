@@ -238,12 +238,19 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 resume ASR»). **Решение:** управление состоянием ASR-задачи. **Рассуждение:** явный UX-win на длинных видео,
 в дорожной карте upstream; средняя сложность.
 
-### F-05 — Языковые предпочтения primary/secondary + авто-открытие 🟠 Ⓜ · PARTIALLY-DONE
+### F-05 — Языковые предпочтения primary/secondary + авто-открытие 🟠 Ⓜ · ✅ **DONE (gap PR #58 v0.3.12 + аудит/фикс PR этот v0.3.14, 2026-06-27)**
 > ⚠️ **Аудит 2026-06-27 (верификация):** per-slot primary/secondary language UI + config + per-slot логика
 > **УЖЕ реализованы и подключены** (SettingsSubtitles.xaml ~`:663-708`, движок читает в `SubtitlesManager`/
-> `SubtitlesOCR`/`SubtitlesTranslator`/`OpenSubtitles`). Реальный остаток — **(а)** латентный gap батч-снапшота
-> ✅ **ЗАКРЫТ (этот PR, v0.3.12)**; **(б)** короткий аудит логики авто-открытия внешних субтитров против уже
-> существующих per-slot prefs — TODO. Сложность оставшегося ближе к ⓢ, не Ⓜ.
+> `SubtitlesOCR`/`SubtitlesTranslator`/`OpenSubtitles`). Остаток закрыт двумя частями.
+> **✅ (б) Аудит авто-открытия (этот PR, v0.3.14):** per-slot fallback корректно подключён — `SubManager.Language`
+> (`SubtitlesManager.cs:100`) для unknown-языка отдаёт `LanguageFallbackPrimary` (slot 0) / `LanguageFallbackSecondary`
+> (slot 1); то же в `SubtitlesOCR.cs:147`, `SubtitlesTranslator.cs:81-82`. Авто-подбор субтитра идёт по приоритет-листу
+> `Config.Subtitles.Languages` (`StreamSuggester.SuggestSubtitles`). **Найден и исправлен реальный латентный краш:**
+> `StreamSuggester.SuggestBestExternalSubtitles` (`:142`) индексировал `Languages[0]` БЕЗ гарда → `IndexOutOfRangeException`,
+> когда пользователь очистил список языков (это возможно: `SelectLanguageDialogVM.CmdMoveLeft` удаляет без min-1 гарда).
+> Параллельный код `DecoderContext.Open.cs:826` тот же `[0]` уже гардит `Languages.Count > 0` — добавлен такой же гард
+> (+ hoist `preferred` из цикла). Авто-подбор СЕКОНДАРИ-слота по отдельному языку — НЕ существует (конфиг имеет один
+> `Languages`-лист); это потенциальная будущая фича, не баг.
 > **✅ F-05-gap DONE (v0.3.12):** `BatchSubtitleConfigSnapshot.CreateSubtitlesConfig` теперь копирует все 5
 > language-fallback полей (`Languages` deep-copy, `LanguageAutoDetect`, `LanguageFallbackPrimary`,
 > `LanguageFallbackSecondary`, `LanguageFallbackSecondarySame`) под try/catch(NRE)→[English] (как `CloneAudioConfig`,

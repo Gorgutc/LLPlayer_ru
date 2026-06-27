@@ -132,6 +132,13 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
 
     public ExternalSubtitlesStream SuggestBestExternalSubtitles()
     {
+        // The user can clear the subtitle language preference list, so guard the [0] access (DecoderContext.Open
+        // already guards the same indexing before its high-suggest pass).
+        if (Config.Subtitles.Languages.Count == 0)
+            return null;
+
+        Language preferred = Config.Subtitles.Languages[0];
+
         var extStreams = Selected.ExternalSubtitlesStreamsAll
             .Where(x => (Config.Subtitles.OpenAutomaticSubs || !x.Automatic))
             .OrderBy(x => x.Language.ToString())
@@ -139,7 +146,7 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
             .ThenBy(x => x.ManualDownloaded);
 
         foreach(var extStream in extStreams)
-            if (extStream.Language == Config.Subtitles.Languages[0])
+            if (extStream.Language == preferred)
                 return extStream;
 
         return null;
