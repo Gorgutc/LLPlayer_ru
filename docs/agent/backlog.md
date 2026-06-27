@@ -233,10 +233,37 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Рассуждение:** (3) — самый надёжный, не зависит от поведения движка; (1) проверить первым (может, мы сами
 включили XXL-флаг). F-17+F-18 имеют общий рычаг (initial_prompt) → разумно делать вместе.
 
-### F-04 — ASR pause/resume 🟠 Ⓜ · TODO · (upstream Roadmap «Now»)
-**Файл/TODO:** [`SubtitlesASR.cs:27`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) («TODO: L: Pause and
-resume ASR»). **Решение:** управление состоянием ASR-задачи. **Рассуждение:** явный UX-win на длинных видео,
-в дорожной карте upstream; средняя сложность.
+### F-04 — ASR pause/resume 🟠 Ⓜ · TODO · **отложено владельцем в отдельную сессию (2026-06-27); план ниже** · (upstream Roadmap «Now»)
+**Файл/TODO:** [`SubtitlesASR.cs:27`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) («TODO: L: Pause and resume ASR»).
+**Рассуждение:** явный UX-win на длинных видео; в дорожной карте upstream; средняя сложность. Самый крупный/рискованный
+пункт остатка (правка frozen ASR-threading + UI), поэтому владелец (AskUserQuestion 2026-06-27) выбрал **отдельную
+сессию** под него; здесь — готовый план.
+
+> **📐 ПЛАН (готов к реализации в свежей сессии):**
+> **Архитектура (выяснено 2026-06-27):** `SubtitlesASR.Execute` (`:125`) → `AudioReader.ReadAll` запускает
+> producer→consumer на каналах (`System.Threading.Channels`): producer демультиплексирует аудио в чанки
+> (`while (!token.IsCancellationRequested)` ~`:667`), consumer гоняет ASR-движок по чанку
+> (`while (await channel.Reader.WaitToReadAsync(token))` ~`:510`, внутри `asrService.Do(chunk.Stream, token)`).
+> Движки: WhisperCpp in-proc (`Do` ~`:1062`), FasterWhisper — ВНЕШНИЙ процесс (`Do` ~`:1330`). `_cts` = отмена;
+> `TryCancel` (`:301`) **чистит субтитры** (`_subtitlesManager[i].Clear()`), флаг `player.IsASRRunning` (`:202`).
+> **Единственная реализуемая гранулярность — пауза на ГРАНИЦЕ ЧАНКА** (чанк транскрибируется атомарно; внешний
+> faster-whisper не прерывается mid-chunk). **Решение владельца:** пауза останавливает на след. границе чанка и
+> **СОХРАНЯЕТ накопленные субтитры** (в отличие от Cancel).
+> **Шаги:**
+> 1. **FlyleafLib `SubtitlesASR`:** добавить async-gate (предпочтительно `SemaphoreSlim`/`AsyncManualResetEvent`, НЕ
+>    sync `ManualResetEventSlim.Wait` — не блокировать тред зря; хотя ASR на выделенном треде, async чище). Методы
+>    `Pause()`/`Resume()` + `IsPaused`. На границе чанка в consumer-loop (и при нужде producer) `await gate.WaitAsync(token)`
+>    ПЕРЕД обработкой следующего чанка. **Cancellation-aware** (отмена во время паузы — чистый выход). Пауза НЕ зовёт
+>    `Clear()`. Не ломать dual-ASR (два слота, `SubIndexSet`) и seek-restart (`Execute` при повторном вызове на новой
+>    позиции делает `TryCancel(true)`+restore — продумать взаимодействие с паузой).
+> 2. **Player/state:** выставить `IsASRPaused` рядом с `IsASRRunning`.
+> 3. **UI:** тумблер Pause/Resume рядом с индикатором «ASR идёт» (найти, где рендерится `IsASRRunning` — «ASR chip»);
+>    команда → `SubtitlesASR.Pause/Resume`.
+> 4. **Скоуп:** интерактивный ASR (батч-ASR `BatchSubtitlesDialog` — отдельный пайплайн с no-overlap/CPU-fallback/трей —
+>    отложить).
+> **Риск:** frozen `media-runtime-contract` (ASR-threading) → тщательное ревью гонок + cancellation-correctness;
+> вынести логику gate в тестируемый вид, где возможно. Гейты + `.exe` smoke на длинном видео (пауза → субтитры целы →
+> resume продолжает).
 
 ### F-05 — Языковые предпочтения primary/secondary + авто-открытие 🟠 Ⓜ · ✅ **DONE (gap PR #58 v0.3.12 + аудит/фикс PR этот v0.3.14, 2026-06-27)**
 > ⚠️ **Аудит 2026-06-27 (верификация):** per-slot primary/secondary language UI + config + per-slot логика
