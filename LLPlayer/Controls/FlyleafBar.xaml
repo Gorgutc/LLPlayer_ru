@@ -194,16 +194,35 @@
                     </Button>
                     <materialDesign:PackIcon Kind="VideoInputAntenna" Height="20" Width="20" Foreground="{DynamicResource MaterialDesign.Brush.Secondary}" VerticalAlignment="Center" Visibility="{Binding FL.Player.IsLive, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}"/>
 
-                    <!-- ASR status chip: shown only while speech-to-text is actively transcribing -->
-                    <Border Margin="6,0,0,0" Padding="6,1" CornerRadius="3" VerticalAlignment="Center"
+                    <!-- ASR status chip: shown only while speech-to-text is actively transcribing.
+                         F-04: left-click toggles pause/resume (pause stops at the next chunk boundary and keeps
+                         already-produced subtitles); the trailing icon reflects the paused state. -->
+                    <Border Margin="6,0,0,0" Padding="6,1" CornerRadius="3" VerticalAlignment="Center" Cursor="Hand"
                             Background="{DynamicResource MaterialDesign.Brush.Primary}"
-                            ToolTip="ASR (speech-to-text) is transcribing"
+                            ToolTip="Speech-to-text — left-click to pause / resume (keeps generated subtitles)"
                             Visibility="{Binding FL.Player.IsASRRunning, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                        <Border.InputBindings>
+                            <MouseBinding Command="{Binding FL.Action.CmdToggleASRPause}" MouseAction="LeftClick" />
+                        </Border.InputBindings>
                         <!-- Foreground adapts (black/white) to the chip's Primary background so a pale synced
                              OS accent stays legible; the accent colour itself is unchanged. -->
                         <StackPanel Orientation="Horizontal">
                             <materialDesign:PackIcon Kind="Microphone" Width="16" Height="16" VerticalAlignment="Center" Foreground="{Binding Background, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource OnColorForegroundConv}}"/>
                             <TextBlock Text="ASR" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12" FontWeight="Bold" Foreground="{Binding Background, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource OnColorForegroundConv}}"/>
+                            <materialDesign:PackIcon Width="14" Height="14" Margin="4,0,0,0" VerticalAlignment="Center"
+                                                     Foreground="{Binding Background, RelativeSource={RelativeSource AncestorType=Border}, Converter={StaticResource OnColorForegroundConv}}">
+                                <materialDesign:PackIcon.Style>
+                                    <Style TargetType="materialDesign:PackIcon">
+                                        <!-- Running: Pause affordance. Paused: Play (resume) affordance. -->
+                                        <Setter Property="Kind" Value="Pause" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FL.Player.IsASRPaused}" Value="True">
+                                                <Setter Property="Kind" Value="Play" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </materialDesign:PackIcon.Style>
+                            </materialDesign:PackIcon>
                         </StackPanel>
                     </Border>
                     </StackPanel>

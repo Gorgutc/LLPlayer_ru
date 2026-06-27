@@ -454,6 +454,13 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     public bool         IsASRRunning        { get => _isASRRunning; internal set => SetUI(ref _isASRRunning, value); }
     bool _isASRRunning;
 
+    /// <summary>
+    /// True while subtitle ASR is paused at a chunk boundary (accumulated subtitles are kept). Toggled on the
+    /// UI thread so it can be data-bound directly, e.g. by the player bar's ASR chip pause/resume control.
+    /// </summary>
+    public bool         IsASRPaused         { get => _isASRPaused; internal set => SetUI(ref _isASRPaused, value); }
+    bool _isASRPaused;
+
     public event        EventHandler<KnownErrorOccurredEventArgs> KnownErrorOccurred;
     public event        EventHandler<UnknownErrorOccurredEventArgs> UnknownErrorOccurred;
 
