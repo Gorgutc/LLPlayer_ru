@@ -67,6 +67,33 @@ public class BatchSubtitlePolicyTests
     }
 
     [Fact]
+    public void RequiresVcRedistPreflight_True_ForWhisperCppEngine()
+    {
+        // whisper.cpp loads its native CRT in-process, so the host must preflight the VC++ runtime.
+        Config config = new(true);
+        config.Subtitles.ASREngine = SubASREngineType.WhisperCpp;
+
+        BatchAsrTranscriber.RequiresVcRedistPreflight(config).Should().BeTrue();
+    }
+
+    [Fact]
+    public void RequiresVcRedistPreflight_False_ForFasterWhisperEngine()
+    {
+        // faster-whisper is a self-contained external exe and is intentionally not gated by the preflight.
+        Config config = new(true);
+        config.Subtitles.ASREngine = SubASREngineType.FasterWhisper;
+
+        BatchAsrTranscriber.RequiresVcRedistPreflight(config).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RequiresVcRedistPreflight_True_ByDefault_MatchesWhisperCppDefaultEngine()
+    {
+        // The default ASR engine is whisper.cpp, so a fresh config requires the preflight.
+        BatchAsrTranscriber.RequiresVcRedistPreflight(new Config(true)).Should().BeTrue();
+    }
+
+    [Fact]
     public void ScanPolicy_IncludesExistingSrtWithoutDub_WhenDubbingIsEnabled()
     {
         BatchSubtitleJob job = new("movie.mkv");

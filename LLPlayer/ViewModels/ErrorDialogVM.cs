@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Media;
 using System.Text;
 using System.Windows;
+using FlyleafLib.MediaPlayer;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
 
@@ -60,6 +61,40 @@ public class ErrorDialogVM : Bindable, IDialogAware
     } = "";
 
     public string ErrorTitle => IsUnknown ? $"{ErrorType} Unknown Error" : $"{ErrorType} Error";
+
+    // Optional single recoverable action for a known error (e.g. INSTALL → open the VC++ download page).
+    // Empty content => no button is shown, so every existing call site is unaffected.
+    private string _actionKey = "";
+
+    public string ActionContent
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasAction));
+            }
+        }
+    } = "";
+
+    public bool HasAction => !string.IsNullOrEmpty(ActionContent);
+
+    public DelegateCommand CmdAction => field ??= new(() =>
+    {
+        // Map the recoverable-action key to its host action, mirroring MainWindowVM's snackbar handlers.
+        switch (_actionKey)
+        {
+            case KnownErrorActionKeys.InstallVcRedist:
+                FL.Action.OpenVcRedistDownload();
+                break;
+            case KnownErrorActionKeys.DownloadWhisperModel:
+                FL.Action.OpenWhisperModelDownload();
+                break;
+        }
+
+        RequestClose.Invoke(ButtonResult.OK);
+    });
 
     public DelegateCommand CmdCopyMessage => field ??= new(() =>
     {
@@ -179,6 +214,15 @@ public class ErrorDialogVM : Bindable, IDialogAware
                 Message = parameters.GetValue<string>("message");
                 ErrorType = parameters.GetValue<string>("errorType");
                 IsUnknown = false;
+
+                // Optional recoverable action (e.g. INSTALL VC++). Absent for ordinary known errors.
+                if (parameters.ContainsKey("actionContent"))
+                {
+                    ActionContent = parameters.GetValue<string>("actionContent");
+                    _actionKey = parameters.ContainsKey("actionKey")
+                        ? parameters.GetValue<string>("actionKey")
+                        : "";
+                }
 
                 break;
             case "unknown":
