@@ -398,7 +398,27 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Идея от Buzz.** Расширение существующего батча (`Batch*`-классы). **Решение:** режим слежения за папкой →
 авто-обработка новых файлов. **Рассуждение:** низкий effort, удобство для пакетной обработки.
 
-### F-10 — Anki-интеграция / Word Management 🟢 Ⓛ · TODO · (upstream «Future» LingQ/Language Reactor)
+### F-10 — Anki-интеграция / Word Management 🟢 Ⓛ · ✅ **DONE (PR #79, merge `7ee5ac5`, v0.3.24, 2026-06-27)**
+> ✅ **Закрыт.** Персистентный кумулятивный список слов `LLPlayer.WordList.json` (рядом с .exe; аддитивно — нет файла =
+> пустой список, OFF-путь byte-identical) + экспорт в Anki **тремя путями**. **Источники (оба, AskUserQuestion):** кнопка
+> **Save** в попапе перевода слова при просмотре (термин + показанный перевод + реплику-пример + языки; honor `IsTranslated`;
+> Reading/Definition пусты → правятся позже; guard `IsLoading` против пустого перевода) + кнопка **Add to List** в AI Insights
+> (bulk из LLM-лексики). Дедуп по Term (case-insensitive, first-wins). **Word Manager** (ПКМ ▸ Subtitles ▸ Word Manager):
+> DataGrid (Term ro, 4 поля in-place с write-through), фильтр, delete (gated), Clear All, имя колоды; **живое обновление**
+> грида при внешних add'ах (`WordListStore.Changed` + подписка с suppress-guard). **Экспорт** общей 5-полевой моделью:
+> TSV (переиспользует `VocabularyParser.ToTsv`); **.apkg** (SQLite `collection.anki2`+zip; genanki-совместимо: guid
+> base91(sha256), csum sha1[:8], flds U+001F, model/deck/conf/dconf JSON; **fail-soft**); **AnkiConnect** live-пуш
+> (localhost:8765; createDeck+createModel → самодостаточно; ошибка createModel парсится, гасится только «already exists»).
+> **Архитектура:** чистая логика в `FlyleafLib/MediaPlayer/AI/` (`SavedWord`, `WordListStore`, `AnkiApkgModel`,
+> `AnkiConnectRequests`, `AnkiConnectResponses` — все юнит-тестируемы); WPF-плумбинг (SQLite/HTTP/диалог) в `LLPlayer`
+> (`AnkiApkgWriter`, `AnkiConnectSender`, `WordManagerDialog`). Зависимость `Microsoft.Data.Sqlite 9.0.17` +
+> `SQLitePCLRaw.bundle_e_sqlite3 3.0.3` (патч против GHSA-2m69-gcr7-jv3q; native `e_sqlite3.dll` копируется в publish).
+> Дизайн-панель (3) + **adversarial review (5 линз)** → все подтверждённые находки исправлены (2 HIGH отсеяны как ложные
+> после сверки с genanki: `col.mod` в мс и guid на SHA-256 — оба верны). Гейты build `-warnaserror` **0/0 ×3** + тесты
+> **548/548** (+49) + verify.ps1 green; **`.apkg` структурно провалидирован реальным SQLite**; `.exe` launch-тест 0.3.24
+> чистый (e_sqlite3.dll присутствует). Контракты product-behavior/wpf-design/config-data/dependency-baseline/manual-smoke
+> аддитивно. **Owner manual-smoke:** импорт TSV/.apkg в Anki + AnkiConnect-пуш. Детали: второй мозг
+> `Sessions/2026-06-27-handoff-f10-word-management.md`.
 **Решение:** персистентные списки слов, экспорт в Anki-колоды/SRS. **Рассуждение:** высокий mission-fit,
 крупно; строится на F-07.
 
@@ -581,7 +601,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 16 | ~~**T-04**~~ ✅ | Whisper-квантизация в UI (q5_0/q5_1/q8_0) → DONE PR #73 v0.3.21 | 🟡 | ⓢ-Ⓜ |
 | 17 | ~~**F-14**~~ ✅ | Расширенный локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | 🟢 | ⓢ-Ⓜ |
 | 18 | ~~**F-09**~~ ✅ | Watch-folder авто-batch → DONE PR #74 v0.3.22 | 🟢 | ⓢ-Ⓜ |
-| 19 | **F-10** | Anki / Word Management | 🟢 | Ⓛ |
+| 19 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | 🟢 | Ⓛ |
 | 20 | **F-11** | Dictionary API | 🟢 | Ⓛ |
 | 21 | **F-16** | Дубляж фазы 1-6 | 🟢 | Ⓛ |
 | 22 | **F-12** | Аудио-waveform | 🟢 | Ⓛ |
@@ -619,7 +639,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 21 | **F-02** | ASR денойз (сайдкар) | Ⓛ | 🟠 |
 | 22 | **F-03** | Диаризация (сайдкар) | Ⓛ | 🟡 |
 | 23 | **F-16** | Дубляж фазы 1-6 | Ⓛ | 🟢 |
-| 24 | **F-10** | Anki / Word Management | Ⓛ | 🟢 |
+| 24 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | Ⓛ | 🟢 |
 | 25 | **F-11** | Dictionary API | Ⓛ | 🟢 |
 | 26 | **F-12** | Аудио-waveform | Ⓛ | 🟢 |
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
