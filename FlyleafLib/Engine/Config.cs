@@ -1420,6 +1420,16 @@ public class Config : NotifyPropertyChanged
         public bool ASRFoldBack { get; set => Set(ref field, value); } = false;
 
         /// <summary>
+        /// Opt-in denoise of the audio fed to ASR (F-02). When on, the resampled 16 kHz mono PCM is run through a
+        /// managed high-pass (removes sub-bass rumble / hum / DC) and then an FFmpeg <c>afftdn</c> stationary-noise
+        /// filter BEFORE it is handed to Whisper, so both ASR engines (whisper.cpp and faster-whisper) and batch see
+        /// the cleaned audio. Off by default → byte-identical to before. This targets STATIONARY noise (hiss, hum,
+        /// fan, rumble); it is NOT speech/music separation (that is the full F-02 Demucs sidecar, out of scope). If the
+        /// native <c>afftdn</c> filter is unavailable in the shipped FFmpeg it degrades to the managed high-pass alone.
+        /// </summary>
+        public bool ASRDenoise { get; set => Set(ref field, value); } = false;
+
+        /// <summary>
         /// Re-segment generated subtitles (ASR and translation) into short, at-most-<see cref="SubtitleMaxLinesPerCue"/>-line
         /// cues of about <see cref="SubtitleMaxCharsPerLine"/> characters per line, splitting an over-long Whisper
         /// segment into several sequential cues with proportional timings, so a single cue does not fill the frame.

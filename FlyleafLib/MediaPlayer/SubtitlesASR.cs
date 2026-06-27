@@ -679,6 +679,11 @@ public class AudioReader : IDisposable
             double silenceSoftFraction = _config.Subtitles.ASRSilenceSoftFraction;
             double silenceRmsThreshold = _config.Subtitles.ASRSilenceRmsThreshold;
 
+            // F-02: opt-in denoise (managed high-pass + optional native afftdn). Read once; off by default → the
+            // ResampleTo write stays byte-identical.
+            _denoiseEnabled = _config.Subtitles.ASRDenoise;
+            _highPass = _denoiseEnabled ? new AsrHighPassFilter(targetSampleRate) : null;
+
             // Producer state shared across passes (mutated inside RunPass).
             MemoryStream waveStream = new(); // MemoryStream does not need to be disposed for releasing memory
             TimeSpan waveDuration = TimeSpan.Zero; // for logging
@@ -760,6 +765,10 @@ public class AudioReader : IDisposable
                     waveStream = new MemoryStream();
                 waveStream.SetLength(0);
                 WriteWavHeader(waveStream, targetSampleRate, targetChannel);
+
+                // F-02: reset the denoise filter state so one pass cannot bleed into the next (T-08 runs two passes).
+                _highPass?.Reset();
+                DenoiseResetForPass();
 
                 waveDuration = TimeSpan.Zero;
                 chunkStart = null;
@@ -882,6 +891,14 @@ public class AudioReader : IDisposable
 
                         if (hardCap || softCut || reachedStop)
                         {
+                            // F-02 + T-08: on the pass-ENDING (reachedStop) cut, flush afftdn's buffered lookahead tail
+                            // INTO this chunk before it is emitted. Otherwise framePts is reset below and the end-of-pass
+                            // flush's bytes get discarded by the tail-chunk guard (framePts != NoTs), dropping audio at
+                            // the backfill->forward seam. Mid-pass cuts (hardCap/softCut) must NOT flush (that would reset
+                            // afftdn state and break continuity at every chunk boundary).
+                            if (reachedStop)
+                                DenoiseFlush(waveStream);
+
                             TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
                             chunkCnt++;
 
@@ -920,6 +937,9 @@ public class AudioReader : IDisposable
                 }
 
                 token.ThrowIfCancellationRequested();
+
+                // F-02: flush the afftdn lookahead tail into the current chunk so the pass loses no audio.
+                DenoiseFlush(waveStream);
 
                 // Process remaining (this pass's tail chunk).
                 if (waveStream.Length > waveHeaderSize && framePts != NoTs)
@@ -973,6 +993,21 @@ public class AudioReader : IDisposable
 
     private byte[] _sampledBuf = [];
     private int _sampledBufSize;
+
+    // F-02 opt-in ASR denoise: managed high-pass over the resampled S16 mono 16k PCM (the testable core), applied in
+    // ResampleTo before the WAV write. _denoiseEnabled mirrors Config.Subtitles.ASRDenoise (read once). The optional
+    // native afftdn stage lives in the _denoiseGraph* fields below.
+    private bool _denoiseEnabled;
+    private AsrHighPassFilter? _highPass;
+
+    // F-02 optional native FFmpeg afftdn stage (built lazily per ASR pass, drained/freed at pass end). Fixed format
+    // s16/mono/16k in and out, so no codec-change reinit is needed. Degrades to managed-high-pass-only on failure.
+    private unsafe AVFilterGraph*   _denoiseGraph   = null;
+    private unsafe AVFilterContext* _denoiseSrcCtx  = null;
+    private unsafe AVFilterContext* _denoiseSinkCtx = null;
+    private unsafe AVFrame*         _denoiseInFrame = null;
+    private unsafe AVFrame*         _denoiseOutFrame= null;
+    private bool                    _denoiseAfftdnFailed;
 
     // for codec change detection
     private int _lastFormat;
@@ -1070,9 +1105,203 @@ public class AudioReader : IDisposable
 
         int resampledDataSize = samplesPerChannel * targetChannel * sizeof(ushort);
 
+        // F-02: managed high-pass in place over the resampled S16 mono PCM (size-preserving, so the T-09 silence
+        // contract and resampledDataSize are unchanged). T-09 then reads the high-passed _sampledBuf.
+        if (_denoiseEnabled && resampledDataSize > 0)
+            _highPass?.ProcessInPlace(_sampledBuf, resampledDataSize);
+
+        // The optional native afftdn stage (when available) writes its own output to toStream and returns; otherwise
+        // (off, or afftdn unavailable) the high-passed/raw PCM is written here.
+        if (DenoiseAfftdnWrite(toStream, resampledDataSize))
+            return resampledDataSize;
+
         toStream.Write(_sampledBuf, 0, resampledDataSize);
 
         return resampledDataSize;
+    }
+
+    // --- F-02 optional native afftdn denoise stage (mirrors AudioDecoder.Filters.cs avfilter pattern) ---
+
+    /// <summary>Pushes the high-passed S16/mono/16k PCM through the afftdn graph and writes its output to
+    /// <paramref name="toStream"/>. Returns true when the afftdn stage handled the write; false when the caller should
+    /// write the high-passed/raw bytes itself (denoise off, afftdn unavailable, or a failure → managed-only fallback).</summary>
+    private unsafe bool DenoiseAfftdnWrite(Stream toStream, int resampledDataSize)
+    {
+        if (!_denoiseEnabled || _denoiseAfftdnFailed)
+            return false;
+
+        if (resampledDataSize <= 0)
+            return true; // nothing to push (empty resample / afftdn warm-up): write nothing, same as before
+
+        if (_denoiseGraph == null)
+        {
+            SetupDenoiseGraph();
+            if (_denoiseAfftdnFailed)
+                return false; // afftdn not available → fall back to managed high-pass only
+        }
+
+        try
+        {
+            av_frame_unref(_denoiseInFrame);
+            _denoiseInFrame->format      = (int)AVSampleFormat.S16;
+            _denoiseInFrame->sample_rate = 16000;
+            av_channel_layout_default(&_denoiseInFrame->ch_layout, 1);
+            _denoiseInFrame->nb_samples  = resampledDataSize / 2;
+            av_frame_get_buffer(_denoiseInFrame, 0).ThrowExceptionIfError("denoise frame buffer");
+
+            _sampledBuf.AsSpan(0, resampledDataSize).CopyTo(new Span<byte>((void*)_denoiseInFrame->data[0], resampledDataSize));
+
+            av_buffersrc_add_frame_flags(_denoiseSrcCtx, _denoiseInFrame, AVBuffersrcFlag.KeepRef)
+                .ThrowExceptionIfError("denoise buffersrc");
+
+            DrainDenoise(toStream);
+            return true;
+        }
+        catch (Exception e)
+        {
+            if (CanWarn) Log.Warn($"ASR denoise (afftdn) failed mid-stream, falling back to high-pass only: {e.Message}");
+            _denoiseAfftdnFailed = true;
+            DisposeDenoise();
+            return false;
+        }
+    }
+
+    private unsafe void DrainDenoise(Stream toStream)
+    {
+        while (av_buffersink_get_frame_flags(_denoiseSinkCtx, _denoiseOutFrame, 0) >= 0)
+        {
+            int outBytes = _denoiseOutFrame->nb_samples * 2; // s16 mono
+            if (outBytes > 0)
+                toStream.Write(new ReadOnlySpan<byte>((void*)_denoiseOutFrame->data[0], outBytes));
+            av_frame_unref(_denoiseOutFrame);
+        }
+    }
+
+    /// <summary>Frees any graph from a previous pass so each ASR pass starts clean (T-08 runs two passes over one
+    /// channel); the graph is rebuilt lazily on the next denoised frame.</summary>
+    private unsafe void DenoiseResetForPass() => DisposeDenoise();
+
+    /// <summary>End-of-pass flush: drains afftdn's buffered lookahead tail into the current chunk so no audio is lost,
+    /// then frees the graph (it EOFs after a flush; the next pass rebuilds).</summary>
+    private unsafe void DenoiseFlush(Stream toStream)
+    {
+        if (_denoiseGraph == null || _denoiseSrcCtx == null)
+            return;
+
+        try
+        {
+            av_buffersrc_add_frame(_denoiseSrcCtx, null); // signal EOF
+            DrainDenoise(toStream);
+        }
+        catch (Exception e)
+        {
+            if (CanWarn) Log.Warn($"ASR denoise flush failed: {e.Message}");
+        }
+        finally
+        {
+            DisposeDenoise();
+        }
+    }
+
+    private unsafe void SetupDenoiseGraph()
+    {
+        try
+        {
+            AVFilter* abuffer     = avfilter_get_by_name("abuffer");
+            AVFilter* afftdn      = avfilter_get_by_name("afftdn");
+            AVFilter* abuffersink = avfilter_get_by_name("abuffersink");
+            if (abuffer == null || afftdn == null || abuffersink == null)
+                throw new Exception("required FFmpeg filter (abuffer/afftdn/abuffersink) not available");
+
+            _denoiseGraph = avfilter_graph_alloc();
+            if (_denoiseGraph == null)
+                throw new Exception("avfilter_graph_alloc failed");
+
+            AVFilterContext* srcCtx;
+            avfilter_graph_create_filter(&srcCtx, abuffer, "in",
+                "channel_layout=mono:sample_fmt=s16:sample_rate=16000:time_base=1/16000", null, _denoiseGraph)
+                .ThrowExceptionIfError("abuffer");
+            _denoiseSrcCtx = srcCtx;
+
+            AVFilterContext* afftdnCtx;
+            avfilter_graph_create_filter(&afftdnCtx, afftdn, "afftdn", AsrDenoise.BuildAfftdnArgs(), null, _denoiseGraph)
+                .ThrowExceptionIfError("afftdn");
+            avfilter_link(srcCtx, 0, afftdnCtx, 0).ThrowExceptionIfError("link src->afftdn");
+
+            AVFilterContext* sinkCtx;
+            if (Engine.FFmpeg.Ver8OrGreater)
+            {
+                sinkCtx = avfilter_graph_alloc_filter(_denoiseGraph, abuffersink, "out");
+                if (sinkCtx == null)
+                    throw new Exception("abuffersink alloc failed");
+                SetDenoiseSinkOpt(sinkCtx, "sample_formats",  [AVSampleFormat.S16],        AVOptionType.SampleFmt);
+                SetDenoiseSinkOpt(sinkCtx, "samplerates",     [16000],                     AVOptionType.Int);
+                SetDenoiseSinkOpt(sinkCtx, "channel_layouts", [AV_CHANNEL_LAYOUT_MONO],    AVOptionType.Chlayout);
+                avfilter_init_dict(sinkCtx, null).ThrowExceptionIfError("abuffersink init");
+            }
+            else
+            {
+                avfilter_graph_create_filter(&sinkCtx, abuffersink, "out", null, null, _denoiseGraph)
+                    .ThrowExceptionIfError("abuffersink");
+                int sr = 16000;
+                AVSampleFormat fmt = AVSampleFormat.S16;
+                av_opt_set_bin(sinkCtx, "sample_fmts",  (byte*)&fmt, sizeof(AVSampleFormat), OptSearchFlags.Children);
+                av_opt_set_bin(sinkCtx, "sample_rates", (byte*)&sr,  sizeof(int),             OptSearchFlags.Children);
+                av_opt_set_int(sinkCtx, "all_channel_counts", 0,                              OptSearchFlags.Children);
+                av_opt_set(sinkCtx,     "ch_layouts", "mono",                                 OptSearchFlags.Children);
+            }
+            _denoiseSinkCtx = sinkCtx;
+
+            avfilter_link(afftdnCtx, 0, sinkCtx, 0).ThrowExceptionIfError("link afftdn->sink");
+            avfilter_graph_config(_denoiseGraph, null).ThrowExceptionIfError("graph config");
+
+            _denoiseInFrame  = av_frame_alloc();
+            _denoiseOutFrame = av_frame_alloc();
+            if (_denoiseInFrame == null || _denoiseOutFrame == null)
+                throw new Exception("av_frame_alloc failed");
+
+            if (CanInfo) Log.Info("ASR denoise: afftdn graph ready");
+        }
+        catch (Exception e)
+        {
+            if (CanWarn) Log.Warn($"ASR denoise: afftdn unavailable, using high-pass only ({e.Message})");
+            _denoiseAfftdnFailed = true;
+            DisposeDenoise();
+        }
+    }
+
+    private unsafe int SetDenoiseSinkOpt<T>(AVFilterContext* ctx, string name, T[] value, AVOptionType type) where T : unmanaged
+    {
+        fixed (T* ptr = value)
+            return av_opt_set_array(ctx, name, OptSearchFlags.Children, 0, (uint)value.Length, type, ptr);
+    }
+
+    private unsafe void DisposeDenoise()
+    {
+        if (_denoiseGraph != null)
+        {
+            fixed (AVFilterGraph** ptr = &_denoiseGraph)
+                avfilter_graph_free(ptr);
+            _denoiseGraph = null;
+        }
+
+        // src/sink contexts are owned by the graph and freed with it.
+        _denoiseSrcCtx  = null;
+        _denoiseSinkCtx = null;
+
+        if (_denoiseInFrame != null)
+        {
+            fixed (AVFrame** ptr = &_denoiseInFrame)
+                av_frame_free(ptr);
+            _denoiseInFrame = null;
+        }
+
+        if (_denoiseOutFrame != null)
+        {
+            fixed (AVFrame** ptr = &_denoiseOutFrame)
+                av_frame_free(ptr);
+            _denoiseOutFrame = null;
+        }
     }
 
     private bool _isDisposed;
@@ -1108,6 +1337,8 @@ public class AudioReader : IDisposable
                 swr_free(ptr);
             }
         }
+
+        DisposeDenoise();
 
         _decoder?.Dispose();
         if (_demuxer != null)

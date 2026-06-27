@@ -217,6 +217,27 @@
                             IsChecked="{Binding FL.PlayerConfig.Subtitles.FixAllCaps}" />
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180">
+                            Denoise ASR Audio
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Clean the audio before transcription (F-02): a high-pass plus an FFmpeg afftdn stationary-noise filter is applied to the 16 kHz audio fed to Whisper, which can help on hiss / hum / rumble. Off by default. It targets steady background noise — it does NOT separate speech from music. Applies to interactive ASR and batch (both engines)."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon
+                                    Kind="Information"
+                                    Width="16" Height="16"
+                                    Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton
+                            IsChecked="{Binding FL.PlayerConfig.Subtitles.ASRDenoise}" />
+                    </StackPanel>
+
                     <StackPanel Visibility="{Binding FL.PlayerConfig.Subtitles.ResegmentSubtitles, Converter={StaticResource BooleanToVisibilityConv}}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock
