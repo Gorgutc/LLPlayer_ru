@@ -1385,6 +1385,41 @@ public class Config : NotifyPropertyChanged
         public int ASRChunkSeconds { get; set => Set(ref field, value); } = 20;
 
         /// <summary>
+        /// Prefer to cut an ASR audio chunk at a SILENT boundary (a pause between phrases) instead of strictly at the
+        /// size/time cap, so Whisper sees a complete phrase rather than one split mid-word (T-09). The size/time caps
+        /// (<see cref="ASRChunkSize"/> / <see cref="ASRChunkSeconds"/>) remain a hard ceiling, and a silent cut is only
+        /// taken after <see cref="ASRSilenceSoftFraction"/> of that budget so chunks do not get tiny. Additive/absent-
+        /// defaulting (on by default, like <see cref="ResegmentSubtitles"/>); applies to interactive and batch ASR.
+        /// When off, chunk cutting is byte-identical to before. On material with no quiet frames it simply falls back
+        /// to the hard caps.
+        /// </summary>
+        public bool ASRSplitOnSilence { get; set => Set(ref field, value); } = true;
+
+        /// <summary>
+        /// Fraction (0..1) of the chunk size/time budget that must accumulate before an early silent cut is allowed,
+        /// when <see cref="ASRSplitOnSilence"/> is on. Keeps silence-cut chunks near the normal size. 0 allows a cut
+        /// at any silence; 1 only at the hard cap (effectively disabling early silent cuts).
+        /// </summary>
+        public double ASRSilenceSoftFraction { get; set => Set(ref field, value); } = 0.6;
+
+        /// <summary>
+        /// Normalized RMS amplitude (0..1) below which an audio frame counts as silence for
+        /// <see cref="ASRSplitOnSilence"/>. ~0.01 (about -40 dBFS) is conservative: speech sits well above it, an
+        /// ambient floor below. A non-positive value disables silent cuts (falls back to the hard caps).
+        /// </summary>
+        public double ASRSilenceRmsThreshold { get; set => Set(ref field, value); } = 0.01;
+
+        /// <summary>
+        /// When interactive ASR starts mid-video (more than ~30s in), also transcribe the audio BEFORE the start
+        /// position that the seek-to-current-position would otherwise skip (T-08 "fold-back"). The skipped span is
+        /// transcribed FIRST so cues are still emitted in increasing-time order (the subtitle store relies on that).
+        /// Off by default: folding back makes the user wait for the earlier half before subtitles appear at their
+        /// current position, a deliberate trade-off against the low-latency seek-to-current behavior. Only affects the
+        /// interactive path that seeks (batch starts at 0, so this is a no-op there).
+        /// </summary>
+        public bool ASRFoldBack { get; set => Set(ref field, value); } = false;
+
+        /// <summary>
         /// Re-segment generated subtitles (ASR and translation) into short, at-most-<see cref="SubtitleMaxLinesPerCue"/>-line
         /// cues of about <see cref="SubtitleMaxCharsPerLine"/> characters per line, splitting an over-long Whisper
         /// segment into several sequential cues with proportional timings, so a single cue does not fill the frame.

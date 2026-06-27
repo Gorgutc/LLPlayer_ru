@@ -662,208 +662,283 @@ public class AudioReader : IDisposable
             _packet = av_packet_alloc();
             _frame = av_frame_alloc();
 
-            // Whisper from the current playback position
-            // TODO: L: Fold back and allow the first half to run as well.
-            if (curTime > TimeSpan.FromSeconds(30))
-            {
-                // copy from DecoderContext.CalcSeekTimestamp()
-                long startTime = _demuxer.hlsCtx == null ? _demuxer.StartTime : _demuxer.hlsCtx->first_timestamp * 10;
-                long ticks = curTime.Ticks + startTime;
-
-                bool forward = false;
-
-                if (_demuxer.Type == MediaType.Audio) ticks -= _config.Audio.Delay;
-
-                if (ticks < startTime)
-                {
-                    ticks = startTime;
-                    forward = true;
-                }
-                else if (ticks > startTime + _demuxer.Duration - (50 * 10000))
-                {
-                    ticks = Math.Max(startTime, startTime + _demuxer.Duration - (50 * 10000));
-                    forward = false;
-                }
-
-                _ = _demuxer.Seek(ticks, forward);
-            }
-
             // When passing the audio file to Whisper, it must be converted to a 16000 sample rate WAV file.
             // For this purpose, the ffmpeg API is used to perform the conversion.
             // Audio files are divided by a certain size, stored in memory, and passed by memory stream.
             int targetSampleRate = 16000;
             int targetChannel = 1;
-            MemoryStream waveStream = new(); // MemoryStream does not need to be disposed for releasing memory
-            TimeSpan waveDuration = TimeSpan.Zero; // for logging
-
             const int waveHeaderSize = 44;
 
             // Stream processing is performed by dividing the audio by a certain size and passing it to whisper.
             long chunkSize = _config.Subtitles.ASRChunkSize;
             // Also split by elapsed seconds for live
             TimeSpan chunkElapsed = TimeSpan.FromSeconds(_config.Subtitles.ASRChunkSeconds);
+
+            // T-09: prefer to cut a chunk at a silent frame instead of strictly at the cap (read tunables once).
+            bool splitOnSilence = _config.Subtitles.ASRSplitOnSilence;
+            double silenceSoftFraction = _config.Subtitles.ASRSilenceSoftFraction;
+            double silenceRmsThreshold = _config.Subtitles.ASRSilenceRmsThreshold;
+
+            // Producer state shared across passes (mutated inside RunPass).
+            MemoryStream waveStream = new(); // MemoryStream does not need to be disposed for releasing memory
+            TimeSpan waveDuration = TimeSpan.Zero; // for logging
             Stopwatch chunkSw = new();
-            chunkSw.Start();
-
-            WriteWavHeader(waveStream, targetSampleRate, targetChannel);
-
             int chunkCnt = 0;
             TimeSpan? chunkStart = null;
             long framePts = NoTs;
-
             int demuxErrors = 0;
             int decodeErrors = 0;
 
-            while (!token.IsCancellationRequested)
+            // T-08 fold-back: when ASR starts mid-video, transcribe the skipped earlier span FIRST (so cues are still
+            // emitted in increasing-time order, keeping the append-only subtitle store sorted), then the forward span.
+            // When fold-back is off this is a single forward pass from curTime, byte-identical to before.
+            (bool foldBack, TimeSpan floor) = AsrFoldback.Plan(curTime, _config.Subtitles.ASRFoldBack, TimeSpan.FromSeconds(30));
+
+            bool backfilled = false;
+
+            if (curTime > TimeSpan.FromSeconds(30))
             {
-                _demuxer.Interrupter.ReadRequest();
-                int ret = av_read_frame(_demuxer.fmtCtx, _packet);
+                // copy from DecoderContext.CalcSeekTimestamp()
+                long startTime = _demuxer.hlsCtx == null ? _demuxer.StartTime : _demuxer.hlsCtx->first_timestamp * 10;
 
-                if (ret != 0)
+                if (foldBack)
                 {
-                    av_packet_unref(_packet);
-
-                    if (_demuxer.Interrupter.Timedout)
+                    // Backfill [floor .. curTime): seek to the stream start, transcribe until we reach curTime.
+                    if (_demuxer.Seek(startTime + floor.Ticks, true) >= 0)
                     {
-                        if (token.IsCancellationRequested)
-                            break;
-
-                        ret.ThrowExceptionIfError("av_read_frame (timed out)");
+                        RunPass(curTime);
+                        backfilled = true;
                     }
-
-                    if (ret == AVERROR_EOF || token.IsCancellationRequested)
+                    else if (CanWarn)
                     {
-                        break;
+                        Log.Warn("ASR fold-back: seek to start failed, skipping backfill pass");
                     }
-
-                    // demux error
-                    if (CanWarn) Log.Warn($"av_read_frame: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
-
-                    if (++demuxErrors == _config.Demuxer.MaxErrors)
-                    {
-                        ret.ThrowExceptionIfError("av_read_frame");
-                    }
-                    continue;
                 }
 
-                // Discard all but the selected audio stream.
-                if (_packet->stream_index != _stream.StreamIndex)
+                if (!backfilled)
                 {
-                    av_packet_unref(_packet);
-                    continue;
+                    // Seek to the current playback position (the original mid-video start behavior).
+                    long ticks = curTime.Ticks + startTime;
+
+                    bool forward = false;
+
+                    if (_demuxer.Type == MediaType.Audio) ticks -= _config.Audio.Delay;
+
+                    if (ticks < startTime)
+                    {
+                        ticks = startTime;
+                        forward = true;
+                    }
+                    else if (ticks > startTime + _demuxer.Duration - (50 * 10000))
+                    {
+                        ticks = Math.Max(startTime, startTime + _demuxer.Duration - (50 * 10000));
+                        forward = false;
+                    }
+
+                    _ = _demuxer.Seek(ticks, forward);
                 }
 
-                ret = avcodec_send_packet(_decoder.CodecCtx, _packet);
-                av_packet_unref(_packet);
-
-                if (ret != 0)
-                {
-                    if (ret == AVERROR(EAGAIN))
-                    {
-                        // Receive_frame and send_packet both returned EAGAIN, which is an API violation.
-                        ret.ThrowExceptionIfError("avcodec_send_packet (EAGAIN)");
-                    }
-
-                    // decoder error
-                    if (CanWarn) Log.Warn($"avcodec_send_packet: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
-
-                    if (++decodeErrors == _config.Decoder.MaxErrors)
-                    {
-                        ret.ThrowExceptionIfError("avcodec_send_packet");
-                    }
-
-                    continue;
-                }
-
-                while (ret >= 0)
-                {
-                    ret = avcodec_receive_frame(_decoder.CodecCtx, _frame);
-                    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-                    {
-                        break;
-                    }
-                    ret.ThrowExceptionIfError("avcodec_receive_frame");
-
-                    if (_frame->best_effort_timestamp != NoTs)
-                    {
-                        framePts = _frame->best_effort_timestamp;
-                    }
-                    else if (_frame->pts != NoTs)
-                    {
-                        framePts = _frame->pts;
-                    }
-                    else
-                    {
-                        // Certain encoders sometimes cannot get pts (APE, Musepack)
-                        framePts += _frame->duration;
-                    }
-
-                    waveDuration = waveDuration.Add(new TimeSpan((long)(_frame->duration * _stream.Timebase)));
-
-                    if (chunkStart == null)
-                    {
-                        chunkStart = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
-                        if (chunkStart.Value.Ticks < 0)
-                        {
-                            // Correct to 0 if negative
-                            chunkStart = new TimeSpan(0);
-                        }
-                    }
-
-                    ResampleTo(waveStream, _frame, targetSampleRate, targetChannel);
-
-                    // TODO: L: want it to split at the silent part
-                    if (waveStream.Length >= chunkSize || chunkSw.Elapsed >= chunkElapsed)
-                    {
-                        TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
-                        chunkCnt++;
-
-                        if (CanInfo) Log.Info(
-                            $"Process chunk (chunkNo: {chunkCnt}, sizeMB: {waveStream.Length / 1024 / 1024}, duration: {waveDuration}, elapsed: {chunkSw.Elapsed})");
-
-                        UpdateWavHeader(waveStream);
-
-                        AudioChunk chunk = new(waveStream, chunkCnt, chunkStart.Value, chunkEnd);
-
-                        if (CanDebug) Log.Debug($"Writing chunk to channel ({chunkCnt})");
-                        // if channel capacity reached, it will be waited
-                        channel.Writer.WriteAsync(chunk, token).AsTask().Wait(token);
-                        if (CanDebug) Log.Debug($"Done writing chunk to channel ({chunkCnt})");
-
-                        if (memoryStreamPool.TryPop(out var stream))
-                            waveStream = stream;
-                        else
-                            waveStream = new MemoryStream();
-
-                        WriteWavHeader(waveStream, targetSampleRate, targetChannel);
-                        waveDuration = TimeSpan.Zero;
-
-                        chunkStart = null;
-                        chunkSw.Restart();
-                        framePts = NoTs;
-                    }
-                }
+                // When the backfill pass ran, the demuxer is already positioned right after curTime, so the forward
+                // pass continues CONTIGUOUSLY from there with NO re-seek: it never re-transcribes [keyframe..curTime)
+                // (no duplicate cues at the seam) and every forward cue starts after the last backfill cue, so the
+                // append-only subtitle store stays sorted by construction rather than relying on the consumer clamp.
             }
 
-            token.ThrowIfCancellationRequested();
+            // Forward pass: from curTime to EOF, or — after a backfill pass — contiguously from where it stopped.
+            RunPass(null);
 
-            // Process remaining
-            if (waveStream.Length > waveHeaderSize && framePts != NoTs)
+            return;
+
+            // Transcribe from the demuxer's current position until EOF, or — for a backfill pass — until the frame
+            // time reaches stopAt. Resets chunk state at entry so it is safe to invoke twice over the one channel.
+            unsafe void RunPass(TimeSpan? stopAt)
             {
-                TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                // Start each pass with a fresh, header-only WAV buffer (never the one just handed to the consumer).
+                if (memoryStreamPool.TryPop(out var pooled))
+                    waveStream = pooled;
+                else
+                    waveStream = new MemoryStream();
+                waveStream.SetLength(0);
+                WriteWavHeader(waveStream, targetSampleRate, targetChannel);
 
-                chunkCnt++;
+                waveDuration = TimeSpan.Zero;
+                chunkStart = null;
+                framePts = NoTs;
+                demuxErrors = 0;
+                decodeErrors = 0;
+                chunkSw.Restart();
 
-                if (CanInfo) Log.Info(
-                    $"Process last chunk (chunkNo: {chunkCnt}, sizeMB: {waveStream.Length / 1024 / 1024}, duration: {waveDuration}, elapsed: {chunkSw.Elapsed})");
+                bool stop = false;
 
-                UpdateWavHeader(waveStream);
+                while (!stop && !token.IsCancellationRequested)
+                {
+                    _demuxer.Interrupter.ReadRequest();
+                    int ret = av_read_frame(_demuxer.fmtCtx, _packet);
 
-                AudioChunk chunk = new(waveStream, chunkCnt, chunkStart!.Value, chunkEnd);
+                    if (ret != 0)
+                    {
+                        av_packet_unref(_packet);
 
-                if (CanDebug) Log.Debug($"Writing last chunk to channel ({chunkCnt})");
-                channel.Writer.WriteAsync(chunk, token).AsTask().Wait(token);
-                if (CanDebug) Log.Debug($"Done writing last chunk to channel ({chunkCnt})");
+                        if (_demuxer.Interrupter.Timedout)
+                        {
+                            if (token.IsCancellationRequested)
+                                break;
+
+                            ret.ThrowExceptionIfError("av_read_frame (timed out)");
+                        }
+
+                        if (ret == AVERROR_EOF || token.IsCancellationRequested)
+                        {
+                            break;
+                        }
+
+                        // demux error
+                        if (CanWarn) Log.Warn($"av_read_frame: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+
+                        if (++demuxErrors == _config.Demuxer.MaxErrors)
+                        {
+                            ret.ThrowExceptionIfError("av_read_frame");
+                        }
+                        continue;
+                    }
+
+                    // Discard all but the selected audio stream.
+                    if (_packet->stream_index != _stream.StreamIndex)
+                    {
+                        av_packet_unref(_packet);
+                        continue;
+                    }
+
+                    ret = avcodec_send_packet(_decoder.CodecCtx, _packet);
+                    av_packet_unref(_packet);
+
+                    if (ret != 0)
+                    {
+                        if (ret == AVERROR(EAGAIN))
+                        {
+                            // Receive_frame and send_packet both returned EAGAIN, which is an API violation.
+                            ret.ThrowExceptionIfError("avcodec_send_packet (EAGAIN)");
+                        }
+
+                        // decoder error
+                        if (CanWarn) Log.Warn($"avcodec_send_packet: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+
+                        if (++decodeErrors == _config.Decoder.MaxErrors)
+                        {
+                            ret.ThrowExceptionIfError("avcodec_send_packet");
+                        }
+
+                        continue;
+                    }
+
+                    while (ret >= 0)
+                    {
+                        ret = avcodec_receive_frame(_decoder.CodecCtx, _frame);
+                        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                        {
+                            break;
+                        }
+                        ret.ThrowExceptionIfError("avcodec_receive_frame");
+
+                        if (_frame->best_effort_timestamp != NoTs)
+                        {
+                            framePts = _frame->best_effort_timestamp;
+                        }
+                        else if (_frame->pts != NoTs)
+                        {
+                            framePts = _frame->pts;
+                        }
+                        else
+                        {
+                            // Certain encoders sometimes cannot get pts (APE, Musepack)
+                            framePts += _frame->duration;
+                        }
+
+                        waveDuration = waveDuration.Add(new TimeSpan((long)(_frame->duration * _stream.Timebase)));
+
+                        if (chunkStart == null)
+                        {
+                            chunkStart = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                            if (chunkStart.Value.Ticks < 0)
+                            {
+                                // Correct to 0 if negative
+                                chunkStart = new TimeSpan(0);
+                            }
+                        }
+
+                        int resampledDataSize = ResampleTo(waveStream, _frame, targetSampleRate, targetChannel);
+
+                        // Cut a chunk when: (a) a hard size/time cap is hit (original behavior, always the ceiling);
+                        // (b) T-09 — past the soft fraction of the budget AND this frame is silent (cleaner phrase
+                        // boundary); or (c) T-08 — a backfill pass reached its stop time. The hard cap guarantees a
+                        // cut always fires, so back-pressure / EOF-tail semantics are unchanged.
+                        TimeSpan frameTime = new((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                        bool reachedStop = AsrFoldback.ReachedStop(frameTime, stopAt);
+                        bool hardCap = waveStream.Length >= chunkSize || chunkSw.Elapsed >= chunkElapsed;
+                        bool softCut = splitOnSilence
+                            && resampledDataSize > 0
+                            && AsrSilence.IsSoftReady(waveStream.Length, chunkSize, chunkSw.Elapsed, chunkElapsed, silenceSoftFraction)
+                            && AsrSilence.IsSilent(_sampledBuf, resampledDataSize, silenceRmsThreshold);
+
+                        if (hardCap || softCut || reachedStop)
+                        {
+                            TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                            chunkCnt++;
+
+                            if (CanInfo) Log.Info(
+                                $"Process chunk (chunkNo: {chunkCnt}, sizeMB: {waveStream.Length / 1024 / 1024}, duration: {waveDuration}, elapsed: {chunkSw.Elapsed})");
+
+                            UpdateWavHeader(waveStream);
+
+                            AudioChunk chunk = new(waveStream, chunkCnt, chunkStart.Value, chunkEnd);
+
+                            if (CanDebug) Log.Debug($"Writing chunk to channel ({chunkCnt})");
+                            // if channel capacity reached, it will be waited
+                            channel.Writer.WriteAsync(chunk, token).AsTask().Wait(token);
+                            if (CanDebug) Log.Debug($"Done writing chunk to channel ({chunkCnt})");
+
+                            if (memoryStreamPool.TryPop(out var stream))
+                                waveStream = stream;
+                            else
+                                waveStream = new MemoryStream();
+
+                            WriteWavHeader(waveStream, targetSampleRate, targetChannel);
+                            waveDuration = TimeSpan.Zero;
+
+                            chunkStart = null;
+                            chunkSw.Restart();
+                            framePts = NoTs;
+
+                            // T-08: a backfill pass has covered up to its stop point — end this pass.
+                            if (reachedStop)
+                            {
+                                stop = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                token.ThrowIfCancellationRequested();
+
+                // Process remaining (this pass's tail chunk).
+                if (waveStream.Length > waveHeaderSize && framePts != NoTs)
+                {
+                    TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+
+                    chunkCnt++;
+
+                    if (CanInfo) Log.Info(
+                        $"Process last chunk (chunkNo: {chunkCnt}, sizeMB: {waveStream.Length / 1024 / 1024}, duration: {waveDuration}, elapsed: {chunkSw.Elapsed})");
+
+                    UpdateWavHeader(waveStream);
+
+                    AudioChunk chunk = new(waveStream, chunkCnt, chunkStart!.Value, chunkEnd);
+
+                    if (CanDebug) Log.Debug($"Writing last chunk to channel ({chunkCnt})");
+                    channel.Writer.WriteAsync(chunk, token).AsTask().Wait(token);
+                    if (CanDebug) Log.Debug($"Done writing last chunk to channel ({chunkCnt})");
+                }
             }
         }
     }
@@ -904,7 +979,10 @@ public class AudioReader : IDisposable
     private int _lastSampleRate;
     private ulong _lastChannelLayout;
 
-    private unsafe void ResampleTo(Stream toStream, AVFrame* frame, int targetSampleRate, int targetChannel)
+    /// <summary>Resamples one decoded frame to S16 mono <paramref name="targetSampleRate"/> Hz, appends it to
+    /// <paramref name="toStream"/>, and returns the number of PCM bytes written (also left in <see cref="_sampledBuf"/>
+    /// for silence detection, T-09).</summary>
+    private unsafe int ResampleTo(Stream toStream, AVFrame* frame, int targetSampleRate, int targetChannel)
     {
         bool codecChanged = false;
 
@@ -993,6 +1071,8 @@ public class AudioReader : IDisposable
         int resampledDataSize = samplesPerChannel * targetChannel * sizeof(ushort);
 
         toStream.Write(_sampledBuf, 0, resampledDataSize);
+
+        return resampledDataSize;
     }
 
     private bool _isDisposed;
