@@ -18,7 +18,7 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | --- | --- | --- |
 | `FlyleafLib` | `CliWrap` | `3.10.1` |
 | `FlyleafLib` | `DeepL.net` | `1.21.0` |
-| `FlyleafLib` | `Flyleaf.FFmpeg.Bindings` | `7.1.1` |
+| `FlyleafLib` | `Flyleaf.FFmpeg.Bindings` | `8.0.1` |
 | `FlyleafLib` | `SearchPioneer.Lingua` | `1.0.5` |
 | `FlyleafLib` | `TesseractOCR` | `5.5.2` |
 | `FlyleafLib` | `UTF.Unknown` | `2.6.0` |
@@ -45,9 +45,13 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `FlyleafLibTests` | `xunit.v3` | `3.2.2` |
 | `FlyleafLibTests` | `xunit.runner.visualstudio` | `3.1.5` |
 
-## Known Baseline Warning
+## Flyleaf.FFmpeg.Bindings alignment
 
-`LLPlayer` and `FlyleafLib` currently reference different `Flyleaf.FFmpeg.Bindings` versions. This is an existing baseline warning, not a new failure. Any change to FFmpeg binding versions requires explicit review and playback/package verification.
+`LLPlayer` and `FlyleafLib` both reference `Flyleaf.FFmpeg.Bindings` `8.0.1`, matching the tracked native FFmpeg 8.0 DLLs shipped under `FFmpeg/` (`avcodec-62`, `avutil-60`, `avformat-62`, `avfilter-11`, `swscale-9`, `swresample-6`, `avdevice-62`).
+
+Historically `FlyleafLib` referenced `7.1.1` while `LLPlayer` referenced `8.0.1`. That was a benign-but-confusing mismatch: with no central package management, NuGet unified the conflicting references **up** to `8.0.1` for the app output, so the actually-shipped managed binding already matched the 8.0 native DLLs; the heavy FFmpeg interop lives in `FlyleafLib`, while `LLPlayer` only consumes managed `LoadProfile`/`LogLevel` enums (no P/Invoke). Task T-01 aligned `FlyleafLib` **up** to `8.0.1` so the compile-time reference matches the runtime-unified binding and the shipped DLLs (verified: `FlyleafLib` + `LLPlayer` build `-warnaserror` 0/0 against `8.0.1`). Down-aligning to `7.1.1` was rejected: it would have forced the unified runtime binding **down** to `7.1.1` against the 8.0 DLLs, replacing a correct pairing with a real mismatch.
+
+Any future change to FFmpeg binding versions (or the tracked `FFmpeg/` DLLs) requires explicit review and playback/package verification.
 
 ## Tracked Native Assets
 

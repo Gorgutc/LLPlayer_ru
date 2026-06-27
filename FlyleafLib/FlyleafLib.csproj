@@ -37,7 +37,7 @@
   <ItemGroup>
     <PackageReference Include="CliWrap" Version="3.10.1" />
     <PackageReference Include="DeepL.net" Version="1.21.0" />
-    <PackageReference Include="Flyleaf.FFmpeg.Bindings" Version="7.1.1" />
+    <PackageReference Include="Flyleaf.FFmpeg.Bindings" Version="8.0.1" />
     <PackageReference Include="SearchPioneer.Lingua" Version="1.0.5" />
     <PackageReference Include="TesseractOCR" Version="5.5.2" />
     <PackageReference Include="UTF.Unknown" Version="2.6.0" />

@@ -219,7 +219,7 @@ try {
 
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "CliWrap" "3.10.1"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "DeepL.net" "1.21.0"
-    Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "Flyleaf.FFmpeg.Bindings" "7.1.1"
+    Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "Flyleaf.FFmpeg.Bindings" "8.0.1"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "SearchPioneer.Lingua" "1.0.5"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "TesseractOCR" "5.5.2"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "UTF.Unknown" "2.6.0"
@@ -246,15 +246,9 @@ try {
     Require-PackageVersion ".\FlyleafLibTests\FlyleafLibTests.csproj" "xunit.v3" "3.2.2"
     Require-PackageVersion ".\FlyleafLibTests\FlyleafLibTests.csproj" "xunit.runner.visualstudio" "3.1.5"
 
-    $llPlayerCsproj = Get-Content ".\LLPlayer\LLPlayer.csproj" -Raw
-    $flyleafCsproj = Get-Content ".\FlyleafLib\FlyleafLib.csproj" -Raw
-    $llPlayerBindingVersion = [regex]::Match($llPlayerCsproj, 'Flyleaf\.FFmpeg\.Bindings" Version="([^"]+)"')
-    $flyleafBindingVersion = [regex]::Match($flyleafCsproj, 'Flyleaf\.FFmpeg\.Bindings" Version="([^"]+)"')
-    if ($llPlayerBindingVersion.Success -and $flyleafBindingVersion.Success) {
-        if ($llPlayerBindingVersion.Groups[1].Value -ne $flyleafBindingVersion.Groups[1].Value) {
-            Write-Warning "Flyleaf.FFmpeg.Bindings versions differ between LLPlayer and FlyleafLib in the current baseline. Keep this visible in review."
-        }
-    }
+    # LLPlayer and FlyleafLib are intentionally aligned to the same Flyleaf.FFmpeg.Bindings version (8.0.1, matching
+    # the shipped FFmpeg 8.0 native DLLs) — see docs/agent/dependency-baseline.md (T-01). Both pins are hard-enforced
+    # by the Require-PackageVersion calls above, so any re-divergence fails here rather than passing as a soft warning.
 
     if ($failures.Count -gt 0) {
         foreach ($failure in $failures) {

@@ -1,3 +1,7 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Text.Json.Serialization;
 using AwesomeAssertions;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Translation;
@@ -61,6 +65,127 @@ public class BatchSubtitleTranslatorTests
             .Model
             .Should()
             .Be("llama3");
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldSnapshotLanguageFallbackPreferences()
+    {
+        // F-05-gap: the batch snapshot used to drop the per-slot language preferences and unknown-source
+        // fallbacks, so batch transcription/translation silently ignored them.
+        Utils.IsTesting = true;
+        Config config = new(true);
+
+        Language french = Language.Get("fra");
+        Language german = Language.Get("deu");
+
+        config.Subtitles.Languages = [french, german];
+        config.Subtitles.LanguageAutoDetect = false;            // default true
+        config.Subtitles.LanguageFallbackSecondarySame = false; // default true
+        config.Subtitles.LanguageFallbackPrimary = french;
+        config.Subtitles.LanguageFallbackSecondary = german;
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config.Subtitles);
+
+        snapshot.LanguageAutoDetect.Should().BeFalse();
+        snapshot.LanguageFallbackSecondarySame.Should().BeFalse();
+        snapshot.LanguageFallbackPrimary.Should().Be(french);
+        snapshot.LanguageFallbackSecondary.Should().Be(german);
+        snapshot.Languages.Should().Equal(french, german);
+
+        // The snapshot's language list must be an independent deep copy of the live config.
+        snapshot.Languages.Should().NotBeSameAs(config.Subtitles.Languages);
+        snapshot.Languages.Add(Language.English);
+        config.Subtitles.Languages.Should().Equal(french, german);
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldCopyEveryScalarSubtitlesConfigSetting()
+    {
+        // Completeness guard against the recurring "batch snapshot forgot a field" bug class (the #42/#43 settings,
+        // FixAllCaps, the language-fallback fields, ...). Enumerates every scalar, publicly-settable, persisted
+        // (non-[JsonIgnore]) property declared on SubtitlesConfig, mutates it away from its default on the source,
+        // snapshots, then asserts the snapshot carried the value over. Nested config objects (WhisperConfig,
+        // FasterWhisperConfig, TranslateChatConfig, DubbingConfig) and collections are out of scope here — they
+        // have dedicated clone methods and focused tests. If you add a new scalar setting, copy it in
+        // CreateSubtitlesConfig (or extend the allow-list below with a documented reason).
+        Utils.IsTesting = true;
+        Config config = new(true);
+        // Seed the language list so the LanguageFallback* getters don't lazily call GetSystemLanguages()
+        // (which NREs in headless tests because OriginalCulture is unset) while we reflect over the properties.
+        config.Subtitles.Languages = [Language.English];
+
+        // Scalars the snapshot intentionally does NOT copy verbatim.
+        HashSet<string> intentionallyDiverging =
+        [
+            nameof(Config.SubtitlesConfig.TranslateTargetLanguage) // forced to Russian for batch
+        ];
+
+        Type type = typeof(Config.SubtitlesConfig);
+        Config.SubtitlesConfig source = config.Subtitles;
+
+        List<PropertyInfo> scalarProps = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.DeclaringType == type)
+            .Where(p => p is { CanRead: true, CanWrite: true } && p.SetMethod!.IsPublic)
+            .Where(p => p.GetCustomAttribute<JsonIgnoreAttribute>() == null)
+            .Where(p => IsScalarSettingType(p.PropertyType))
+            .ToList();
+
+        scalarProps.Should().NotBeEmpty("the guard must actually enumerate SubtitlesConfig settings");
+
+        foreach (PropertyInfo prop in scalarProps)
+        {
+            object? mutated = NextDistinctValue(prop.PropertyType, prop.GetValue(source));
+            prop.SetValue(source, mutated);
+        }
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(source);
+
+        foreach (PropertyInfo prop in scalarProps)
+        {
+            if (intentionallyDiverging.Contains(prop.Name))
+                continue;
+
+            object? expected = prop.GetValue(source);
+            object? actual = prop.GetValue(snapshot);
+            actual.Should().Be(expected, $"the batch snapshot must copy SubtitlesConfig.{prop.Name}");
+        }
+    }
+
+    private static bool IsScalarSettingType(Type t)
+    {
+        Type u = Nullable.GetUnderlyingType(t) ?? t;
+        return u.IsEnum
+            || u == typeof(bool) || u == typeof(int) || u == typeof(long)
+            || u == typeof(double) || u == typeof(float) || u == typeof(string)
+            || u == typeof(Language);
+    }
+
+    private static object? NextDistinctValue(Type t, object? current)
+    {
+        Type u = Nullable.GetUnderlyingType(t) ?? t;
+
+        if (u.IsEnum)
+        {
+            foreach (object v in Enum.GetValues(u))
+                if (!v.Equals(current))
+                    return v;
+            return current;
+        }
+
+        if (u == typeof(bool)) return !(bool)(current ?? false);
+        if (u == typeof(int)) return (int)(current ?? 0) + 1;
+        if (u == typeof(long)) return (long)(current ?? 0L) + 1L;
+        if (u == typeof(double)) return (double)(current ?? 0d) + 1d;
+        if (u == typeof(float)) return (float)(current ?? 0f) + 1f;
+        if (u == typeof(string)) return (current as string ?? "") + "_probe";
+
+        if (u == typeof(Language))
+        {
+            Language french = Language.Get("fra");
+            return current is Language cl && cl.Equals(french) ? Language.Get("deu") : french;
+        }
+
+        return current;
     }
 
     [Fact]

@@ -87,6 +87,25 @@ public static class BatchSubtitleConfigSnapshot
         snapshot.TranslateServiceSettings = CloneTranslateServiceSettings(source.TranslateServiceSettings);
         snapshot.TranslateTargetLanguage = TargetLanguage.Russian;
 
+        // Per-slot subtitle language preferences + unknown-source fallbacks (primary/secondary). These were dropped
+        // from the batch snapshot, so batch transcription/translation silently ignored the user's language prefs
+        // (same snapshot bug class as the #42/#43 settings). The getters lazily fall back to GetSystemLanguages(),
+        // which can throw in headless/secondary contexts, so guard the copy exactly like CloneAudioConfig does.
+        try
+        {
+            // Read Languages FIRST: the only fallback (catch) sets just Languages, so on a throw the rest must not
+            // have been partially copied. The Fallback* getters also chain through Languages.
+            snapshot.Languages = new List<Language>(source.Languages);
+            snapshot.LanguageAutoDetect = source.LanguageAutoDetect;
+            snapshot.LanguageFallbackPrimary = source.LanguageFallbackPrimary;
+            snapshot.LanguageFallbackSecondarySame = source.LanguageFallbackSecondarySame;
+            snapshot.LanguageFallbackSecondary = source.LanguageFallbackSecondary;
+        }
+        catch (NullReferenceException)
+        {
+            snapshot.Languages = [Language.English];
+        }
+
         return snapshot;
     }
 
