@@ -238,14 +238,22 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 resume ASR»). **Решение:** управление состоянием ASR-задачи. **Рассуждение:** явный UX-win на длинных видео,
 в дорожной карте upstream; средняя сложность.
 
-### F-05 — Языковые предпочтения primary/secondary + авто-открытие 🟠 Ⓜ · TODO · (upstream «Now»)
-**Решение:** расширить конфиг и логику открытия субтитров (per-slot язык, автоподбор внешних). **Заодно
-(подтверждено аудитом 2026-06-27, латентный баг из ревью PR #44):** `BatchSubtitleConfigSnapshot.CreateSubtitlesConfig`
-([`:48-91`](../../FlyleafLib/MediaPlayer/Batch/BatchSubtitleConfigSnapshot.cs)) НЕ копирует 5 language-fallback полей
-`SubtitlesConfig` (`Languages` `:1222`, `LanguageAutoDetect` `:1235`, `LanguageFallbackPrimary` `:1240`,
-`LanguageFallbackSecondary` `:1253`, `LanguageFallbackSecondarySame` `:1272`) → батч игнорирует языковые префы
-(тот же класс бага, что чинили PR #44/#55-снапшот). Дешёвый фикс — забандлить с F-05.
-**Рассуждение:** ядро изучения языка; в upstream Roadmap «Now»; средняя сложность.
+### F-05 — Языковые предпочтения primary/secondary + авто-открытие 🟠 Ⓜ · PARTIALLY-DONE
+> ⚠️ **Аудит 2026-06-27 (верификация):** per-slot primary/secondary language UI + config + per-slot логика
+> **УЖЕ реализованы и подключены** (SettingsSubtitles.xaml ~`:663-708`, движок читает в `SubtitlesManager`/
+> `SubtitlesOCR`/`SubtitlesTranslator`/`OpenSubtitles`). Реальный остаток — **(а)** латентный gap батч-снапшота
+> ✅ **ЗАКРЫТ (этот PR, v0.3.12)**; **(б)** короткий аудит логики авто-открытия внешних субтитров против уже
+> существующих per-slot prefs — TODO. Сложность оставшегося ближе к ⓢ, не Ⓜ.
+> **✅ F-05-gap DONE (v0.3.12):** `BatchSubtitleConfigSnapshot.CreateSubtitlesConfig` теперь копирует все 5
+> language-fallback полей (`Languages` deep-copy, `LanguageAutoDetect`, `LanguageFallbackPrimary`,
+> `LanguageFallbackSecondary`, `LanguageFallbackSecondarySame`) под try/catch(NRE)→[English] (как `CloneAudioConfig`,
+> т.к. ленивые геттеры зовут `GetSystemLanguages()`, который NRE'ит в headless). + focused regression-тест
+> (RED-without-fix доказан) + **reflection-completeness guard** по всем скалярным settable-полям `SubtitlesConfig`
+> (allow-list: `TranslateTargetLanguage`) — закрывает рекуррентный класс «батч-снапшот забыл поле». Тесты 237/237.
+> **Известный смежный gap (НЕ в этом PR):** снапшот не копирует вложенный `DubbingConfig` (тот же класс; влияние
+> ~нулевое для headless-батча, но молча) → отдельный follow-up.
+**Решение (остаток):** аудит авто-подбора/открытия внешних субтитров (per-slot язык). **Рассуждение:** ядро
+изучения языка; в upstream Roadmap «Now»; остаток мал.
 
 ### F-06 — Экспорт транскрипта в TXT / VTT 🟡 ⓢ-Ⓜ · TODO
 Сейчас экспорт только SRT ([`SrtExporter.cs`](../../LLPlayer/Services/SrtExporter.cs),
@@ -303,11 +311,19 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 
 ## 3. 🧰 ТЕХДОЛГ / ИНФРАСТРУКТУРА / МЕЛКИЕ TODO
 
-### T-01 — Рассинхрон FFmpeg-биндингов (8.0.1 vs 7.1.1) 🟠 Ⓜ · TODO
-`LLPlayer` ссылается на `Flyleaf.FFmpeg.Bindings 8.0.1` ([`LLPlayer.csproj:33`](../../LLPlayer/LLPlayer.csproj)),
-а `FlyleafLib` — на `7.1.1` (см. `docs/agent/dependency-baseline.md`). Известный baseline-warning,
-потенц. рантайм-несовместимость декодирования/рендера. **Решение:** выровнять версии, прогнать
-`scripts/codex/verify.ps1` + ручной smoke воспроизведения, обновить `dependency-baseline.md`.
+### T-01 — Рассинхрон FFmpeg-биндингов (8.0.1 vs 7.1.1) 🟠 Ⓜ · ✅ **DONE (этот PR, v0.3.12, 2026-06-27)**
+> ✅ **Закрыт up-align'ом FlyleafLib 7.1.1→8.0.1.** ⚠️ **Премиса верификатора была НЕВЕРНА** («отгружаемые DLL =
+> FFmpeg 7.x» → down-align). Проверка по коду: tracked DLL в `FFmpeg/` = **FFmpeg 8.0** (`avcodec-62`/`avutil-60`/
+> `avformat-62`/`avfilter-11`/`swscale-9`/`swresample-6`/`avdevice-62`; release-action их и копирует). Central package
+> management нет → NuGet unify конфликтующих ссылок **вверх до 8.0.1**, т.е. реально отгружаемый managed-binding уже
+> = 8.0.1 и КОРРЕКТНО совпадал с 8.0 DLL; FFmpeg-interop (159+, `Globals.cs` global usings, hw-ctx) — в FlyleafLib,
+> `LLPlayer` юзает binding только для managed-енумов `LoadProfile`/`LogLevel` (не P/Invoke). **Down-align форсировал
+> бы unify ВНИЗ к 7.1.1 против 8.0 DLL = реальный mismatch** → отвергнут (решение владельца через AskUserQuestion).
+> **Up-align** выравнивает compile-time ref FlyleafLib под рантайм-unify + 8.0 DLL: `FlyleafLib.csproj:40` 7.1.1→8.0.1,
+> гейт `verify-frozen.ps1:222` 7.1.1→8.0.1, `dependency-baseline.md` (таблица + секция «alignment»). Эмпирически
+> проверено: build `-warnaserror` FlyleafLib **0/0** + LLPlayer+WpfColorFontDialog **0/0** против 8.0.1 (исходники
+> компилятся чисто; бинарная совместимость и так доказана работающим .exe). Гейты verify.ps1 0/0 + тесты 237/237.
+> **Остаток:** ручной playback-smoke `.exe` (на владельце/при публикации) — по frozen dep-правилу.
 
 ### T-02 — Ранняя диагностика VC++ Redistributable 🟠 ⓢ-Ⓜ · TODO
 Без VC++ 2022+ приложение стартует, но падает при включении ASR/OCR (README/FAQ). **Решение:** усилить
