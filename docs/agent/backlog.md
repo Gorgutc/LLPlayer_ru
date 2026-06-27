@@ -431,17 +431,33 @@ OPEN, **отложен владельцем**. **Решение:** решить 
 > `SSAtoSubStyles`), поэтому это реконструкция, а не pass-through. Покрыто тестами (whole-cue/disjoint/clamp/
 > non-italic-ignored/null).
 
-### T-08 — ASR fold-back при перемотке назад 🟢 Ⓜ · TODO
-[`SubtitlesASR.cs:616`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO («Fold back and allow the first
-half to run as well»). При seek назад первая половина может не обработаться.
+### T-08 — ASR fold-back при перемотке назад 🟢 Ⓜ · ✅ **DONE (PR #69, merge `f7dc152`, v0.3.19, 2026-06-27, бандл с T-09)**
+> ✅ **Закрыт (default OFF).** При старте интерактивного ASR с середины (`curTime>30s`) старый код сикал к `curTime` и
+> транскрибировал только вперёд, пропуская `[0..curTime)`. Теперь при `ASRFoldBack=true` пропущенная половина
+> дотранскрибируется: backfill `[0..curTime)` идёт **ПЕРВЫМ** (`Seek` в начало → `RunPass(curTime)`), затем forward
+> **КОНТИГУАЛЬНО** продолжает от места остановки **без ре-сика** → cue эмитятся строго по возрастанию времени →
+> append-only `SubtitlesManager.Add` остаётся отсортированным **по построению** (без правок менеджера — выбран
+> **Ordering A** дизайн-панелью; B/C ломали бы сорт/Index-инвариант). Чистый `FlyleafLib/Utils/AsrFoldback.cs`
+> (`Plan`/`ReachedStop`); петля demux/decode извлечена в local `RunPass(TimeSpan? stopAt)`. OFF по умолчанию: fold-back
+> задерживает субтитры у текущей позиции (trade-off против seek-to-current UX). Батч — структурный no-op (`ReadAll(0)`).
+> Adversarial-ревью: исправлены seam-дубли (контигуальное продолжение vs ре-сик назад к keyframe). Гейты 0/0, тесты
+> **363/363**, `.exe` launch-clean. **Реальная локация TODO была `:666`, не `:616` (бэклог устарел после F-04/F-07).**
 
-### T-09 — ASR: дробление чанков по тишине 🟢 Ⓜ · TODO
-[`SubtitlesASR.cs:765`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO («split at the silent part»).
-Сейчас чанки режутся по размеру/времени, не по тишине → возможны разрывы фраз.
+### T-09 — ASR: дробление чанков по тишине 🟢 Ⓜ · ✅ **DONE (PR #69, merge `f7dc152`, v0.3.19, 2026-06-27, бандл с T-08)**
+> ✅ **Закрыт (default ON).** Чанки резались строго по размеру/времени, деля фразу посреди слова. Теперь продюсер
+> **предпочитает резать на тихой границе** (RMS < `ASRSilenceRmsThreshold=0.01`, только после `ASRSilenceSoftFraction=0.6`
+> бюджета), size/elapsed-капы — жёсткий потолок; на шумном материале без пауз graceful fallback к капам (= прежнее
+> поведение, byte-identical при OFF). Чистый тестируемый `FlyleafLib/Utils/AsrSilence.cs` (`Rms`/`IsSilent`/`IsSoftReady`)
+> над уже ресэмплированным s16-mono-16kHz PCM; `ResampleTo` void→int. Применяется к интерактиву И батчу. Кноб
+> `ASRSplitOnSilence`. Adversarial-ревью: `resampledDataSize==0` больше не ложная тишина. **Реальная локация TODO была
+> `:816`, не `:765`.** Детали (T-08+T-09): второй мозг `Sessions/2026-06-27-handoff-t09-t08-asr-chunks.md`.
 
-### T-10 — Per-segment language detection 🟢 Ⓜ · TODO
-[`SubtitlesASR.cs:~1059`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO. Язык пиннится на первом
-непустом сегменте; смешанный по языку контент не дораспознаётся.
+### T-10 — Per-segment language detection 🟢 Ⓛ · TODO · ⚠️ в конфликте с F-17
+[`SubtitlesASR.cs:1114-1116`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO (бэклог устарел: было `~1059`). Язык
+пиннится на первом непустом сегменте; смешанный по языку контент не дораспознаётся. **⚠️ Переоценка 2026-06-27:
+large/high-risk и в ПРЯМОМ конфликте с уже сделанным F-17** (пиннинг первого сегмента + `--language` re-injection
+добавлены F-17 ПРОТИВ дрейфа языка) → отложить, если владелец явно не хочет mixed-language (нужно решение + per-cue
+`SubtitleData.Language`, кросс-cutting).
 
 ### T-11 — Sandbox `dotnet`/Windows SDK + нет .NET 10 SDK у владельца 🟢 ⓢ · DOC
 Sandbox `dotnet` иногда падает при чтении Windows SDK из AppData; у Maxim нет .NET 10 SDK (есть 8/9/11-preview;
@@ -476,7 +492,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 21 | **F-16** | Дубляж фазы 1-6 | 🟢 | Ⓛ |
 | 22 | **F-12** | Аудио-waveform | 🟢 | Ⓛ |
 | 23 | **T-07** | SrtExporter теги `<i>` | 🟢 | ⓢ |
-| 24 | **T-08/09/10** | ASR TODO (fold-back / silence-split / per-seg lang) | 🟢 | Ⓜ |
+| 24 | ~~**T-08/T-09**~~ ✅ + **T-10** | ASR TODO: fold-back/silence-split ✅ DONE (PR #69); per-seg lang ⚠️ конфликт F-17 | 🟢 | Ⓜ/Ⓛ |
 | 25 | **T-06** | Дрейф документации | 🟢 | ⓢ |
 | 26 | **T-05** | Решение по M3-редизайну (PR #31) | 🟢 | — |
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
@@ -504,7 +520,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 16 | **T-01** | FFmpeg-биндинги (выравнивание + smoke) | Ⓜ | 🟠 |
 | 17 | **T-03** | Тестовое покрытие (ongoing) | Ⓜ | 🟡 |
 | 18 | **F-07** | AI-summary / лексика | Ⓜ | 🟡 |
-| 19 | **T-08/09/10** | ASR TODO | Ⓜ | 🟢 |
+| 19 | ~~**T-08/T-09**~~ ✅ + **T-10** | ASR TODO: fold-back/silence-split ✅ DONE (PR #69 v0.3.19); per-seg lang ⚠️ конфликт F-17 (large) | Ⓜ/Ⓛ | 🟢 |
 | 20 | **F-15** | Yomitan/10ten мост | Ⓜ-Ⓛ | 🟡 |
 | 21 | **F-02** | ASR денойз (сайдкар) | Ⓛ | 🟠 |
 | 22 | **F-03** | Диаризация (сайдкар) | Ⓛ | 🟡 |
