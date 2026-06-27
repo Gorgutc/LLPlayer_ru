@@ -358,10 +358,17 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 (движок FlyleafLib + WPF-слой). **Рассуждение:** огромная работа (фактически переписывание UI), стратегическая
 цель; не трогать инцидентно.
 
-### F-14 — Расширенный локальный поиск субтитров 🟢 ⓢ-Ⓜ · TODO · (upstream «Now»)
-**Решение:** улучшить инкрементальный поиск в `SubtitlesSidebar`
-([`SubtitlesSidebarVM.cs`](../../LLPlayer/ViewModels/SubtitlesSidebarVM.cs)). **Рассуждение:** удобство,
-небольшой; в upstream Roadmap.
+### F-14 — Расширенный локальный поиск субтитров 🟢 ⓢ-Ⓜ · ✅ **DONE (PR #71, merge `3c4107d`, v0.3.20, 2026-06-27)**
+> ✅ **Закрыт.** Поиск сайдбара получил 3 тумблера: **match case / whole word / regex** (next/prev/clear/hit-count
+> уже были). Чистый тестируемый `FlyleafLib/Utils/SubtitleSearcher.cs` (`TryCreate`/`IsMatch`): дефолт всех опций OFF =
+> case-insensitive подстрока **byte-identical** прежнему `SubFilter`; match-case→`Ordinal`; whole-word→`\b…\b`
+> (Unicode, кириллица); regex verbatim, whole-word+regex→`\b(?:…)\b`; **regex с match-timeout 100мс против ReDoS**;
+> невалидный паттерн→`null`→UI «Invalid regex». 3 персист-тумблера в `AppConfig` (`SidebarSearch{MatchCase,WholeWord,
+> Regex}`, дефолт false, аддитивно); VM строит matcher в `ApplyFilter`; 3 `ToggleButton` в `SubtitlesSidebar.xaml`.
+> **Скоуп — per-slot поиск** (cross-track merge намеренно вне scope). Гейты 0/0 ×3, тесты **393/393** (+30),
+> **4-линзовое adversarial review SHIP-READY 0 Crit** (1 important исправлен: тумблер опции при dual-sub оставлял
+> невидимый слот со устаревшим фильтром → инвалидация кэша), `.exe` launch-clean. owner-smoke: видимость checked-state
+> тумблеров при 24×24. Детали: второй мозг `Sessions/2026-06-27-handoff-f14-subtitle-search.md`.
 
 ### F-15 — Yomitan / 10ten в плеере 🟡 Ⓜ-Ⓛ · TODO · ([upstream issue #13](https://github.com/umlx5h/LLPlayer/issues/13), «Later»)
 Сейчас только через буфер обмена (FAQ). **Решение:** встроенный мост к словарным браузер-расширениям.
@@ -485,7 +492,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 14 | **F-08** | Sync-хелпер (shift-all) | 🟡 | ⓢ-Ⓜ |
 | 15 | **B-03** | Сегментер: кламп perLine | 🟡 | ⓢ |
 | 16 | **T-04** | Whisper-квантизация в UI | 🟡 | ⓢ-Ⓜ |
-| 17 | **F-14** | Расширенный локальный поиск | 🟢 | ⓢ-Ⓜ |
+| 17 | ~~**F-14**~~ ✅ | Расширенный локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | 🟢 | ⓢ-Ⓜ |
 | 18 | **F-09** | Watch-folder авто-batch | 🟢 | ⓢ-Ⓜ |
 | 19 | **F-10** | Anki / Word Management | 🟢 | Ⓛ |
 | 20 | **F-11** | Dictionary API | 🟢 | Ⓛ |
@@ -512,7 +519,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 8 | **F-06** | Экспорт TXT/VTT | ⓢ-Ⓜ | 🟡 |
 | 9 | **F-09** | Watch-folder | ⓢ-Ⓜ | 🟢 |
 | 10 | **T-04** | Whisper-квантизация UI | ⓢ-Ⓜ | 🟡 |
-| 11 | **F-14** | Локальный поиск | ⓢ-Ⓜ | 🟢 |
+| 11 | ~~**F-14**~~ ✅ | Локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | ⓢ-Ⓜ | 🟢 |
 | 12 | **F-08** | Sync-хелпер | ⓢ-Ⓜ | 🟡 |
 | 13 | **F-01** | Универсальная ре-сегментация (+ре-тайминг, тесты, контракт) | Ⓜ | 🔴 |
 | 14 | **F-04** | ASR pause/resume | Ⓜ | 🟠 |
