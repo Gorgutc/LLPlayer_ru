@@ -63,6 +63,13 @@ public static class BatchSubtitleConfigSnapshot
             ASREngine = source.ASREngine,
             ASRChunkSizeMB = source.ASRChunkSizeMB,
             ASRChunkSeconds = source.ASRChunkSeconds,
+            // T-09 silence-split applies to batch transcription too (same producer); fold-back (ASRFoldBack) is a
+            // structural no-op for batch because BatchAsrTranscriber calls ReadAll(TimeSpan.Zero, ...) so the
+            // seek/curTime>30s path never fires — copied only for snapshot/reflection-guard parity.
+            ASRSplitOnSilence = source.ASRSplitOnSilence,
+            ASRSilenceSoftFraction = source.ASRSilenceSoftFraction,
+            ASRSilenceRmsThreshold = source.ASRSilenceRmsThreshold,
+            ASRFoldBack = source.ASRFoldBack,
             ResegmentSubtitles = source.ResegmentSubtitles,
             SubtitleMaxCharsPerLine = source.SubtitleMaxCharsPerLine,
             SubtitleMaxLinesPerCue = source.SubtitleMaxLinesPerCue,
