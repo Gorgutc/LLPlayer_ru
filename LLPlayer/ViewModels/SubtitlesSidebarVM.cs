@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Windows.Data;
+using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
@@ -52,6 +53,20 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
                     ApplyFilter();
                 }
                 break;
+            case nameof(FL.Config.SidebarSearchMatchCase):
+            case nameof(FL.Config.SidebarSearchWholeWord):
+            case nameof(FL.Config.SidebarSearchRegex):
+                // F-14: a search-option toggle changed — re-run the active search with the new options.
+                if (FL.Config.SidebarSearchActive && SearchText.Trim().Length != 0)
+                {
+                    // An option toggle changes match semantics WITHOUT changing the query text, so the
+                    // SidebarShowSecondary guard (which only re-applies on a text change) would otherwise leave
+                    // the non-visible slot's view materialized under the old options. Invalidate that slot's cache
+                    // so switching to it re-applies the filter with the new options.
+                    _lastSearchText[1 - SubIndex] = null!;
+                    ApplyFilter();
+                }
+                break;
         }
     }
 
@@ -75,6 +90,10 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
     }
 
     private string _trimSearchText = string.Empty; // for performance
+
+    // F-14: compiled matcher for the current search (rebuilt on query/option change). Null when the query is empty
+    // or, for a regex search, the pattern is invalid (surfaced as "Invalid regex" in the hit count).
+    private SubtitleSearcher? _searcher;
 
     public string HitCount { get; set => Set(ref field, value); } = string.Empty;
 
@@ -246,9 +265,25 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         _trimSearchText = SearchText.Trim();
         _lastSearchText[SubIndex] = _trimSearchText;
 
+        // F-14: rebuild the matcher under the current options. Null = empty query (no filter) or invalid regex.
+        _searcher = _trimSearchText.Length == 0
+            ? null
+            : SubtitleSearcher.TryCreate(
+                _trimSearchText,
+                FL.Config.SidebarSearchMatchCase,
+                FL.Config.SidebarSearchWholeWord,
+                FL.Config.SidebarSearchRegex);
+
         // initialize filter lazily
         _filteredSubs[SubIndex].Filter ??= SubFilter;
         _filteredSubs[SubIndex].Refresh();
+
+        // Invalid regex: the filter matched nothing — tell the user instead of a misleading "No hits".
+        if (_trimSearchText.Length != 0 && _searcher == null)
+        {
+            HitCount = "Invalid regex";
+            return;
+        }
 
         int count = _filteredSubs[SubIndex].Count;
         HitCount = count > 0 ? $"{count} hits" : "No hits";
@@ -273,9 +308,10 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
     private bool SubFilter(object obj)
     {
         if (_trimSearchText.Length == 0) return true;
+        if (_searcher == null) return false; // invalid regex → no matches
         if (obj is not SubtitleData sub) return false;
 
         string? source = FL.Config.SidebarShowOriginalText ? sub.Text : sub.DisplayText;
-        return source?.IndexOf(_trimSearchText, StringComparison.OrdinalIgnoreCase) >= 0;
+        return _searcher.IsMatch(source);
     }
 }

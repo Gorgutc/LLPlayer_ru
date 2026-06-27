@@ -444,6 +444,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <TextBox
@@ -466,8 +467,34 @@
                         Command="{Binding CmdPrevMatch}" />
                 </TextBox.InputBindings>
             </TextBox>
+
+            <!-- F-14 search option toggles: match case / whole word / regex -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <ToggleButton
+                    Style="{StaticResource ToggleButton}"
+                    materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FormatLetterCase}"
+                    Content="{materialDesign:PackIcon Kind=FormatLetterCase}"
+                    ToolTip="Match case"
+                    AutomationProperties.Name="Match case"
+                    IsChecked="{Binding FL.Config.SidebarSearchMatchCase}" />
+                <ToggleButton
+                    Style="{StaticResource ToggleButton}"
+                    materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FormatLetterMatches}"
+                    Content="{materialDesign:PackIcon Kind=FormatLetterMatches}"
+                    ToolTip="Match whole word"
+                    AutomationProperties.Name="Match whole word"
+                    IsChecked="{Binding FL.Config.SidebarSearchWholeWord}" />
+                <ToggleButton
+                    Style="{StaticResource ToggleButton}"
+                    materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=Regex}"
+                    Content="{materialDesign:PackIcon Kind=Regex}"
+                    ToolTip="Use regular expression"
+                    AutomationProperties.Name="Use regular expression"
+                    IsChecked="{Binding FL.Config.SidebarSearchRegex}" />
+            </StackPanel>
+
             <Button
-                Grid.Column="1"
+                Grid.Column="2"
                 Style="{StaticResource IconButton}"
                 Margin="2 0 0 0"
                 ToolTip="Clear search (Esc)"
