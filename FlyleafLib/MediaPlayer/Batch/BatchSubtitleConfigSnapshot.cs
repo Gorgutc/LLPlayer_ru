@@ -149,9 +149,15 @@ public static class BatchSubtitleConfigSnapshot
         {
             Model = source.Model == null
                 ? null
+                // Quantization MUST be copied: the reflection-completeness guard
+                // (BatchSubtitleTranslatorTests.CreateSubtitlesConfig_ShouldCopyEveryScalarSubtitlesConfigSetting)
+                // only enumerates scalars declared on SubtitlesConfig and explicitly skips nested config objects, so
+                // dropping it here would silently make a batch run resolve ggml-{model}.bin (the full model) instead
+                // of the user's quantized file — pinned by CloneWhisperCppConfig_ShouldCopyModelQuantization.
                 : new WhisperCppModel
                 {
                     Model = source.Model.Model,
+                    Quantization = source.Model.Quantization,
                     Size = source.Model.Size
                 },
             RuntimeLibraries = new List<RuntimeLibrary>(source.RuntimeLibraries),

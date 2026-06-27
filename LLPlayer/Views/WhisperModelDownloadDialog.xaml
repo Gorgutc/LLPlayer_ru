@@ -42,7 +42,7 @@
             <ComboBox
                 ItemsSource="{Binding Models}"
                 SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
-                Width="200" Margin="10,0,8,0">
+                Width="240" Margin="10,0,8,0">
                 <ComboBox.ItemTemplate>
                     <DataTemplate DataType="{x:Type flyleaf:WhisperCppModel}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
@@ -50,7 +50,7 @@
                                 Kind="Check" Width="20" Height="20"
                                 Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Margin="0,0,5,0"
                                 Visibility="{Binding Downloaded, Converter={StaticResource BooleanToVisibilityHiddenConv}}" />
-                            <TextBlock Text="{Binding Model}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding}" VerticalAlignment="Center" />
 
                             <TextBlock Text="{Binding Size, Converter={StaticResource FileSizeHumanConv}, StringFormat=' ({0})'}" VerticalAlignment="Center"
                                        Visibility="{Binding Downloaded, Converter={StaticResource BooleanToVisibilityConv}}"/>
