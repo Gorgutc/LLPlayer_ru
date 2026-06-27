@@ -1,0 +1,148 @@
+<UserControl x:Class="LLPlayer.Views.AiInsightsDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:LLPlayer.Views"
+             xmlns:vm="clr-namespace:LLPlayer.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:AiInsightsDialogVM}"
+             d:Foreground="White"
+             d:Background="Black"
+             d:DesignHeight="600" d:DesignWidth="620">
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Options -->
+        <StackPanel Grid.Row="0">
+            <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
+                <Label Content="Output" Width="80" />
+                <ComboBox
+                    ItemsSource="{Binding ModeList}"
+                    SelectedItem="{Binding SelectedMode}"
+                    Width="180"
+                    ToolTip="What to generate: a summary, key vocabulary, or both" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
+                <Label Content="Subtitle" Width="80" />
+                <ComboBox
+                    ItemsSource="{Binding SubIndexList}"
+                    SelectedItem="{Binding SelectedSubIndex}"
+                    Width="180">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource SubIndexToDisplayStringConv}}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Margin="0 0 0 8">
+                <Label Content="Model" Width="80" />
+                <TextBlock VerticalAlignment="Center" Text="{Binding LlmIndicator}" FontStyle="Italic" Opacity="0.8" />
+            </StackPanel>
+
+            <CheckBox
+                Margin="0 4 0 0"
+                IsChecked="{Binding UseTranslated, Mode=TwoWay}"
+                Content="Analyze the translated text instead of the original"
+                ToolTip="By default the original transcript is analyzed and explained into your target language." />
+
+            <TextBlock
+                Visibility="{Binding SubManager.IsLoading, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed}"
+                Margin="0 8 0 0"
+                TextWrapping="Wrap"
+                FontWeight="Bold"
+                Foreground="#ef5350"
+                Text="WARN: ASR/OCR is running, so the transcript may be incomplete." />
+        </StackPanel>
+
+        <!-- Actions + progress -->
+        <Grid Grid.Row="1" Margin="0 12 0 8">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button Content="Generate" Width="100" Command="{Binding CmdGenerate}"
+                        ToolTip="Generate insights for the selected subtitle via the configured LLM" />
+                <Button Content="Cancel" Width="80" Margin="8 0 0 0" Command="{Binding CmdCancel}"
+                        Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConv}}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Copy" Width="70" Command="{Binding CmdCopy}" />
+                <Button Content="Save..." Width="80" Margin="8 0 0 0" Command="{Binding CmdSave}" />
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="2" Orientation="Vertical">
+            <ProgressBar
+                IsIndeterminate="True"
+                Height="4"
+                Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConv}}" />
+            <TextBlock Margin="0 4 0 0" Text="{Binding ProgressText}"
+                       Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConv}}" />
+            <TextBlock Margin="0 4 0 0" TextWrapping="Wrap" Foreground="#ffa726"
+                       Text="The transcript was very long, so it was sampled - coverage may be partial."
+                       Visibility="{Binding PartialCoverageWarning, Converter={StaticResource BooleanToVisibilityConv}}" />
+        </StackPanel>
+
+        <!-- Results -->
+        <Grid Grid.Row="3" Margin="0 8 0 0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Summary -->
+            <DockPanel Grid.Row="0" Visibility="{Binding HasSummary, Converter={StaticResource BooleanToVisibilityConv}}">
+                <TextBlock DockPanel.Dock="Top" Text="Summary" FontWeight="Bold" Margin="0 0 0 4" />
+                <TextBox
+                    Text="{Binding SummaryText, Mode=OneWay}"
+                    IsReadOnly="True"
+                    AcceptsReturn="True"
+                    TextWrapping="Wrap"
+                    VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled" />
+            </DockPanel>
+
+            <GridSplitter Grid.Row="1" Height="4" HorizontalAlignment="Stretch"
+                          Visibility="{Binding HasSummary, Converter={StaticResource BooleanToVisibilityConv}}" />
+
+            <!-- Vocabulary -->
+            <DockPanel Grid.Row="2">
+                <TextBlock DockPanel.Dock="Top" Text="Vocabulary" FontWeight="Bold" Margin="0 4 0 4"
+                           Visibility="{Binding HasVocabulary, Converter={StaticResource BooleanToVisibilityConv}}" />
+                <DataGrid
+                    ItemsSource="{Binding Vocabulary}"
+                    AutoGenerateColumns="False"
+                    IsReadOnly="True"
+                    CanUserAddRows="False"
+                    HeadersVisibility="Column"
+                    GridLinesVisibility="Horizontal"
+                    Visibility="{Binding HasVocabulary, Converter={StaticResource BooleanToVisibilityConv}}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Term" Binding="{Binding Term}" Width="1.2*" />
+                        <DataGridTextColumn Header="Reading" Binding="{Binding Reading}" Width="*" />
+                        <DataGridTextColumn Header="Translation" Binding="{Binding Translation}" Width="1.2*" />
+                        <DataGridTextColumn Header="Definition" Binding="{Binding Definition}" Width="1.5*" />
+                        <DataGridTextColumn Header="Example" Binding="{Binding Example}" Width="1.8*" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Raw fallback when structured parsing found nothing -->
+                <TextBox
+                    Text="{Binding RawVocabularyReply, Mode=OneWay}"
+                    IsReadOnly="True"
+                    AcceptsReturn="True"
+                    TextWrapping="Wrap"
+                    VerticalScrollBarVisibility="Auto"
+                    Visibility="{Binding ShowRawVocabulary, Converter={StaticResource BooleanToVisibilityConv}}" />
+            </DockPanel>
+        </Grid>
+    </Grid>
+</UserControl>
