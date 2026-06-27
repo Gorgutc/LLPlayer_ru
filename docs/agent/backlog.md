@@ -361,7 +361,19 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 > компилятся чисто; бинарная совместимость и так доказана работающим .exe). Гейты verify.ps1 0/0 + тесты 237/237.
 > **Остаток:** ручной playback-smoke `.exe` (на владельце/при публикации) — по frozen dep-правилу.
 
-### T-02 — Ранняя диагностика VC++ Redistributable 🟠 ⓢ-Ⓜ · TODO
+### T-02 — Ранняя диагностика VC++ Redistributable 🟠 ⓢ-Ⓜ · ✅ **DONE (PR #62, merge `296c248`, v0.3.15, 2026-06-27)**
+> ✅ **Закрыт.** Новый чистый тестируемый `FlyleafLib/Utils/VcRedistChecker.cs` — probe `vcruntime140.dll`/
+> `vcruntime140_1.dll`/`msvcp140.dll` через `NativeLibrary.TryLoad` (loader-search = ровно то, что резолвит
+> нативка). Детектим **отсутствие** современного CRT (крэш-кейс), НЕ строгую версию — строгий гейт «2022» дал бы
+> false-positive на рабочем VC++ 2019+ (redistributable кумулятивен). Preflight в 3 in-process точках:
+> `SubtitlesASR.CanExecute` (whisper.cpp), `TesseractOCRService.TryInitialize`, `BatchAsrTranscriber.ValidateAsrConfig`;
+> **faster-whisper** (внешний exe) и **Microsoft OCR** (WinRT) НЕ гейтятся. UI: интерактивный whisper.cpp ASR →
+> non-blocking «INSTALL» snackbar (`KnownErrorActionKeys.InstallVcRedist` → `AppActions.OpenVcRedistDownload`);
+> OCR/batch → modal с URL. Гейты build 0/0, тесты **262/262** (+11), verify-frozen/doc-coverage green, 5-линзовое
+> adversarial `/code-review` (19 агентов; 2 critical+1 important разобраны: обновлён frozen `product-behavior-contract`,
+> переписан вводящий в заблуждение комментарий), `.exe` launch-тест 0.3.15 чистый. **Follow-up (defer):** батч кидает
+> VC++-ошибку в ctor → модал, а не снэкбар (UX-асимметрия; строго лучше прежнего краша). Детали: второй мозг
+> `Sessions/2026-06-27-handoff-t02-vcredist-preflight.md`.
 Без VC++ 2022+ приложение стартует, но падает при включении ASR/OCR (README/FAQ). **Решение:** усилить
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
