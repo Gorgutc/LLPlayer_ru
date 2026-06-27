@@ -1,6 +1,8 @@
 ﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Windows;
 using FlyleafLib;
 using LLPlayer.Extensions;
@@ -89,7 +91,7 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
 
             StatusText = $"Model '{downloadModel}' downloading..";
 
-            long modelSize = await DownloadModelWithProgressAsync(downloadModel.Model, tempModelPath, token);
+            long modelSize = await DownloadModelWithProgressAsync(downloadModel, tempModelPath, token);
 
             // After successful download, rename temporary file to final file
             File.Move(tempModelPath, downloadModel.ModelFilePath);
@@ -103,6 +105,13 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
         catch (OperationCanceledException)
         {
             StatusText = "Download canceled";
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Not every (model, quantization) pair is published on the download mirror — surface a clear message
+            // instead of a raw HTTP error. The partial .tmp is removed by the finally below, so nothing is left
+            // half-written and the model stays "not downloaded".
+            StatusText = $"'{downloadModel}' is not available on the server. Try a different model or quantization.";
         }
         catch (Exception ex)
         {
@@ -195,11 +204,11 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
         OnPropertyChanged(nameof(CanDelete));
     }
 
-    private async Task<long> DownloadModelWithProgressAsync(GgmlType modelType, string destinationPath, CancellationToken token)
+    private async Task<long> DownloadModelWithProgressAsync(WhisperCppModel model, string destinationPath, CancellationToken token)
     {
         DownloadedSize = 0;
 
-        await using Stream modelStream = await WhisperGgmlDownloader.Default.GetGgmlModelAsync(modelType, default, token);
+        await using Stream modelStream = await WhisperGgmlDownloader.Default.GetGgmlModelAsync(model.Model, model.Quantization, token);
         await using FileStream fileWriter = File.OpenWrite(destinationPath);
 
         byte[] buffer = new byte[1024 * 128];

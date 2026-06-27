@@ -417,7 +417,25 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 189 тестов, но крупные области без юнитов. **Решение:** покрыть парсинг субтитров, перевод (моки сети),
 ASR/OCR (где детерминируемо), playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
 
-### T-04 — Whisper-квантизация (q8_0/q5_0) в UI 🟡 ⓢ-Ⓜ · TODO
+### T-04 — Whisper-квантизация (q8_0/q5_0) в UI 🟡 ⓢ-Ⓜ · ✅ **DONE (PR #73, v0.3.21, 2026-06-27)**
+> ✅ **Закрыт.** Раньше загрузчик моделей whisper.cpp жёстко слал `QuantizationType.NoQuantization`
+> (`WhisperModelDownloadDialogVM.cs:202` — параметр `default`). Теперь список моделей = **кросс-продукт**
+> `GgmlType × {NoQuantization, Q5_0, Q5_1, Q8_0}` (Approach A дизайн-панели: каждая квант-вариация — полноценная
+> строка download/select/delete, статус Downloaded по файлу). `WhisperCppModel` получил поле `QuantizationType
+> Quantization` (персист, дефолт NoQuantization); `ModelFileName`/`ToString`/`Equals`/`GetHashCode` — quant-aware;
+> **NoQuantization byte-identical** прежнему (`ggml-{model}.bin`, лейбл, дефолтный выбор `Models.First()`),
+> квантизованные → `ggml-{model}-{quant}.bin` (e.g. `ggml-base-q5_1.bin`). Загрузка шлёт `GetGgmlModelAsync(model.Model,
+> model.Quantization, token)`; friendly-catch на `HttpRequestException` NotFound (недоступная комбинация на сервере →
+> понятное сообщение, не сырой HTTP; .tmp чистится). Лейбл в обоих ComboBox → `{Binding}` (ToString=model+quant),
+> ширина 200→240. **Batch-parity:** `BatchSubtitleConfigSnapshot.CloneWhisperCppConfig` копирует `Quantization`
+> (silent-bug class — reflection-guard НЕ рекурсит в `WhisperCppModel` → отдельный тест). Персист: enum'ы = строки
+> (`AppConfig.GetJsonSerializerOptions`/`JsonStringEnumConverter`); pre-0.3.21 конфиг без ключа → NoQuantization →
+> тот же файл, миграции нет. Гейты build `-warnaserror` **0/0 ×3** + тесты **410/410** (+17) + verify.ps1 (env/plugin/
+> doc-coverage/frozen) green. Дизайн-панель (3+судья) → **adversarial review (5 линз+триаж): SHIP-READY, 0 crit/imp,
+> 0 must-fix**; correctness-агент декомпилировал Whisper.net 1.9.0 и live-проверил все 12×{q5_0,q5_1,q8_0} на HF-зеркале
+> (все доступны). `.exe` launch-test 0.3.21 чистый. Контракты product-behavior + config-data обновлены. Детали:
+> второй мозг `Sessions/2026-06-27-handoff-t04-whisper-quant.md`.
+
 whisper.cpp/Whisper.net поддерживают квантизованные модели, но в UI не выведено. **Решение:** дать выбор
 квантизации (лучший безопасный выигрыш скорости). См. References whisper-research во втором мозге.
 
@@ -491,7 +509,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 13 | **T-03** | Тестовое покрытие | 🟡 | Ⓜ |
 | 14 | **F-08** | Sync-хелпер (shift-all) | 🟡 | ⓢ-Ⓜ |
 | 15 | **B-03** | Сегментер: кламп perLine | 🟡 | ⓢ |
-| 16 | **T-04** | Whisper-квантизация в UI | 🟡 | ⓢ-Ⓜ |
+| 16 | ~~**T-04**~~ ✅ | Whisper-квантизация в UI (q5_0/q5_1/q8_0) → DONE PR #73 v0.3.21 | 🟡 | ⓢ-Ⓜ |
 | 17 | ~~**F-14**~~ ✅ | Расширенный локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | 🟢 | ⓢ-Ⓜ |
 | 18 | **F-09** | Watch-folder авто-batch | 🟢 | ⓢ-Ⓜ |
 | 19 | **F-10** | Anki / Word Management | 🟢 | Ⓛ |
@@ -518,7 +536,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 7 | **T-02** | Ранняя диагностика VC++ | ⓢ-Ⓜ | 🟠 |
 | 8 | **F-06** | Экспорт TXT/VTT | ⓢ-Ⓜ | 🟡 |
 | 9 | **F-09** | Watch-folder | ⓢ-Ⓜ | 🟢 |
-| 10 | **T-04** | Whisper-квантизация UI | ⓢ-Ⓜ | 🟡 |
+| 10 | ~~**T-04**~~ ✅ | Whisper-квантизация UI (q5_0/q5_1/q8_0) → DONE PR #73 v0.3.21 | ⓢ-Ⓜ | 🟡 |
 | 11 | ~~**F-14**~~ ✅ | Локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | ⓢ-Ⓜ | 🟢 |
 | 12 | **F-08** | Sync-хелпер | ⓢ-Ⓜ | 🟡 |
 | 13 | **F-01** | Универсальная ре-сегментация (+ре-тайминг, тесты, контракт) | Ⓜ | 🔴 |

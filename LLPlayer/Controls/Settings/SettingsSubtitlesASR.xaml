@@ -178,13 +178,13 @@
                                         </InlineUIContainer>
                                     </TextBlock>
                                     <ComboBox
-                                        Width="200"
+                                        Width="240"
                                         ItemsSource="{Binding DownloadModels}"
                                         SelectedItem="{Binding FL.PlayerConfig.Subtitles.WhisperCppConfig.Model}">
                                         <ComboBox.ItemTemplate>
                                             <DataTemplate DataType="{x:Type flyleaf:WhisperCppModel}">
                                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Model}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding}" VerticalAlignment="Center" />
                                                     <TextBlock Text="{Binding Size, Converter={StaticResource FileSizeHumanConv}, StringFormat=' ({0})'}" VerticalAlignment="Center" />
                                                 </StackPanel>
                                             </DataTemplate>

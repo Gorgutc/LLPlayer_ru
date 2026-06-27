@@ -6,6 +6,7 @@ using AwesomeAssertions;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
+using Whisper.net.Ggml;
 
 namespace FlyleafLib.MediaPlayer;
 
@@ -65,6 +66,46 @@ public class BatchSubtitleTranslatorTests
             .Model
             .Should()
             .Be("llama3");
+    }
+
+    [Fact]
+    public void CloneWhisperCppConfig_ShouldCopyModelQuantization()
+    {
+        // T-04: the whisper.cpp model is a NESTED object, which the scalar reflection guard
+        // (CreateSubtitlesConfig_ShouldCopyEveryScalarSubtitlesConfigSetting) does not reach. A forgotten
+        // Quantization copy would silently make a batch run resolve ggml-{model}.bin (the full model) instead of
+        // the user's quantized file — so pin it here. RED-without-fix: dropping `Quantization = source.Model.Quantization`
+        // in CloneWhisperCppConfig fails this test.
+        Utils.IsTesting = true;
+        Config config = new(true);
+        config.Subtitles.Languages = [Language.English];
+        config.Subtitles.WhisperCppConfig.Model = new WhisperCppModel
+        {
+            Model = GgmlType.Medium,
+            Quantization = QuantizationType.Q8_0
+        };
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config.Subtitles);
+
+        snapshot.WhisperCppConfig.Should().NotBeSameAs(config.Subtitles.WhisperCppConfig);
+        snapshot.WhisperCppConfig.Model.Should().NotBeNull();
+        snapshot.WhisperCppConfig.Model!.Quantization.Should().Be(QuantizationType.Q8_0);
+        snapshot.WhisperCppConfig.Model!.ModelFileName.Should().Be("ggml-medium-q8_0.bin");
+        // deep copy, not a shared reference
+        snapshot.WhisperCppConfig.Model.Should().NotBeSameAs(config.Subtitles.WhisperCppConfig.Model);
+    }
+
+    [Fact]
+    public void CloneWhisperCppConfig_ShouldKeepNullModelNull()
+    {
+        Utils.IsTesting = true;
+        Config config = new(true);
+        config.Subtitles.Languages = [Language.English];
+        config.Subtitles.WhisperCppConfig.Model = null;
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config.Subtitles);
+
+        snapshot.WhisperCppConfig.Model.Should().BeNull();
     }
 
     [Fact]
