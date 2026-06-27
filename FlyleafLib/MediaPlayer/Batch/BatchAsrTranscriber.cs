@@ -200,6 +200,13 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     {
         if (config.Subtitles.ASREngine == SubASREngineType.WhisperCpp)
         {
+            // Same VC++ preflight as the interactive path (SubtitlesASR.CanExecute): whisper.cpp loads its
+            // native runtime in-process, so without the redistributable the load aborts the whole process.
+            // Surfacing it as a per-file InvalidOperationException fails just this batch file with a clear
+            // message instead of crashing the app. faster-whisper (external exe) is not checked.
+            if (!VcRedistChecker.IsRuntimePresent(out _))
+                throw new InvalidOperationException(VcRedistChecker.BuildMissingMessage("Speech-to-text (whisper.cpp)"));
+
             if (config.Subtitles.WhisperCppConfig.Model == null)
                 throw new InvalidOperationException("whisper.cpp model is not set. Please download it from the settings.");
 

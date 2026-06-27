@@ -65,6 +65,16 @@ public class SubtitlesASR
 
         if (_config.Subtitles.ASREngine == SubASREngineType.WhisperCpp)
         {
+            // whisper.cpp loads its native runtime in-process; without the VC++ redistributable that load
+            // aborts the whole app (README). Preflight the CRT here so the user gets an actionable message
+            // instead of a crash. faster-whisper is a self-contained external exe, so it is not checked.
+            if (!VcRedistChecker.IsRuntimePresent(out _))
+            {
+                err = VcRedistChecker.BuildMissingMessage("Speech-to-text (whisper.cpp)");
+                actionHint = KnownErrorActionKeys.InstallVcRedist;
+                return false;
+            }
+
             if (_config.Subtitles.WhisperCppConfig.Model == null)
             {
                 err = "whisper.cpp model is not set. Please download it from the settings.";

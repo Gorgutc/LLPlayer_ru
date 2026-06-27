@@ -433,6 +433,14 @@ public class AppActions
         _dialogService.ShowDialog(nameof(WhisperModelDownloadDialog));
     }
 
+    // Opens the Microsoft Visual C++ Redistributable download page in the browser
+    // (from the "missing VC++ runtime" ASR snackbar action; see VcRedistChecker / T-02).
+    public void OpenVcRedistDownload()
+    {
+        _player.Activity.ForceFullActive();
+        HyperlinkHelper.OpenUrlInBrowser(VcRedistChecker.DownloadUrl);
+    }
+
     public DelegateCommand CmdOpenWindowSettings => field ??= new(() =>
     {
         if (_player.IsPlaying)
