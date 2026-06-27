@@ -102,6 +102,13 @@ public class MainWindowVM : Bindable
                         FL.MessageQueue.Enqueue(args.Message, "DOWNLOAD", () => FL.Action.OpenWhisperModelDownload());
                     }
                 }
+                else if (args.ErrorType == KnownErrorType.Configuration && args.ActionHint == KnownErrorActionKeys.InstallVcRedist)
+                {
+                    // Missing VC++ runtime for whisper.cpp ASR (T-02): non-blocking actionable snackbar that
+                    // opens the Microsoft redistributable download page, mirroring the missing-model DOWNLOAD
+                    // action. The native load would otherwise crash the app the moment ASR starts.
+                    FL.MessageQueue.Enqueue(args.Message, "INSTALL", () => FL.Action.OpenVcRedistDownload());
+                }
                 else
                 {
                     ErrorDialogHelper.ShowKnownErrorPopup(args.Message, args.ErrorType);

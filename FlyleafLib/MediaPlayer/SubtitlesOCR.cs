@@ -263,6 +263,15 @@ public class TesseractOCRService : IOCRService
 
     public bool TryInitialize(Language lang, out string err)
     {
+        // Tesseract constructs its native engine in-process below; without the VC++ redistributable that
+        // load aborts the whole app (README). Preflight the CRT so the user gets an actionable message
+        // instead of a crash. The Microsoft OCR engine is WinRT-based and needs no such check.
+        if (!VcRedistChecker.IsRuntimePresent(out _))
+        {
+            err = VcRedistChecker.BuildMissingMessage("Tesseract OCR");
+            return false;
+        }
+
         _lang = lang;
 
         string iso6391 = lang.ISO6391;

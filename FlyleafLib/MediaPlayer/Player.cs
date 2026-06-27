@@ -755,6 +755,9 @@ public static class KnownErrorSettingsTab
 public static class KnownErrorActionKeys
 {
     public const string DownloadWhisperModel = "DownloadWhisperModel";
+
+    /// <summary>Offer to open the Microsoft Visual C++ Redistributable (x64) download page.</summary>
+    public const string InstallVcRedist = "InstallVcRedist";
 }
 
 public class KnownErrorOccurredEventArgs : EventArgs
