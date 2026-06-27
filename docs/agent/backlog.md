@@ -436,8 +436,20 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-189 тестов, но крупные области без юнитов. **Решение:** покрыть парсинг субтитров, перевод (моки сети),
-ASR/OCR (где детерминируемо), playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
+**488 тестов** (на 2026-06-27; ранее в этой заметке стояло устаревшее «189»). Крупные области ещё без юнитов.
+**Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
+playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
+> **Прогресс 2026-06-27 (PR этот, +54 теста → 488):** добавлены юнит-тесты на ранее непокрытые чистые функции:
+> `Utils` форматтеры времени (`TsToTime`/`TicksToTime`/`McsToTime`/`TicksToTimeMini` — sentinels `NoTs`/0,
+> положительные/отрицательные, <1мин/<1ч/<1сут/≥1сут ветки) → `FlyleafLibTests/Utils/UtilsTimeFormatTests.cs`;
+> `TextEncodings.DetectEncoding` (byte[]+path: BOM UTF-8/UTF-16 LE/BE/UTF-32 BE, UTF-8-без-BOM, пусто, clamp
+> maxBytes, missing-file→null; характеризован quirk «UTF-32 LE BOM детектится как UTF-16 LE» из-за порядка
+> проверок) → `FlyleafLibTests/Utils/TextEncodingsTests.cs`; DeepL `ToSourceCode`/`ToTargetCode` switch-таблицы
+> (ku→KMR, no→nb, EN-US/EN-GB, PT-PT/PT-BR, ZH-HANS/ZH-HANT, Kurdish→KMR, default uppercase + hyphen-split
+> «fr-FR»→FR; internal через InternalsVisibleTo) → `FlyleafLibTests/MediaPlayer/Translation/DeepLLanguageCodeTests.cs`;
+> `DubbingSrtReader` edge-cases (PadRight дробных мс, skip блока без таймлайна с верной индексацией, skip
+> пустого текста, single-digit час) → дополнения в `DubbingSrtReaderTests.cs`. Все чистые (ноль продакшн-кода),
+> гейты build -warnaserror 0/0 ×3 + verify.ps1 green. Остаётся ONGOING (demuxer/playlist/OCR ещё открыты).
 
 ### T-04 — Whisper-квантизация (q8_0/q5_0) в UI 🟡 ⓢ-Ⓜ · ✅ **DONE (PR #73, v0.3.21, 2026-06-27)**
 > ✅ **Закрыт.** Раньше загрузчик моделей whisper.cpp жёстко слал `QuantizationType.NoQuantization`
