@@ -126,6 +126,13 @@
                     Content="Generate Russian dub (AI)"
                     ToolTip="After the subtitles, also render a Russian voice-over track (video.ru.dub.flac) beside each video using the local TTS engine. Requires the dub engine to be provisioned first. Runs serialized (no GPU overlap)."
                     IsChecked="{Binding GenerateDubbing}" />
+
+                <CheckBox
+                    Margin="18 0 0 0"
+                    VerticalAlignment="Center"
+                    Content="Watch folder (auto-process new)"
+                    ToolTip="Watch the selected folder and automatically transcribe new video files as they appear (once they finish copying). Processing starts when nothing else is running; otherwise the new files queue and run next. The Recursive, Overwrite, and friendliness (Smooth / CPU-while-active) options above still apply. Watching keeps running while this window is minimized to the tray and stops when you close it."
+                    IsChecked="{Binding WatchFolder}" />
             </StackPanel>
 
             <TextBlock

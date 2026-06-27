@@ -337,7 +337,29 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 > Reset, UI `PopupMenu.xaml:387-418` + Settings ▸ Keys ▸ Offset). Бэклог требовал ровно это («НЕ полный редактор»);
 > деструктивный two-point rate-stretch явно вне скоупа. **Действие:** пометить DONE (опц. ручной smoke кнопки Sync).
 
-### F-09 — Watch-folder авто-batch 🟢 ⓢ-Ⓜ · TODO
+### F-09 — Watch-folder авто-batch 🟢 ⓢ-Ⓜ · ✅ **DONE (PR #74, v0.3.22, 2026-06-27)**
+> ✅ **Закрыт.** Opt-in режим слежения: батч-окно следит за выбранной папкой (рекурсивно при Recursive) и
+> авто-обрабатывает новые видео по мере их появления. **Решение владельца (AskUserQuestion):** (1) **авто-старт в
+> простое** (set-and-forget; новый файл → авто-добавляется + авто-запуск когда нет активного прогона, иначе очередь →
+> drain после; предохранители Smooth/CPU-when-active берегут отзывчивость); (2) **watch пока окно открыто/в трее**
+> (стоп на toggle-off / реальном close / quit). **Pure FlyleafLib seam** (юнит-тесты): `Utils.IsVideoExtension`
+> (вынесен из `GetMoviesSorted`, один source), `Batch/WatchFolderPolicy.ShouldEnqueue` (video+dedup+output-exists→enum),
+> `Batch/FileReadiness` (`FileStabilityState`+`Step`/`IsReady`, 2 стабильных тика). **Тонкий `LLPlayer/Services/
+> BatchFolderWatcher.cs`:** FileSystemWatcher (Created+Renamed, IncludeSubdirectories, NotifyFilter FileName|Size|
+> LastWrite, буфер 64KB) + DispatcherTimer 1s; **всё марш на UI-thread** (`PostToUi`, без локов); готовность = size+mtime
+> стабильны + open-for-read; **partial-файлы (.part/.tmp) отсекаются** (не video-расширение); **InternalBufferOverflow
+> рекаверится re-enum'ом, без teardown**; FileReady/Error на UI. VM: `WatchFolder` (in-session `_watchFolder` —
+> авторитет поведения; live-config трогаем только при user-toggle → транзиентный сбой НЕ персистит OFF); `_watchQueued`
+> (только watch-приходы авто-стартуют — scan-backlog и post-Cancel не трогаются); drain в `RunAsync.finally`
+> (BeginInvoke, без реентрантности); `CanCloseDialog` → minimize-to-tray при watch. Config `WatchFolder` (default OFF,
+> additive). UI: чекбокс + 👁-индикатор в summary. **Гарантии:** OFF-path byte-identical; нет double-run (guard IsRunning);
+> watch выживает tray-minimize, гибнет на close/toggle/quit. Гейты build `-warnaserror` **0/0 ×3** + тесты **434/434**
+> (+24) + verify.ps1 (env/plugin/doc-coverage/frozen) green. Дизайн-панель (3 дизайнера; судья упал на схеме → синтез
+> вручную) → **adversarial review (5 линз+триаж): FIX-THEN-SHIP, 3 important исправлены** (idle-watch-гибнет-при-close;
+> auto-start мёл все Pending; recoverable FSW-error глушил+персистил OFF) + **verify-агент нашёл 4-й** (live-config leak
+> в persist:false-пути) → исправлен. `.exe` launch-test 0.3.22 чистый. Контракты product-behavior + config-data.
+> Детали: второй мозг `Sessions/2026-06-27-handoff-f09-watch-folder.md`.
+
 **Идея от Buzz.** Расширение существующего батча (`Batch*`-классы). **Решение:** режим слежения за папкой →
 авто-обработка новых файлов. **Рассуждение:** низкий effort, удобство для пакетной обработки.
 
@@ -511,7 +533,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 15 | **B-03** | Сегментер: кламп perLine | 🟡 | ⓢ |
 | 16 | ~~**T-04**~~ ✅ | Whisper-квантизация в UI (q5_0/q5_1/q8_0) → DONE PR #73 v0.3.21 | 🟡 | ⓢ-Ⓜ |
 | 17 | ~~**F-14**~~ ✅ | Расширенный локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | 🟢 | ⓢ-Ⓜ |
-| 18 | **F-09** | Watch-folder авто-batch | 🟢 | ⓢ-Ⓜ |
+| 18 | ~~**F-09**~~ ✅ | Watch-folder авто-batch → DONE PR #74 v0.3.22 | 🟢 | ⓢ-Ⓜ |
 | 19 | **F-10** | Anki / Word Management | 🟢 | Ⓛ |
 | 20 | **F-11** | Dictionary API | 🟢 | Ⓛ |
 | 21 | **F-16** | Дубляж фазы 1-6 | 🟢 | Ⓛ |
@@ -535,7 +557,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 6 | **B-02** | Сегментер: forward-merge головы (+тест) | ⓢ | 🟠 |
 | 7 | **T-02** | Ранняя диагностика VC++ | ⓢ-Ⓜ | 🟠 |
 | 8 | **F-06** | Экспорт TXT/VTT | ⓢ-Ⓜ | 🟡 |
-| 9 | **F-09** | Watch-folder | ⓢ-Ⓜ | 🟢 |
+| 9 | ~~**F-09**~~ ✅ | Watch-folder → DONE PR #74 v0.3.22 | ⓢ-Ⓜ | 🟢 |
 | 10 | ~~**T-04**~~ ✅ | Whisper-квантизация UI (q5_0/q5_1/q8_0) → DONE PR #73 v0.3.21 | ⓢ-Ⓜ | 🟡 |
 | 11 | ~~**F-14**~~ ✅ | Локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | ⓢ-Ⓜ | 🟢 |
 | 12 | **F-08** | Sync-хелпер | ⓢ-Ⓜ | 🟡 |
