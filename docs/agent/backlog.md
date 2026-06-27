@@ -233,7 +233,19 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Рассуждение:** (3) — самый надёжный, не зависит от поведения движка; (1) проверить первым (может, мы сами
 включили XXL-флаг). F-17+F-18 имеют общий рычаг (initial_prompt) → разумно делать вместе.
 
-### F-04 — ASR pause/resume 🟠 Ⓜ · TODO · **отложено владельцем в отдельную сессию (2026-06-27); план ниже** · (upstream Roadmap «Now»)
+### F-04 — ASR pause/resume 🟠 Ⓜ · ✅ **DONE (PR #65, merge `f6c7625`, v0.3.17, 2026-06-27)** · (upstream Roadmap «Now»)
+> ✅ **Закрыт по плану ниже.** Новый чистый тестируемый `FlyleafLib/Utils/PauseTokenSource.cs` (`PauseTokenSource`+`PauseToken`
+> struct) — async-гейт, не блокирует тред, cancellation-aware (не мутирует shared TCS на отмене), thread-safe (Interlocked CAS);
+> `default` PauseToken = never-paused → батч передаёт его и получает no-op. `SubtitlesASR.Pause()/Resume()/IsPaused`; reset гейта
+> на старте каждого `Execute` (не родиться paused после seek) и в `finally`; consumer в `AudioReader.ReadAll` `await`'ит гейт на
+> **границе чанка** (канал bounded cap 1-2 → producer backpressure'ит на `WriteAsync`, не убегает). Пауза **СОХРАНЯЕТ субтитры**
+> (в отличие от `TryCancel`, который чистит). UI: `Player.IsASRPaused` + `AppActions.CmdToggleASRPause` + кликабельный ASR-чип в
+> `FlyleafBar.xaml` (иконка Pause/Play). Скоуп — только интерактивный ASR (батч НЕ затронут, default token). Гейты build 0/0,
+> тесты **275/275**, verify-frozen/doc-coverage green, **6-линзовое adversarial `/code-review` (14 агентов; 0 critical, 0 дефектов
+> продакшн-кода — подтверждённые находки = усиление тестов concurrency-примитива, внесено: concurrent stress + bounded-channel
+> back-pressure + tight-timeout)**, `.exe` launch-тест 0.3.17 чистый. Контракты product-behavior/media-runtime(ASR-threading)/
+> wpf-design/manual-smoke обновлены. Интегрирован с параллельным PR #64 (батч-VC++, v0.3.16) через merge → версия 0.3.17.
+> Детали: второй мозг `Sessions/2026-06-27-handoff-f04-asr-pause-resume.md`.
 **Файл/TODO:** [`SubtitlesASR.cs:27`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) («TODO: L: Pause and resume ASR»).
 **Рассуждение:** явный UX-win на длинных видео; в дорожной карте upstream; средняя сложность. Самый крупный/рискованный
 пункт остатка (правка frozen ASR-threading + UI), поэтому владелец (AskUserQuestion 2026-06-27) выбрал **отдельную
