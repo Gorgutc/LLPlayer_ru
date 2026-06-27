@@ -53,6 +53,35 @@ public class SubtitlesASR
         Log = new LogHandler(("[#1]").PadRight(8, ' ') + " [SubtitlesASR  ] ");
     }
 
+    // F-04: pause gate for the interactive ASR run. The consumer awaits this at a chunk boundary; pausing keeps
+    // already-produced subtitles (unlike TryCancel, which clears them) and back-pressures the producer.
+    private readonly PauseTokenSource _pauseSource = new();
+
+    /// <summary>True while the interactive ASR run is paused at a chunk boundary (accumulated subtitles kept).</summary>
+    public bool IsPaused => _pauseSource.IsPaused;
+
+    /// <summary>
+    /// Pause the interactive ASR run at the next chunk boundary, keeping already-produced subtitles. No-op when
+    /// ASR is not running. A chunk is transcribed atomically, so the chunk in flight (incl. the external
+    /// faster-whisper process) finishes first; the producer then back-pressures on the bounded channel.
+    /// </summary>
+    public void Pause()
+    {
+        CancellationTokenSource? cts = _cts;
+        if (cts == null || cts.IsCancellationRequested)
+            return; // not running
+
+        _pauseSource.Pause();
+        _config.Subtitles.player.IsASRPaused = true;
+    }
+
+    /// <summary>Resume the interactive ASR run after <see cref="Pause"/>. Idempotent / safe when not paused.</summary>
+    public void Resume()
+    {
+        _pauseSource.Resume();
+        _config.Subtitles.player.IsASRPaused = false;
+    }
+
     /// <summary>
     /// Check that ASR is executable
     /// </summary>
@@ -213,6 +242,9 @@ public class SubtitlesASR
             try
             {
             _cts = new CancellationTokenSource();
+            // A fresh run must never start paused (e.g. left paused before a seek-triggered restart).
+            _pauseSource.Resume();
+            _config.Subtitles.player.IsASRPaused = false;
             using AudioReader reader = new(_config, subIndex);
             reader.Open(url, streamIndex, type, _cts.Token);
 
@@ -281,7 +313,7 @@ public class SubtitlesASR
                         }
                     }
                 }
-            }, _cts.Token);
+            }, _cts.Token, _pauseSource.Token);
 
             if (!_cts.Token.IsCancellationRequested)
             {
@@ -302,6 +334,9 @@ public class SubtitlesASR
             finally
             {
                 _config.Subtitles.player.IsASRRunning = false;
+                // Always clear the paused state on completion/cancellation/error so the next run starts clean.
+                _pauseSource.Resume();
+                _config.Subtitles.player.IsASRPaused = false;
             }
         }
 
@@ -446,7 +481,7 @@ public class AudioReader : IDisposable
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     /// <exception cref="OperationCanceledException"></exception>
-    public void ReadAll(TimeSpan curTime, Action<SubtitleASRData> addSub, CancellationToken cancellationToken)
+    public void ReadAll(TimeSpan curTime, Action<SubtitleASRData> addSub, CancellationToken cancellationToken, PauseToken pauseToken = default)
     {
         if (_demuxer == null || _decoder == null || _stream == null)
             throw new InvalidOperationException("Open() is not called");
@@ -519,6 +554,11 @@ public class AudioReader : IDisposable
 
             while (await channel.Reader.WaitToReadAsync(token))
             {
+                // F-04 pause boundary: a chunk is transcribed atomically, so pause takes effect BETWEEN chunks.
+                // If paused, suspend here until resumed or cancelled, keeping already-produced subtitles; the
+                // producer back-pressures on the bounded channel meanwhile. A default PauseToken (batch) no-ops.
+                await pauseToken.WaitWhilePausedAsync(token);
+
                 // Use TryPeek() to reduce the channel capacity by one.
                 if (!channel.Reader.TryPeek(out AudioChunk chunk))
                     throw new InvalidOperationException("can not peek AudioChunk from channel");

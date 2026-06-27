@@ -441,6 +441,17 @@ public class AppActions
         HyperlinkHelper.OpenUrlInBrowser(VcRedistChecker.DownloadUrl);
     }
 
+    // F-04: toggle interactive ASR (speech-to-text) pause/resume from the player bar's ASR chip.
+    // Pause/Resume are no-ops when ASR is not running, and the chip is only visible while it is.
+    public DelegateCommand CmdToggleASRPause => field ??= new(() =>
+    {
+        var asr = _player.SubtitlesASR;
+        if (asr.IsPaused)
+            asr.Resume();
+        else
+            asr.Pause();
+    });
+
     public DelegateCommand CmdOpenWindowSettings => field ??= new(() =>
     {
         if (_player.IsPlaying)
