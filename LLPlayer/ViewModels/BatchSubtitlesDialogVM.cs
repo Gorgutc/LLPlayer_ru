@@ -53,6 +53,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
         PreferRussianAudio = FL.Config.BatchSubtitles.PreferRussianAudio;
         WatchFolder = FL.Config.BatchSubtitles.WatchFolder;
+        Voices = VoiceBankResolver.ForConfig(FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId);
         _initializing = false;
 
         // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in
@@ -179,6 +180,12 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             }
         }
     }
+
+    // Built-in dub voice bank for the picker next to "Generate Russian dub". GPU-free (never starts the
+    // sidecar); includes the current DefaultVoiceId even if it is not a known preset so the ComboBox
+    // never blanks. The selected value writes through to DubbingConfig.DefaultVoiceId, which the renderer
+    // reads live at run start (BatchSubtitlesDialogVM builds DubbingRenderer from the live config).
+    public IReadOnlyList<TtsVoice> Voices { get; }
 
     // When on, a file with a Russian-tagged audio track has that track transcribed (Russian subtitles, no
     // translation); files without a Russian track are transcribed + translated as before. A per-file override

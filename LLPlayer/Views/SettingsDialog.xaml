@@ -113,6 +113,12 @@
                             Tag="SettingsSubtitlesAction"
                             FontSize="14"
                             FontWeight="Normal" />
+
+                        <TreeViewItem
+                            Header="Dubbing"
+                            Tag="SettingsSubtitlesDubbing"
+                            FontSize="14"
+                            FontWeight="Normal" />
                     </TreeViewItem>
 
                     <TreeViewItem Tag="SettingsKeys" IsExpanded="True">

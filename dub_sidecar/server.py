@@ -42,6 +42,9 @@ _MODEL_LOCK = threading.Lock()
 _SYNTH_RATE = 24000  # CosyVoice2 native sample rate (mono)
 
 # A tiny preset "voice bank" for the MVP override path. The real engine maps these to model voices.
+# NOTE: the C# UI mirrors this list in VoiceBankResolver.BuiltIn (FlyleafLib/MediaPlayer/Dubbing/
+# VoiceBankResolver.cs) so the voice picker can populate WITHOUT starting this sidecar — keep the two
+# lists (ids/names/genders/language) in lockstep; a C# unit test pins the expected presets.
 VOICES = [
     {"id": "ru-preset-1", "name": "Russian Narrator (M)", "gender": "male", "language": "ru"},
     {"id": "ru-preset-2", "name": "Russian Narrator (F)", "gender": "female", "language": "ru"},

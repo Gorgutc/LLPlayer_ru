@@ -58,6 +58,7 @@ Settings navigation is a left TreeView plus right content area. Current sections
 - Subtitles OCR
 - Subtitles Translate
 - Subtitles Word Action
+- Subtitles Dubbing
 - Keys
 - Key Offset
 - Mouse
@@ -68,6 +69,8 @@ Settings navigation is a left TreeView plus right content area. Current sections
 Do not remove or merge sections unless the user explicitly requests a settings redesign.
 
 A search box above the TreeView filters sections by label/key (hiding non-matches, expanding branches with a match) and is cleared automatically before a deep-link navigation so targets are never hidden; it must not change the page cache or the `SelectedItemChanged`/`LoadPage` flow. The ASR section keeps its advanced whisper.cpp tuning knobs in a collapsed Expander.
+
+The **Subtitles ▸ Dubbing** section (F-16 phase 1) surfaces the existing `Config.Subtitles.DubbingConfig` (dub voice, ducking %, atempo min/max, output format). The voice picker binds a GPU-free static bank (`VoiceBankResolver.BuiltIn`) and never starts the TTS sidecar; `SelectedValuePath="Id"` round-trips `DefaultVoiceId` (a string). Additive — with defaults unchanged the section is informational and writes the same values back. The batch dialog carries the same voice picker beside the "Generate Russian dub (AI)" checkbox (enabled only when dubbing is on).
 
 ## Subtitle UI
 

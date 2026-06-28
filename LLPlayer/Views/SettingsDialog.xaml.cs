@@ -68,6 +68,7 @@ public partial class SettingsDialog : UserControl
             [nameof(SettingsSubtitlesOCR)] = () => new SettingsSubtitlesOCR(),
             [nameof(SettingsSubtitlesTrans)] = () => new SettingsSubtitlesTrans(),
             [nameof(SettingsSubtitlesAction)] = () => new SettingsSubtitlesAction(),
+            [nameof(SettingsSubtitlesDubbing)] = () => new SettingsSubtitlesDubbing(),
             [nameof(SettingsKeys)] = () => new SettingsKeys(),
             [nameof(SettingsKeysOffset)] = () => new SettingsKeysOffset(),
             [nameof(SettingsMouse)] = () => new SettingsMouse(),

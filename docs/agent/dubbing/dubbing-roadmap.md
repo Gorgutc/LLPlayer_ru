@@ -39,6 +39,14 @@ non-Russian target languages; bundling non-commercial models.
 | **5 — Isochrony + translation polish** | Full layered isochrony (duration-budgeted LLM translation, pause-spill, TTS rate ctrl, smoothed capped atempo, reset-at-pause). VideoLingo Translate-Reflect-Adapt + ViDove proofreader ideas for Russian consistency. Optional RVC (MIT) post-pass (prototype first). | 4 | RVC (MIT, optional) |
 | **6 — Optional cloud slot** | `ITtsService` with ElevenLabs (TTS stable; dubbing endpoint experimental), Azure/Cartesia alt. User-supplied paid key; **defaults to preset voices** (cloud source-speaker cloning is ToS-prohibited). Local stays default. | 3 | none (user keys) |
 
+> **Phase 1 progress (F-16, voice-bank slice — shipped v0.3.30):** the C#-side voice bank landed —
+> `VoiceBankResolver` (GPU-free preset bank mirroring `dub_sidecar/server.py` VOICES + fail-soft
+> `ResolveAsync` engine-merge seam) plus a voice picker in the batch dialog and a new **Settings ▸
+> Subtitles ▸ Dubbing** section (voice / ducking / atempo / output format). Selecting a voice writes
+> `DubbingConfig.DefaultVoiceId` (one voice per dub). **Still phase-2:** per-line / per-speaker selection
+> (needs diarization + per-line data) and the manual gender override UI; pre-rendering additional preset
+> voices is owner first-run on the GPU.
+
 ## This session's sprint (Phase 0)
 
 > **Honest scope (design-review correction B7):** the long-lived HTTP sidecar, the `uv` provisioner,
