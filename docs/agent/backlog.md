@@ -562,9 +562,27 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 783/783** (на 2026-06-28, после T-03-среза №2 PR #88 +58; ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
+**Тесты: 915/915** (на 2026-06-28, после T-03-среза №3 PR #95 — language-мапперы +70; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 voice-bank +25 → 845; затем +70 → 915. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
+> **Прогресс 2026-06-28 (PR #95, +70 тестов → 915, tests-only):** покрыты ранее непокрытые
+> ПУБЛИЧНЫЕ чистые language-мапперы движка (ожидания ИЗ КОДА) → `FlyleafLibTests/Engine/LanguageMapperTests.cs`:
+> `TesseractModel.TesseractLangToISO6391` (105 активных записей: count-tripwire, spot-маппинги,
+> `zh`×2 / `zz`×1, форма «2 строчные буквы», все ключи — определённые enum-значения);
+> `WhisperLanguage.LanguageToCode`/`GetWhisperLanguages` (reverse-map 100, case-insensitive,
+> title-case `UpperFirstOfWords` вкл. «Haitian Creole», round-trip между фасадами, сортировка,
+> distinct codes); `Language.ISO639_2T_TO_2B`/`ISO639_2B_TO_2T` (биекция 20×2 + spot); `Language.StringToCulture`
+> (guard-ветки + fallback-скан по EnglishName через exception-path); `Language.ThreeLetterToCulture`
+> (zht→zh-Hant/pob→pt-BR/tgl→fil). **Culture/ICU-fragile ветки (nor→nob/scc→srp, `GetCultureInfo` для
+> 3-letter) намеренно НЕ ассертятся** (стабильность CI .NET 10.x ↔ локаль .NET 11-preview). Многоагентно:
+> верификация (workflow 5 Explore) → adversarial-ревью (workflow 4 линзы) → триаж (2 coverage-доп приняты:
+> fallback-scan + tgl; brittleness-«critical» = не дефект теста — prod OrderBy и BeInAscendingOrder делят
+> один ambient comparer; `char.IsUpper(char,Culture)` перегрузки НЕТ → галлюцинация, отклонено;
+> cardinality-tripwires оставлены) → `/code-review high` Approve. Гейты build `-warnaserror` **0/0** +
+> verify.ps1 green + **915/915**; tests-only → без бампа версии/launch. **Возможный prod follow-up:**
+> `WhisperLanguage.GetWhisperLanguages` `OrderBy` без `StringComparer.InvariantCulture` (несогласовано с
+> `Language.AllLanguages`; безвреден для ASCII-имён). Остаётся ONGOING (demuxer/playlist/OCR-карты Tesseract
+> уже покрыты частично; Google/Microsoft translate-мапперы private → нужен seam).
 > **Прогресс 2026-06-28 (PR #88, +58 тестов → 783, tests-only):** покрыты ранее непокрытые ПУБЛИЧНЫЕ
 > детерминированные функции: `TranslateServiceTypeExtensions` (`IsLLM` одиночные + combined-flags,
 > `LLMServices` cardinality-tripwire + membership, `DefaultSettings` enum→конкретный settings-тип через
