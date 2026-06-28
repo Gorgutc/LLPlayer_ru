@@ -508,7 +508,7 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > браузерное расширение — заводить отдельной крупной задачей.
 Сейчас словарь — через попап перевода слова (F-11) и буфер обмена (FAQ).
 
-### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · IN-PROGRESS (фаза 1 voice-bank ✅ PR #93 v0.3.30; фазы 2-6 TODO)
+### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · IN-PROGRESS (фаза 1 voice-bank ✅ PR #93 v0.3.30; фаза 2 частично: custom voice-ID ✅ PR #96 v0.3.31; остаток фаз 2-6 TODO)
 > ⚙️ **Фаза 1 (voice-bank) — срез отгружен (PR #93, merge `526a1a3`, v0.3.30, 2026-06-28).** Пользователь
 > выбирает **голос дубляжа** (банк пресетов). Аддитивно/opt-in; default (`DefaultVoiceId=ru-preset-1`, дубляж
 > выкл.) **byte-identical**. **Pure GPU-free `FlyleafLib/MediaPlayer/Dubbing/VoiceBankResolver.cs`**: `BuiltIn`
@@ -523,6 +523,21 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > `/code-review high` Approve. Гейты build `-warnaserror` **0/0 ×3** + тесты **845/845** (+25) + verify.ps1 green;
 > `.exe` launch 0.3.30 чистый. Контракты wpf-design/dubbing/dubbing-roadmap аддитивно. Детали: второй мозг
 > `Sessions/2026-06-28-handoff-f16-voice-bank.md`.
+> ⚙️ **Фаза 2 (частично) — custom voice-ID отгружен (PR [#96](https://github.com/Gorgutc/LLPlayer_ru/pull/96), merge `58e4320`, v0.3.31, 2026-06-28).** Пользователь регистрирует **кастомные voice-ID** (добавленные в локальный
+> `dub_sidecar/server.py` VOICES) в Settings ▸ Subtitles ▸ Dubbing ▸ **Custom voice IDs** (ListBox + Add/Remove)
+> → они появляются в пикере голоса (Settings + батч-диалог) и доходят до движка как `DefaultVoiceId` →
+> `TtsRequest.VoiceId`. Аддитивно/opt-in, пустой список (default) → **byte-identical**. `DubbingConfig.CustomVoiceIds`
+> (`List<string>`) + `VoiceBankResolver.ForConfig(selected, customVoiceIds)` overload (merge после банка:
+> trim/dedup-ci/declared-order; selected остаётся placeholder; пустой → тот же `BuiltIn`-инстанс) + фабрика
+> `CustomVoice(id)`. `ObservableCollection Voices` мутируется **хирургически (без Clear)** → two-way `SelectedValue`
+> не бланкуется. GPU-free, **не стартует sidecar** для пикера. **Развилка (AskUserQuestion):** буквальный «Refresh
+> voices from engine» = hollow (стартует GPU-движок ради зеркала банка + не launch-проверяем off-GPU) → выбран
+> custom-ID список. Adversarial-ревью (4 линзы): **CRITICAL** — батч-пикер не передавал custom-ID → исправлено;
+> DRY-фабрика. Гейты build `-warnaserror` **0/0** + тесты **926/926** (+11) + verify.ps1 green; `/code-review`
+> Approve; **`.exe` launch 0.3.31 чистый**. Контракты wpf-design/dubbing/dubbing-roadmap (фаза 2) аддитивно.
+> **Остаток фазы 2:** per-line / per-speaker выбор + diarization-gender (нужен F-03 + per-line данные), AAC/m4a
+> энкод в sidecar (Python+GPU), pre-render доп. голосов + live-discovery `ResolveAsync` refresh (= owner GPU
+> first-run). Детали: второй мозг `Sessions/2026-06-28-handoff-f16-custom-voices.md`.
 Дубляж — Phase 0 (PR #35 влит, CosyVoice2 в `dub_sidecar/`). SE предлагает много TTS (Edge/Kokoro/OmniVoice
 voice-cloning). **Решение:** фазы 1-6 из [[2026-06-23-handoff-dubbing-mvp]] (мульти-голос, качество,
 diarization-aware). **Рассуждение:** крупно; держать как продолжение существующей фичи.
@@ -562,7 +577,7 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 915/915** (на 2026-06-28, после T-03-среза №3 PR #95 — language-мапперы +70; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 voice-bank +25 → 845; затем +70 → 915. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
+**Тесты: 926/926** (на 2026-06-28 v0.3.31: после T-03-среза №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
 > **Прогресс 2026-06-28 (PR #95, +70 тестов → 915, tests-only):** покрыты ранее непокрытые
