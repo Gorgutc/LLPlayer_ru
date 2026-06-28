@@ -31,8 +31,9 @@ public class DubbingConfig : NotifyPropertyChanged
     /// <summary>MVP single preset Russian voice; later overridable per speaker from the voice bank.</summary>
     public string DefaultVoiceId { get; set => Set(ref field, value); } = "ru-preset-1";
 
-    /// <summary>Original-audio level under the dub during dubbed spans, 0..100. Drives the duck depth.</summary>
-    public int DuckingPercent { get; set => Set(ref field, value); } = 15;
+    /// <summary>Original-audio level under the dub during dubbed spans, 0..100. Drives the duck depth.
+    /// Clamped to its valid range on set so a hand-edited config or UI echo cannot push it out of bounds.</summary>
+    public int DuckingPercent { get; set => Set(ref field, Math.Clamp(value, 0, 100)); } = 15;
 
     /// <summary>Isochrony: capped pitch-preserving time-stretch (ffmpeg atempo) range.</summary>
     public double AtempoMin { get; set => Set(ref field, value); } = 0.9;
@@ -41,6 +42,8 @@ public class DubbingConfig : NotifyPropertyChanged
     /// <summary>Mandatory Russian stress/homograph normalization before synthesis; graceful-degrades.</summary>
     public bool StressNormalization { get; set => Set(ref field, value); } = true;
 
-    /// <summary>Dub container. FLAC avoids AAC encoder priming (A/V sync); m4a is allowed.</summary>
+    /// <summary>Dub container. FLAC avoids AAC encoder priming (A/V sync) and is the only format the
+    /// sidecar currently encodes — a non-FLAC value degrades to a FLAC bitstream, so the picker UI
+    /// offers FLAC only until a real AAC/m4a path exists.</summary>
     public string OutputFormat { get; set => Set(ref field, value); } = DubbingOutputPathBuilder.DefaultExtension;
 }

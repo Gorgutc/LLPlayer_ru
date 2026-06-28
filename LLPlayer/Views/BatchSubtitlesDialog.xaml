@@ -127,6 +127,18 @@
                     ToolTip="After the subtitles, also render a Russian voice-over track (video.ru.dub.flac) beside each video using the local TTS engine. Requires the dub engine to be provisioned first. Runs serialized (no GPU overlap)."
                     IsChecked="{Binding GenerateDubbing}" />
 
+                <ComboBox
+                    Margin="8 0 0 0"
+                    Width="150"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="Dub voice"
+                    ItemsSource="{Binding Voices}"
+                    DisplayMemberPath="DisplayName"
+                    SelectedValuePath="Id"
+                    SelectedValue="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId}"
+                    IsEnabled="{Binding GenerateDubbing}"
+                    ToolTip="Voice for the rendered Russian dub (the default voice used for every line). More dub options under Settings &#x25b8; Subtitles &#x25b8; Dubbing." />
+
                 <CheckBox
                     Margin="18 0 0 0"
                     VerticalAlignment="Center"

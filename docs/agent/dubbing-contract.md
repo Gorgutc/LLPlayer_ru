@@ -95,6 +95,15 @@ user explicitly asks to change that product decision.
 
 ## Voices (Phase 1–3 — planned)
 
+- **Phase 1 voice bank (shipped, additive):** the selectable preset bank is mirrored in C# as the
+  GPU-free `VoiceBankResolver.BuiltIn` (`FlyleafLib/MediaPlayer/Dubbing/VoiceBankResolver.cs`), kept in
+  **lockstep** with `dub_sidecar/server.py`'s `VOICES` (a unit test pins the ids/order). The picker
+  (batch dialog + **Settings ▸ Subtitles ▸ Dubbing**) binds this static bank and **never starts the
+  sidecar** to enumerate voices; the engine `ITtsService.GetVoicesAsync` stays the phase-2 live-discovery
+  seam, surfaced by `VoiceBankResolver.ResolveAsync` (fail-soft; built-in metadata wins on id collision;
+  not yet wired into the UI). The chosen voice writes `DubbingConfig.DefaultVoiceId` (one voice for the
+  whole dub); **per-line / per-speaker selection remains phase 2** (needs per-line data). The renderer
+  reads `DefaultVoiceId` live at run start, so no batch-snapshot coverage is required.
 - **Hybrid:** by default, diarize speakers and **clone each speaker's timbre** into Russian
   (CosyVoice2 zero-shot from a per-speaker reference clip), preserving gender; **any speaker can be
   overridden** with a preset bank voice. Gender uses a license-free F0 heuristic + manual override.

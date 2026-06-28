@@ -1,0 +1,114 @@
+<UserControl x:Class="LLPlayer.Controls.Settings.SettingsSubtitlesDubbing"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:LLPlayer.Controls.Settings"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:helpers="clr-namespace:LLPlayer.Extensions"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance local:SettingsSubtitlesDubbingVM}"
+             d:Foreground="White"
+             d:Background="Black"
+             d:DesignHeight="450" d:DesignWidth="800">
+    <ScrollViewer>
+        <StackPanel>
+            <TextBlock
+                Text="Subtitles > Dubbing"
+                FontSize="24"
+                FontWeight="Bold"
+                Margin="0 0 0 16" />
+
+            <TextBlock
+                Margin="0 0 0 16"
+                Foreground="{DynamicResource MaterialDesignBodyLight}"
+                Text="AI dubbing renders a Russian voice-over track (video.ru.dub.*) beside each video using the local TTS engine (opt-in, run from the Batch dialog). Phase 1 uses a single voice for the whole dub; per-speaker selection comes later." />
+
+            <GroupBox Header="Voice">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180"
+                            Text="Dub voice" />
+                        <ComboBox
+                            Width="240"
+                            AutomationProperties.Name="Dub voice"
+                            ItemsSource="{Binding Voices}"
+                            DisplayMemberPath="DisplayName"
+                            SelectedValuePath="Id"
+                            SelectedValue="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId}"
+                            ToolTip="The preset voice used for the whole dubbed track. Per-line / per-speaker selection is a later phase." />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Mix &amp; Timing">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180"
+                            Text="Ducking (%)"
+                            ToolTip="Original-audio level under the dub during dubbed spans (lower = quieter original)." />
+                        <Slider
+                            Width="200"
+                            VerticalAlignment="Center"
+                            Minimum="0"
+                            Maximum="100"
+                            TickFrequency="1"
+                            IsSnapToTickEnabled="True"
+                            Style="{StaticResource MaterialDesignDiscreteSlider}"
+                            Value="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.DuckingPercent}" />
+                        <TextBox
+                            Width="40"
+                            Margin="8 0 0 0"
+                            Text="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.DuckingPercent, UpdateSourceTrigger=PropertyChanged}"
+                            helpers:TextBoxHelper.OnlyNumeric="Uint" />
+                        <TextBlock
+                            Margin="4 0 0 0"
+                            Text="%" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180"
+                            Text="Atempo min"
+                            ToolTip="Lower bound of the pitch-preserving time-stretch applied to fit each line into its slot." />
+                        <TextBox
+                            Width="100"
+                            Text="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.AtempoMin}"
+                            helpers:TextBoxHelper.OnlyNumeric="Double" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180"
+                            Text="Atempo max"
+                            ToolTip="Upper bound of the pitch-preserving time-stretch (values above 1 shorten the line)." />
+                        <TextBox
+                            Width="100"
+                            Text="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.AtempoMax}"
+                            helpers:TextBoxHelper.OnlyNumeric="Double" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Output">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180"
+                            Text="Output format" />
+                        <ComboBox
+                            Width="240"
+                            AutomationProperties.Name="Dub output format"
+                            SelectedValuePath="Tag"
+                            SelectedValue="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.OutputFormat}"
+                            ToolTip="Dub container. FLAC is currently the only format the engine encodes — it also avoids AAC encoder priming, preserving A/V sync. (AAC/m4a is a later phase.)">
+                            <ComboBoxItem Content="FLAC" Tag="flac" />
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
