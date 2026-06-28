@@ -445,7 +445,23 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Заодно закрывает реалистичное ядро F-15** (литеральный Yomitan-бридж невозможен аддитивно; «определение слова в
 попапе» = то же действие).
 
-### F-12 — A-B повтор ✅ **DONE (PR этот, v0.3.27, 2026-06-28)** + аудио-waveform 🟢 Ⓛ · TODO (waveform-половина)
+### F-12 — A-B повтор ✅ **DONE (v0.3.27, 2026-06-28)** + аудио-waveform ✅ **DONE (PR этот, v0.3.28, 2026-06-28)**
+> ✅ **Waveform-половина отгружена (v0.3.28).** Opt-in визуализация аудио-огибающей за сикбаром (тумблер `AppConfig.
+> ShowWaveform`, **default OFF → byte-identical**). При включении с открытым локальным файлом аудио декодируется один
+> раз в **фоновом worker'е** через `WaveformReader` (свой изолированный `Demuxer`+`AudioDecoder`+`SwrContext` —
+> паттерн ASR `AudioReader`, 2-й `avformat_open_input`; НЕ трогает играющий пайплайн), ресэмплится в S16 mono 16kHz
+> и сворачивается в **чистый `WaveformPeakBuilder`** (`FlyleafLib/Utils/WaveformPeaks.cs`, PTS-bucketing, max-abs,
+> 17 юнит-тестов) → рендерится `Path`/`StreamGeometry` (`WaveformGeometryConverter`, auto-gain) в `Canvas` ПЕРЕД
+> слайдером (z-order под треком; `AbOverlay` цел). State на `Player.Waveform.cs` (`WaveformPeaks`/`WaveformActive`/
+> `WaveformEnabled`; cancel-and-replace, reset в `ResetMe`, триггер в `Decoder_OpenAudioStreamCompleted`); тумблер
+> в баре рядом с A-B. **Skip live/HLS/no-audio/unknown-duration; fail-soft на ошибке декода (нет оверлея, не модал).**
+> CTS-владение: worker — единственный диспозер своего CTS (swap/clear/reset только Cancel) → нет ODE-гонки.
+> Дизайн-панель (3 линзы) + adversarial-ревью (5 линз: native-memory/threading/correctness/additive/ui — **все SHIP**;
+> 1 minor token.Register-ODE + 1 ui-nit unused-progress-props исправлены; nits Reduce-doc учтён). Гейты build
+> `-warnaserror` **0/0 ×3** + тесты **803→820 (+17)** + verify.ps1 green; **`.exe` launch 0.3.28 чистый** (бар рендерится,
+> без crash.log). Контракты product-behavior/media-runtime/wpf-design/config-data + manual-smoke аддитивно. **Owner
+> manual-smoke:** тумблер Waveform → огибающая за сикбаром на локальном файле; смена файла → ребилд; no-audio/live → нет
+> waveform. Детали: второй мозг `Sessions/2026-06-28-handoff-f12-waveform.md`. **F-12 полностью закрыта.**
 > ✅ **A-B повтор отгружен (v0.3.27).** Пользователь ставит точки A и B во время воспроизведения; плеер зацикливает
 > отрезок [A,B] (frame-accurate seek назад к A при достижении B) до сброса. **OFF byte-identical** (нет точек →
 > поведение прежнее). Pure тестируемый `FlyleafLib/MediaPlayer/AbLoop.cs` (20 юнит-тестов); состояние — `Volatile.
@@ -701,7 +717,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 19 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | 🟢 | Ⓛ |
 | 20 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | 🟢 | Ⓛ |
 | 21 | **F-16** | Дубляж фазы 1-6 | 🟢 | Ⓛ |
-| 22 | **F-12** | Аудио-waveform | 🟢 | Ⓛ |
+| 22 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 (A-B повтор DONE v0.3.27) | 🟢 | Ⓛ |
 | 23 | ~~**T-07**~~ ✅ | SrtExporter теги `<i>` → DONE PR #59 v0.3.13 | 🟢 | ⓢ |
 | 24 | ~~**T-08/T-09**~~ ✅ + **T-10** | fold-back/silence-split ✅ DONE PR #69 v0.3.19; **T-10** per-seg lang ⚠️ конфликт F-17 (OPEN) | 🟢 | Ⓜ/Ⓛ |
 | 25 | ~~**T-06**~~ ✅ | Дрейф документации форка → DONE PR #84 (doc-only) | 🟢 | ⓢ |
@@ -709,7 +725,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.27):** F-03, T-03(ongoing), F-16, F-12-waveform(половина), T-05(решение), F-13, T-10(⚠️F-17), F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 A-B повтор ✅ DONE (v0.3.27); F-15 ✅ DONE-BY-F-11.**
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.28):** F-03, T-03(ongoing), F-16, T-05(решение), F-13, T-10(⚠️F-17), F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -740,11 +756,11 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 23 | **F-16** | Дубляж фазы 1-6 | Ⓛ | 🟢 |
 | 24 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | Ⓛ | 🟢 |
 | 25 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | Ⓛ | 🟢 |
-| 26 | **F-12** | Аудио-waveform | Ⓛ | 🟢 |
+| 26 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 | Ⓛ | 🟢 |
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | **T-05** | M3-редизайн — решение владельца (не оценивается) | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-28 (v0.3.27), легче→тяжелее:** T-03(ongoing) · F-12-waveform(половина) · F-03 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. Решение-only: T-05. **F-11/T-06/T-11 ✅ DONE; F-12 A-B повтор ✅ DONE (v0.3.27); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-06-28 (v0.3.28), легче→тяжелее:** T-03(ongoing) · F-03 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. Решение-only: T-05. **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
 
 ---
 

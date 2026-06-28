@@ -89,6 +89,8 @@ unsafe partial class Player
             Duration= duration;
         });
         UIAll();
+
+        TriggerWaveformBuild(); // F-12: if the opt-in waveform is enabled, decode the envelope in the background
     }
     private void Decoder_OpenVideoStreamCompleted(object sender, OpenVideoStreamCompletedArgs e)
     {

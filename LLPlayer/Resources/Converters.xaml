@@ -23,6 +23,7 @@
     <conv:AspectRatioIsCheckedConverter x:Key="AspectRatioIsCheckedConv"/>
     <conv:AbMarkerLeftConverter x:Key="AbMarkerLeftConv"/>
     <conv:AbBandWidthConverter x:Key="AbBandWidthConv"/>
+    <conv:WaveformGeometryConverter x:Key="WaveformGeometryConv"/>
 
     <!--General Converters-->
     <conv:BooleanToVisibilityMiscConverter x:Key="BooleanToVisibilityConv"/>
