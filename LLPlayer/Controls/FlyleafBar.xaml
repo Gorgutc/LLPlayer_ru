@@ -45,6 +45,22 @@
 
                 <!-- Current Time | Slider | Duration -->
                 <TextBlock Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center" Text="{Binding FL.Player.CurTime, Converter={StaticResource TicksToTimeConv}}" d:Text="00:00:00"/>
+                <!-- F-12 audio waveform: opt-in envelope drawn BEHIND the seek slider track. Declared BEFORE the
+                     Slider so it sits at LOWER z-order (under the track); a separate non-hit-testable Canvas like
+                     AbOverlay, collapsed when off/not built so the OFF path is unchanged. -->
+                <Canvas x:Name="WaveformOverlay" Grid.Column="1" Margin="10,0,10,0" IsHitTestVisible="False"
+                        VerticalAlignment="Stretch"
+                        Visibility="{Binding FL.Player.WaveformActive, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                    <Path Fill="{DynamicResource MaterialDesign.Brush.Primary}" Opacity="0.30" IsHitTestVisible="False">
+                        <Path.Data>
+                            <MultiBinding Converter="{StaticResource WaveformGeometryConv}">
+                                <Binding Path="FL.Player.WaveformPeaks"/>
+                                <Binding Path="ActualWidth" ElementName="WaveformOverlay"/>
+                                <Binding Path="ActualHeight" ElementName="WaveformOverlay"/>
+                            </MultiBinding>
+                        </Path.Data>
+                    </Path>
+                </Canvas>
                 <Slider
                     Grid.Column="1"
                     Cursor="Hand"
@@ -143,6 +159,7 @@
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
@@ -346,8 +363,40 @@ Right Click: Open Context Menu</ToolTip>
                     </Button.Style>
                 </Button>
 
+                <!-- F-12 Waveform toggle: opt-in seek-bar audio envelope (decoded in the background, default off).
+                     Lit (Primary) while enabled; mirrors AppConfig.ShowWaveform → Player.WaveformEnabled. -->
+                <ToggleButton Grid.Column="8"
+                              Width="32" Height="32" Padding="0"
+                              Background="Transparent" BorderThickness="0"
+                              Focusable="False"
+                              IsChecked="{Binding FL.Config.ShowWaveform}"
+                              Content="{materialDesign:PackIcon Kind=Waveform, Size=22}"
+                              ToolTip="Show audio waveform on the seek bar (decoded in the background)"
+                              AutomationProperties.Name="Show Waveform">
+                    <ToggleButton.Style>
+                        <Style TargetType="ToggleButton">
+                            <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="{TemplateBinding Background}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ToggleButton.Style>
+                </ToggleButton>
+
                 <!-- Volume Button (Mute/Unmute) -->
-                <Button Grid.Column="8" Foreground="{DynamicResource MaterialDesignBody}" Command="{Binding FL.Player.Commands.ToggleMute}" ToolTip="Mute / Unmute" AutomationProperties.Name="Mute / Unmute">
+                <Button Grid.Column="9" Foreground="{DynamicResource MaterialDesignBody}" Command="{Binding FL.Player.Commands.ToggleMute}" ToolTip="Mute / Unmute" AutomationProperties.Name="Mute / Unmute">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=VolumeHigh}"/>
@@ -372,13 +421,13 @@ Right Click: Open Context Menu</ToolTip>
                 <!-- Volume Slider -->
                 <!-- On a narrow bar the volume slider collapses (mute stays available) instead of clipping the
                      edge controls; tune the px threshold via ConverterParameter. -->
-                <Slider Grid.Column="9" Style="{DynamicResource FlyleafSlider}" Cursor="Hand" AutomationProperties.Name="Volume" AutomationProperties.HelpText="Volume level, scroll or drag to adjust" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter=620}" Foreground="{DynamicResource MaterialDesignBody}" Focusable="False" Margin="0,0,6,0" Width="100" VerticalAlignment="Center" Minimum="0" Maximum="{Binding FL.PlayerConfig.Audio.VolumeMax, Mode=OneWay}" d:Maximum="150" d:Value="75" Value="{Binding FL.Player.Audio.Volume}"/>
+                <Slider Grid.Column="10" Style="{DynamicResource FlyleafSlider}" Cursor="Hand" AutomationProperties.Name="Volume" AutomationProperties.HelpText="Volume level, scroll or drag to adjust" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter=620}" Foreground="{DynamicResource MaterialDesignBody}" Focusable="False" Margin="0,0,6,0" Width="100" VerticalAlignment="Center" Minimum="0" Maximum="{Binding FL.PlayerConfig.Audio.VolumeMax, Mode=OneWay}" d:Maximum="150" d:Value="75" Value="{Binding FL.Player.Audio.Volume}"/>
 
                 <!-- Open Settings Button — collapses into the overflow kebab on a narrow bar (after the volume slider). -->
-                <Button Grid.Column="10" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings" AutomationProperties.Name="Open Settings" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}"/>
+                <Button Grid.Column="11" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings" AutomationProperties.Name="Open Settings" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}"/>
 
                 <!-- Toggle Sub Sidebar — collapses into the overflow kebab on a narrow bar (after the volume slider). -->
-                <Button Grid.Column="11" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar" AutomationProperties.Name="Toggle Sub Sidebar" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}">
+                <Button Grid.Column="12" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar" AutomationProperties.Name="Toggle Sub Sidebar" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=DockRight}"/>
@@ -394,7 +443,7 @@ Right Click: Open Context Menu</ToolTip>
                 <!-- Overflow kebab: holds the low-priority actions that collapsed off the narrow bar (shown below
                      the 520px gate, i.e. after the volume slider drops at 620). Threshold is owner-tunable.
                      Opened/Closed reuse the existing SetActivity handlers so the bar doesn't auto-hide while open. -->
-                <materialDesign:PopupBox Grid.Column="12"
+                <materialDesign:PopupBox Grid.Column="13"
                                          VerticalAlignment="Center"
                                          Focusable="False"
                                          PlacementMode="TopAndAlignCentres"
@@ -423,7 +472,7 @@ Right Click: Open Context Menu</ToolTip>
                 </materialDesign:PopupBox>
 
                 <!-- Toggle Fullscreen Button -->
-                <ToggleButton Grid.Column="13" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen" AutomationProperties.Name="Toggle Fullscreen"/>
+                <ToggleButton Grid.Column="14" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen" AutomationProperties.Name="Toggle Fullscreen"/>
             </Grid>
         </Grid>
     </materialDesign:Card>

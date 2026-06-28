@@ -640,6 +640,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
         isLive      = false;
         lastError   = null;
         ResetABLoop(); // F-12: drop A-B repeat points so a leftover loop can't fire on a new file
+        ResetWaveform(); // F-12: cancel any waveform build + drop peaks so a stale envelope can't show on a new file
 
         UIAdd(() =>
         {
@@ -652,6 +653,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
             BufferedDuration = 0;
             SetCurTime();
             RaiseABLoopChanged();
+            RaiseWaveformChanged();
         });
     }
     private void Reset()

@@ -32,6 +32,15 @@ public class AppConfig : Bindable
 
         Subs.Initialize(this, fl);
 
+        // F-12: mirror the persisted seek-bar waveform toggle into the engine, which owns the build lifecycle
+        // (FlyleafLib cannot reference AppConfig). Apply the loaded value now, then push every later change.
+        FL.Player.WaveformEnabled = ShowWaveform;
+        PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ShowWaveform))
+                FL.Player.WaveformEnabled = ShowWaveform;
+        };
+
         // NOTE: theme/accent are applied in App.OnInitialized (after the shell exists), NOT here —
         // running PaletteHelper during FlyleafManager construction is too early and a failure would
         // corrupt the singleton.
@@ -206,6 +215,11 @@ public class AppConfig : Bindable
     public bool SidebarSearchWholeWord { get; set => Set(ref field, value); }
 
     public bool SidebarSearchRegex { get; set => Set(ref field, value); }
+
+    // F-12 seek-bar audio waveform (persisted; default false = no waveform, OFF byte-identical). Additive/
+    // absent-defaulting: a config that predates this key deserializes to false, so nothing is drawn or decoded
+    // until the user opts in. Mirrored into the engine (Player.WaveformEnabled) in Initialize().
+    public bool ShowWaveform { get; set => Set(ref field, value); }
 
     public string SidebarFontFamily { get; set => Set(ref field, value); } = "Segoe UI";
 
