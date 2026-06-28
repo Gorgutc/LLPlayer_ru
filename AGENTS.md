@@ -24,6 +24,8 @@ LLPlayer is a Windows-only C#/.NET 10 WPF media player for language learning. Th
 
 The application targets `net10.0-windows10.0.18362.0`, `win-x64`, and publishes as a framework-dependent single-file Windows exe. Do not assume this is a web, Node, React, or Playwright project.
 
+This is a fork of upstream `umlx5h/LLPlayer`; the `_ru` suffix denotes the Russified agent/automation infrastructure layer (this `AGENTS.md`, `docs/agent/`, `scripts/codex/`, `Plugins/llplayer-codex/`, Russian commit messages), **not** a Russian-localized build — the player UI/code tracks upstream and is not localized. See `docs/agent/architecture.md` ("Fork Relationship") and the local developer-environment notes in `docs/agent/technical-stack.md` ("Local Development Environment").
+
 ## Frozen Product Contracts
 
 Before changing product behavior, inspect the matching frozen contract:
