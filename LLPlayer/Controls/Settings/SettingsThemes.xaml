@@ -107,6 +107,25 @@
                             </TextBox.Text>
                         </TextBox>
                     </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Width="180">
+                            Material 3 Theme (rose)
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Opt-in Material You colour overlay: a rose-tinted dark surface ramp + primary-container accent applied live on top of the palette. Off by default. Applies only in the Dark theme with the default Primary/Secondary colours (accent sync or a custom colour shows your colour instead). Colour-only — control shapes are unchanged."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon Kind="Information" Width="16" Height="16" Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton
+                            AutomationProperties.Name="Material 3 Theme"
+                            AutomationProperties.HelpText="Opt-in Material You rose colour overlay for the dark theme with default colours. Off by default; colour-only (control shapes unchanged)."
+                            IsChecked="{Binding FL.Config.Theme.ShowM3Theme}" />
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 

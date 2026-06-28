@@ -1,0 +1,48 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================
+         M3 — Neutral surface ramp (rose-tinted dark).
+         Overrides the MaterialDesignInXAML dark neutral surface brushes
+         with the Material You rose-tinted dark ramp. Consumed via
+         DynamicResource everywhere, so re-declaring the same keys in a
+         later-merged dictionary wins at lookup time.
+
+         This dictionary is TOGGLED at runtime by AppConfigTheme: present
+         only while the effective theme is Dark, so Light / Follow-Windows
+         theme modes fall back to the stock MaterialDesign light surfaces
+         (preserving the live theme-switch feature). Do not merge a colour
+         override that PaletteHelper must own for non-dark modes.
+         ============================================================ -->
+
+    <!-- Window / page / deepest surface (m3-bg) -->
+    <SolidColorBrush x:Key="MaterialDesignPaper" Color="#1A1216" />
+
+    <!-- Base surface: cards-host / menus / dialog body (m3-surf) -->
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Background" Color="#241A1E" />
+    <SolidColorBrush x:Key="MaterialDesignBackground" Color="#241A1E" />
+
+    <!-- Toolbar / sidebar surface (m3-surf) -->
+    <SolidColorBrush x:Key="MaterialDesignToolBarBackground" Color="#241A1E" />
+
+    <!-- Raised surface: cards (m3-surf2) -->
+    <SolidColorBrush x:Key="MaterialDesignCardBackground" Color="#2D2025" />
+
+    <!-- Highest tonal surface: chips / field box / kbd (m3-surf3) -->
+    <SolidColorBrush x:Key="MaterialDesignChipBackground" Color="#382A30" />
+    <SolidColorBrush x:Key="MaterialDesignTextFieldBoxBackground" Color="#382A30" />
+
+    <!-- Outline / hairline (rgba(236,179,196,0.25)) -->
+    <SolidColorBrush x:Key="MaterialDesignDivider" Color="#40ECB3C4" />
+    <SolidColorBrush x:Key="MaterialDesignTextBoxBorder" Color="#40ECB3C4" />
+
+    <!-- On-surface text -->
+    <SolidColorBrush x:Key="MaterialDesignBody" Color="#F3DDE4" />
+    <SolidColorBrush x:Key="MaterialDesignBodyLight" Color="#D8C2C9" />
+    <SolidColorBrush x:Key="MaterialDesignColumnHeader" Color="#D8C2C9" />
+
+    <!-- Neutral selection / Slider base foreground -->
+    <SolidColorBrush x:Key="MaterialDesignSelection" Color="#2D2025" />
+    <SolidColorBrush x:Key="MaterialDesign.Brush.Foreground" Color="#F3DDE4" />
+
+</ResourceDictionary>
