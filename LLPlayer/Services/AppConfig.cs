@@ -1002,6 +1002,7 @@ public class AppConfigTheme : Bindable
             Theme cur = _paletteHelper.GetTheme();
             cur.SetBaseTheme(dark ? BaseTheme.Dark : BaseTheme.Light);
             _paletteHelper.SetTheme(cur);
+            RefreshM3Overlays();
 
             LLPlayer.Views.MainWindow.ReapplyTitleBar(dark);
         }
@@ -1036,6 +1037,7 @@ public class AppConfigTheme : Bindable
                 Theme cur = _paletteHelper.GetTheme();
                 cur.SetPrimaryColor(value);
                 _paletteHelper.SetTheme(cur);
+                RefreshM3Overlays();
             }
         }
     } = (Color)ColorConverter.ConvertFromString("#D23D6F"); // Pink
@@ -1053,6 +1055,7 @@ public class AppConfigTheme : Bindable
                 Theme cur = _paletteHelper.GetTheme();
                 cur.SetSecondaryColor(value);
                 _paletteHelper.SetTheme(cur);
+                RefreshM3Overlays();
             }
         }
     } = (Color)ColorConverter.ConvertFromString("#00B8D4"); // Cyan
@@ -1063,18 +1066,22 @@ public class AppConfigTheme : Bindable
     /// </summary>
     internal void ApplyAccentSync(Color accent)
     {
+        _accentSyncActive = true;
         Theme cur = _paletteHelper.GetTheme();
         cur.SetPrimaryColor(accent);
         cur.SetSecondaryColor(SecondaryColor);
         _paletteHelper.SetTheme(cur);
+        RefreshM3Overlays();
     }
 
     /// <summary>Re-applies the user's stored PrimaryColor (used when accent sync is turned off).</summary>
     internal void RestorePrimaryColor()
     {
+        _accentSyncActive = false;
         Theme cur = _paletteHelper.GetTheme();
         cur.SetPrimaryColor(PrimaryColor);
         _paletteHelper.SetTheme(cur);
+        RefreshM3Overlays();
     }
 
     /// <summary>
@@ -1084,10 +1091,95 @@ public class AppConfigTheme : Bindable
     /// </summary>
     internal void ApplyUserColors()
     {
+        _accentSyncActive = false;
         Theme cur = _paletteHelper.GetTheme();
         cur.SetPrimaryColor(PrimaryColor);
         cur.SetSecondaryColor(SecondaryColor);
         _paletteHelper.SetTheme(cur);
+        RefreshM3Overlays();
+    }
+
+    /// <summary>
+    /// Opt-in Material 3 (Material You) colour overlay. Default <c>false</c> → byte-identical to the stock
+    /// MaterialDesign2 look (no overlay dictionaries are merged). When enabled, a rose-tinted dark surface ramp
+    /// (<c>M3.Surfaces.xaml</c>) plus a primary-container accent (<c>M3.Accent.xaml</c>) are re-asserted on top
+    /// of the live palette for the dark theme. Colour-only: control shapes / radii are unchanged.
+    /// </summary>
+    public bool ShowM3Theme
+    {
+        get;
+        set
+        {
+            if (Set(ref field, value) && Loaded)
+                RefreshM3Overlays();
+        }
+    }
+
+    // ---- Material 3 (Material You) colour overlays -------------------------------------------------
+    // The rose-tinted surface ramp and primary-container accents live in two resource dictionaries
+    // (M3.Surfaces.xaml / M3.Accent.xaml). They are NOT merged statically in App.xaml, so with the default
+    // ShowM3Theme=false nothing is merged and the stock MaterialDesign2 look stays byte-identical. When the
+    // overlay is enabled they are added LAST (so they win DynamicResource lookups) and re-asserted after every
+    // PaletteHelper.SetTheme (which regenerates the neutral + primary/secondary brushes), but only for the
+    // states where M3 applies — leaving Light / Follow-Windows / accent-sync / colour-picker intact.
+
+    private static readonly Uri _m3SurfacesUri = new("/LLPlayer;component/Resources/M3.Surfaces.xaml", UriKind.Relative);
+    private static readonly Uri _m3AccentUri = new("/LLPlayer;component/Resources/M3.Accent.xaml", UriKind.Relative);
+    private static readonly Color _m3DefaultPrimary = (Color)ColorConverter.ConvertFromString("#D23D6F");
+    private static readonly Color _m3DefaultSecondary = (Color)ColorConverter.ConvertFromString("#00B8D4");
+
+    /// <summary>True while OS-accent sync is driving the primary colour (set by the apply paths).</summary>
+    private bool _accentSyncActive;
+
+    /// <summary>
+    /// Re-asserts the M3 colour overlays on top of the live MaterialDesign palette. Removes any existing
+    /// overlays first, then re-adds them last when applicable. No-op result (overlays removed) when
+    /// <see cref="ShowM3Theme"/> is off or the effective theme is light. The primary-container accent applies
+    /// only when the user has not customised the colours or enabled accent sync (so those features keep
+    /// showing the chosen colour). Cosmetic — never throws.
+    /// </summary>
+    private void RefreshM3Overlays()
+    {
+        try
+        {
+            Application? app = Application.Current;
+            if (app is null)
+                return;
+
+            Collection<ResourceDictionary> dicts = app.Resources.MergedDictionaries;
+
+            // Remove any existing M3 overlays first, so a toggle-off / theme switch actually drops them and an
+            // enabled re-assert re-adds them LAST for deterministic DynamicResource priority. Match by leaf
+            // filename to cover both the "/Resources/…" and "/LLPlayer;component/Resources/…" Uri forms.
+            for (int i = dicts.Count - 1; i >= 0; i--)
+            {
+                string? src = dicts[i].Source?.OriginalString;
+                if (src is not null &&
+                    (src.EndsWith("M3.Surfaces.xaml", StringComparison.OrdinalIgnoreCase) ||
+                     src.EndsWith("M3.Accent.xaml", StringComparison.OrdinalIgnoreCase)))
+                {
+                    dicts.RemoveAt(i);
+                }
+            }
+
+            // Opt-in: off by default → stock MaterialDesign2 look (byte-identical, no overlay merged).
+            if (!ShowM3Theme)
+                return;
+
+            // Light / Follow-Windows-light: let the stock MaterialDesign light palette show through.
+            if (!EffectiveDark)
+                return;
+
+            dicts.Add(new ResourceDictionary { Source = _m3SurfacesUri });
+
+            bool defaultColors = PrimaryColor == _m3DefaultPrimary && SecondaryColor == _m3DefaultSecondary;
+            if (!_accentSyncActive && defaultColors)
+                dicts.Add(new ResourceDictionary { Source = _m3AccentUri });
+        }
+        catch
+        {
+            // Overlay management is cosmetic; never let it crash a theme apply.
+        }
     }
 }
 
