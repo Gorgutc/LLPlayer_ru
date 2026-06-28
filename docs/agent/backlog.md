@@ -508,7 +508,21 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > браузерное расширение — заводить отдельной крупной задачей.
 Сейчас словарь — через попап перевода слова (F-11) и буфер обмена (FAQ).
 
-### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · TODO
+### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · IN-PROGRESS (фаза 1 voice-bank ✅ PR #93 v0.3.30; фазы 2-6 TODO)
+> ⚙️ **Фаза 1 (voice-bank) — срез отгружен (PR #93, merge `526a1a3`, v0.3.30, 2026-06-28).** Пользователь
+> выбирает **голос дубляжа** (банк пресетов). Аддитивно/opt-in; default (`DefaultVoiceId=ru-preset-1`, дубляж
+> выкл.) **byte-identical**. **Pure GPU-free `FlyleafLib/MediaPlayer/Dubbing/VoiceBankResolver.cs`**: `BuiltIn`
+> (read-only, зеркало `dub_sidecar/server.py` VOICES — M/F пресеты) + `Resolve`/`ForConfig` (custom-id →
+> плейсхолдер, дропдаун не пустеет/не перезаписывает кастом) + `ResolveAsync(ITtsService)` (phase-2 merge-seam,
+> fail-soft, built-in metadata wins, **не стартует sidecar**, пока не в UI). UI: **новая секция Settings ▸
+> Subtitles ▸ Dubbing** (голос + ducking + atempo + формат=FLAC) + дропдаун голоса в батч-диалоге рядом с
+> «Generate Russian dub» (пишет `DefaultVoiceId`, рендерер читает живьём). `DuckingPercent` клампится 0..100.
+> **Фаза 2 (НЕ в срезе):** per-line / per-speaker выбор + diarization-gender (нужны per-line данные); AAC/m4a
+> энкод в sidecar (сейчас m4a деградирует в FLAC → в UI только FLAC); pre-render доп. пресет-голосов = owner
+> first-run на GPU. Дизайн-панель (3) + adversarial (4 линзы: 3 SHIP + 1 fix-then-ship → 5 фиксов) +
+> `/code-review high` Approve. Гейты build `-warnaserror` **0/0 ×3** + тесты **845/845** (+25) + verify.ps1 green;
+> `.exe` launch 0.3.30 чистый. Контракты wpf-design/dubbing/dubbing-roadmap аддитивно. Детали: второй мозг
+> `Sessions/2026-06-28-handoff-f16-voice-bank.md`.
 Дубляж — Phase 0 (PR #35 влит, CosyVoice2 в `dub_sidecar/`). SE предлагает много TTS (Edge/Kokoro/OmniVoice
 voice-cloning). **Решение:** фазы 1-6 из [[2026-06-23-handoff-dubbing-mvp]] (мульти-голос, качество,
 diarization-aware). **Рассуждение:** крупно; держать как продолжение существующей фичи.
@@ -714,7 +728,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 18 | ~~**F-09**~~ ✅ | Watch-folder авто-batch → DONE PR #74 v0.3.22 | 🟢 | ⓢ-Ⓜ |
 | 19 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | 🟢 | Ⓛ |
 | 20 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | 🟢 | Ⓛ |
-| 21 | **F-16** | Дубляж фазы 1-6 | 🟢 | Ⓛ |
+| 21 | **F-16** | Дубляж: фаза 1 voice-bank ✅ PR #93 v0.3.30; фазы 2-6 TODO | 🟢 | Ⓛ |
 | 22 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 (A-B повтор DONE v0.3.27) | 🟢 | Ⓛ |
 | 23 | ~~**T-07**~~ ✅ | SrtExporter теги `<i>` → DONE PR #59 v0.3.13 | 🟢 | ⓢ |
 | 24 | ~~**T-08/T-09**~~ ✅ + **T-10** | fold-back/silence-split ✅ DONE PR #69 v0.3.19; **T-10** per-seg lang ⚠️ конфликт F-17 (OPEN) | 🟢 | Ⓜ/Ⓛ |
@@ -723,7 +737,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.29):** F-03, T-03(ongoing), F-16, T-10(⚠️F-17), F-13, F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.30):** F-03, T-03(ongoing), F-16(фаза 1 ✅; фазы 2-6 TODO), T-10(⚠️F-17), F-13, F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -751,14 +765,14 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 20 | **F-15** | Yomitan/10ten мост | Ⓜ-Ⓛ | 🟡 |
 | 21 | ~~**F-02 срез**~~ ✅ | ASR денойз → DONE PR #76 v0.3.23; **полный Demucs-сайдкар = STANDBY (по триггеру)** | Ⓛ | 🟠 |
 | 22 | **F-03** | Диаризация (сайдкар) | Ⓛ | 🟡 |
-| 23 | **F-16** | Дубляж фазы 1-6 | Ⓛ | 🟢 |
+| 23 | **F-16** | Дубляж: фаза 1 voice-bank ✅ v0.3.30; фазы 2-6 TODO | Ⓛ | 🟢 |
 | 24 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | Ⓛ | 🟢 |
 | 25 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | Ⓛ | 🟢 |
 | 26 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 | Ⓛ | 🟢 |
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-28 (v0.3.29), легче→тяжелее:** T-03(ongoing) · F-03 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-06-28 (v0.3.30), легче→тяжелее:** T-03(ongoing) · F-16(фаза 1 ✅ v0.3.30; фазы 2-6 TODO) · F-03 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
 
 ---
 
