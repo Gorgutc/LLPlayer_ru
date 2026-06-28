@@ -589,8 +589,9 @@ public static partial class Utils
 
         // Divide by 1024 to get fractional value
         readable /= 1024;
-        // Return formatted number with suffix
-        return readable.ToString("0.## ") + suffix;
+        // Return formatted number with suffix (InvariantCulture so the decimal separator
+        // is always '.', regardless of the current culture, e.g. "1.5 KB" not "1,5 KB" on ru-RU)
+        return readable.ToString("0.## ", CultureInfo.InvariantCulture) + suffix;
     }
     static List<PerformanceCounter> gpuCounters;
     public static void GetGPUCounters()
