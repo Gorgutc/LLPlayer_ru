@@ -11,6 +11,7 @@ using FlyleafLib.Controls.WPF;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaRenderer;
 using FlyleafLib.MediaPlayer;
+using FlyleafLib.MediaPlayer.AI;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
 using FlyleafLib.Plugins;
@@ -1513,6 +1514,16 @@ public class Config : NotifyPropertyChanged
         /// Translation Word Service Type
         /// </summary>
         public TranslateServiceType TranslateWordServiceType { get; set => Set(ref field, value); } = TranslateServiceType.GoogleV1;
+
+        /// <summary>
+        /// F-11: dictionary DEFINITION provider for the word-click popup (in addition to the translation), and
+        /// the source of the Reading/Definition fields auto-filled into the F-10 word list on Save. Off (default)
+        /// = no definition lookup, byte-identical to before. Auto = dictionaryapi.dev for English source words,
+        /// the configured LLM for other languages (and as a fallback when the dictionary has no entry).
+        /// DictionaryApi / Llm force one provider. Persisted as a string (JsonStringEnumConverter); absent in
+        /// pre-F-11 configs -> Off, no migration.
+        /// </summary>
+        public WordDefinitionServiceType WordDefinitionServiceType { get; set => Set(ref field, value); } = WordDefinitionServiceType.Off;
 
         /// <summary>
         /// Translation Service Type Settings

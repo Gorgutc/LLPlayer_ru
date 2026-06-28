@@ -7,6 +7,7 @@
              xmlns:helpers="clr-namespace:LLPlayer.Extensions"
              xmlns:sys="clr-namespace:System;assembly=System.Runtime"
              xmlns:flyleafServices="clr-namespace:FlyleafLib.MediaPlayer.Translation.Services;assembly=FlyleafLib"
+             xmlns:flyleafAI="clr-namespace:FlyleafLib.MediaPlayer.AI;assembly=FlyleafLib"
              xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:services="clr-namespace:LLPlayer.Services"
@@ -25,6 +26,12 @@
         <ObjectDataProvider x:Key="SubAutoTextCopyTargetEnum" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
             <ObjectDataProvider.MethodParameters>
                 <x:Type TypeName="services:SubAutoTextCopyTarget"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <ObjectDataProvider x:Key="WordDefinitionServiceTypeEnum" MethodName="GetValues" ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="flyleafAI:WordDefinitionServiceType"/>
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
 
@@ -63,6 +70,29 @@
                         </ComboBox>
                     </StackPanel>
                     <TextBlock Text="Please configure the settings in advance in the Translate tab." />
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox Header="Word Definition (Dictionary)">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            FontSize="14"
+                            FontWeight="Medium"
+                            VerticalAlignment="Center"
+                            Width="180"
+                            Text="Definition Source" />
+                        <ComboBox
+                            Width="180"
+                            ItemsSource="{Binding Source={StaticResource WordDefinitionServiceTypeEnum}}"
+                            SelectedItem="{Binding FL.PlayerConfig.Subtitles.WordDefinitionServiceType}" />
+                    </StackPanel>
+                    <TextBlock
+                        TextWrapping="Wrap"
+                        MaxWidth="540"
+                        HorizontalAlignment="Left"
+                        Margin="0 8 0 0"
+                        Text="Show a dictionary definition in the word popup (in addition to the translation) and auto-fill the saved word's Reading/Definition for Anki. Auto uses the free dictionaryapi.dev for English source words and your configured translation LLM for other languages (and as a fallback). Off keeps the popup unchanged." />
                 </StackPanel>
             </GroupBox>
 

@@ -38,6 +38,18 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
     private readonly Dictionary<string, string> _translateCache = new();
     private string? _lastSearchActionUrl;
 
+    // F-11: dictionary-definition lookup (separate from translation). Built lazily, reset in Clear() on a
+    // settings/language change. _lastDefinition stashes the entry for the CURRENT word so Save can auto-fill the
+    // F-10 Reading/Definition; it is cleared at the top of every Popup() so a stale entry never attaches to a
+    // new Save. _definitionCache mirrors _translateCache (keyed by lower(word), caches not-found as Empty).
+    private WordDefinitionService? _wordDefinitionService;
+    private readonly Dictionary<string, DictionaryEntry> _definitionCache = new();
+    private DictionaryEntry? _lastDefinition;
+    // The in-flight definition lookup for the current word (null when none). Save waits on it so a click in the
+    // gap between the translation and the definition does not persist a word with blank Reading/Definition that
+    // the F-10 term-dedup (first-wins) would then refuse to update.
+    private Task<DictionaryEntry>? _pendingDefinitionTask;
+
     public WordPopup()
     {
         InitializeComponent();
@@ -62,6 +74,9 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
     public bool IsLoading { get; set => Set(ref field, value); }
 
+    // F-11: drives the visibility of the (third) definition row; false keeps the popup byte-identical to before.
+    public bool DefinitionVisible { get; set => Set(ref field, value); }
+
     public bool IsOpen { get; set => Set(ref field, value); }
 
     public UIElement? PopupPlacementTarget { get; set => Set(ref field, value); }
@@ -83,6 +98,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             case nameof(Config.SubtitlesConfig.TranslateWordServiceType):
             case nameof(Config.SubtitlesConfig.TranslateTargetLanguage):
             case nameof(Config.SubtitlesConfig.LanguageFallbackPrimary):
+            case nameof(Config.SubtitlesConfig.WordDefinitionServiceType):
                 // Apply translating settings changes
                 _wordTranslateConfigErrorNotified = false;
                 Clear();
@@ -122,6 +138,17 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         _translateService = null;
         // clear cache
         _translateCache.Clear();
+
+        // F-11: re-resolve the definition provider after a settings/language change (a new LLM may now be
+        // configured, the target language may differ) and drop cached lookups for the previous configuration.
+        _wordDefinitionService?.Dispose();
+        _wordDefinitionService = null;
+        _definitionCache.Clear();
+        _lastDefinition = null;
+        _pendingDefinitionTask = null;
+        // Also drop a now-stale definition row from a still-open popup (the old config produced it).
+        DefinitionVisible = false;
+        DefinitionText.Text = "";
     }
 
     private void InitializeContextMenu()
@@ -343,6 +370,11 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
         SourceText.Text = source;
         TranslationText.Text = "";
+        // F-11: reset the definition row + stash so a previous word's definition can never linger or be saved.
+        DefinitionText.Text = "";
+        DefinitionVisible = false;
+        _lastDefinition = null;
+        _pendingDefinitionTask = null;
 
         if (IsSidebar && e.Sender is SelectableTextBox)
         {
@@ -370,9 +402,29 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
         try
         {
+            // F-11: start the (best-effort) definition lookup in parallel with the translation under the same
+            // token, so a re-click cancels both. null when the feature is off / not applicable for this word.
+            Task<DictionaryEntry>? definitionTask = StartDefinitionLookup(source, e, cts.Token);
+            _pendingDefinitionTask = definitionTask;
+
             string result = await TranslateWithCache(source, e, cts.Token);
             TranslationText.Text = result;
             IsLoading = false;
+
+            // The translation is the primary signal and is shown first; the definition fills in after it lands.
+            if (definitionTask != null)
+            {
+                DictionaryEntry entry = await definitionTask;
+                // Gate on the RENDERED text (not just IsEmpty) so a sense-with-blank-definition never shows an
+                // empty row; drop a late result for a superseded word via the cts==_cts guard.
+                string display = entry.IsEmpty ? string.Empty : entry.FlattenForDisplay();
+                if (cts == _cts && display.Length > 0)
+                {
+                    _lastDefinition = entry;
+                    DefinitionText.Text = display;
+                    DefinitionVisible = true;
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -380,6 +432,9 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             // started a new translation whose spinner must stay on.
             if (cts == _cts)
                 IsLoading = false;
+            // If the translation cancelled before the definition was awaited, the definition task is abandoned
+            // and shares the cancelled token; observe it so it is not an unobserved (faulted) task exception.
+            ObservePendingDefinition(definitionTask: _pendingDefinitionTask);
             return;
         }
 
@@ -409,6 +464,92 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         }
     }
 
+    // F-11: kick off a best-effort dictionary-definition lookup for the clicked word. Returns null when the
+    // feature is off or not applicable (so the caller skips it). Never throws synchronously — definition is a
+    // bonus, so any setup problem degrades to "no definition" (the whole body after the trivial early returns is
+    // wrapped in try). NOTE: a monolingual definition (source == target, e.g. an English word defined in English,
+    // or a Russian word defined in Russian) IS useful, so — unlike translation — there is no same-language skip.
+    private Task<DictionaryEntry>? StartDefinitionLookup(string source, WordClickedEventArgs e, CancellationToken token)
+    {
+        WordDefinitionServiceType mode = FL.PlayerConfig.Subtitles.WordDefinitionServiceType;
+        if (mode == WordDefinitionServiceType.Off)
+        {
+            return null;
+        }
+
+        // A clicked already-translated word has no source-language dictionary entry (mirrors TranslateWithCache).
+        if (e.IsTranslated)
+        {
+            return null;
+        }
+
+        try
+        {
+            // NOTE: the bare name "Language" resolves to System.Windows.Markup.XmlLanguage in this WPF file, so
+            // use var (the property is FlyleafLib.Language) and fully-qualify the static.
+            var srcLang = FL.Player.SubtitlesManager[e.SubIndex].Language;
+            if (srcLang == null || srcLang == FlyleafLib.Language.Unknown)
+            {
+                return null;
+            }
+
+            string key = source.ToLower();
+            if (_definitionCache.TryGetValue(key, out DictionaryEntry? cached))
+            {
+                return Task.FromResult(cached!);
+            }
+
+            _wordDefinitionService ??= WordDefinitionService.ForConfig(FL.PlayerConfig.Subtitles);
+
+            WordDefinitionProvider provider =
+                WordDefinitionSelector.Select(mode, srcLang.ISO6391, _wordDefinitionService.LlmAvailable);
+            if (provider == WordDefinitionProvider.None)
+            {
+                return null;
+            }
+
+            // Auto on an English word: fall back to the LLM when the free dictionary has no entry (pure rule).
+            bool allowLlmFallback =
+                WordDefinitionSelector.AllowLlmFallback(mode, provider, _wordDefinitionService.LlmAvailable);
+
+            string? srcName = srcLang.TopEnglishName;
+            string targetName = FL.PlayerConfig.Subtitles.TranslateLanguage.TopEnglishName;
+
+            return LookupAndCacheAsync(provider, allowLlmFallback, source, srcName, targetName, e.Text, key, token);
+        }
+        catch
+        {
+            // Definition is best-effort: any setup problem degrades to no definition.
+            return null;
+        }
+    }
+
+    // Observe the exception of an abandoned definition task (cancelled by a re-click) so it does not surface as
+    // an unobserved task exception at GC time. No-op for a null/already-completed-and-awaited task.
+    private static void ObservePendingDefinition(Task<DictionaryEntry>? definitionTask)
+    {
+        if (definitionTask is { IsCompleted: false })
+        {
+            _ = definitionTask.ContinueWith(
+                static t => { _ = t.Exception; },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+    }
+
+    private async Task<DictionaryEntry> LookupAndCacheAsync(
+        WordDefinitionProvider provider, bool allowLlmFallback, string word,
+        string? sourceLangName, string targetLangName, string context, string cacheKey, CancellationToken token)
+    {
+        DictionaryEntry entry = await _wordDefinitionService!.GetDefinitionAsync(
+            provider, allowLlmFallback, word, sourceLangName, targetLangName, context, token);
+
+        // Cache the outcome (including Empty) so repeat clicks on the same word don't re-hit the network.
+        _definitionCache[cacheKey] = entry;
+        return entry;
+    }
+
     private void CloseButton_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         IsOpen = false;
@@ -422,7 +563,8 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
     // F-10: save the looked-up word to the global word list (Subtitles > Word Manager). Uses the translation
     // already shown in the popup; honors IsTranslated (a clicked translated word is stored as-is in the target
-    // language). Reading/Definition are left blank for the user to fill in the Word Manager later.
+    // language). F-11: Reading/Definition are auto-filled from the fetched dictionary entry when available, and
+    // otherwise left blank for the user to fill in the Word Manager later.
     private void SaveWordButton_OnClick(object sender, RoutedEventArgs e)
     {
         string term = (_clickedWords ?? string.Empty).Trim();
@@ -439,9 +581,22 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             return;
         }
 
+        // F-11: don't save while the definition lookup is still in flight — the dictionary Reading/Definition
+        // would be saved blank, and the F-10 term-dedup (first-wins) would refuse to update the row from a later
+        // auto-fill. Ask the user to retry once the definition has landed (mirrors the translation guard).
+        if (_pendingDefinitionTask is { IsCompleted: false })
+        {
+            FL.MessageQueue.Enqueue("Looking up the definition — try Save again in a moment.");
+            return;
+        }
+
         string targetLang = FL.PlayerConfig.Subtitles.TranslateTargetLanguage.ToISO6391();
         string translation;
         string sourceLanguage;
+        // F-11: auto-fill Reading/Definition from the fetched dictionary entry (empty when the feature is off,
+        // the lookup found nothing, or the clicked word was already translated — preserving today's behavior).
+        string reading = string.Empty;
+        string definition = string.Empty;
         if (_clickedIsTranslated)
         {
             // The clicked word is already translated text — keep it as the term in the target language.
@@ -452,10 +607,15 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         {
             translation = TranslationText.Text ?? string.Empty;
             sourceLanguage = FL.Player.SubtitlesManager[_clickedSubIndex].Language?.ISO6391 ?? string.Empty;
+
+            if (_lastDefinition is { IsEmpty: false } entry)
+            {
+                (reading, definition) = entry.ToFields();
+            }
         }
 
         SavedWord word = new(
-            term, "", translation, "", _clickedText ?? string.Empty,
+            term, reading, translation, definition, _clickedText ?? string.Empty,
             sourceLanguage, targetLang, WordSource.WordClick, DateTime.UtcNow.ToString("O"));
 
         bool added = _wordListStore.TryAdd(word);
