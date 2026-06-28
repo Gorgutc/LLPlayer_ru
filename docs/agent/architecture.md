@@ -2,6 +2,16 @@
 
 LLPlayer is a Windows desktop media player for language learning.
 
+## Fork Relationship (T-06)
+
+This repository is a fork of upstream [`umlx5h/LLPlayer`](https://github.com/umlx5h/LLPlayer). The `_ru` suffix in the repository name denotes a **Russified agent/automation infrastructure layer**, NOT a Russian-localized build of the application:
+
+- **Forked / repository-specific:** agent instructions and frozen contracts (`AGENTS.md`, `docs/agent/`), verification scripts (`scripts/codex/`), the `Plugins/llplayer-codex/` skill plugin, and Russian-language commit messages and infrastructure notes.
+- **Inherited from upstream, unchanged:** the player application itself. The WPF UI, view models, and `FlyleafLib` engine track upstream; the app's strings, menus, and settings are **not** localized to Russian and remain in upstream English. Product changes are made narrowly and additively (see the frozen contracts), not as a rewrite or a translation of the app.
+- **Possible future direction (not started):** Russian localization of the application's UI resources (e.g. `.resx` / bound strings) is a plausible future evolution that would make the `_ru` suffix describe an actual localized build. No UI-localization work has begun; until it does, treat the app as English-only and upstream-tracking. A full UI port/localization would be a large, owner-initiated effort (comparable in scope to the deferred Avalonia port, F-13), not an incidental change.
+
+The human-facing version of this note lives in the top-level `README.md` ("About this fork").
+
 ## Solution Units
 
 - `LLPlayer/`: WPF app, Prism/DryIoc composition root, views, view models, controls, settings, dialogs, app config, and actions.

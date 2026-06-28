@@ -13,6 +13,16 @@
 
 ---
 
+## 🌐 About this fork (`_ru`)
+
+This repository is a fork of [umlx5h/LLPlayer](https://github.com/umlx5h/LLPlayer). The **`_ru` suffix denotes a Russified agent/automation infrastructure layer, not a Russian-localized build of the player.**
+
+- **What `_ru` changes:** the agent/automation layer only — agent instructions and contracts (`AGENTS.md`, `docs/agent/`), verification scripts (`scripts/codex/`), the `Plugins/llplayer-codex/` skill plugin, and Russian-language commit messages and infrastructure docs.
+- **What `_ru` does *not* change (yet):** the application itself. The player UI and code track upstream and are **not** localized — strings, menus, and settings remain in upstream English. Feature work is additive on top of upstream.
+- **Possible future direction (not started):** Russian localization of the app's UI resources is a plausible future evolution, so the `_ru` suffix has room to grow into an actual localized build. No UI-localization work has begun.
+
+For the agent-facing version of this note, see [`docs/agent/architecture.md`](docs/agent/architecture.md) ("Fork Relationship").
+
 ## 🎬 Demo
 
 https://github.com/user-attachments/assets/05a7b451-ee3b-489f-aac9-f1670ed76e71
