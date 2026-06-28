@@ -181,7 +181,13 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
                 // Loop Playback
                 if (value == Status.Ended)
                 {
-                    if (LoopPlayback && !ReversePlayback)
+                    // F-12 A-B repeat takes priority over whole-file loop when B sits at/near EOF.
+                    // Snapshot A/B once (like CheckABLoopBack) so a concurrent ClearABLoop can't make the
+                    // value read -1 between the enabled-check and the seek.
+                    long abA = _abLoopA, abB = _abLoopB;
+                    if (AbLoop.IsEnabled(abA, abB) && !ReversePlayback)
+                        SeekAccurate((int)(abA / 10000));
+                    else if (LoopPlayback && !ReversePlayback)
                     {
                         int seekMs = (int)(MainDemuxer.StartTime == 0 ? 0 : MainDemuxer.StartTime / 10000);
                         Seek(seekMs);
@@ -251,6 +257,9 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
 
                 curTime = ts;
             }
+
+            if (CheckABLoopBack(curTime)) // F-12 A-B repeat: reached B → seek back to A (the seek refreshes CurTime)
+                return;
 
             if (skipRefreshType
                 || Config.Player.UICurTime == UIRefreshType.PerFrame
@@ -630,6 +639,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
         duration    = 0;
         isLive      = false;
         lastError   = null;
+        ResetABLoop(); // F-12: drop A-B repeat points so a leftover loop can't fire on a new file
 
         UIAdd(() =>
         {
@@ -641,6 +651,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
             LastError   = lastError;
             BufferedDuration = 0;
             SetCurTime();
+            RaiseABLoopChanged();
         });
     }
     private void Reset()

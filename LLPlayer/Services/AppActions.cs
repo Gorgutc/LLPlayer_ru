@@ -983,6 +983,10 @@ public static class KeyBindingActionExtensions
             case KeyBindingAction.TogglePlayPause:
             case KeyBindingAction.ToggleReversePlayback:
             case KeyBindingAction.ToggleLoopPlayback:
+            case KeyBindingAction.ABLoopSetStart:
+            case KeyBindingAction.ABLoopSetEnd:
+            case KeyBindingAction.ABLoopClear:
+            case KeyBindingAction.ABLoopToggle:
             case KeyBindingAction.SeekForward:
             case KeyBindingAction.SeekBackward:
             case KeyBindingAction.SeekForward2:

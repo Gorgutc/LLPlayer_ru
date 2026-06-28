@@ -66,6 +66,53 @@
                         </MultiBinding>
                     </Slider.SelectionEnd>
                 </Slider>
+                <!-- F-12 A-B repeat markers: a separate overlay (NOT the slider's selection-range, which shows
+                     buffering) so the A/B band + markers are purely additive over the seek track. -->
+                <Canvas x:Name="AbOverlay" Grid.Column="1" Margin="10,0,10,0" IsHitTestVisible="False"
+                        VerticalAlignment="Stretch"
+                        Visibility="{Binding FL.Player.ABLoopActive, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                    <Rectangle Fill="{DynamicResource MaterialDesign.Brush.Primary}" Opacity="0.25" IsHitTestVisible="False"
+                               Height="{Binding ActualHeight, ElementName=AbOverlay}"
+                               Visibility="{Binding FL.Player.ABLoopEnabled, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                        <Canvas.Left>
+                            <MultiBinding Converter="{StaticResource AbMarkerLeftConv}">
+                                <Binding Path="FL.Player.ABLoopA"/>
+                                <Binding Path="FL.Player.Duration"/>
+                                <Binding Path="ActualWidth" ElementName="AbOverlay"/>
+                            </MultiBinding>
+                        </Canvas.Left>
+                        <Rectangle.Width>
+                            <MultiBinding Converter="{StaticResource AbBandWidthConv}">
+                                <Binding Path="FL.Player.ABLoopA"/>
+                                <Binding Path="FL.Player.ABLoopB"/>
+                                <Binding Path="FL.Player.Duration"/>
+                                <Binding Path="ActualWidth" ElementName="AbOverlay"/>
+                            </MultiBinding>
+                        </Rectangle.Width>
+                    </Rectangle>
+                    <Rectangle Width="2" Fill="{DynamicResource MaterialDesign.Brush.Primary}" IsHitTestVisible="False"
+                               Height="{Binding ActualHeight, ElementName=AbOverlay}"
+                               Visibility="{Binding FL.Player.HasABLoopA, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                        <Canvas.Left>
+                            <MultiBinding Converter="{StaticResource AbMarkerLeftConv}">
+                                <Binding Path="FL.Player.ABLoopA"/>
+                                <Binding Path="FL.Player.Duration"/>
+                                <Binding Path="ActualWidth" ElementName="AbOverlay"/>
+                            </MultiBinding>
+                        </Canvas.Left>
+                    </Rectangle>
+                    <Rectangle Width="2" Fill="{DynamicResource MaterialDesign.Brush.Primary}" IsHitTestVisible="False"
+                               Height="{Binding ActualHeight, ElementName=AbOverlay}"
+                               Visibility="{Binding FL.Player.HasABLoopB, Converter={StaticResource BooleanToVisibilityConv}, FallbackValue=Collapsed, TargetNullValue=Collapsed}">
+                        <Canvas.Left>
+                            <MultiBinding Converter="{StaticResource AbMarkerLeftConv}">
+                                <Binding Path="FL.Player.ABLoopB"/>
+                                <Binding Path="FL.Player.Duration"/>
+                                <Binding Path="ActualWidth" ElementName="AbOverlay"/>
+                            </MultiBinding>
+                        </Canvas.Left>
+                    </Rectangle>
+                </Canvas>
                 <!-- Remaining time -->
                 <!-- TODO: L: config -->
                 <TextBlock Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -96,6 +143,7 @@
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
                     <ColumnDefinition Width="auto"/>
@@ -271,8 +319,35 @@ Right Click: Open Context Menu</ToolTip>
                     </Button.Style>
                 </Button>
 
+                <!-- F-12 A-B Repeat: left-click cycles Set A -> Set B -> Clear; right-click menu for explicit actions.
+                     Lit (Primary) while a loop is armed. Hotkeys (unbound by default) live in Settings > Keys. -->
+                <Button Grid.Column="7"
+                        Command="{Binding FL.Player.Commands.ToggleABLoop}"
+                        ToolTip="A-B Repeat — click to set A, then B (loops); click again to clear. Right-click for options"
+                        AutomationProperties.Name="A-B Repeat">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
+                            <Setter Property="Content" Value="{materialDesign:PackIcon Kind=RepeatVariant}"/>
+                            <Setter Property="ContextMenu">
+                                <Setter.Value>
+                                    <ContextMenu Style="{StaticResource FlyleafContextMenu}">
+                                        <MenuItem Header="Set point A" Command="{Binding FL.Player.Commands.SetABLoopStart}"/>
+                                        <MenuItem Header="Set point B" Command="{Binding FL.Player.Commands.SetABLoopEnd}"/>
+                                        <MenuItem Header="Clear A-B" Command="{Binding FL.Player.Commands.ClearABLoop}"/>
+                                    </ContextMenu>
+                                </Setter.Value>
+                            </Setter>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding FL.Player.ABLoopActive}" Value="True">
+                                    <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+
                 <!-- Volume Button (Mute/Unmute) -->
-                <Button Grid.Column="7" Foreground="{DynamicResource MaterialDesignBody}" Command="{Binding FL.Player.Commands.ToggleMute}" ToolTip="Mute / Unmute" AutomationProperties.Name="Mute / Unmute">
+                <Button Grid.Column="8" Foreground="{DynamicResource MaterialDesignBody}" Command="{Binding FL.Player.Commands.ToggleMute}" ToolTip="Mute / Unmute" AutomationProperties.Name="Mute / Unmute">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=VolumeHigh}"/>
@@ -297,13 +372,13 @@ Right Click: Open Context Menu</ToolTip>
                 <!-- Volume Slider -->
                 <!-- On a narrow bar the volume slider collapses (mute stays available) instead of clipping the
                      edge controls; tune the px threshold via ConverterParameter. -->
-                <Slider Grid.Column="8" Style="{DynamicResource FlyleafSlider}" Cursor="Hand" AutomationProperties.Name="Volume" AutomationProperties.HelpText="Volume level, scroll or drag to adjust" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter=620}" Foreground="{DynamicResource MaterialDesignBody}" Focusable="False" Margin="0,0,6,0" Width="100" VerticalAlignment="Center" Minimum="0" Maximum="{Binding FL.PlayerConfig.Audio.VolumeMax, Mode=OneWay}" d:Maximum="150" d:Value="75" Value="{Binding FL.Player.Audio.Volume}"/>
+                <Slider Grid.Column="9" Style="{DynamicResource FlyleafSlider}" Cursor="Hand" AutomationProperties.Name="Volume" AutomationProperties.HelpText="Volume level, scroll or drag to adjust" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter=620}" Foreground="{DynamicResource MaterialDesignBody}" Focusable="False" Margin="0,0,6,0" Width="100" VerticalAlignment="Center" Minimum="0" Maximum="{Binding FL.PlayerConfig.Audio.VolumeMax, Mode=OneWay}" d:Maximum="150" d:Value="75" Value="{Binding FL.Player.Audio.Volume}"/>
 
                 <!-- Open Settings Button — collapses into the overflow kebab on a narrow bar (after the volume slider). -->
-                <Button Grid.Column="9" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings" AutomationProperties.Name="Open Settings" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}"/>
+                <Button Grid.Column="10" Style="{StaticResource IconButton}" Content="{materialDesign:PackIcon Kind=SettingsOutline}" Command="{Binding FL.Action.CmdOpenWindowSettings}" ToolTip="Open Settings" AutomationProperties.Name="Open Settings" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}"/>
 
                 <!-- Toggle Sub Sidebar — collapses into the overflow kebab on a narrow bar (after the volume slider). -->
-                <Button Grid.Column="10" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar" AutomationProperties.Name="Toggle Sub Sidebar" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}">
+                <Button Grid.Column="11" Command="{Binding FL.Action.CmdToggleSidebar}" ToolTip="Toggle Sub Sidebar" AutomationProperties.Name="Toggle Sub Sidebar" Visibility="{Binding ActualWidth, ElementName=MyCard, Converter={StaticResource WidthToVisibilityConv}, ConverterParameter={StaticResource BarOverflowThresholdPx}}">
                     <Button.Style>
                         <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
                             <Setter Property="Content" Value="{materialDesign:PackIcon Kind=DockRight}"/>
@@ -319,7 +394,7 @@ Right Click: Open Context Menu</ToolTip>
                 <!-- Overflow kebab: holds the low-priority actions that collapsed off the narrow bar (shown below
                      the 520px gate, i.e. after the volume slider drops at 620). Threshold is owner-tunable.
                      Opened/Closed reuse the existing SetActivity handlers so the bar doesn't auto-hide while open. -->
-                <materialDesign:PopupBox Grid.Column="11"
+                <materialDesign:PopupBox Grid.Column="12"
                                          VerticalAlignment="Center"
                                          Focusable="False"
                                          PlacementMode="TopAndAlignCentres"
@@ -348,7 +423,7 @@ Right Click: Open Context Menu</ToolTip>
                 </materialDesign:PopupBox>
 
                 <!-- Toggle Fullscreen Button -->
-                <ToggleButton Grid.Column="12" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen" AutomationProperties.Name="Toggle Fullscreen"/>
+                <ToggleButton Grid.Column="13" Style="{StaticResource MaterialDesignActionToggleButton}" Foreground="{DynamicResource MaterialDesign.Brush.Primary}" Background="Transparent" Focusable="False" IsChecked="{Binding FL.Player.Host.IsFullScreen}" Content="{materialDesign:PackIcon Kind=Fullscreen, Size=28}" materialDesign:ToggleButtonAssist.OnContent="{materialDesign:PackIcon Kind=FullscreenExit, Size=28}" ToolTip="Toggle Fullscreen" AutomationProperties.Name="Toggle Fullscreen"/>
             </Grid>
         </Grid>
     </materialDesign:Card>

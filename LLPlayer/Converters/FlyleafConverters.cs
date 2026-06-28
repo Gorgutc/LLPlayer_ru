@@ -241,3 +241,53 @@ public class AspectRatioIsCheckedConverter : IMultiValueConverter
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
 }
+
+// F-12 A-B repeat: maps a point (ticks) to a Canvas.Left over the seek overlay, matching the slider's
+// buffering band convention (fraction * ActualWidth). values[0]=pointTicks (long, -1 = unset),
+// values[1]=durationTicks (long), values[2]=overlay ActualWidth (double). Returns a clamped DIP offset.
+public class AbMarkerLeftConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length < 3 || values.Any(x => x == DependencyProperty.UnsetValue))
+            return 0d;
+
+        long point = System.Convert.ToInt64(values[0]);
+        long dur   = System.Convert.ToInt64(values[1]);
+        double w   = System.Convert.ToDouble(values[2]);
+        if (point < 0 || dur <= 0 || w <= 0)
+            return 0d;
+
+        double frac = Math.Clamp(point / (double)dur, 0d, 1d);
+        return frac * w;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+// F-12 A-B repeat: width (DIP) of the highlighted band between A and B. values[0]=aTicks, values[1]=bTicks,
+// values[2]=durationTicks, values[3]=overlay ActualWidth. Returns 0 for an unset/inverted window so the band
+// (Rectangle.Width) is never negative.
+public class AbBandWidthConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length < 4 || values.Any(x => x == DependencyProperty.UnsetValue))
+            return 0d;
+
+        long a   = System.Convert.ToInt64(values[0]);
+        long b   = System.Convert.ToInt64(values[1]);
+        long dur = System.Convert.ToInt64(values[2]);
+        double w = System.Convert.ToDouble(values[3]);
+        if (a < 0 || b < 0 || dur <= 0 || w <= 0 || b <= a)
+            return 0d;
+
+        double fa = Math.Clamp(a / (double)dur, 0d, 1d);
+        double fb = Math.Clamp(b / (double)dur, 0d, 1d);
+        return Math.Max(0d, (fb - fa) * w);
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}

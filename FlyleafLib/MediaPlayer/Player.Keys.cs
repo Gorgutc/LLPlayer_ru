@@ -448,6 +448,15 @@ public class KeysConfig
             case KeyBindingAction.ToggleLoopPlayback:
                 return player.ToggleLoopPlayback;
 
+            case KeyBindingAction.ABLoopSetStart:
+                return player.SetABLoopStart;
+            case KeyBindingAction.ABLoopSetEnd:
+                return player.SetABLoopEnd;
+            case KeyBindingAction.ABLoopClear:
+                return player.ClearABLoop;
+            case KeyBindingAction.ABLoopToggle:
+                return player.ToggleABLoop;
+
             case KeyBindingAction.ToggleSeekAccurate:
                 return player.ToggleSeekAccurate;
 
@@ -571,6 +580,10 @@ public class KeysConfig
         { KeyBindingAction.ToggleRecording },
         { KeyBindingAction.ToggleReversePlayback },
         { KeyBindingAction.ToggleLoopPlayback },
+        { KeyBindingAction.ABLoopSetStart },
+        { KeyBindingAction.ABLoopSetEnd },
+        { KeyBindingAction.ABLoopClear },
+        { KeyBindingAction.ABLoopToggle },
         { KeyBindingAction.Play },
         { KeyBindingAction.Pause },
         { KeyBindingAction.Stop },
@@ -799,4 +812,14 @@ public enum KeyBindingAction
     ZoomIn,
     [Description("Zoom Out (1)")]
     ZoomOut,
+
+    // F-12 A-B repeat. Appended at END (KeyBindingAction is persisted by name in config).
+    [Description("A-B Repeat: Set Point A")]
+    ABLoopSetStart,
+    [Description("A-B Repeat: Set Point B")]
+    ABLoopSetEnd,
+    [Description("A-B Repeat: Clear")]
+    ABLoopClear,
+    [Description("A-B Repeat: Toggle (set A, then B, then clear)")]
+    ABLoopToggle,
 }

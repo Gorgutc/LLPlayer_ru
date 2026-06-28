@@ -445,9 +445,26 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Заодно закрывает реалистичное ядро F-15** (литеральный Yomitan-бридж невозможен аддитивно; «определение слова в
 попапе» = то же действие).
 
-### F-12 — Аудио-waveform (визуализация) 🟢 Ⓛ · TODO
-**Идея от SubtitleEdit.** **Решение:** рендер waveform из аудио FlyleafLib для точного A-B/sync.
-**Рассуждение:** средний mission-fit, крупный effort; не топ для плеера.
+### F-12 — A-B повтор ✅ **DONE (PR этот, v0.3.27, 2026-06-28)** + аудио-waveform 🟢 Ⓛ · TODO (waveform-половина)
+> ✅ **A-B повтор отгружен (v0.3.27).** Пользователь ставит точки A и B во время воспроизведения; плеер зацикливает
+> отрезок [A,B] (frame-accurate seek назад к A при достижении B) до сброса. **OFF byte-identical** (нет точек →
+> поведение прежнее). Pure тестируемый `FlyleafLib/MediaPlayer/AbLoop.cs` (20 юнит-тестов); состояние — `Volatile.
+> Read/Write` по двум `long` на `Player` (`volatile long` запрещён C# CS0677). Loop-back hook ВНУТРИ `UpdateCurTime`
+> ПОСЛЕ `lock(seeks)` (покрывает все screamer'ы, в т.ч. audio-only; нет seek-storm — гард `seeks.IsEmpty`) →
+> переиспользует готовый thread-safe `SeekAccurate` (без новых локов, frozen media-runtime соблюдён); EOF-guard в
+> `Status.Ended` (A-B приоритетнее whole-file loop, snapshot против TOCTOU); reset в `ResetMe`; skip при reverse/
+> HLS-live. Хоткеи — движковый `KeyBindingAction` (`ABLoopSetStart/End/Clear/Toggle`, unbound по умолчанию, группа
+> Playback, авто в CheatSheet/Command Palette). UI: кнопка A-B в баре (cycle/ContextMenu/lit-active) + маркеры A/B +
+> полоса на сикбаре (отдельный `Canvas`-оверлей + 2 конвертера, буфер-`IsSelectionRangeEnabled` цел). Дизайн-панель
+> (3 линзы) + **adversarial-ревью (5 линз: все SHIP; 1 MINOR исправлен — TOCTOU в EOF-guard → snapshot; 2 NIT
+> отклонены)**. Гейты build `-warnaserror` **0/0 ×3** + тесты **803/803** (+20) + verify.ps1 green; `/code-review high`
+> → Approve. Заодно исправлен пред-существующий флак `BatchSubtitlePolicyTests` (был не self-contained — `Utils.
+> IsTesting` в ctor; падал в изоляции; новый тест-файл сдвинул порядок xUnit и вскрыл). Контракты product-behavior/
+> media-runtime/config-data/wpf-design/manual-smoke аддитивно. **Waveform-визуализация — НЕ в этом срезе** (тяжёлая
+> offline-декод половина: отдельный декод-проход + peak-reducer + рендер — отдельная сессия). Детали: второй мозг
+> `Sessions/2026-06-28-handoff-f12-ab-loop.md`.
+**Идея от SubtitleEdit.** **Остаток (waveform):** рендер waveform из аудио FlyleafLib для визуального sync.
+**Рассуждение:** A-B повтор — заметный single-session UX-win для изучения языка; waveform — крупный effort, не топ.
 
 ### F-13 — Кросс-платформенность (Avalonia, Linux/Mac) 🟢 ⓍⓁ · DEFERRED · (upstream «Future»)
 SE5 и Buzz уже кросс-платформенны → наш Windows-only = конкурентный минус. **Решение:** порт UI на Avalonia
@@ -466,9 +483,14 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > невидимый слот со устаревшим фильтром → инвалидация кэша), `.exe` launch-clean. owner-smoke: видимость checked-state
 > тумблеров при 24×24. Детали: второй мозг `Sessions/2026-06-27-handoff-f14-subtitle-search.md`.
 
-### F-15 — Yomitan / 10ten в плеере 🟡 Ⓜ-Ⓛ · TODO · ([upstream issue #13](https://github.com/umlx5h/LLPlayer/issues/13), «Later»)
-Сейчас только через буфер обмена (FAQ). **Решение:** встроенный мост к словарным браузер-расширениям.
-**Рассуждение:** ценно для японского/анки-воркфлоу; средне-крупно.
+### F-15 — Yomitan / 10ten в плеере 🟡 Ⓜ-Ⓛ · ✅ **DONE-BY-F-11 (решение владельца 2026-06-28)** · ([upstream issue #13](https://github.com/umlx5h/LLPlayer/issues/13))
+> ✅ **Закрыто как реализованное F-11.** Реалистичное ядро — «словарное определение слова в попапе» — отгружено F-11
+> (`WordDefinitionServiceType` {Off,Auto,DictionaryApi,Llm}, v0.3.25); clipboard-авто-копирование уже влито upstream
+> (`1db5a76`). Литеральный браузер-мост к Yomitan/10ten аддитивно невозможен (WebExtension не читает WPF-текст; нужен
+> WebView2 + упакованное расширение = крупно/fragile/multi-session, ломает frozen WPF). Многоагентная верификация
+> (high-confidence, 2026-06-28) + решение владельца (AskUserQuestion) → DONE-BY-F-11. Если позже понадобится именно
+> браузерное расширение — заводить отдельной крупной задачей.
+Сейчас словарь — через попап перевода слова (F-11) и буфер обмена (FAQ).
 
 ### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · TODO
 Дубляж — Phase 0 (PR #35 влит, CosyVoice2 в `dub_sidecar/`). SE предлагает много TTS (Edge/Kokoro/OmniVoice
@@ -687,7 +709,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.25):** F-15(реалистичное ядро закрыто F-11), F-03, T-03(ongoing), F-16, F-12, T-05(решение), F-13, T-10(⚠️F-17), F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (PR #82/#84 v0.3.25).**
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.27):** F-03, T-03(ongoing), F-16, F-12-waveform(половина), T-05(решение), F-13, T-10(⚠️F-17), F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 A-B повтор ✅ DONE (v0.3.27); F-15 ✅ DONE-BY-F-11.**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -722,7 +744,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | **T-05** | M3-редизайн — решение владельца (не оценивается) | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-28 (v0.3.25), легче→тяжелее:** T-03(ongoing) · F-15(ядро закрыто F-11) · F-03 · F-12 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. Решение-only: T-05. **F-11/T-06/T-11 ✅ DONE.** Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-06-28 (v0.3.27), легче→тяжелее:** T-03(ongoing) · F-12-waveform(половина) · F-03 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. Решение-only: T-05. **F-11/T-06/T-11 ✅ DONE; F-12 A-B повтор ✅ DONE (v0.3.27); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
 
 ---
 
