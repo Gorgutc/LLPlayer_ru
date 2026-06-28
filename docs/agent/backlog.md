@@ -422,9 +422,28 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Решение:** персистентные списки слов, экспорт в Anki-колоды/SRS. **Рассуждение:** высокий mission-fit,
 крупно; строится на F-07.
 
-### F-11 — Dictionary API (англ./яп. и др.) 🟢 Ⓛ · TODO · (upstream «Later»)
-Сейчас только перевод слова, не словарные определения (FAQ README). **Решение:** интеграция словарных API.
-**Рассуждение:** высокий mission-fit, сложно (много языков) — потому upstream отложил.
+### F-11 — Dictionary API (англ./яп. и др.) 🟢 Ⓛ · ✅ **DONE (PR #82, merge `58be9bd`, v0.3.25, 2026-06-28)**
+> ✅ **Закрыт.** Опц. `Subtitles.WordDefinitionServiceType` {Off,Auto,DictionaryApi,Llm} (default OFF →
+> byte-identical). При включении попап перевода слова показывает **словарное определение** третьей строкой под
+> переводом и при **Save** авто-заполняет Anki-поля `Reading`/`Definition` (заполняет ровно те поля, что F-10
+> оставляла пустыми). **Решения владельца (AskUserQuestion):** провайдер = «Оба» (`Auto` — английское слово →
+> бесплатный **dictionaryapi.dev**; иной язык → настроенный **LLM** на target-языке; английское слово, отсутствующее
+> в словаре → **LLM-fallback** при наличии LLM) + авто-заполнение Anki = «Да». **Чистая логика → FlyleafLib/MediaPlayer/AI/**
+> (`WordDefinitionModels`/`DictionaryApiParser`/`WordDefinitionPrompts`/`WordDefinitionSelector`/`WordDefinitionService`,
+> все юнит-тестируемы; парсер зеркалит `ParseGoogleV1`, 404-объект/пусто/мусор → `Empty` без throw; LLM через
+> инъектируемый делегат как F-07) + **тонкая WPF → LLPlayer** (`WordPopup` 3-я строка, параллельный fetch под общим
+> `_cts`, кэш на жизнь попапа; дропдаун в Settings ▸ Subtitles ▸ Word Action). Переиспользует `AiInsightLlmResolver`/
+> `CompleteAsync` — без нового LLM-конфига. **Fail-soft:** 404/таймаут/ошибка LLM/нет LLM → строка скрыта, никогда
+> не модал; cancellation пробрасывается; Save ждёт in-flight определение. **Монолингв (source==target) полезен →
+> same-language НЕ пропускается.** Config additive/string/без миграции, зеркалится в `BatchSubtitleConfigSnapshot`.
+> Дизайн-панель (3) + **adversarial-ревью (5 линз): 4 ship + 1 fix-then-ship** → исправлены UriFormatException
+> fail-soft hole, Save-during-definition race, same-language guard, вынос `AllowLlmFallback` в чистый селектор,
+> try-обёртка/gate/orphan-observe. Гейты build `-warnaserror` **0/0 ×3** + тесты **607/607** (+59) + verify.ps1 green;
+> `/code-review high` → Approve; **`.exe` launch 0.3.25 чистый**. Контракты product-behavior/config-data/wpf-design/
+> manual-smoke аддитивно. **Owner manual-smoke:** Definition Source=Auto → клик по EN-слову → строка + Save заполняет
+> Anki-поля; слово вне словаря → только перевод. Детали: второй мозг `Sessions/2026-06-28-handoff-f11-dictionary.md`.
+**Заодно закрывает реалистичное ядро F-15** (литеральный Yomitan-бридж невозможен аддитивно; «определение слова в
+попапе» = то же действие).
 
 ### F-12 — Аудио-waveform (визуализация) 🟢 Ⓛ · TODO
 **Идея от SubtitleEdit.** **Решение:** рендер waveform из аудио FlyleafLib для точного A-B/sync.
@@ -602,7 +621,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 17 | ~~**F-14**~~ ✅ | Расширенный локальный поиск (match-case/whole-word/regex) → DONE PR #71 v0.3.20 | 🟢 | ⓢ-Ⓜ |
 | 18 | ~~**F-09**~~ ✅ | Watch-folder авто-batch → DONE PR #74 v0.3.22 | 🟢 | ⓢ-Ⓜ |
 | 19 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | 🟢 | Ⓛ |
-| 20 | **F-11** | Dictionary API | 🟢 | Ⓛ |
+| 20 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | 🟢 | Ⓛ |
 | 21 | **F-16** | Дубляж фазы 1-6 | 🟢 | Ⓛ |
 | 22 | **F-12** | Аудио-waveform | 🟢 | Ⓛ |
 | 23 | ~~**T-07**~~ ✅ | SrtExporter теги `<i>` → DONE PR #59 v0.3.13 | 🟢 | ⓢ |
@@ -612,7 +631,7 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | **T-11** | Sandbox/SDK гряз (doc) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-27 (v0.3.24):** F-15, F-03, T-03(ongoing), F-11, F-16, F-12, T-06, T-05(решение), F-13, T-11, T-10(⚠️F-17), F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE).
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.25):** F-15(реалистичное ядро закрыто F-11), F-03, T-03(ongoing), F-16, F-12, T-06, T-05(решение), F-13, T-11, T-10(⚠️F-17), F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11 ✅ DONE (PR #82 v0.3.25).**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -642,12 +661,12 @@ Sandbox `dotnet` иногда падает при чтении Windows SDK из 
 | 22 | **F-03** | Диаризация (сайдкар) | Ⓛ | 🟡 |
 | 23 | **F-16** | Дубляж фазы 1-6 | Ⓛ | 🟢 |
 | 24 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | Ⓛ | 🟢 |
-| 25 | **F-11** | Dictionary API | Ⓛ | 🟢 |
+| 25 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | Ⓛ | 🟢 |
 | 26 | **F-12** | Аудио-waveform | Ⓛ | 🟢 |
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | **T-05** | M3-редизайн — решение владельца (не оценивается) | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-27 (v0.3.24), легче→тяжелее:** T-11 · T-06 · T-03(ongoing) · F-15 · F-03 · F-11 · F-12 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. Решение-only: T-05. Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-06-28 (v0.3.25), легче→тяжелее:** T-11 · T-06 · T-03(ongoing) · F-15(ядро закрыто F-11) · F-03 · F-12 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. Решение-only: T-05. **F-11 ✅ DONE.** Всё остальное в таблице — ✅ DONE.
 
 ---
 
