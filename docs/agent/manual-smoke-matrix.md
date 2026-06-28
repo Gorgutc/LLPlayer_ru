@@ -8,6 +8,7 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Open media from a command-line path/URL.
 - Play, pause, seek, stop, change volume, fullscreen, and close.
 - Confirm taskbar progress and play/pause thumbnail action update.
+- A-B repeat (F-12): during playback click the A-B button (repeat icon) to set A, then B; confirm playback loops between them, the seek bar shows the A/B markers + highlighted band, and the button icon lights. Click again to clear and confirm normal playback resumes. Optionally bind Set A / Set B / Clear in Settings ▸ Keys and verify the shortcuts; confirm the points reset when a new file is opened.
 
 ## Subtitles
 

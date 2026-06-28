@@ -21,6 +21,7 @@ This document freezes runtime boundaries and high-risk invariants from `main`.
 - Open/open-async, stop, seek, playback, stream switching, and error events are coordinated by `Player` partial classes.
 - Latest open requests clear stale queued opens; preserve this behavior.
 - Seek/resync lock ordering across decoder codec contexts and demuxer format context is high risk.
+- A-B repeat (F-12, since 0.3.27) checks on the playback thread inside `UpdateCurTime` — after the `lock(seeks)` block, so no nested locking — whether the playhead reached the user's B point and, if so, issues the existing `SeekAccurate` back to A. It adds no new lock and routes through the same queued-seek/resync path as a slider seek; the A/B points are two `long` fields read/written via `Volatile.Read/Write`. The check is inert when no points are set (byte-identical), during reverse playback, and for HLS-live; the points reset on open via `ResetMe`.
 
 ## Media Framework
 

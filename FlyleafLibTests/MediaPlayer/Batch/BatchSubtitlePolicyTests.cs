@@ -6,6 +6,12 @@ namespace FlyleafLib.MediaPlayer;
 
 public class BatchSubtitlePolicyTests
 {
+    // Config(true) only resolves test-mode subtitle settings when Utils.IsTesting is set. Make this class
+    // self-contained (xUnit news up the class per test, so this runs before each) instead of relying on another
+    // test having set the global static first — a latent ordering dependency that surfaces when new test files
+    // shift the xUnit schedule (it failed in isolation before this).
+    public BatchSubtitlePolicyTests() => Utils.IsTesting = true;
+
     [Fact]
     public void ResolveInitialSourceLanguage_UsesSelectedRussianTrackBeforeWhisperFallback()
     {

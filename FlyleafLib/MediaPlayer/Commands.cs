@@ -65,6 +65,10 @@ public class Commands
 
     public ICommand ToggleReversePlayback   { get; set; }
     public ICommand ToggleLoopPlayback      { get; set; }
+    public ICommand SetABLoopStart          { get; set; }
+    public ICommand SetABLoopEnd            { get; set; }
+    public ICommand ClearABLoop             { get; set; }
+    public ICommand ToggleABLoop            { get; set; }
     public ICommand StartRecording          { get; set; }
     public ICommand StopRecording           { get; set; }
     public ICommand ToggleRecording         { get; set; }
@@ -139,6 +143,10 @@ public class Commands
 
         ToggleReversePlayback   = new RelayCommandSimple(player.ToggleReversePlayback);
         ToggleLoopPlayback      = new RelayCommandSimple(player.ToggleLoopPlayback);
+        SetABLoopStart          = new RelayCommandSimple(player.SetABLoopStart);
+        SetABLoopEnd            = new RelayCommandSimple(player.SetABLoopEnd);
+        ClearABLoop             = new RelayCommandSimple(player.ClearABLoop);
+        ToggleABLoop            = new RelayCommandSimple(player.ToggleABLoop);
         StartRecording          = new RelayCommandSimple(player.StartRecording);
         StopRecording           = new RelayCommandSimple(player.StopRecording);
         ToggleRecording         = new RelayCommandSimple(player.ToggleRecording);
