@@ -225,7 +225,7 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
     }
 
     // ref: https://learn.microsoft.com/en-us/azure/ai-services/translator/language-support
-    private string ToSourceCode(string iso6391)
+    internal string ToSourceCode(string iso6391)
     {
         if (!DefaultRegions.TryGetValue(iso6391, out string? defaultRegion))
         {
@@ -246,7 +246,7 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
         return _settings.Regions.GetValueOrDefault(iso6391, defaultRegion);
     }
 
-    private static string ToTargetCode(TargetLanguage target)
+    internal static string ToTargetCode(TargetLanguage target)
     {
         return target switch
         {

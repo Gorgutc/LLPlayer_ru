@@ -86,7 +86,7 @@ public class GoogleV1TranslateService : ITranslateService
         _targetLang = ToTargetCode(target);
     }
 
-    private string ToSourceCode(string iso6391)
+    internal string ToSourceCode(string iso6391)
     {
         if (iso6391 == "nb")
         {
@@ -105,7 +105,7 @@ public class GoogleV1TranslateService : ITranslateService
         return _settings.Regions.GetValueOrDefault(iso6391, defaultRegion);
     }
 
-    private static string ToTargetCode(TargetLanguage target)
+    internal static string ToTargetCode(TargetLanguage target)
     {
         return target switch
         {
