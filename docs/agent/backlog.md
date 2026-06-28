@@ -577,9 +577,33 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 926/926** (на 2026-06-28 v0.3.31: после T-03-среза №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
+**Тесты: 1026/1026** (на 2026-06-28: после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
+> **Прогресс 2026-06-28 (PR #98, +100 тестов → 1026, tests-only):** покрыты ранее непокрытые
+> ПУБЛИЧНЫЕ/internal-seam чистые функции 4 областей (ожидания ИЗ КОДА):
+> **(1) Переводческие мапперы** — `GoogleV1TranslateService`/`MicrosoftTranslateServiceBase`
+> `ToSourceCode` (instance: default-region, user-override, **non-region-override-ignore**) +
+> `ToTargetCode` (static): спец-кейсы `nb→no`, `lg→lug`, `mn→mn-Cyrl`, `ny→nya`, `rn→run`,
+> `sr→sr-Latn`, `EnglishAmerican→en` (default-ветка через `ToISO6391`) →
+> `FlyleafLibTests/MediaPlayer/Translation/TranslateLanguageCodeMapperTests.cs`. **Seam:**
+> `private`→`internal` на 4 методах (byte-identical, зеркало DeepL, `InternalsVisibleTo` уже есть).
+> **(2) `ParseSubtitles.SSAtoSubStyles`** — bold/italic/underline/strikeout/color (BGR-hex `&HBBGGRR`,
+> порядок каналов, ветки short-hex / close-without-open / 2-digit), dialogue `,,`+`\N`+trim,
+> literal-backslash, greek-fixup, overlapping styles → `MediaFramework/MediaFrame/ParseSubtitlesTests.cs`
+> (throwing-edge-кейсы намеренно вне scope). **(3) `BatchSubtitleConfigSnapshot`** — clone-независимость
+> коллекций/словарей/плагинов/nested + `--task` стриппинг + force-Russian (комплемент к scalar-completeness
+> guard, который намеренно исключает коллекции/nested) → `MediaPlayer/Batch/BatchSubtitleConfigSnapshotTests.cs`.
+> **(4) `Utils`** — конвертеры цветов WinForms/WPF/Vortice/`VideoColor` + `FixFileUrl` (file:-URI→LocalPath,
+> %-decode, case-insensitive, passthrough) → `Utils/UtilsColorConversionTests.cs` + `UtilsFixFileUrlTests.cs`.
+> Многоагентно: верификация бэклога (8) → adversarial-ревью (5 линз: correctness/non-vacuity/brittleness/
+> coverage/seam-safety → **SHIP**, 0 mustFix; ложные отсеяны — Regions предзаполнен DefaultRegions, не пуст) →
+> триаж (+7 coverage-тестов: G/B-каналы MidGray, SSA color-ветки, non-region-ignore) → `/code-review high`
+> Approve. Гейты build `-warnaserror` **0/0** + verify.ps1 green + **1026/1026**; tests-only → без бампа/launch.
+> **Грабли:** `ToSourceCode` — instance (зависит от `_settings.Regions`) → тест через сконструированный сервис
+> (HttpClient на shared handler, сеть не трогается); `VideoColor`=`Vortice.Direct3D11.VideoColor`; ⚠️ тест-файлы
+> в WORKTREE-путь; `-warnaserror` на тест-проекте всплывает pre-existing xUnit1051 (PauseTokenSourceTests) —
+> норм-`dotnet test` их терпит. Остаётся ONGOING (Google/MS мапперы теперь покрыты; demuxer/OCR-утилиты открыты).
 > **Прогресс 2026-06-28 (PR #95, +70 тестов → 915, tests-only):** покрыты ранее непокрытые
 > ПУБЛИЧНЫЕ чистые language-мапперы движка (ожидания ИЗ КОДА) → `FlyleafLibTests/Engine/LanguageMapperTests.cs`:
 > `TesseractModel.TesseractLangToISO6391` (105 активных записей: count-tripwire, spot-маппинги,
