@@ -510,9 +510,25 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 725/725** (на 2026-06-28, после T-03-follow-up PR #86 +4; ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725). Крупные области ещё без юнитов.
+**Тесты: 783/783** (на 2026-06-28, после T-03-среза №2 PR #88 +58; ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
+> **Прогресс 2026-06-28 (PR #88, +58 тестов → 783, tests-only):** покрыты ранее непокрытые ПУБЛИЧНЫЕ
+> детерминированные функции: `TranslateServiceTypeExtensions` (`IsLLM` одиночные + combined-flags,
+> `LLMServices` cardinality-tripwire + membership, `DefaultSettings` enum→конкретный settings-тип через
+> `typeof`-InlineData + throw на undefined) → `FlyleafLibTests/MediaPlayer/Translation/TranslateServiceTypeExtensionsTests.cs`;
+> `M3UPlaylist.ParseFromString` (EXTINF/Title, теги `key="value"`, `[Geo-blocked]`/`[Not 24/7]`, `(NNNp)` height,
+> `#EXTVLCOPT` UA/referrer, мульти/пусто/leading-ws/EOF→null/empty-title→""/tag-value-с-пробелом-отброшен) →
+> `MediaFramework/MediaPlaylist/M3UPlaylistTests.cs`; `PLSPlaylist.Parse` (Win32 `GetPrivateProfileString`, temp
+> `.pls` ASCII/CRLF, cleanup в Dispose; `NumberOfEntries` cap-больше/меньше/0/-1, File/Title/Length,
+> break-on-missing, `GetINIAttribute` present/missing) → `MediaFramework/MediaPlaylist/PLSPlaylistTests.cs`.
+> Ожидания выведены ИЗ КОДА (трасса парсеров / .NET Regex no-match quirk `Match.Empty.Groups.Count==1` /
+> HasFlag-семантика). 5-линзовое adversarial-ревью (correctness 0 находок) + `/code-review high` → Approve;
+> гейты build -warnaserror **0/0 ×3** + **783/783** + verify.ps1 green; tests-only → без бампа версии и launch-теста.
+> **Грабли:** combined-flags `IsLLM` = `HasFlag`(«все биты») → `IsLLM(Ollama|GoogleV1)`=**false** (агент-ревьюер
+> дал неверное `true` → выведено из кода); `typeof`-InlineData для `DefaultSettings` НЕ менять на
+> `BeAssignableTo<ITranslateSettings>` (сделало бы тест вакуумным — все 12 типов реализуют интерфейс).
+> Остаётся ONGOING (demuxer/OCR/Translation-сетевые мапперы Google/Microsoft ещё открыты).
 > **Прогресс 2026-06-28 (PR #86, +4 теста → 725, v0.3.26 — behaviour-change, НЕ tests-only):** закрыт
 > follow-up прошлого среза — прод `GetBytesReadable` переведён на
 > `ToString("0.## ", CultureInfo.InvariantCulture)`: десятичный разделитель теперь всегда `.` при любой
