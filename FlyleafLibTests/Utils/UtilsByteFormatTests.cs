@@ -1,12 +1,13 @@
+using System.Globalization;
 using AwesomeAssertions;
 
 namespace FlyleafLib;
 
-// Utils.GetBytesReadable(nuint) had no coverage. It selects a unit suffix by power-of-two thresholds, bit-shifts,
-// divides by 1024 and formats with "0.## ". The fractional path uses the CURRENT culture's decimal separator
-// (no InvariantCulture), so to stay culture-independent these tests only assert exact values that land on whole
-// numbers (no separator) plus suffix-boundary checks. nuint is not a valid attribute constant, so values come in
-// as ulong and are cast inside the test (the project runs win-x64, so nuint is 64-bit).
+// Utils.GetBytesReadable(nuint) selects a unit suffix by power-of-two thresholds, bit-shifts, divides by 1024 and
+// formats with "0.## " using InvariantCulture, so the decimal separator is always '.' regardless of the current
+// culture (e.g. "1.5 KB", never "1,5 KB" on ru-RU). That lets the fractional cases below assert exact strings
+// safely. nuint is not a valid attribute constant, so values come in as ulong and are cast inside the test (the
+// project runs win-x64, so nuint is 64-bit).
 public class UtilsByteFormatTests
 {
     [Theory]
@@ -31,7 +32,33 @@ public class UtilsByteFormatTests
     [InlineData(1073741823UL, "MB")]     // just below the GB threshold (0x40000000)
     public void GetBytesReadable_SuffixThresholds(ulong bytes, string expectedSuffix)
     {
-        // Asserting only the suffix keeps the boundary checks free of the culture-dependent decimal separator.
         Utils.GetBytesReadable((nuint)bytes).Should().EndWith(expectedSuffix);
+    }
+
+    [Theory]
+    [InlineData(1536UL, "1.5 KB")]          // 1536 / 1024 = 1.5
+    [InlineData(1280UL, "1.25 KB")]         // 1280 / 1024 = 1.25
+    [InlineData(1572864UL, "1.5 MB")]       // (1572864 >> 10) / 1024 = 1536 / 1024 = 1.5
+    public void GetBytesReadable_FractionalValues(ulong bytes, string expected)
+    {
+        // The format string is "0.## " so up to two decimals with trailing zeros trimmed; the separator is '.'.
+        Utils.GetBytesReadable((nuint)bytes).Should().Be(expected);
+    }
+
+    [Fact]
+    public void GetBytesReadable_FractionalValue_UsesDotSeparator_UnderCommaCulture()
+    {
+        // Regression guard: ru-RU uses ',' as its decimal separator. Because the method formats with
+        // InvariantCulture, the output must still use '.' ("1.5 KB"), not the culture's ',' ("1,5 KB").
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ru-RU");
+            Utils.GetBytesReadable((nuint)1536UL).Should().Be("1.5 KB");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
     }
 }
