@@ -510,9 +510,29 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 548/548** (на 2026-06-27, после F-10 PR #79 +49; T-03-срез PR #75 дал 489, далее F-02 +10 → 499, F-10 +49 → 548). Крупные области ещё без юнитов.
+**Тесты: 721/721** (на 2026-06-28, после T-03-среза этой сессии +114; ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, эта сессия +114 → 721). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
+> **Прогресс 2026-06-28 (PR этот, +114 тестов → 721):** покрыты ранее непокрытые ПУБЛИЧНЫЕ чистые функции
+> `Utils.cs` (ожидания выведены из спеки — regex/бит-математика/.NET-форматтеры/switch, не из прогона):
+> `Align`/`FFALIGN`/`Scale`/`SnapToInt`/`GCD` (`UtilsMathTests.cs`); `TruncateString`/`GetUrlExtention`/
+> `LowerCaseFirstChar`/`ToHexadecimal`/`DoubleToTimeMini`/`GetValidFileName` (`UtilsStringTests.cs`);
+> `GetBytesReadable` (`UtilsByteFormatTests.cs` — **culture-safe: только целочисленные значения + EndsWith-пороги**,
+> т.к. прод `ToString("0.## ")` БЕЗ InvariantCulture — latent prod-issue, не чинили в tests-only PR);
+> `GetMediaParts` (`UtilsMediaPartsTests.cs` — regex S/E/Year + control-flow: early-return при `res.Index==0`
+> НЕ заполняет Extension; .NET `Match.Empty.Groups.Count==1` на no-match → fall-through к Year/Title; RxResolution/
+> RxExtended noise-границы); `ParseQueryString`/`GetFlagsAsList`/`GetFlagsAsString`/`GetRecInnerException` (cap 4)/
+> `GetDumpMetadata` (null/empty/single — multi-entry порядок dict-зависим, опущен) (`UtilsQueryFlagsTests.cs`);
+> `Disposable` (`DisposableTests.cs`); `TargetLanguageExtensions.DisplayName`/`ToISO6391` (EnumMember-коды сверены:
+> en-US/fr-FR/pt-PT/zh-CN/ru/de) (`TargetLanguageExtensionsTests.cs`). Многоагентно: разведка (4 Explore →
+> 91 кандидат/44 реко; сверкой с кодом пойманы 2 ошибки разведки в GetBytesReadable/GetMediaParts) → реализация →
+> **adversarial-ревью (4 линзы: non-vacuity/correctness/brittleness/coverage) → 2 SHIP + 2 FIX-THEN-SHIP**;
+> усилены DoubleToTimeMini (round-down контраст), TruncateString (Min-ветка), GetMediaParts (+3 regex-границы);
+> отклонены 2 CRITICAL как inapplicable (culture тестов уже safe; GetValidFileName platform moot — Windows-only TFM).
+> `/code-review high` → Approve. Все чистые (ноль продакшн-кода), гейты build -warnaserror 0/0 ×3 + verify.ps1 green;
+> tests-only → без бампа версии и launch-теста. **Follow-up:** prod `GetBytesReadable` стоит перевести на
+> InvariantCulture (отдельный мелкий PR — это смена поведения на не-инвариантных культурах). Остаётся ONGOING
+> (demuxer/playlist/OCR/Translation-мапперы Google/Microsoft/ToTargetLanguage ещё открыты).
 > **Прогресс 2026-06-27 (PR этот, +54 теста → 488):** добавлены юнит-тесты на ранее непокрытые чистые функции:
 > `Utils` форматтеры времени (`TsToTime`/`TicksToTime`/`McsToTime`/`TicksToTimeMini` — sentinels `NoTs`/0,
 > положительные/отрицательные, <1мин/<1ч/<1сут/≥1сут ветки) → `FlyleafLibTests/Utils/UtilsTimeFormatTests.cs`;
