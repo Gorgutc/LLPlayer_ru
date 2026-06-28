@@ -32,11 +32,12 @@
             </Style>
         </Border.Style>
 
-        <!-- TODO: L: Support dictionary API in addition to translations-->
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition />
                 <RowDefinition />
+                <!-- F-11: dictionary definition row. Auto height + Collapsed by default = zero height when off. -->
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Grid Grid.Row="0">
@@ -119,6 +120,36 @@
                     <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
                         <!-- Matches the Border: white over video, theme body colour in the sidebar. -->
                         <Setter Property="Foreground" Value="White" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSidebar}" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBox.Style>
+            </TextBox>
+
+            <!-- F-11: dictionary definition (secondary). Wraps + scrolls; capped height so it never dwarfs the
+                 video frame. Collapsed unless a definition was fetched, so the OFF path is byte-identical. -->
+            <TextBox
+                x:Name="DefinitionText"
+                Grid.Row="2"
+                AutomationProperties.Name="Definition"
+                AutomationProperties.LiveSetting="Polite"
+                IsReadOnly="True"
+                TextWrapping="Wrap"
+                TextAlignment="Left"
+                Margin="0 6 0 0"
+                MaxHeight="160"
+                VerticalScrollBarVisibility="Auto"
+                materialDesign:TextFieldAssist.DecorationVisibility="Hidden"
+                BorderThickness="0"
+                FontSize="13"
+                Visibility="{Binding DefinitionVisible, Converter={StaticResource BooleanToVisibilityConv}}">
+                <TextBox.Style>
+                    <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                        <!-- Slightly dimmer than the translation: secondary over video, theme body in sidebar. -->
+                        <Setter Property="Foreground" Value="#DDDDDD" />
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsSidebar}" Value="True">
                                 <Setter Property="Foreground" Value="{DynamicResource MaterialDesignBody}" />

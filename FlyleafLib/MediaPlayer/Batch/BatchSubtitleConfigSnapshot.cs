@@ -83,6 +83,9 @@ public static class BatchSubtitleConfigSnapshot
             MsOcrRegions = new Dictionary<string, string>(source.MsOcrRegions),
             TranslateServiceType = source.TranslateServiceType,
             TranslateWordServiceType = source.TranslateWordServiceType,
+            // F-11: an interactive (word-popup) setting like TranslateWordServiceType; copied for snapshot
+            // completeness (the batch path does not read it) per the scalar-completeness guard.
+            WordDefinitionServiceType = source.WordDefinitionServiceType,
             TranslateCountBackward = source.TranslateCountBackward,
             TranslateCountForward = source.TranslateCountForward,
             TranslateMaxConcurrency = source.TranslateMaxConcurrency
