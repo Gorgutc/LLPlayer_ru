@@ -39,6 +39,38 @@
                             SelectedValue="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId}"
                             ToolTip="The preset voice used for the whole dubbed track. Per-line / per-speaker selection is a later phase." />
                     </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
+                        <TextBlock
+                            Width="180"
+                            VerticalAlignment="Top"
+                            Text="Custom voice IDs"
+                            ToolTip="Register voice ids you added to the local engine (dub_sidecar/server.py VOICES) so they appear in the picker above. The id is sent to the engine as-is at render time and is not validated here." />
+                        <StackPanel Width="240">
+                            <ListBox
+                                MaxHeight="120"
+                                AutomationProperties.Name="Custom voice IDs"
+                                ItemsSource="{Binding CustomVoiceIds}"
+                                SelectedItem="{Binding SelectedCustomVoiceId}" />
+                            <StackPanel
+                                Orientation="Horizontal"
+                                Margin="0 4 0 0">
+                                <TextBox
+                                    Width="140"
+                                    VerticalAlignment="Center"
+                                    ToolTip="New custom voice id (as registered in the engine)"
+                                    Text="{Binding NewVoiceId, UpdateSourceTrigger=PropertyChanged}" />
+                                <Button
+                                    Margin="4 0 0 0"
+                                    Content="Add"
+                                    Command="{Binding CmdAddVoiceId}" />
+                                <Button
+                                    Margin="4 0 0 0"
+                                    Content="Remove"
+                                    Command="{Binding CmdRemoveVoiceId}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
             </GroupBox>
 

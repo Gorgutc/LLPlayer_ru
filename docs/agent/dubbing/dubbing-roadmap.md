@@ -46,6 +46,15 @@ non-Russian target languages; bundling non-commercial models.
 > `DubbingConfig.DefaultVoiceId` (one voice per dub). **Still phase-2:** per-line / per-speaker selection
 > (needs diarization + per-line data) and the manual gender override UI; pre-rendering additional preset
 > voices is owner first-run on the GPU.
+>
+> **Phase 2 progress (F-16, custom voice ids — shipped v0.3.31):** the voice picker now merges
+> user-declared `DubbingConfig.CustomVoiceIds` with the built-in bank via the new
+> `VoiceBankResolver.ForConfig(selected, customVoiceIds)` overload (dedup/trim/order-preserving), and
+> **Settings ▸ Subtitles ▸ Dubbing** gained a **Custom voice IDs** Add/Remove editor. This lets a voice
+> the user added to `dub_sidecar/server.py` VOICES be selected (and reach the synth request as
+> `DefaultVoiceId`) without hand-editing config — GPU-free, default empty → byte-identical, no engine
+> probe. **Still phase-2:** diarization + per-speaker presets + F0/manual gender override UI; the engine
+> live-discovery refresh (`ResolveAsync`) remains unwired (it would require starting the GPU sidecar).
 
 ## This session's sprint (Phase 0)
 

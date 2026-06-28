@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using FlyleafLib.MediaPlayer.Dubbing;
 
 namespace FlyleafLib;
@@ -30,6 +31,12 @@ public class DubbingConfig : NotifyPropertyChanged
 
     /// <summary>MVP single preset Russian voice; later overridable per speaker from the voice bank.</summary>
     public string DefaultVoiceId { get; set => Set(ref field, value); } = "ru-preset-1";
+
+    /// <summary>User-declared extra voice ids merged into the voice picker (e.g. presets the user added to the
+    /// local sidecar's <c>VOICES</c>), so a custom voice can be selected without hand-editing this file.
+    /// Default empty → byte-identical (the picker shows only the built-in bank). The id is passed to the
+    /// engine verbatim at synth time; LLPlayer does not validate it against a running engine.</summary>
+    public List<string> CustomVoiceIds { get; set => Set(ref field, value); } = new();
 
     /// <summary>Original-audio level under the dub during dubbed spans, 0..100. Drives the duck depth.
     /// Clamped to its valid range on set so a hand-edited config or UI echo cannot push it out of bounds.</summary>
