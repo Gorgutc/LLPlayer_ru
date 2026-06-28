@@ -53,7 +53,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
         PreferRussianAudio = FL.Config.BatchSubtitles.PreferRussianAudio;
         WatchFolder = FL.Config.BatchSubtitles.WatchFolder;
-        Voices = VoiceBankResolver.ForConfig(FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId);
+        Voices = VoiceBankResolver.ForConfig(
+            FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId,
+            FL.PlayerConfig.Subtitles.DubbingConfig.CustomVoiceIds);
         _initializing = false;
 
         // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in

@@ -35,6 +35,13 @@ public static class VoiceBankResolver
     });
 
     /// <summary>
+    /// Builds the placeholder <see cref="TtsVoice"/> for a custom / not-yet-known id (display name = id,
+    /// unknown gender, empty language). Single source of truth so the picker UI and the resolver agree on
+    /// how an unrecognised id is surfaced. The id is used verbatim (callers trim where appropriate).
+    /// </summary>
+    public static TtsVoice CustomVoice(string id) => new(id, id, "unknown", "");
+
+    /// <summary>
     /// Exact-id lookup over the built-in bank (case-insensitive on Id, matching the sidecar contract).
     /// Returns null for an unknown/blank id.
     /// </summary>
@@ -64,8 +71,44 @@ public static class VoiceBankResolver
 
         List<TtsVoice> list = new(BuiltIn.Count + 1);
         list.AddRange(BuiltIn);
-        list.Add(new TtsVoice(selectedVoiceId, selectedVoiceId, "unknown", ""));
+        list.Add(CustomVoice(selectedVoiceId));
         return list;
+    }
+
+    /// <summary>
+    /// Like <see cref="ForConfig(string?)"/> but also merges user-declared <paramref name="customVoiceIds"/>
+    /// (from <see cref="DubbingConfig.CustomVoiceIds"/>) after the built-in presets, in declared order: blanks
+    /// are skipped, ids are trimmed, and ids already present (a built-in or an earlier custom id) are dropped
+    /// (dedup by Id, OrdinalIgnoreCase). The selected id is then appended as a placeholder if it is still not
+    /// present, exactly as the single-argument overload does, so the picker never blanks. A null
+    /// <paramref name="customVoiceIds"/> is identical to <see cref="ForConfig(string?)"/>; when nothing is
+    /// actually added the canonical built-in instance is returned (fast-path parity).
+    /// </summary>
+    public static IReadOnlyList<TtsVoice> ForConfig(string? selectedVoiceId, IEnumerable<string>? customVoiceIds)
+    {
+        if (customVoiceIds is null)
+            return ForConfig(selectedVoiceId);
+
+        List<TtsVoice> list = new(BuiltIn.Count + 4);
+        list.AddRange(BuiltIn);
+
+        HashSet<string> known = new(BuiltIn.Select(v => v.Id), StringComparer.OrdinalIgnoreCase);
+
+        foreach (string? id in customVoiceIds)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                continue;
+
+            string trimmed = id.Trim();
+            if (known.Add(trimmed))
+                list.Add(CustomVoice(trimmed));
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedVoiceId) && known.Add(selectedVoiceId))
+            list.Add(CustomVoice(selectedVoiceId));
+
+        // Nothing new appended -> hand back the canonical built-in instance (parity with the single-arg path).
+        return list.Count == BuiltIn.Count ? BuiltIn : list;
     }
 
     /// <summary>

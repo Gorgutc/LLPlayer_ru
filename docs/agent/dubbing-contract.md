@@ -104,6 +104,15 @@ user explicitly asks to change that product decision.
   not yet wired into the UI). The chosen voice writes `DubbingConfig.DefaultVoiceId` (one voice for the
   whole dub); **per-line / per-speaker selection remains phase 2** (needs per-line data). The renderer
   reads `DefaultVoiceId` live at run start, so no batch-snapshot coverage is required.
+- **Phase 2 custom voice ids (shipped, additive):** the user can register extra voice ids
+  (`DubbingConfig.CustomVoiceIds`, default empty → byte-identical) via **Settings ▸ Subtitles ▸ Dubbing ▸
+  Custom voice IDs** (list + Add/Remove). Both pickers (Settings + batch dialog) merge them after the
+  built-in bank via `VoiceBankResolver.ForConfig(selected, customVoiceIds)` (trim, dedup by Id
+  OrdinalIgnoreCase, declared order; the selected id stays selectable). The id is sent to the engine
+  **verbatim** at synth time (`DefaultVoiceId` → `TtsRequest.VoiceId`); LLPlayer does not validate it
+  against a running engine and **still never starts the sidecar** to populate the picker. Persisted in
+  `LLPlayer.PlayerConfig.json` under `Subtitles.DubbingConfig.CustomVoiceIds` (absent-defaulting, no
+  migration). The live-discovery refresh (`ResolveAsync`) remains unwired (it would require starting the GPU sidecar).
 - **Hybrid:** by default, diarize speakers and **clone each speaker's timbre** into Russian
   (CosyVoice2 zero-shot from a per-speaker reference clip), preserving gender; **any speaker can be
   overridden** with a preset bank voice. Gender uses a license-free F0 heuristic + manual override.

@@ -80,6 +80,85 @@ public class VoiceBankResolverTests
         result[2].Should().Be(new TtsVoice("my-custom-voice", "my-custom-voice", "unknown", ""));
     }
 
+    // ---- ForConfig(selected, customVoiceIds): built-in + user-declared custom ids (F-16 phase 2) ----
+
+    [Fact]
+    public void ForConfig_NullCustomIds_MatchesSingleArg()
+    {
+        VoiceBankResolver.ForConfig("ru-preset-1", null).Should().Equal(VoiceBankResolver.ForConfig("ru-preset-1"));
+        VoiceBankResolver.ForConfig("hand-edited", null).Should().Equal(VoiceBankResolver.ForConfig("hand-edited"));
+    }
+
+    [Fact]
+    public void ForConfig_EmptyCustomIds_KnownSelection_ReturnsBuiltInInstance()
+    {
+        VoiceBankResolver.ForConfig("ru-preset-1", []).Should().BeSameAs(VoiceBankResolver.BuiltIn);
+    }
+
+    [Fact]
+    public void ForConfig_CustomIds_AppendedAfterBuiltIn_InDeclaredOrder()
+    {
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig("ru-preset-1", ["custom-a", "custom-b"]);
+
+        result.Should().HaveCount(4);
+        result.Take(2).Should().Equal(VoiceBankResolver.BuiltIn);
+        result[2].Should().Be(new TtsVoice("custom-a", "custom-a", "unknown", ""));
+        result[3].Should().Be(new TtsVoice("custom-b", "custom-b", "unknown", ""));
+    }
+
+    [Fact]
+    public void ForConfig_CustomIds_DedupAgainstBuiltIn_CaseInsensitive()
+    {
+        // "RU-PRESET-1" is a built-in id (case-insensitive) -> dropped; only "custom-a" is appended.
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig("ru-preset-1", ["RU-PRESET-1", "custom-a"]);
+
+        result.Should().HaveCount(3);
+        result.Take(2).Should().Equal(VoiceBankResolver.BuiltIn);
+        result[2].Id.Should().Be("custom-a");
+    }
+
+    [Fact]
+    public void ForConfig_CustomIds_DedupAmongThemselves_CaseInsensitive_FirstWins()
+    {
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig("ru-preset-1", ["custom-a", "CUSTOM-A", "custom-b"]);
+
+        result.Select(v => v.Id).Should().Equal("ru-preset-1", "ru-preset-2", "custom-a", "custom-b");
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ForConfig_CustomIds_BlankEntries_AreSkipped(string? blank)
+    {
+        VoiceBankResolver.ForConfig("ru-preset-1", [blank!]).Should().BeSameAs(VoiceBankResolver.BuiltIn);
+    }
+
+    [Fact]
+    public void ForConfig_CustomIds_AreTrimmed()
+    {
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig("ru-preset-1", ["  spaced-id  "]);
+
+        result.Should().HaveCount(3);
+        result[2].Id.Should().Be("spaced-id");
+    }
+
+    [Fact]
+    public void ForConfig_SelectedUnknownNotInCustom_AppendedAsPlaceholderLast()
+    {
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig("hand-edited", ["custom-a"]);
+
+        result.Select(v => v.Id).Should().Equal("ru-preset-1", "ru-preset-2", "custom-a", "hand-edited");
+    }
+
+    [Fact]
+    public void ForConfig_SelectedIsACustomId_NotDuplicated()
+    {
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig("custom-a", ["custom-a"]);
+
+        result.Select(v => v.Id).Should().Equal("ru-preset-1", "ru-preset-2", "custom-a");
+    }
+
     // ---- ResolveAsync: phase-2 merge (fail-soft, built-in wins, dedup) ----
 
     [Fact]
