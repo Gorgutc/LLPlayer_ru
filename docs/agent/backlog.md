@@ -631,10 +631,8 @@ playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03
 whisper.cpp/Whisper.net поддерживают квантизованные модели, но в UI не выведено. **Решение:** дать выбор
 квантизации (лучший безопасный выигрыш скорости). См. References whisper-research во втором мозге.
 
-### T-05 — Судьба M3-редизайна (PR #31) 🟢 — · DEFERRED
-[PR #31](https://github.com/Gorgutc/LLPlayer_ru/pull/31) (`claude/modest-brown-29ced0`, Material 3 re-skin) —
-OPEN, **отложен владельцем**. **Решение:** решить — мерджить, доработать (глоб. M3-скроллбары/focus-ring) или
-закрыть в пользу нового фреймворка. **Рассуждение:** не трогать без явного решения владельца.
+### T-05 — Судьба M3-редизайна (PR #31) 🟢 — · ✅ **DONE (решение владельца «B-opt-in», PR #91 merge `89a0fc7`, v0.3.29, 2026-06-28; PR #31 ЗАКРЫТ)**
+> ✅ **Закрыто.** [PR #31](https://github.com/Gorgutc/LLPlayer_ru/pull/31) (`claude/modest-brown-29ced0`, 1:1 Material 3 re-skin) был **на 123 коммита позади main** (1 коммит от 2026-06-22). Многоагентная верификация (5 Explore) + adversarial-панель (3 стойки: steelman-merge / steelman-revive / devil-close) показали: механически конфликтуют лишь 3 файла, но **семантически re-skin безнадёжно протух** — перекрашивал UI, которого структурно уже нет (новые `AiInsightsDialog`/`WordManagerDialog` + контролы бара A-B/waveform/ASR-pause он не знает) → любой мерж = несогласованный «half-M3» UI. **Решение владельца (AskUserQuestion): `B-opt-in`** — PR #31 **закрыт** (с пояснением; ветка `claude/modest-brown-29ced0` + дизайн-доки `docs/agent/redesign/` сохранены → дизайн восстановим), а спасённый **M3 цвет-фундамент отгружен аддитивно за тумблером** ([PR #91](https://github.com/Gorgutc/LLPlayer_ru/pull/91), v0.3.29). Opt-in `AppConfigTheme.ShowM3Theme` (Settings ▸ Themes, **default OFF → byte-identical**, оверлеи НЕ мерджатся в `App.xaml`): `RefreshM3Overlays()` переутверждает `M3.Surfaces.xaml` + `M3.Accent.xaml` (взяты ИЗ PR #31; **не** `M3.xaml` с формами) последними в `MergedDictionaries` → переопределяют стандартные MaterialDesign-ключи при `DynamicResource` → весь UI в rose Material You **без правок поверхностей**. **Цвет-only** (формы/радиусы/шаблоны не меняются — полный per-surface re-skin = будущая задача); только Dark; Accent-словарь лишь при default-цветах без accent-sync; fail-soft. Гейты build `-warnaserror` **0/0 ×3** + тесты **820/820** + verify.ps1 (frozen/doc/dub-license) green; 4-линзовое adversarial-ревью реализации (все SHIP, 0 дефектов) + `/code-review high` Approve; **`.exe` launch 0.3.29 чистый** (жив 13c, без crash.log, FFmpeg 7 DLL + e_sqlite3). Контракты wpf-design + config-data аддитивно. **Owner manual-smoke:** тумблер Material 3 Theme → rose Material You; OFF / Light / accent-sync / свой цвет → стоковый вид. Детали: второй мозг `Sessions/2026-06-28-handoff-t05-m3-decision.md`.
 
 ### T-06 — Дрейф документации форка vs upstream 🟢 ⓢ · ✅ **DONE (PR #84, v0.3.25, 2026-06-28, doc-only)**
 > ✅ **Закрыт (без кода).** Решение владельца (AskUserQuestion): «документировать как agent-infra + заметка про
@@ -721,11 +719,11 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 23 | ~~**T-07**~~ ✅ | SrtExporter теги `<i>` → DONE PR #59 v0.3.13 | 🟢 | ⓢ |
 | 24 | ~~**T-08/T-09**~~ ✅ + **T-10** | fold-back/silence-split ✅ DONE PR #69 v0.3.19; **T-10** per-seg lang ⚠️ конфликт F-17 (OPEN) | 🟢 | Ⓜ/Ⓛ |
 | 25 | ~~**T-06**~~ ✅ | Дрейф документации форка → DONE PR #84 (doc-only) | 🟢 | ⓢ |
-| 26 | **T-05** | Решение по M3-редизайну (PR #31, CONFLICTING) | 🟢 | — |
+| 26 | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | 🟢 | — |
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.28):** F-03, T-03(ongoing), F-16, T-05(решение), F-13, T-10(⚠️F-17), F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.**
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.29):** F-03, T-03(ongoing), F-16, T-10(⚠️F-17), F-13, F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -758,9 +756,9 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 25 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | Ⓛ | 🟢 |
 | 26 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 | Ⓛ | 🟢 |
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
-| — | **T-05** | M3-редизайн — решение владельца (не оценивается) | — | 🟢 |
+| — | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-28 (v0.3.28), легче→тяжелее:** T-03(ongoing) · F-03 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. Решение-only: T-05. **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-06-28 (v0.3.29), легче→тяжелее:** T-03(ongoing) · F-03 · F-16 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
 
 ---
 
