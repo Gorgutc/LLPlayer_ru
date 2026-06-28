@@ -510,10 +510,20 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 721/721** (на 2026-06-28, после T-03-среза этой сессии +114; ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, эта сессия +114 → 721). Крупные области ещё без юнитов.
+**Тесты: 725/725** (на 2026-06-28, после T-03-follow-up PR #86 +4; ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
-> **Прогресс 2026-06-28 (PR этот, +114 тестов → 721):** покрыты ранее непокрытые ПУБЛИЧНЫЕ чистые функции
+> **Прогресс 2026-06-28 (PR #86, +4 теста → 725, v0.3.26 — behaviour-change, НЕ tests-only):** закрыт
+> follow-up прошлого среза — прод `GetBytesReadable` переведён на
+> `ToString("0.## ", CultureInfo.InvariantCulture)`: десятичный разделитель теперь всегда `.` при любой
+> культуре («1.5 KB», не «1,5 KB» на ru-RU). Единственное прод-использование — диаг-лог GPU-памяти
+> `GpuAdapter.ToString()`; frozen-контракты метод не упоминают; формат `"0.##"` без групп-разделителей →
+> единственный culture-риск был десятичный разделитель. Тесты: `UtilsByteFormatTests` +3 дробных кейса
+> (1.5/1.25 KB, 1.5 MB) + culture-guard, форсящий `ru-RU` (`...UsesDotSeparator_UnderCommaCulture` — **падал
+> бы до фикса**, настоящий non-vacuous регресс-guard; try/finally восстанавливает `CurrentCulture`).
+> Самообзор (5 линз) + `/code-review` → Approve. Гейты build -warnaserror 0/0 (LLPlayer+YoutubeDL) +
+> FlyleafLibTests 725/725 + verify-frozen green; бамп 0.3.25→0.3.26, `.exe` launch-тест чистый (10 c, без crash.log).
+> **Прогресс 2026-06-28 (PR #85, +114 тестов → 721):** покрыты ранее непокрытые ПУБЛИЧНЫЕ чистые функции
 > `Utils.cs` (ожидания выведены из спеки — regex/бит-математика/.NET-форматтеры/switch, не из прогона):
 > `Align`/`FFALIGN`/`Scale`/`SnapToInt`/`GCD` (`UtilsMathTests.cs`); `TruncateString`/`GetUrlExtention`/
 > `LowerCaseFirstChar`/`ToHexadecimal`/`DoubleToTimeMini`/`GetValidFileName` (`UtilsStringTests.cs`);
@@ -530,8 +540,8 @@ playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03
 > усилены DoubleToTimeMini (round-down контраст), TruncateString (Min-ветка), GetMediaParts (+3 regex-границы);
 > отклонены 2 CRITICAL как inapplicable (culture тестов уже safe; GetValidFileName platform moot — Windows-only TFM).
 > `/code-review high` → Approve. Все чистые (ноль продакшн-кода), гейты build -warnaserror 0/0 ×3 + verify.ps1 green;
-> tests-only → без бампа версии и launch-теста. **Follow-up:** prod `GetBytesReadable` стоит перевести на
-> InvariantCulture (отдельный мелкий PR — это смена поведения на не-инвариантных культурах). Остаётся ONGOING
+> tests-only → без бампа версии и launch-теста. **Follow-up:** ✅ ВЫПОЛНЕНО в PR #86 (выше) — prod `GetBytesReadable`
+> переведён на InvariantCulture. Остаётся ONGOING
 > (demuxer/playlist/OCR/Translation-мапперы Google/Microsoft/ToTargetLanguage ещё открыты).
 > **Прогресс 2026-06-27 (PR этот, +54 теста → 488):** добавлены юнит-тесты на ранее непокрытые чистые функции:
 > `Utils` форматтеры времени (`TsToTime`/`TicksToTime`/`McsToTime`/`TicksToTimeMini` — sentinels `NoTs`/0,
