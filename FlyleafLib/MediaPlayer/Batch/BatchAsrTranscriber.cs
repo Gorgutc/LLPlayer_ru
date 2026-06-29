@@ -139,6 +139,10 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
                         Text = c.Text,
                         StartTime = c.Start,
                         EndTime = c.End,
+                        // Split cues inherit the parent cue's per-cue metadata (T-10 ASR language + F-03 speaker);
+                        // otherwise re-segmentation silently drops it. Inert today (display does not consume it yet).
+                        Language = s.Language,
+                        SpeakerId = s.SpeakerId,
 #if DEBUG
                         ChunkNo = s.ChunkNo,
                         StartTimeChunk = s.StartTimeChunk,
