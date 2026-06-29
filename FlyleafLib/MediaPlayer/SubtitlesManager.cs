@@ -578,7 +578,9 @@ public class SubManager : INotifyPropertyChanged
         List<SubtitleData> result = new(cues.Count);
         foreach ((string text, TimeSpan start, TimeSpan end) in cues)
         {
-            result.Add(new SubtitleData { Text = text, StartTime = start, EndTime = end });
+            // Split cues inherit the parent cue's per-cue metadata (T-10 language + F-03 speaker) for parity with
+            // the single-cue fast path above (which keeps the original object). Null for loaded subs today.
+            result.Add(new SubtitleData { Text = text, StartTime = start, EndTime = end, Language = data.Language, SpeakerId = data.SpeakerId });
         }
         return result;
     }
@@ -1088,6 +1090,14 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
     /// </summary>
     public Language? Language { get; set; }
 
+    /// <summary>
+    /// Speaker label for this cue (F-03 diarization prep), or null when unknown / not applicable. Inert metadata —
+    /// it does not change rendering, export, or translation by itself, and nothing populates it yet (speaker
+    /// diarization is a future GPU sidecar). Reserved so the per-cue speaker schema is in place; a plain string id
+    /// (e.g. "SPEAKER_00") mirrors the per-cue <see cref="Language"/> field added in T-10.
+    /// </summary>
+    public string? SpeakerId { get; set; }
+
     private bool _isDisposed;
 
     public void Dispose()
@@ -1115,6 +1125,7 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
             StartTime = StartTime,
             EndTime = EndTime,
             Language = Language,
+            SpeakerId = SpeakerId,
 #if DEBUG
             ChunkNo = ChunkNo,
             StartTimeChunk = StartTimeChunk,

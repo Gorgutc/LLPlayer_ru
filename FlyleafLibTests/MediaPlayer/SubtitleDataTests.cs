@@ -2,7 +2,8 @@ using AwesomeAssertions;
 
 namespace FlyleafLib.MediaPlayer;
 
-// SubtitleData.Clone must carry the new per-cue source language (T-10) along with the existing scalar fields.
+// SubtitleData.Clone must carry the new per-cue source language (T-10) and speaker id (F-03 prep)
+// along with the existing scalar fields.
 public class SubtitleDataTests
 {
     [Fact]
@@ -34,5 +35,49 @@ public class SubtitleDataTests
         var sub = new SubtitleData { Text = "x", Language = null };
 
         sub.Clone().Language.Should().BeNull();
+    }
+
+    [Fact]
+    public void Clone_CopiesSpeakerId()
+    {
+        var sub = new SubtitleData
+        {
+            Index = 7,
+            Text = "Hi",
+            StartTime = TimeSpan.FromSeconds(3),
+            EndTime = TimeSpan.FromSeconds(4),
+            SpeakerId = "SPEAKER_00",
+        };
+
+        SubtitleData clone = sub.Clone();
+
+        clone.SpeakerId.Should().Be("SPEAKER_00");
+        // Sanity: distinct instance still carrying the other scalar fields (non-vacuous).
+        clone.Should().NotBeSameAs(sub);
+        clone.Index.Should().Be(7);
+        clone.Text.Should().Be("Hi");
+        clone.StartTime.Should().Be(TimeSpan.FromSeconds(3));
+    }
+
+    [Fact]
+    public void Clone_NullSpeakerId_StaysNull()
+    {
+        // Nothing populates the speaker yet (diarization is a future GPU sidecar); the clone must keep it null
+        // (byte-identical default for loaded/ASR cues).
+        var sub = new SubtitleData { Text = "x", SpeakerId = null };
+
+        sub.Clone().SpeakerId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Clone_CopiesLanguageAndSpeakerIdTogether()
+    {
+        // Guard against a future Clone refactor dropping one of the two independent per-cue metadata fields.
+        var sub = new SubtitleData { Text = "y", Language = Language.English, SpeakerId = "SPEAKER_01" };
+
+        SubtitleData clone = sub.Clone();
+
+        clone.Language.Should().Be(Language.English);
+        clone.SpeakerId.Should().Be("SPEAKER_01");
     }
 }

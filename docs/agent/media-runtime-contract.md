@@ -37,6 +37,7 @@ This document freezes runtime boundaries and high-risk invariants from `main`.
 - Text and bitmap subtitles are both first-class.
 - Bitmap subtitle data has explicit lifetime/disposal and positioning.
 - `SubtitlesSelectedHelper` is static/global and is not multi-player safe. Do not redesign it incidentally.
+- `SubtitleData` carries optional per-cue metadata that is inert by itself (it does not change rendering, export, or translation): `Language` (the ASR source language, T-10) and `SpeakerId` (a speaker-label string reserved for future diarization, F-03 — nothing populates it yet, so a default `null` is byte-identical). Both are copied by `SubtitleData.Clone()` and carried onto the split cues when a cue is re-segmented, so per-cue metadata is not lost.
 
 ## ASR/OCR/Translation
 
