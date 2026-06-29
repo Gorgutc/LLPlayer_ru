@@ -215,7 +215,20 @@ HttpClient.Timeout of 60 [seconds]». Владелец гоняет перево
 (полное):** опц. предобработка аудио вокал-изоляцией (Demucs/аналог) в сайдкаре по образцу дубляжа
 (`dub_sidecar/`), opt-in. **Рассуждение:** высокая ценность для качества субтитров; крупно.
 
-### F-03 — Диаризация (speaker ID) 🟡 Ⓛ · TODO
+### F-03 — Диаризация (speaker ID) 🟡 Ⓛ · IN-PROGRESS (prep-срез ✅ PR #102 v0.3.33; диаризация = GPU-сайдкар TODO)
+> ⚙️ **Prep-срез отгружен (PR [#102](https://github.com/Gorgutc/LLPlayer_ru/pull/102), merge `710bc70`, v0.3.33, 2026-06-29).**
+> GPU-free задел схемы по паттерну T-10: новое inert nullable-поле `SubtitleData.SpeakerId` (`string?`, default null →
+> **byte-identical** — ничего не пишет, диаризация = будущий GPU-сайдкар). Переносится в `SubtitleData.Clone()` И на
+> split-cue на ОБОИХ сайтах ре-сегментации (`BatchAsrTranscriber`, `SubtitlesManager.ResegmentLoaded`) — попутно
+> закрыт **латентный gap T-10**, где per-cue `Language` терялся при ре-сегментации (inert сегодня → byte-identical).
+> **Решение владельца (AskUserQuestion ×2):** взять F-03 prep + форма схемы = простой `string` id (не record
+> `Speaker{Id,Name,Gender,Language}`). Тесты +3 (1035→**1038**); `media-runtime-contract` аддитивный буллет;
+> `config-data` НЕ тронут (нет персист-ключа). Многоагентно: верификация (`w1ac9316y`, 6 агентов) → adversarial-ревью
+> (`wondq7zcl`, 4 линзы+триаж: SHIP, 0 must-fix; seam-completeness находка ПРИМЕНЕНА = 2 правки переноса) → `/code-review high`
+> Approve. Гейты build `-warnaserror` **0/0** + **1038/1038** + verify.ps1 green; **`.exe` launch 0.3.33 чистый**
+> (жив 13с, без crash.log, FFmpeg+e_sqlite3). **Разблокирует F-16 per-line/per-speaker дубляж.** **Остаток F-03:**
+> сама диаризация (pyannote-audio сайдкар по образцу `dub_sidecar/` → заполнение `SpeakerId`) + потребление дисплеем/
+> экспортом/дубляжом — GPU + multi-session. Детали: второй мозг `Sessions/2026-06-29-session-LIVE-tracker-11.md`.
 **Идея от Buzz.** Метки говорящих → лучше форматирование диалогов и понимание. **Решение:** сайдкар
 pyannote-audio или возможности faster-whisper-XXL; метки в `SubtitleData`. **Рассуждение:** mission-fit
 средний-высокий, крупно; фазами; согласуется с двойными субтитрами/диалогами.
@@ -804,7 +817,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-29 (v0.3.32):** F-03, T-03(ongoing), F-16(фаза 1 ✅; фазы 2-6 TODO), F-13, F-02-full(Demucs, по триггеру). **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-29 (v0.3.33):** T-03(ongoing), F-03(prep-срез SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO), F-16(фаза 1 ✅; фазы 2-6 TODO), F-13, F-02-full(Demucs, по триггеру). **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -839,7 +852,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-29 (v0.3.32), легче→тяжелее:** T-03(ongoing) · F-16(фаза 1 ✅ v0.3.30; фазы 2-6 TODO) · F-03 · F-02-full(Demucs, по триггеру) · F-13. **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-06-29 (v0.3.33), легче→тяжелее:** T-03(ongoing) · F-03(prep SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO) · F-16(фаза 1 ✅ v0.3.30; фазы 2-6 TODO) · F-02-full(Demucs, по триггеру) · F-13. **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
 
 ---
 
