@@ -90,6 +90,9 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
                 Text = data.Text,
                 StartTime = data.StartTime,
                 EndTime = data.EndTime,
+                // Per-cue source language (T-10); with per-segment detection on, mixed-language audio records
+                // each cue's own language. Not persisted to the SRT the batch writes, but kept for model parity.
+                Language = asrLanguage,
 #if DEBUG
                 ChunkNo = data.ChunkNo,
                 StartTimeChunk = data.StartTimeChunk,

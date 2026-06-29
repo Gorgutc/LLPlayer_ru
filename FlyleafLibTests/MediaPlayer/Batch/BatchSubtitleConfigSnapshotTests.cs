@@ -22,6 +22,18 @@ public class BatchSubtitleConfigSnapshotTests
     }
 
     [Fact]
+    public void CreateSubtitlesConfig_AsrPerSegmentLanguage_IsCopied()
+    {
+        Config config = NewTestConfig();
+        config.Subtitles.ASRPerSegmentLanguage = true;
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config.Subtitles);
+
+        // The T-10 toggle must reach the headless batch snapshot — it gates the shared ASR services' language pin.
+        snapshot.ASRPerSegmentLanguage.Should().BeTrue();
+    }
+
+    [Fact]
     public void CreateSubtitlesConfig_TesseractOcrRegions_AreAnIndependentCopy()
     {
         Config config = NewTestConfig();

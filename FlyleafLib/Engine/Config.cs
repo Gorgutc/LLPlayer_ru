@@ -1431,6 +1431,17 @@ public class Config : NotifyPropertyChanged
         public bool ASRDenoise { get; set => Set(ref field, value); } = false;
 
         /// <summary>
+        /// Detect the spoken language per ASR segment instead of pinning the whole transcript to the first detected
+        /// language (T-10). Off by default → byte-identical: the language detected on the first segment that produced
+        /// text is reused for every later segment/chunk (F-17 anti-drift, which prevents the foreign-token drift
+        /// Whisper exhibits on uncertain audio). When on, each whisper.cpp segment — and each faster-whisper chunk —
+        /// auto-detects its own language, so genuinely mixed-language audio is transcribed in the right language per
+        /// segment, and the per-cue language is recorded on <see cref="SubtitleData.Language"/>. Only affects the
+        /// auto-detect path (a model/user-fixed language is untouched). Applies to interactive ASR and batch.
+        /// </summary>
+        public bool ASRPerSegmentLanguage { get; set => Set(ref field, value); } = false;
+
+        /// <summary>
         /// Re-segment generated subtitles (ASR and translation) into short, at-most-<see cref="SubtitleMaxLinesPerCue"/>-line
         /// cues of about <see cref="SubtitleMaxCharsPerLine"/> characters per line, splitting an over-long Whisper
         /// segment into several sequential cues with proportional timings, so a single cue does not fill the frame.

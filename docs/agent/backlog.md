@@ -743,12 +743,22 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 > `ASRSplitOnSilence`. Adversarial-ревью: `resampledDataSize==0` больше не ложная тишина. **Реальная локация TODO была
 > `:816`, не `:765`.** Детали (T-08+T-09): второй мозг `Sessions/2026-06-27-handoff-t09-t08-asr-chunks.md`.
 
-### T-10 — Per-segment language detection 🟢 Ⓛ · TODO · ⚠️ в конфликте с F-17
-[`SubtitlesASR.cs:1114-1116`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) TODO (бэклог устарел: было `~1059`). Язык
-пиннится на первом непустом сегменте; смешанный по языку контент не дораспознаётся. **⚠️ Переоценка 2026-06-27:
-large/high-risk и в ПРЯМОМ конфликте с уже сделанным F-17** (пиннинг первого сегмента + `--language` re-injection
-добавлены F-17 ПРОТИВ дрейфа языка) → отложить, если владелец явно не хочет mixed-language (нужно решение + per-cue
-`SubtitleData.Language`, кросс-cutting).
+### T-10 — Per-segment language detection 🟢 Ⓛ · ✅ **DONE (v0.3.32, 2026-06-29, opt-in)**
+> ✅ **Закрыт config-тумблером (решение владельца, AskUserQuestion).** Конфликт с frozen F-17 разрешён **opt-in**
+> `Subtitles.ASRPerSegmentLanguage` (**default OFF → byte-identical** к F-17): OFF — язык пиннится на первом непустом
+> сегменте (анти-дрейф F-17); ON — каждый сегмент whisper.cpp / чанк faster-whisper авто-детектит свой язык
+> (mixed-language контент), и per-cue язык пишется в **новое поле `SubtitleData.Language`**. Гейтинг пиннинга вынесен
+> в чистый тестируемый `FlyleafLib/Utils/AsrLanguagePolicy.cs` (`ShouldPinLanguage`/`ShouldResetPerChunk`); 4 сайта в
+> `SubtitlesASR.cs` (whisper.cpp `ChangeLanguage` + capture; faster-whisper per-chunk reset + `--language` inject) гейтятся
+> `!ASRPerSegmentLanguage`. Затрагивает только auto-detect путь (model/user-fixed язык — no-op). Интерактив + батч
+> (snapshot копирует флаг + reflection-guard). UI-тумблер «Detect Language Per Segment» в `SettingsSubtitles.xaml`.
+> Многоагентно: верификация (workflow `w9z322ydt`, 7 агентов) → реализация → **adversarial-ревью (workflow `wj858vuaq`,
+> 5 линз+триаж): SHIP, 0 must-fix** (единственный «CRITICAL NRE» — **ложноположительный**: безусловный `continue` на
+> `SubtitlesASR.cs:1791` делает null-forgiving yield недостижимым при null + `Language.Get(null)` сам null-safe) →
+> `/code-review high` Approve. Гейты build `-warnaserror` **0/0** (LLPlayer+YoutubeDL) + тесты **1035/1035** (+8) +
+> verify.ps1 green; **`.exe` launch 0.3.32 чистый** (жив 13с, без crash.log, FFmpeg + e_sqlite3). Контракты
+> media-runtime/config-data/product-behavior аддитивно. Реальная локация TODO была `SubtitlesASR.cs:1426-1427`
+> (бэклог устарел: `:1114-1116`). Детали: второй мозг `Sessions/2026-06-29-session-LIVE-tracker-10.md`.
 
 ### T-11 — Sandbox `dotnet`/Windows SDK + нет .NET 10 SDK у владельца 🟢 ⓢ · ✅ **DONE (PR #84, v0.3.25, 2026-06-28, doc-only)**
 > ✅ **Закрыт (без кода).** Локальное окружение и процедура эскалации задокументированы в **`docs/agent/technical-stack.md`**
@@ -794,7 +804,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-28 (v0.3.30):** F-03, T-03(ongoing), F-16(фаза 1 ✅; фазы 2-6 TODO), T-10(⚠️F-17), F-13, F-02-full(Demucs, по триггеру). См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-29 (v0.3.32):** F-03, T-03(ongoing), F-16(фаза 1 ✅; фазы 2-6 TODO), F-13, F-02-full(Demucs, по триггеру). **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -829,7 +839,7 @@ large/high-risk и в ПРЯМОМ конфликте с уже сделанны
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-28 (v0.3.30), легче→тяжелее:** T-03(ongoing) · F-16(фаза 1 ✅ v0.3.30; фазы 2-6 TODO) · F-03 · F-02-full(Demucs, по триггеру) · T-10(⚠️F-17) · F-13. **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-06-29 (v0.3.32), легче→тяжелее:** T-03(ongoing) · F-16(фаза 1 ✅ v0.3.30; фазы 2-6 TODO) · F-03 · F-02-full(Demucs, по триггеру) · F-13. **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
 
 ---
 
