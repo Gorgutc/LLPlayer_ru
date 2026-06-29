@@ -141,6 +141,29 @@ public class ResegmentLoadedTests
         string.Concat(cues.Select(c => c.Text!.Replace("\n", ""))).Should().Be(text);
     }
 
+    [Fact]
+    public void SegmenterFailure_PassesOriginalCueInsteadOfFailingSubtitleLoad()
+    {
+        // Loaded subtitles are a hot playback path: a bad re-segmentation edge must not fault the background
+        // subtitle loader and surface "Cannot load all subtitles on worker thread".
+        SubtitleData data = GiantCue();
+        SubtitleSegmentOptions invalidOpt = new()
+        {
+            MaxCharsPerLine = Opt.MaxCharsPerLine,
+            MaxLinesPerCue = Opt.MaxLinesPerCue,
+            MaxCjkCharsPerLine = Opt.MaxCjkCharsPerLine,
+            MaxCueDurationSec = Opt.MaxCueDurationSec,
+            MinCueDurationSec = double.PositiveInfinity,
+        };
+
+        List<SubtitleData> cues = SubManager.ResegmentLoaded(data, enabled: true, invalidOpt);
+
+        cues.Should().ContainSingle().Which.Should().BeSameAs(data);
+        data.Text.Should().Be(GiantCue().Text);
+        data.StartTime.Should().Be(TimeSpan.Zero);
+        data.EndTime.Should().Be(TimeSpan.FromSeconds(30));
+    }
+
     private static string Normalize(string s) =>
         string.Join(' ', s.Replace('\n', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries));
 }

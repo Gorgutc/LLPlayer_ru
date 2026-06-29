@@ -6,7 +6,7 @@ Do not commit these files unless a user explicitly requests and reviews the chan
 - Downloaded `yt-dlp.exe`, Whisper models, faster-whisper engines, Tesseract data, OCR/ASR caches.
 - AI dubbing runtime data: the dub Python venv (`DubEngine/`), downloaded TTS model weights (`dubmodels/`), and rendered dub tracks (`*.ru.dub.*`). NOTE: `dub_sidecar/` (server.py, pyproject.toml, uv.lock) IS committed GPLv3 source.
 - Local media output folders such as `Recordings/` and `Snapshots/`.
-- Runtime config and local state: `LLPlayer.Config.json`, `LLPlayer.Engine.json`, `LLPlayer.PlayerConfig.json`, `crash.log`, logs, dumps.
+- Runtime config and local state: `LLPlayer.Config.json`, `LLPlayer.Engine.json`, `LLPlayer.PlayerConfig.json`, `LLPlayer.WordList.json`, `crash.log`, logs, dumps.
 - Secrets, API keys, translator credentials, `.env*`, local Codex memories, local machine paths.
 - Screenshots, videos, benchmark artifacts, or generated reports unless the task explicitly asks for evidence artifacts.
 

@@ -18,3 +18,5 @@
    - Infra only: `scripts/codex/verify-fast.ps1`
    - App/build changes: `scripts/codex/verify.ps1`
    - Packaging changes: `scripts/codex/ship.ps1`
+
+6. Before final handoff, run spawned `/review` with at least `verification_reviewer`. If no subagent spawn tool is available, say so and do not claim `/review` is satisfied.

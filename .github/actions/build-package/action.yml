@@ -18,7 +18,7 @@ runs:
 
     - name: Restore dependencies
       shell: pwsh
-      run: dotnet restore .\LLPlayer\LLPlayer.csproj /p:PublishReadyToRun=true
+      run: dotnet restore .\LLPlayer\LLPlayer.csproj /p:PublishReadyToRun=true -warnaserror
 
     - name: Build App
       shell: pwsh
@@ -53,7 +53,7 @@ runs:
     - name: Restore dependencies for Plugins
       shell: pwsh
       run: |
-        dotnet restore .\Plugins\YoutubeDL\YoutubeDL.csproj /p:PublishReadyToRun=true
+        dotnet restore .\Plugins\YoutubeDL\YoutubeDL.csproj /p:PublishReadyToRun=true -warnaserror
 
     - name: Build Plugins
       shell: pwsh

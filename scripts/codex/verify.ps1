@@ -24,7 +24,7 @@ try {
     & ".\scripts\codex\verify-fast.ps1"
 
     if (-not $SkipRestore) {
-        Invoke-Checked dotnet "restore"
+        Invoke-Checked dotnet "restore" "-warnaserror"
     }
 
     Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer"
