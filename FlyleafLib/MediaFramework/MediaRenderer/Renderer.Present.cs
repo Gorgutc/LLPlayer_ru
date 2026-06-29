@@ -175,7 +175,7 @@ public unsafe partial class Renderer
 
                 return true;
             }
-            
+
             lock (lockRenderLoops)
             {
                 if (VideoProcessor == VideoProcessors.D3D11)

@@ -4,7 +4,7 @@ LLPlayer quality tooling is PowerShell/.NET-first.
 
 ## Allowed Baseline
 
-- `dotnet restore`
+- `dotnet restore -warnaserror`
 - `dotnet build -warnaserror`
 - `dotnet test`
 - PowerShell verification scripts

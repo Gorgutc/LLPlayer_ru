@@ -18,3 +18,4 @@ Findings come first and must include severity and path.
 - Instruction drift for Codex infrastructure.
 
 Always run or cite fresh verification before claiming work is complete.
+Final `/review` must be performed by a spawned subagent, at minimum `verification_reviewer`. If no subagent spawn tool is available, say that explicitly instead of simulating the review inline.

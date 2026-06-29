@@ -19,7 +19,7 @@ jobs:
         dotnet-version: 10.0.x
 
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore -warnaserror
 
     - name: Build App
       run: dotnet build --no-restore -warnaserror .\LLPlayer

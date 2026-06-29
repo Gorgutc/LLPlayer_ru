@@ -75,7 +75,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\ship.ps1
 The current baseline commands are:
 
 ```powershell
-dotnet restore
+dotnet restore -warnaserror
 dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
 dotnet test --no-restore .\FlyleafLibTests

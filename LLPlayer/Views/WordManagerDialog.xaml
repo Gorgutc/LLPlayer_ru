@@ -23,7 +23,7 @@
         <Grid Grid.Row="0" Margin="0 0 0 8">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                 <TextBox Width="240" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged, Mode=TwoWay}"
-                         ToolTip="Filter by term, translation, or example"
+                         ToolTip="Filter by term, reading, translation, definition, or example"
                          VerticalContentAlignment="Center" />
                 <TextBlock Margin="12 0 0 0" VerticalAlignment="Center" Opacity="0.8"
                            Text="{Binding WordCount, StringFormat='{}{0} words'}" />

@@ -51,6 +51,16 @@ try {
     Require-Text ".\.github\actions\build-package\action.yml" "yt-dlp\.exe" "Release package action must handle yt-dlp.exe."
     Require-Text ".\.github\actions\build-package\action.yml" "Invoke-WebRequest .*yt-dlp\.exe" "Release package action must download yt-dlp.exe."
     Require-Text ".\.github\actions\build-package\action.yml" "C:\\Program Files\\7-Zip\\7z\.exe" "Release package action must archive with 7-Zip."
+    Require-Text ".\.github\actions\build-package\action.yml" "dotnet restore \.\\LLPlayer\\LLPlayer\.csproj /p:PublishReadyToRun=true -warnaserror" "Release package action app restore must treat NuGet audit warnings as errors."
+    Require-Text ".\.github\actions\build-package\action.yml" "dotnet restore \.\\Plugins\\YoutubeDL\\YoutubeDL\.csproj /p:PublishReadyToRun=true -warnaserror" "Release package action YoutubeDL restore must treat NuGet audit warnings as errors."
+    Require-Text ".\.github\workflows\build.yml" "dotnet restore -warnaserror" "Build workflow restore must treat NuGet audit warnings as errors."
+    Require-Text ".\scripts\codex\verify.ps1" 'Invoke-Checked dotnet "restore" "-warnaserror"' "Full verification restore must treat NuGet audit warnings as errors."
+    Require-Text ".\scripts\codex\ship.ps1" 'Invoke-Checked dotnet "restore" "\.\\LLPlayer\\LLPlayer\.csproj" "/p:PublishReadyToRun=true" "-warnaserror"' "Ship smoke app restore must treat NuGet audit warnings as errors."
+    Require-Text ".\scripts\codex\ship.ps1" 'Invoke-Checked dotnet "restore" "\.\\Plugins\\YoutubeDL\\YoutubeDL\.csproj" "/p:PublishReadyToRun=true" "-warnaserror"' "Ship smoke YoutubeDL restore must treat NuGet audit warnings as errors."
+    Require-Text ".\Plugins\llplayer-codex\skills\llplayer-dotnet-rules\SKILL.md" "dotnet restore -warnaserror" "LLPlayer .NET skill must document restore audit warnings as errors."
+    Require-Text ".\Plugins\llplayer-codex\skills\llplayer-quality-tooling\SKILL.md" "dotnet restore -warnaserror" "LLPlayer quality tooling skill must document restore audit warnings as errors."
+    Require-Text ".\docs\agent\quality-tooling.md" "dotnet restore -warnaserror" "Quality tooling docs must document restore audit warnings as errors."
+    Require-Text ".\.codex\agents\dotnet_quality_guardian.toml" "dotnet restore -warnaserror" "dotnet_quality_guardian must require restore audit warnings as errors."
     Require-Text ".\scripts\codex\ship.ps1" "Publish cleanup target\(s\) missing" "Ship smoke must fail if release cleanup targets drift."
     Require-Text ".\scripts\codex\ship.ps1" "Release dry-run" "Ship smoke must dry-run release-only packaging tail."
     Require-Text ".\scripts\codex\ship.ps1" "yt-dlp\.exe_here" "Ship smoke must create yt-dlp placeholder."
@@ -135,7 +145,10 @@ try {
         "LLPlayer.Config.json",
         "LLPlayer.Engine.json",
         "LLPlayer.PlayerConfig.json",
+        "LLPlayer.WordList.json",
         "crash.log",
+        "*.dmp",
+        "*.dump",
         "Recordings/",
         "Snapshots/",
         "whispermodels/",
@@ -192,6 +205,7 @@ try {
         ":(glob)**/LLPlayer.Config.json" `
         ":(glob)**/LLPlayer.Engine.json" `
         ":(glob)**/LLPlayer.PlayerConfig.json" `
+        ":(glob)**/LLPlayer.WordList.json" `
         ":(glob)**/crash.log" `
         ":(glob)**/.env*" `
         ":(glob)**/*.dmp" `
@@ -238,7 +252,9 @@ try {
     Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "LibNMeCab" "0.10.2"
     Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "LibNMeCab.IpaDicBin" "0.10.0"
     Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "MaterialDesignThemes" "5.3.1"
+    Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "Microsoft.Data.Sqlite" "9.0.17"
     Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "Prism.DryIoc" "9.0.537"
+    Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "SQLitePCLRaw.bundle_e_sqlite3" "3.0.3"
     Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "Squid-Box.SevenZipSharp.Lite" "1.6.2.24"
     Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "Whisper.net.Runtime" "1.9.0"
     Require-PackageVersion ".\LLPlayer\LLPlayer.csproj" "Whisper.net.Runtime.Cuda.Windows" "1.9.0"

@@ -552,8 +552,17 @@ public class SubManager : INotifyPropertyChanged
             MinCueDurationSec = opt.MinCueDurationSec,
         };
 
-        List<(string Text, TimeSpan Start, TimeSpan End)> cues =
-            SubtitleSegmenter.Resegment(data.Text!, data.StartTime, data.EndTime, loadedOpt);
+        List<(string Text, TimeSpan Start, TimeSpan End)> cues;
+        try
+        {
+            cues = SubtitleSegmenter.Resegment(data.Text!, data.StartTime, data.EndTime, loadedOpt);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Re-segmentation is readability post-processing for loaded subtitles. A malformed/edge cue or
+            // hand-edited config value must not fault the subtitle-loading worker; keep the authored cue.
+            return [data];
+        }
 
         if (cues.Count == 1)
         {

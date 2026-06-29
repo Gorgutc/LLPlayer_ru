@@ -87,7 +87,11 @@ public class WordManagerDialogVM : Bindable, IDialogAware
             return true;
         }
         string f = FilterText.Trim();
-        return Contains(w.Term, f) || Contains(w.Translation, f) || Contains(w.Example, f);
+        return Contains(w.Term, f)
+               || Contains(w.Reading, f)
+               || Contains(w.Translation, f)
+               || Contains(w.Definition, f)
+               || Contains(w.Example, f);
 
         static bool Contains(string s, string f) =>
             (s ?? "").Contains(f, StringComparison.OrdinalIgnoreCase);
@@ -98,9 +102,17 @@ public class WordManagerDialogVM : Bindable, IDialogAware
         Words.Clear();
         foreach (SavedWord w in _store.GetAll())
         {
-            Words.Add(new WordRowVM(w, CommitRowEdit));
+            Words.Add(new WordRowVM(w, CommitRowEdit, RefreshFilterAfterEdit));
         }
         OnPropertyChanged(nameof(WordCount));
+    }
+
+    private void RefreshFilterAfterEdit()
+    {
+        if (!string.IsNullOrWhiteSpace(FilterText))
+        {
+            WordsView.Refresh();
+        }
     }
 
     // A word was added/removed from another surface while this dialog is open → refresh (unless it was us).
@@ -322,12 +334,14 @@ public class WordManagerDialogVM : Bindable, IDialogAware
 public sealed class WordRowVM : Bindable
 {
     private readonly Func<SavedWord, SavedWord, bool> _commit;
+    private readonly Action _afterEdit;
     private SavedWord _model;
 
-    public WordRowVM(SavedWord model, Func<SavedWord, SavedWord, bool> commit)
+    public WordRowVM(SavedWord model, Func<SavedWord, SavedWord, bool> commit, Action afterEdit)
     {
         _model = model;
         _commit = commit;
+        _afterEdit = afterEdit;
     }
 
     public SavedWord Model => _model;
@@ -369,11 +383,16 @@ public sealed class WordRowVM : Bindable
 
     private void Edit(SavedWord updated)
     {
-        if (_commit(_model, updated))
+        bool committed = _commit(_model, updated);
+        if (committed)
         {
             _model = updated;
         }
         OnPropertyChanged(string.Empty); // record replaced (or edit rejected) — refresh all bound columns
+        if (committed)
+        {
+            _afterEdit();
+        }
     }
 
     private static string FormatSaved(string iso)

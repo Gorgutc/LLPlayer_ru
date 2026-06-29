@@ -33,7 +33,7 @@ try {
     New-Item -ItemType Directory -Path $appPublish -Force | Out-Null
     New-Item -ItemType Directory -Path $pluginPublish -Force | Out-Null
 
-    Invoke-Checked dotnet "restore" ".\LLPlayer\LLPlayer.csproj" "/p:PublishReadyToRun=true"
+    Invoke-Checked dotnet "restore" ".\LLPlayer\LLPlayer.csproj" "/p:PublishReadyToRun=true" "-warnaserror"
     Invoke-Checked dotnet "msbuild" ".\LLPlayer\LLPlayer.csproj" "/t:Publish" "/p:PublishProfile=FolderProfile" "/p:PublishDir=$appPublish"
 
     if (-not (Test-Path (Join-Path $appPublish "LLPlayer.exe"))) {
@@ -86,7 +86,7 @@ try {
         throw "Publish smoke is missing copied FFmpeg DLLs."
     }
 
-    Invoke-Checked dotnet "restore" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/p:PublishReadyToRun=true"
+    Invoke-Checked dotnet "restore" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/p:PublishReadyToRun=true" "-warnaserror"
     Invoke-Checked dotnet "msbuild" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/t:Publish" "/p:PublishProfile=FolderProfile" "/p:PublishDir=$pluginPublish"
 
     $pluginOut = Join-Path $appPublish "Plugins\YoutubeDL"

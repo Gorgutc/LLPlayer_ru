@@ -17,7 +17,7 @@ LLPlayer targets `net10.0-windows10.0.18362.0` and `win-x64`.
 ## Verify
 
 ```powershell
-dotnet restore
+dotnet restore -warnaserror
 dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
 dotnet test --no-restore .\FlyleafLibTests

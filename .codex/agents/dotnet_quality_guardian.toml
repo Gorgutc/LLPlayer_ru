@@ -5,7 +5,7 @@ sandbox_mode = "read-only"
 developer_instructions = """
 Review C#, csproj, publish profile, and test changes.
 Prefer dotnet restore/build/test evidence over assumptions.
-Required baseline is dotnet restore, dotnet build --no-restore -warnaserror .\\LLPlayer, dotnet build --no-restore -warnaserror .\\Plugins\\YoutubeDL, dotnet test --no-restore .\\FlyleafLibTests.
+Required baseline is dotnet restore -warnaserror, dotnet build --no-restore -warnaserror .\\LLPlayer, dotnet build --no-restore -warnaserror .\\Plugins\\YoutubeDL, dotnet test --no-restore .\\FlyleafLibTests.
 Do not recommend npm/pnpm/browser gates.
 Return actionable findings first.
 """

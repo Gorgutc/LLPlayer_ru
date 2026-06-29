@@ -87,7 +87,7 @@ try {
             $gates.Add("verify-fast")
         }
 
-        if ($normalized -match '^(AGENTS\.md|\.codex/|\.agents/|Plugins/llplayer-codex/|docs/agent/|scripts/codex/)') {
+        if ($normalized -match '^(AGENTS\.md|CLAUDE\.md|GEMINI\.md|RUN_INSTRUCTIONS\.md|DO_NOT_PUSH\.md|\.codex/|\.agents/|Plugins/llplayer-codex/|docs/agent/|scripts/codex/)') {
             $contracts.Add("agent infrastructure")
             $agents.Add("codex_infra_architect")
             $agents.Add("instruction_drift_auditor")
@@ -144,6 +144,13 @@ try {
             $agents.Add("packaging_release_reviewer")
             $agents.Add("verification_reviewer")
             $gates.Add("ship")
+        }
+        if ($normalized -match '^\.github/workflows/') {
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
         }
 
         if ($contracts.Count -eq 0) {

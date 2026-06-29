@@ -22,6 +22,8 @@ Use this read-only helper before review when you need to map changed files to fr
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\audit-frozen.ps1
 ```
 
+Before final handoff, run spawned `/review` with at least `verification_reviewer`. If no subagent spawn tool is available, report that explicitly and do not claim `/review` has been satisfied.
+
 ## Full Build/Test Gate
 
 ```powershell
@@ -31,7 +33,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1
 Runs fast verification plus:
 
 ```powershell
-dotnet restore
+dotnet restore -warnaserror
 dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
 dotnet test --no-restore .\FlyleafLibTests

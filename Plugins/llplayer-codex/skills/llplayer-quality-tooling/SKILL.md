@@ -9,7 +9,7 @@ Quality tooling must match a Windows desktop app.
 
 ## Preferred Tools
 
-- `dotnet restore`, `dotnet build -warnaserror`, `dotnet test`.
+- `dotnet restore -warnaserror`, `dotnet build -warnaserror`, `dotnet test`.
 - PowerShell scripts under `scripts/codex`.
 - Existing GitHub Actions on `windows-latest`.
 - Future C# analyzers only when they do not create broad unrelated churn.

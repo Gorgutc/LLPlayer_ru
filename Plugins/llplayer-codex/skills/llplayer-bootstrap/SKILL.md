@@ -24,3 +24,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.
 ```
 
 If work touches app code, plan to run `.\scripts\codex\verify.ps1` before handoff.
+
+Before final handoff, run spawned `/review` with at least `verification_reviewer`. If no subagent spawn tool is available, notify the user and do not claim `/review` has been satisfied.

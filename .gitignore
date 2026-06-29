@@ -356,6 +356,8 @@ LLPlayer.Engine.json
 LLPlayer.PlayerConfig.json
 LLPlayer.WordList.json
 crash.log
+*.dmp
+*.dump
 Recordings/
 Snapshots/
 whispermodels/

@@ -11,11 +11,13 @@ namespace FlyleafLib;
 
 public class PauseTokenSourceTests
 {
+    private static CancellationToken TestCancellation => TestContext.Current.CancellationToken;
+
     // Asserts a task completes promptly (not via a multi-second framework timeout) so a regression that hangs
     // the gate fails fast and deterministically rather than stalling the suite.
     private static async Task CompletesWithin(Task task, int milliseconds = 2000)
     {
-        Task finished = await Task.WhenAny(task, Task.Delay(milliseconds));
+        Task finished = await Task.WhenAny(task, Task.Delay(milliseconds, TestCancellation));
         finished.Should().BeSameAs(task, "the awaited gate task should complete promptly, not hang");
         await task; // observe completion / surface any exception
     }
@@ -60,7 +62,7 @@ public class PauseTokenSourceTests
 
         token.IsPaused.Should().BeFalse();
 
-        Task wait = token.WaitWhilePausedAsync();
+        Task wait = token.WaitWhilePausedAsync(TestCancellation);
         // A default token is an unconditional no-op regardless of any other source state: it hands back the
         // shared completed Task, which is exactly what the batch ASR path relies on.
         wait.Should().BeSameAs(Task.CompletedTask);
@@ -72,7 +74,7 @@ public class PauseTokenSourceTests
     {
         var pts = new PauseTokenSource();
 
-        pts.Token.WaitWhilePausedAsync().IsCompleted.Should().BeTrue();
+        pts.Token.WaitWhilePausedAsync(TestCancellation).IsCompleted.Should().BeTrue();
     }
 
     [Fact]
@@ -81,7 +83,7 @@ public class PauseTokenSourceTests
         var pts = new PauseTokenSource();
         pts.Pause();
 
-        Task wait = pts.Token.WaitWhilePausedAsync();
+        Task wait = pts.Token.WaitWhilePausedAsync(TestCancellation);
         wait.IsCompleted.Should().BeFalse(); // suspended while paused
 
         pts.Resume();
@@ -108,7 +110,7 @@ public class PauseTokenSourceTests
         // Cancellation does not mutate the shared gate: it is still paused and reusable. A fresh, uncancelled
         // wait still completes on the next Resume.
         pts.IsPaused.Should().BeTrue();
-        Task fresh = pts.Token.WaitWhilePausedAsync();
+        Task fresh = pts.Token.WaitWhilePausedAsync(TestCancellation);
         fresh.IsCompleted.Should().BeFalse();
         pts.Resume();
         await CompletesWithin(fresh);
@@ -133,14 +135,14 @@ public class PauseTokenSourceTests
         var pts = new PauseTokenSource();
 
         pts.Pause();
-        Task w1 = pts.Token.WaitWhilePausedAsync();
+        Task w1 = pts.Token.WaitWhilePausedAsync(TestCancellation);
         w1.IsCompleted.Should().BeFalse();
         pts.Resume();
         await CompletesWithin(w1);
 
         // A second pause after resume must suspend a fresh wait independently.
         pts.Pause();
-        Task w2 = pts.Token.WaitWhilePausedAsync();
+        Task w2 = pts.Token.WaitWhilePausedAsync(TestCancellation);
         w2.IsCompleted.Should().BeFalse();
         pts.Resume();
         await CompletesWithin(w2);
@@ -166,16 +168,17 @@ public class PauseTokenSourceTests
                 else
                     pts.Resume();
             }
-        })).ToArray();
+        }, TestCancellation)).ToArray();
 
         Task[] waiters = Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
         {
-            // No token: a parked waiter only unparks on Resume, so a lost wakeup would hang this loop.
+            // The test token only cancels the runner; in normal execution a parked waiter unparks on Resume,
+            // so a lost wakeup would hang this loop.
             while (!stop.IsCancellationRequested)
-                await pts.Token.WaitWhilePausedAsync();
-        })).ToArray();
+                await pts.Token.WaitWhilePausedAsync(TestCancellation);
+        }, TestCancellation)).ToArray();
 
-        await Task.Delay(400);
+        await Task.Delay(400, TestCancellation);
         stop.Cancel();
         await CompletesWithin(Task.WhenAll(hammers), 5000);
 
@@ -201,22 +204,22 @@ public class PauseTokenSourceTests
         var consumed = new List<int>();
         Task consumer = Task.Run(async () =>
         {
-            while (await channel.Reader.WaitToReadAsync())
+            while (await channel.Reader.WaitToReadAsync(TestCancellation))
             {
-                await pts.Token.WaitWhilePausedAsync();
+                await pts.Token.WaitWhilePausedAsync(TestCancellation);
                 if (channel.Reader.TryRead(out int v))
                     consumed.Add(v);
             }
-        });
+        }, TestCancellation);
 
         Task producer = Task.Run(async () =>
         {
             for (int i = 0; i < 3; i++)
-                await channel.Writer.WriteAsync(i);
+                await channel.Writer.WriteAsync(i, TestCancellation);
             channel.Writer.Complete();
-        });
+        }, TestCancellation);
 
-        await Task.Delay(50);
+        await Task.Delay(50, TestCancellation);
         producer.IsCompleted.Should().BeFalse("the bounded channel must back-pressure the producer while paused");
         consumed.Should().BeEmpty();
 
