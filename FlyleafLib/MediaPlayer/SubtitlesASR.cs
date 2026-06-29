@@ -297,6 +297,9 @@ public class SubtitlesASR
                                 Text = text,
                                 StartTime = startTime,
                                 EndTime = endTime,
+                                // Per-cue source language (T-10). With per-segment detection off this mirrors the
+                                // pinned transcript language; on, it is the segment's own auto-detected language.
+                                Language = Language.Get(data.Language),
 #if DEBUG
                                 ChunkNo = data.ChunkNo,
                                 StartTimeChunk = data.StartTimeChunk,
@@ -1422,10 +1425,10 @@ public class WhisperCppASRService : IASRService
 
     public async IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language)> Do(MemoryStream waveStream, [EnumeratorCancellation] CancellationToken token)
     {
-        // If language detection is on, set detected language manually
-        // TODO: L: Currently this is set because language information is managed for the entire subtitle,
-        // but if language information is maintained for each subtitle, it should not be set.
-        if (_isLanguageDetect && _detectedLanguage is not null)
+        // If language detection is on, pin the already-detected language onto this chunk (F-17 anti-drift), so a
+        // later uncertain segment cannot drift to a foreign language. With per-segment detection on (T-10), the
+        // language is NOT pinned: each segment auto-detects its own, transcribing mixed-language audio correctly.
+        if (AsrLanguagePolicy.ShouldPinLanguage(_config.Subtitles.ASRPerSegmentLanguage, _isLanguageDetect, _detectedLanguage))
         {
             _processor.ChangeLanguage(_detectedLanguage);
         }
@@ -1443,9 +1446,10 @@ public class WhisperCppASRService : IASRService
                 continue;
             }
 
-            // Pin the detected language only from a segment that actually produced text, so a silent
-            // or music-only first chunk cannot lock the whole file to a wrongly-detected language.
-            if (_detectedLanguage is null && !string.IsNullOrEmpty(result.Language))
+            // Remember the detected language only from a segment that actually produced text, so a silent
+            // or music-only first chunk cannot lock the whole file to a wrongly-detected language (F-17).
+            // Per-segment detection (T-10) never pins, so this capture is skipped when that toggle is on.
+            if (!_config.Subtitles.ASRPerSegmentLanguage && _detectedLanguage is null && !string.IsNullOrEmpty(result.Language))
             {
                 _detectedLanguage = result.Language;
             }
@@ -1714,10 +1718,20 @@ public partial class FasterWhisperASRService : IASRService
             Lock outputLock = new();
             bool oneSuccess = false;
 
-            ArgumentsBuilder args = new();
-            if (_isLanguageDetect && !string.IsNullOrEmpty(_detectedLanguage))
+            // Per-segment detection (T-10): re-detect the language for every chunk instead of pinning the first
+            // chunk's. Clearing the remembered language makes the stderr detection below capture this chunk's own
+            // language, and the pin below is skipped so faster-whisper auto-detects per chunk.
+            if (AsrLanguagePolicy.ShouldResetPerChunk(_config.Subtitles.ASRPerSegmentLanguage, _isLanguageDetect))
             {
-                args.Add("--language").Add(_detectedLanguage);
+                _detectedLanguage = null;
+            }
+
+            ArgumentsBuilder args = new();
+            // Pin the already-detected language onto this chunk (F-17 anti-drift) unless per-segment detection is on.
+            // ShouldPinLanguage is true only when _detectedLanguage is non-empty, so the null-forgiving cast is safe.
+            if (AsrLanguagePolicy.ShouldPinLanguage(_config.Subtitles.ASRPerSegmentLanguage, _isLanguageDetect, _detectedLanguage))
+            {
+                args.Add("--language").Add(_detectedLanguage!);
             }
             args.Add(tempFilePath);
             string addedArgs = args.Build();

@@ -1081,6 +1081,13 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
 
     public bool IsBitmap { get; set; }
 
+    /// <summary>
+    /// Source language of this cue as reported by ASR (T-10), or null when unknown / not applicable (loaded or
+    /// translated subtitles do not set it). Inert metadata — it does not change rendering by itself. With the
+    /// per-segment ASR toggle off it mirrors the pinned transcript language; on, it is the cue's own detected language.
+    /// </summary>
+    public Language? Language { get; set; }
+
     private bool _isDisposed;
 
     public void Dispose()
@@ -1107,6 +1114,7 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
             EnabledTranslated = EnabledTranslated,
             StartTime = StartTime,
             EndTime = EndTime,
+            Language = Language,
 #if DEBUG
             ChunkNo = ChunkNo,
             StartTimeChunk = StartTimeChunk,

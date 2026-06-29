@@ -238,6 +238,27 @@
                             IsChecked="{Binding FL.PlayerConfig.Subtitles.ASRDenoise}" />
                     </StackPanel>
 
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180">
+                            Detect Language Per Segment
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Detect the spoken language per ASR segment instead of pinning the whole transcript to the first detected language (T-10). Off by default: the first detected language is reused for the rest of the file, which prevents Whisper drifting to foreign-looking tokens on uncertain audio (F-17). Turn on only for genuinely mixed-language audio — then each segment (whisper.cpp) or chunk (faster-whisper) auto-detects its own language. Only affects auto-detection (a fixed/model language is untouched). Applies to interactive ASR and batch."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon
+                                    Kind="Information"
+                                    Width="16" Height="16"
+                                    Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton
+                            IsChecked="{Binding FL.PlayerConfig.Subtitles.ASRPerSegmentLanguage}" />
+                    </StackPanel>
+
                     <StackPanel Visibility="{Binding FL.PlayerConfig.Subtitles.ResegmentSubtitles, Converter={StaticResource BooleanToVisibilityConv}}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock
