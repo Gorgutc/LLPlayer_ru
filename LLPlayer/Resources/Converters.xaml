@@ -39,6 +39,7 @@
     <conv:KeyToStringConverter x:Key="KeyToStringConv"/>
     <conv:FileSizeHumanConverter x:Key="FileSizeHumanConv"/>
     <conv:NullableIntConverter x:Key="NullableIntConv" />
+    <conv:StringHasValueConverter x:Key="StringHasValueConv" />
     <conv:HalfConverter x:Key="HalfConv" />
     <conv:WidthToVisibilityConverter x:Key="WidthToVisibilityConv" />
     <conv:InverseWidthToVisibilityConverter x:Key="InverseWidthToVisibilityConv" />
@@ -53,5 +54,6 @@
     <conv:TimeSpanToStringConverter x:Key="TimeSpanToStringConv"/>
     <conv:SubBitmapImageSourceConverter x:Key="SubBitmapImageSourceConv"/>
     <conv:SubIndexToDisplayStringConverter x:Key="SubIndexToDisplayStringConv"/>
+    <conv:SubVoiceAssignmentConverter x:Key="SubVoiceAssignmentConv"/>
 
 </ResourceDictionary>

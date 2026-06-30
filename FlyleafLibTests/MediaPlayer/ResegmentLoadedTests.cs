@@ -142,6 +142,25 @@ public class ResegmentLoadedTests
     }
 
     [Fact]
+    public void SplitCues_InheritParentPerCueMetadata()
+    {
+        // F-16 phase 2a (+ T-10 language + F-03 speaker): a per-cue field assigned to a cue must propagate to every
+        // split cue when it is re-segmented — parity with the single-cue fast path (which keeps the original
+        // object). Otherwise re-segmenting after a per-line dub voice was assigned would silently drop it.
+        SubtitleData data = GiantCue();
+        data.AssignedVoiceId = "ru-preset-2";
+        data.SpeakerId = "SPEAKER_03";
+        data.Language = Language.English;
+
+        List<SubtitleData> cues = SubManager.ResegmentLoaded(data, enabled: true, Opt);
+
+        cues.Should().HaveCountGreaterThan(1);
+        cues.Should().OnlyContain(c => c.AssignedVoiceId == "ru-preset-2");
+        cues.Should().OnlyContain(c => c.SpeakerId == "SPEAKER_03");
+        cues.Should().OnlyContain(c => c.Language == Language.English);
+    }
+
+    [Fact]
     public void SegmenterFailure_PassesOriginalCueInsteadOfFailingSubtitleLoad()
     {
         // Loaded subtitles are a hot playback path: a bad re-segmentation edge must not fault the background

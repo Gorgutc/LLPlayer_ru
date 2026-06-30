@@ -2,8 +2,9 @@
 
 #nullable enable
 
-/// <summary>One translated line to dub, with its source timing (the slot the dub should fit).</summary>
-public sealed record DubbingLine(int Index, string Text, TimeSpan Start, TimeSpan End)
+/// <summary>One translated line to dub, with its source timing (the slot the dub should fit) and an optional
+/// per-line voice override (F-16 phase 2a; null = use the run's default voice).</summary>
+public sealed record DubbingLine(int Index, string Text, TimeSpan Start, TimeSpan End, string? VoiceId = null)
 {
     public double SlotMs => (End - Start).TotalMilliseconds;
 }

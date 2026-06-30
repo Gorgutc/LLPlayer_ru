@@ -578,9 +578,10 @@ public class SubManager : INotifyPropertyChanged
         List<SubtitleData> result = new(cues.Count);
         foreach ((string text, TimeSpan start, TimeSpan end) in cues)
         {
-            // Split cues inherit the parent cue's per-cue metadata (T-10 language + F-03 speaker) for parity with
-            // the single-cue fast path above (which keeps the original object). Null for loaded subs today.
-            result.Add(new SubtitleData { Text = text, StartTime = start, EndTime = end, Language = data.Language, SpeakerId = data.SpeakerId });
+            // Split cues inherit the parent cue's per-cue metadata (T-10 language + F-03 speaker + F-16 per-line
+            // dub voice) for parity with the single-cue fast path above (which keeps the original object). Null for
+            // loaded subs today.
+            result.Add(new SubtitleData { Text = text, StartTime = start, EndTime = end, Language = data.Language, SpeakerId = data.SpeakerId, AssignedVoiceId = data.AssignedVoiceId });
         }
         return result;
     }
@@ -1098,6 +1099,16 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
     /// </summary>
     public string? SpeakerId { get; set; }
 
+    /// <summary>
+    /// Per-line dub voice override (F-16 phase 2a), or null to use the run's default dub voice
+    /// (<see cref="DubbingConfig.DefaultVoiceId"/>). Default null → byte-identical: the dub renderer falls back to
+    /// the default voice, so a track with no assignments renders exactly as the single-voice dub. Inert for
+    /// everything except the AI dub (display/export/translation ignore it). Interactive/in-memory only — never
+    /// serialized (a re-render from an existing .srt loses it); a blank value means "no override". Set via the
+    /// sidebar per-row voice picker. Notifies so the picker's set/unset visual state updates live.
+    /// </summary>
+    public string? AssignedVoiceId { get; set => Set(ref field, value); }
+
     private bool _isDisposed;
 
     public void Dispose()
@@ -1126,6 +1137,7 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
             EndTime = EndTime,
             Language = Language,
             SpeakerId = SpeakerId,
+            AssignedVoiceId = AssignedVoiceId,
 #if DEBUG
             ChunkNo = ChunkNo,
             StartTimeChunk = StartTimeChunk,

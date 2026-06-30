@@ -2,8 +2,8 @@ using AwesomeAssertions;
 
 namespace FlyleafLib.MediaPlayer;
 
-// SubtitleData.Clone must carry the new per-cue source language (T-10) and speaker id (F-03 prep)
-// along with the existing scalar fields.
+// SubtitleData.Clone must carry the per-cue metadata — source language (T-10), speaker id (F-03 prep), and the
+// per-line dub voice (F-16 phase 2a) — along with the existing scalar fields.
 public class SubtitleDataTests
 {
     [Fact]
@@ -70,14 +70,52 @@ public class SubtitleDataTests
     }
 
     [Fact]
-    public void Clone_CopiesLanguageAndSpeakerIdTogether()
+    public void Clone_CopiesAssignedVoiceId()
     {
-        // Guard against a future Clone refactor dropping one of the two independent per-cue metadata fields.
-        var sub = new SubtitleData { Text = "y", Language = Language.English, SpeakerId = "SPEAKER_01" };
+        var sub = new SubtitleData
+        {
+            Index = 9,
+            Text = "Line",
+            StartTime = TimeSpan.FromSeconds(5),
+            EndTime = TimeSpan.FromSeconds(6),
+            AssignedVoiceId = "ru-preset-2",
+        };
+
+        SubtitleData clone = sub.Clone();
+
+        clone.AssignedVoiceId.Should().Be("ru-preset-2");
+        // Sanity: distinct instance still carrying the other scalar fields (non-vacuous).
+        clone.Should().NotBeSameAs(sub);
+        clone.Index.Should().Be(9);
+        clone.Text.Should().Be("Line");
+    }
+
+    [Fact]
+    public void Clone_NullAssignedVoiceId_StaysNull()
+    {
+        // Default for every cue (no per-line dub voice assigned); the clone must keep it null so a dub with no
+        // overrides stays byte-identical to the single-voice render.
+        var sub = new SubtitleData { Text = "x", AssignedVoiceId = null };
+
+        sub.Clone().AssignedVoiceId.Should().BeNull();
+    }
+
+    [Fact]
+    public void Clone_CopiesAllPerCueMetadataTogether()
+    {
+        // Guard against a future Clone refactor dropping one of the independent per-cue metadata fields.
+        var sub = new SubtitleData
+        {
+            Text = "y",
+            Language = Language.English,
+            SpeakerId = "SPEAKER_01",
+            AssignedVoiceId = "ru-preset-2",
+        };
 
         SubtitleData clone = sub.Clone();
 
         clone.Language.Should().Be(Language.English);
         clone.SpeakerId.Should().Be("SPEAKER_01");
+        clone.AssignedVoiceId.Should().Be("ru-preset-2");
     }
 }

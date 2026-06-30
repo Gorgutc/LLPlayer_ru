@@ -227,3 +227,40 @@ public class SubIndexToDisplayStringConverter : IValueConverter
         return DependencyProperty.UnsetValue;
     }
 }
+
+/// <summary>
+/// Per-line dub voice assignment (F-16 phase 2a): packs a sidebar row's cue and the voice id chosen from the
+/// per-row voice context menu into a single command parameter for <c>SubtitlesSidebarVM.CmdSubSetVoice</c>.
+/// </summary>
+public sealed record SubVoiceAssignment(SubtitleData Sub, string? VoiceId);
+
+public class SubVoiceAssignmentConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        // values[0] = the row's SubtitleData (the cue); values[1] = the menu item's TtsVoice.Id
+        // (empty string for the "use default voice" entry → clears the override).
+        if (values.Length == 2 && values[0] is SubtitleData sub)
+        {
+            return new SubVoiceAssignment(sub, values[1] as string);
+        }
+
+        return DependencyProperty.UnsetValue;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+    {
+        throw new NotSupportedException();
+    }
+}
+
+/// <summary>True when the bound value is a non-blank string. Used to light the per-line dub-voice icon only when
+/// the cue carries an explicit override.</summary>
+public class StringHasValueConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is string s && !string.IsNullOrWhiteSpace(s);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
