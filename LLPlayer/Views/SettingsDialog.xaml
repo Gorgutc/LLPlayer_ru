@@ -76,7 +76,7 @@
                         </TreeViewItem.Header>
                     </TreeViewItem>
 
-                    <TreeViewItem Tag="SettingsSubtitles" Uid="Re-segmentation Resegmentation ASR translation" IsExpanded="True">
+                    <TreeViewItem Tag="SettingsSubtitles" Uid="Re-segmentation Resegmentation ASR translation language per segment mixed language" IsExpanded="True">
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <materialDesign:PackIcon Kind="ClosedCaption" Width="24" Height="24" Margin="0 0 8 0" />
@@ -93,6 +93,7 @@
                         <TreeViewItem
                             Header="ASR"
                             Tag="SettingsSubtitlesASR"
+                            Uid="Detect Language Per Segment ASRPerSegmentLanguage mixed language per-segment auto detect"
                             FontSize="14"
                             FontWeight="Normal" />
 

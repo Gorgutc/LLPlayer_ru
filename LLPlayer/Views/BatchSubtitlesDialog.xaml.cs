@@ -33,6 +33,8 @@ public partial class BatchSubtitlesDialog : UserControl
     // main player window is closed / minimized to the tray).
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        _vm.RefreshVoices();
+
         Window? win = Window.GetWindow(this);
         if (win == null)
             return;

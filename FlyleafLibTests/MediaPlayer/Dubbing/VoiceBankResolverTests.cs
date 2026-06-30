@@ -159,6 +159,22 @@ public class VoiceBankResolverTests
         result.Select(v => v.Id).Should().Equal("ru-preset-1", "ru-preset-2", "custom-a");
     }
 
+    [Fact]
+    public void ContainsVoiceId_MatchesExistingPickerEntries_CaseInsensitive()
+    {
+        IReadOnlyList<TtsVoice> voices = VoiceBankResolver.ForConfig("custom-a", []);
+
+        VoiceBankResolver.ContainsVoiceId(voices, "CUSTOM-A").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ContainsVoiceId_BlankOrMissing_ReturnsFalse()
+    {
+        VoiceBankResolver.ContainsVoiceId(VoiceBankResolver.BuiltIn, null).Should().BeFalse();
+        VoiceBankResolver.ContainsVoiceId(VoiceBankResolver.BuiltIn, "   ").Should().BeFalse();
+        VoiceBankResolver.ContainsVoiceId(VoiceBankResolver.BuiltIn, "missing").Should().BeFalse();
+    }
+
     // ---- ResolveAsync: phase-2 merge (fail-soft, built-in wins, dedup) ----
 
     [Fact]

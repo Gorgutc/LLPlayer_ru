@@ -26,7 +26,8 @@ runs:
         dotnet msbuild .\LLPlayer\LLPlayer.csproj `
           /t:Publish `
           /p:PublishProfile=FolderProfile `
-          /p:PublishDir=${{ runner.temp }}\publish
+          /p:PublishDir=${{ runner.temp }}\publish `
+          /warnaserror
 
     - name: Clean build
       shell: pwsh
@@ -61,7 +62,8 @@ runs:
         dotnet msbuild .\Plugins\YoutubeDL\YoutubeDL.csproj `
           /t:Publish `
           /p:PublishProfile=FolderProfile `
-          /p:PublishDir=${{ runner.temp }}\publish-YoutubeDL
+          /p:PublishDir=${{ runner.temp }}\publish-YoutubeDL `
+          /warnaserror
 
     - name: Copy Plugin DLLs
       shell: pwsh
@@ -88,6 +90,20 @@ runs:
         $outDir = "$pub\Plugins\YoutubeDL"
         New-Item -Path "$outDir\yt-dlp.exe_here" -ItemType File
         Invoke-WebRequest -Uri "$url" -OutFile "$outDir\yt-dlp.exe"
+
+    - name: Validate release contents
+      shell: pwsh
+      run: |
+        $pub = "${{ runner.temp }}\publish"
+        foreach ($forbiddenDubRuntime in @("DubEngine", "dubmodels")) {
+          if (Test-Path "$pub\$forbiddenDubRuntime") {
+            throw "Release package must not include dubbing runtime data $forbiddenDubRuntime."
+          }
+        }
+        $publishedDubOutputs = @(Get-ChildItem $pub -Filter "*.ru.dub.*" -Recurse -ErrorAction SilentlyContinue)
+        if ($publishedDubOutputs.Count -gt 0) {
+          throw "Release package must not include rendered dub output(s): $($publishedDubOutputs.FullName -join ', ')."
+        }
 
     - name: Archive with 7-Zip
       id: archive

@@ -42,7 +42,7 @@ speaker — **local-first**, with an optional pluggable cloud slot.
 | Gender (Phase 2) | **F0 median-pitch heuristic** + manual override | License-free (librosa/torchaudio). |
 | Source separation (Phase 4) | **Mel-Band RoFormer** / **Demucs** via `python-audio-separator` | Code MIT; **weights download-on-first-run, user opt-in with a no-clear-license notice** (weights are effectively unlicensed — download does not fully cure this). |
 | Word timing | faster-whisper word timestamps / **WhisperX** (BSD-2) | Pin a tested triple; diarization-handoff smoke test (Phase 2). |
-| Time-stretch | **ffmpeg `atempo`** | **Quality choice** (clean for small ±10–15% corrections; single-instance, 0.5–100×, no chaining). Licensing is moot — the bundled FFmpeg is GPL and already includes rubberband too. |
+| Time-stretch | C# capped `atempo` factor, executed by sidecar `librosa.effects.time_stretch` | Quality choice for small corrections; current backend is sidecar DSP. |
 | .NET integration | **Long-lived localhost HTTP Python sidecar** | Separate process = mere aggregation → keeps the proprietary CUDA/torch stack legal beside the GPLv3 app. |
 | Cloud slot (Phase 6) | **ElevenLabs** primary; Azure/Cartesia alt | User's own paid key; **preset voices only**; impls must **reject any source-speaker reference clip** (enforced in code). |
 
@@ -63,35 +63,33 @@ video ─▶ [1] extract audio (ffmpeg, bundled)
        ─▶ [6] duration-budgeted translation to Russian (LM Studio, existing)
        ─▶ [7] Russian stress/normalization (Silero)            ← mandatory, graceful-degrade
        ─▶ [8] per-segment TTS (CosyVoice2: cloned timbre, or bank voice override)
-       ─▶ [9] isochrony fit (TTS duration ctrl ▸ pause-spill ▸ capped atempo ▸ drift-reset)
-       ─▶ [10] assemble: adelay each clip onto a full-length silence bed ─▶ continuous dub stream
-       ─▶ [11] mix: (Phase 4) over music bed; (MVP) sidechaincompress-duck the original under the dub
-       ─▶ [12] encode (ffmpeg) ─▶ video.ru.dub.flac/m4a ─▶ external audio track (selectable)
+       -> [9] C# isochrony fit (TTS duration ctrl -> pause-spill -> capped atempo factor -> drift-reset)
+       -> [10] sidecar assemble: place each clip onto a full-length silence bed -> continuous dub stream
+       -> [11] sidecar mix: (Phase 4) over music bed; (MVP) envelope-duck the original under the dub
+       -> [12] sidecar encode -> video.ru.dub.flac/m4a -> external audio track (selectable)
 ```
 
-Substrate: a single long-lived localhost HTTP Python sidecar runs the **neural** steps; all **DSP**
-(extract, atempo, assemble, duck, mix, encode) is **ffmpeg via CliWrap** using the bundled FFmpeg.
+Substrate: a single long-lived localhost HTTP Python sidecar runs the **neural** steps and current
+dub-track DSP/assembly. C# owns orchestration and pure isochrony placement math; the sidecar decodes,
+stretches, places, ducks/mixes, and encodes the final track.
 
 ### 4.1 A/V sync invariant (load-bearing — B5)
 
 The dub is **one continuous audio stream spanning PTS 0..video_duration**: each synthesized line is
-`adelay`'d to its source start and mixed (`amix`) onto a **full-length silence bed** (`anullsrc` +
-`apad`/`-shortest` off), **never concatenated** (concatenation desyncs everything after line 1).
-Encode the dub as **WAV or FLAC** (no encoder priming delay); if AAC/m4a is chosen, account for the
-~21–45 ms priming shift (and `Config.Audio.Delay` is the runtime escape hatch). Smoke-test sync at
-0:00, mid-file, and near the end.
+placed at its source start on a full-length sidecar dub bed, never concatenated (concatenation
+desyncs everything after line 1). Encode the dub as **WAV or FLAC** (no encoder priming delay); if
+AAC/m4a is chosen, account for the ~21-45 ms priming shift (and `Config.Audio.Delay` is the runtime
+escape hatch). Smoke-test sync at 0:00, mid-file, and near the end.
 
 ### 4.2 Ducking & assembly (B6, I6)
 
-- **Ducking** uses **`sidechaincompress`** (original keyed by the dub envelope) — one filter, no
-  per-span `volume=enable=between(...)` enumeration (which would blow the ~32 KB Windows command
-  line for thousands of spans). The whole filtergraph is passed via **`-filter_complex_script
-  FILE`** to dodge the command-line limit entirely. The filtergraph string is produced by a
-  **pure, unit-testable builder function**.
-- **Sample-rate/channels:** CosyVoice2 emits 24 kHz mono; films are typically 48 kHz stereo.
-  Insert an explicit `aresample` to the **ffprobe'd source rate** and a defined channel layout (dub
-  centered mono over preserved stereo via `pan`); never rely on `amix` to silently downmix. The
-  format-decision logic is unit-tested.
+- **Ducking** uses a sidecar-computed envelope from the dub bed - one mix pass, no per-span
+  filtergraph enumeration (the design avoids generating a giant operation per line for thousands of
+  spans).
+- **Sample-rate/channels:** CosyVoice2 emits 24 kHz mono; films are typically 48 kHz stereo. The
+  sidecar decodes the source audio via PyAV, resamples clips via `librosa` when needed, preserves the
+  source sample rate/channel count for the original bed, and writes the final track atomically via
+  `soundfile`.
 
 ### 4.3 Isochrony — MVP behavior (I7)
 
@@ -109,8 +107,9 @@ A single-narrator Russian *закадровый* voiceover, delivered as a **com
 
 Flow: existing faster-whisper ASR + LM Studio translation → timed Russian lines → (each line Silero
 stress-normalized) → synthesize the whole dub with **one bundled preset CosyVoice2 Russian voice**
-→ capped `atempo` fit + drift-reset → `adelay` onto a full-length silence bed → `sidechaincompress`
-duck the original under the dub → encode `video.ru.dub.flac` → selectable external audio track.
+→ capped `atempo` fit + drift-reset → sidecar placement onto a full-length silence bed →
+envelope-duck the original under the dub → encode `video.ru.dub.flac` → selectable external audio
+track.
 
 No diarization, cloning, separation, or voice bank.
 
@@ -126,9 +125,8 @@ FlyleafLib/MediaPlayer/Dubbing/
   TtsModels.cs              // TtsRequest(text, voiceId, refClipPath?, targetDurationMs, gender), TtsVoice, TtsResult
   DubSidecarHost.cs         // RUN-SCOPED: owns python child, HttpClient, port, readiness, watchdog, Job Object
   LocalCosyVoiceTtsService.cs   // ITtsService over DubSidecarHost (per-file, cheap)
-  DubbingRenderer.cs        // orchestrates synth → atempo+drift-reset → adelay-assemble → duck/mix → encode
+  DubbingRenderer.cs        // orchestrates synth -> atempo+drift-reset -> sidecar assemble/duck/mix/encode
   IDubbingRenderer.cs
-  DubbingFilterGraph.cs     // PURE builder: adelay bed + sidechaincompress + aresample (unit-tested)
   DubbingIsochrony.cs       // PURE: atempo factor clamp + drift-reset-at-pause (unit-tested)
   DubbingOutputPathBuilder.cs   // BuildRussianDubPath(media) → "video.ru.dub.flac"  (sibling of SubtitleOutputPathBuilder)
 ```
@@ -140,14 +138,14 @@ FlyleafLib/MediaPlayer/Dubbing/
   instance process-wide** (run-scoped singleton/lock) so batch + single-file never double VRAM.
 - Built from an **immutable `DubbingConfig` snapshot** captured at run start (mirrors the batch ASR
   config-snapshot precedent); a config change requires an explicit restart, never live mutation.
-- **Port:** python binds port 0 and prints `DUB_PORT=NNNNN` on stdout; C# reads it via CliWrap
-  `ListenAsync` (same idiom as `FasterWhisperASRService.Do`). Then a bounded `/health` poll with a
-  generous timeout, progress UI, and a recoverable error (not a crash) on timeout.
+- **Port:** python binds port 0 and prints `DUB_PORT=NNNNN` on stdout; C# launches it with raw
+  `System.Diagnostics.Process` so the child handle can be assigned to the Job Object, reads the port
+  from `OutputDataReceived`, then runs a bounded `/health` poll with a generous timeout, progress UI,
+  and a recoverable error (not a crash) on timeout.
 - **Orphan safety:** the python child is placed in a **Windows Job Object with
   `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`** (the OS reaps it if LLPlayer dies/crashes/is killed), and
-  the sidecar **self-terminates if its parent PID disappears**. Teardown is wired into both
-  `App.OnExit` and the batch-run `finally`. (This is the exact orphan class PR #33/#34 removed —
-  CliWrap alone only kills the child while the C# await is alive.)
+  the sidecar **self-terminates if its parent PID disappears**. Teardown is wired into the
+  batch-run `finally`; there is no app-lifetime daemon.
 
 **Batch integration (I1, I9):**
 - Hook is an **optional ctor param** `IDubbingRenderer? dubber = null` on `BatchSubtitleProcessor`
@@ -189,15 +187,15 @@ LLPlayer/Views(+VM)/
 
 ```
 dub_sidecar/                    // OUR GPLv3 code — committed; heavy deps provisioned by uv on first run
-  server.py                     // FastAPI/uvicorn, binds port 0, prints DUB_PORT, loads CosyVoice2 once;
+  server.py                     // stdlib http.server, binds port 0, prints DUB_PORT, loads CosyVoice2 once;
                                 //   --mock mode synthesizes a tone/silence of target duration (no heavy deps)
-  pyproject.toml / uv.lock      // pinned: torch>=2.7.0+cu128, cosyvoice, soundfile, fastapi, uvicorn; NO ttsfrd, NO NC pkgs
+  pyproject.toml / uv.lock      // pinned: torch>=2.7.0+cu128, soundfile/librosa/numpy/PyAV; NO fastapi/uvicorn, NO ttsfrd, NO NC pkgs
 ```
 
 Endpoints (MVP): `GET /health` → `{ready:true}`; `POST /synthesize {text, voice_id,
 target_duration_ms}` → `{wav_path}` (temp WAV path, not base64). The sidecar self-terminates if its
 parent PID disappears. A **`--mock`** flag (tone/silence of the requested duration, pure-stdlib)
-exists so the **entire C# pipeline + ffmpeg assembly can be validated deterministically off-GPU**
+exists so the **entire C# pipeline + sidecar assembly can be validated deterministically off-GPU**
 (in tests / dev), while the real CosyVoice2 is a drop-in on the same HTTP contract.
 
 ## 7. Configuration (additive, absent-defaulting)
@@ -251,9 +249,9 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
 | Risk | Sev | Mitigation |
 | --- | --- | --- |
 | RTX 5090 sm_120 / cu128; faster-whisper INT8 crashes on sm_120 | High | Pin `torch>=2.7.0+cu128` (stable); force ASR `compute_type=float16`; **launch-test on the real 5090** (owner first-run). |
-| Orphan multi-GB GPU python process on crash/kill | High | Job Object `KILL_ON_JOB_CLOSE` + parent-PID self-terminate + teardown in App.OnExit & run finally. |
-| A/V desync of a separately-rendered track | High | One continuous stream, adelay-onto-silence-bed (not concat); FLAC (no priming); sync smoke at 0/mid/end. |
-| Filtergraph blows the Windows command line | High | `sidechaincompress` (no per-span enum) + `-filter_complex_script FILE`; pure builder. |
+| Orphan multi-GB GPU python process on crash/kill | High | Job Object `KILL_ON_JOB_CLOSE` + parent-PID self-terminate + run-finally teardown. |
+| A/V desync of a separately-rendered track | High | One continuous sidecar-assembled stream (not concat); FLAC (no priming); sync smoke at 0/mid/end. |
+| Assembly/mix operation scales with many cues | High | Sidecar assembly uses array operations instead of generating a per-cue ffmpeg filtergraph. |
 | Batch GPU contention regression | High | `GenerateDubbing` forces serialize-mode; dub never in the pipelined translation worker; idle-gate sidecar. |
 | Non-redistributable weights | High | Bundle only Apache/CC-BY/MIT; separation weights first-run + opt-in notice; user-install XTTS/F5; lockfile gate. |
 | CosyVoice2 Russian quality / accent | High | Mandatory Silero stress; voice-bank override; owner A/B ear-test vs user-installed XTTS/F5 before locking default. |
@@ -263,9 +261,8 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
 ## 11. Testing & gates
 
 - **Unit (xUnit, off-GPU, deterministic):** `DubbingOutputPathBuilder`; `DubbingIsochrony`
-  (atempo clamp, drift-reset-at-pause); `DubbingFilterGraph` (adelay bed, sidechaincompress,
-  aresample/channel decision); `DubbingConfig` defaults; `DubbedAudioAutoLoader` path logic. The
-  `--mock` sidecar enables an optional end-to-end ffmpeg-assembly smoke with a generated tone.
+  (atempo clamp, drift-reset-at-pause); `DubbingConfig` defaults; `DubbedAudioAutoLoader` path
+  logic. The `--mock` sidecar enables an optional end-to-end sidecar-assembly smoke with a generated tone.
 - **Gates:** `dotnet build -warnaserror` (LLPlayer + Plugins/YoutubeDL); `dotnet test
   FlyleafLibTests`; `verify-fast`/`verify` (frozen) **incl. the new lockfile NC-package gate**;
   multi-agent `/review` (close Critical/Important).

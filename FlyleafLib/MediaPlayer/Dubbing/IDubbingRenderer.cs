@@ -10,7 +10,7 @@ public sealed record DubbingProgress(int CompletedLines, int TotalLines, string?
 /// <summary>
 /// Renders a pre-translated subtitle set into a Russian dub audio track beside the source video.
 /// Implementations own no GPU state of their own — they drive an <see cref="ITtsService"/> for neural
-/// synthesis and the bundled FFmpeg for all DSP (assemble / time-stretch / duck / mix / encode).
+/// synthesis and sidecar assembly/DSP (time-stretch / duck / mix / encode).
 /// </summary>
 public interface IDubbingRenderer : IAsyncDisposable
 {

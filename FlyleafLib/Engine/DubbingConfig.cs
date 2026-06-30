@@ -36,7 +36,7 @@ public class DubbingConfig : NotifyPropertyChanged
     /// local sidecar's <c>VOICES</c>), so a custom voice can be selected without hand-editing this file.
     /// Default empty → byte-identical (the picker shows only the built-in bank). The id is passed to the
     /// engine verbatim at synth time; LLPlayer does not validate it against a running engine.</summary>
-    public List<string> CustomVoiceIds { get; set => Set(ref field, value); } = new();
+    public List<string> CustomVoiceIds { get; set => Set(ref field, value ?? new()); } = new();
 
     /// <summary>Original-audio level under the dub during dubbed spans, 0..100. Drives the duck depth.
     /// Clamped to its valid range on set so a hand-edited config or UI echo cannot push it out of bounds.</summary>
