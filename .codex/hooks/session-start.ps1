@@ -6,4 +6,5 @@ Write-Host "- Stack: C#/.NET 10/WPF, Windows-only, FlyleafLib, FFmpeg, Whisper/T
 Write-Host "- Fast gate: .\scripts\codex\verify-fast.ps1"
 Write-Host "- Full gate: .\scripts\codex\verify.ps1"
 Write-Host "- Ship gate: .\scripts\codex\ship.ps1"
+Write-Host "- Final review: spawn a review subagent before handoff; if spawning is unavailable, report that /review was not satisfied."
 Write-Host "- Do not port web/Node/Playwright/Lighthouse gates unless a task explicitly adds a web surface."

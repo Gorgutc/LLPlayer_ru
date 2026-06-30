@@ -58,6 +58,24 @@ public static class VoiceBankResolver
     }
 
     /// <summary>
+    /// Case-insensitive membership check over an already-materialized picker list. This is intentionally separate
+    /// from <see cref="Resolve(string?)"/> because the picker can contain user-declared or hand-edited placeholders
+    /// that are not part of the built-in bank.
+    /// </summary>
+    public static bool ContainsVoiceId(IEnumerable<TtsVoice>? voices, string? voiceId)
+    {
+        if (voices is null || string.IsNullOrWhiteSpace(voiceId))
+            return false;
+
+        string trimmed = voiceId.Trim();
+        foreach (TtsVoice? voice in voices)
+            if (voice is not null && string.Equals(voice.Id, trimmed, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+        return false;
+    }
+
+    /// <summary>
     /// The built-in bank for binding a picker's <c>ItemsSource</c>, guaranteeing the currently-selected
     /// id is present so the ComboBox never shows a blank selection. If <paramref name="selectedVoiceId"/>
     /// is a non-blank id that is not already in the bank (e.g. a hand-edited config value or a future
@@ -104,8 +122,12 @@ public static class VoiceBankResolver
                 list.Add(CustomVoice(trimmed));
         }
 
-        if (!string.IsNullOrWhiteSpace(selectedVoiceId) && known.Add(selectedVoiceId))
-            list.Add(CustomVoice(selectedVoiceId));
+        if (!string.IsNullOrWhiteSpace(selectedVoiceId))
+        {
+            string trimmedSelected = selectedVoiceId.Trim();
+            if (known.Add(trimmedSelected))
+                list.Add(CustomVoice(trimmedSelected));
+        }
 
         // Nothing new appended -> hand back the canonical built-in instance (parity with the single-arg path).
         return list.Count == BuiltIn.Count ? BuiltIn : list;

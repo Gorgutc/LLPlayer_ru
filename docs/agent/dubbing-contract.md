@@ -23,9 +23,9 @@ user explicitly asks to change that product decision.
   priming shift must be accounted for. An existing non-empty `video.ru.dub.*` is detected, shown as
   done, and excluded from the default run unless overwrite is explicitly enabled (its own check
   against the `.ru.dub` path, independent of the `.ru.srt` path).
-- **A/V sync invariant:** the dub is **one continuous audio stream spanning PTS 0..video_duration** —
-  each line is `adelay`'d to its source start and `amix`'d onto a full-length silence bed, **never
-  concatenated**. This invariant is mandatory; regressing it silently desyncs the track.
+- **A/V sync invariant:** the dub is **one continuous audio stream spanning PTS 0..video_duration**;
+  each line is placed at its source start on a full-length sidecar dub bed, **never concatenated**.
+  This invariant is mandatory; regressing it silently desyncs the track.
 - **Committed source vs runtime data:** `dub_sidecar/` (`server.py`, `pyproject.toml`, `uv.lock`) is
   **committed GPLv3 source**. The TTS venv (`DubEngine/`), model weights (`dubmodels/`), and the
   output (`video.ru.dub.*`) are **user runtime data, never tracked** (same policy as `Whisper/`,
@@ -44,7 +44,10 @@ user explicitly asks to change that product decision.
   translate → dub → save, one file at a time) so a GPU ASR engine, a local-LLM translator, and the
   TTS sidecar never saturate the GPU at once (preserves the PR #33/d3bed9c contention guarantee). The
   existing Win32 idle gate also brackets the sidecar.
-- **Neural work runs in a Python sidecar; DSP runs in the bundled FFmpeg.**
+- **Neural work and dub-track assembly/DSP run in the Python sidecar.** C# owns orchestration and
+  unit-tested isochrony placement math (`DubbingIsochrony`); the sidecar executes stretch, placement,
+  duck/mix, and encode from the immutable run snapshot. The bundled FFmpeg remains the app/media
+  native runtime, but it is not the current dubbing assembly backend.
 - **Sidecar lifetime:** a **run-scoped `DubSidecarHost`** owns the python child, HttpClient, port,
   readiness probe, and watchdog. It is created from an **immutable `DubbingConfig` snapshot** at run
   start, loads the model **once**, and is stopped in the same `finally` that ends the run. **Exactly
@@ -71,12 +74,12 @@ user explicitly asks to change that product decision.
   callers.
 - Russian text is run through a **mandatory stress/homograph normalization** pass before synthesis
   (graceful-degrade to raw text if the module is unavailable).
-- **Isochrony (MVP):** capped ffmpeg `atempo` (pitch-preserving; single instance; the bundled FFmpeg
-  is GPL so the filter choice is a quality decision, not licensing) + **drift-reset at every ≥300 ms
-  gap**. A line may run long / start late and resync at the next pause — a documented limitation, not
-  a bug. The ducking uses `sidechaincompress` (no per-span `volume` enumeration) and the filtergraph
-  is passed via `-filter_complex_script FILE` (Windows command-line limit). Sample rate is
-  `aresample`'d to the ffprobe'd source rate with a defined channel layout.
+- **Isochrony (MVP):** C# computes a capped `atempo` factor (pitch-preserving intent; one factor per
+  clip) + **drift-reset at every 300 ms gap**. The sidecar executes the stretch/resample/mix:
+  PyAV decodes the source audio, `librosa` applies time-stretch/resample when needed, `numpy` places
+  clips on the dub bed and applies envelope ducking, and `soundfile` atomically writes the final
+  track. A line may run long / start late and resync at the next pause as a documented limitation,
+  not a bug.
 - **Track exposure:** the rendered track is surfaced through the existing external-audio mechanism —
   it appears under the existing **Audio ▸ External** menu (`PopupMenu.xaml`, bound to
   `Playlist.Selected.ExternalAudioStreams`). `DubbedAudioAutoLoader` adds it on player-open via the

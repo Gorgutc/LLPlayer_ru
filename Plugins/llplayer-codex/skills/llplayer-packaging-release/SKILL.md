@@ -6,6 +6,7 @@ description: Use when changing LLPlayer_ru publish profiles, GitHub release work
 # LLPlayer Packaging Release
 
 Release packaging source of truth is `.github/actions/build-package/action.yml`.
+Use `scripts/codex/ship.ps1` as the local offline packaging smoke; keep it in sync with the action.
 
 ## Preserve Flow
 
@@ -18,4 +19,14 @@ Release packaging source of truth is `.github/actions/build-package/action.yml`.
 7. Download `yt-dlp.exe` in CI release only.
 8. Archive with 7-Zip.
 
+Publish steps must keep warnings fatal (`/warnaserror`) for both app and `Plugins/YoutubeDL`.
+The package must include committed runtime source/assets (`FFmpeg`, `LLPlayer/lib/7z.dll`, `dub_sidecar/`
+source including `uv.lock`) and must reject generated/runtime data (`DubEngine/`, `dubmodels/`,
+`*.ru.dub.*`, downloaded local `yt-dlp.exe`).
+
 Local Codex verification should stay offline unless explicitly shipping.
+
+## Review
+
+For packaging changes, run `scripts/codex/ship.ps1` when feasible and spawn `packaging_release_reviewer`.
+Before final handoff, satisfy `/review` with a spawned review subagent; if the tool is unavailable, say so.

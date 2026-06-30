@@ -5,7 +5,7 @@ namespace FlyleafLib.MediaPlayer.Dubbing;
 #nullable enable
 
 /// <summary>
-/// Pure isochrony math for the MVP: capped pitch-preserving time-stretch (ffmpeg <c>atempo</c>) plus
+/// Pure isochrony math for the MVP: capped pitch-preserving time-stretch factor (<c>atempo</c>) plus
 /// drift-reset placement. Russian runs ~10-30% longer than most source languages, so a single
 /// capped atempo cannot always fit a line; the placement lets a line run long / start late and then
 /// HARD-RESETS accumulated drift at the next pause so error never compounds. No I/O — unit-tested.

@@ -23,7 +23,8 @@ non-Russian target languages; bundling non-commercial models.
 
 - **Local-first**, redistribution-safe (the license of the *weights* is the hard filter).
 - **Pre-render** + reuse the batch pipeline & `ExternalAudioStream`; never touch the audio thread.
-- **Neural in the Python sidecar, DSP in bundled FFmpeg** (clean licensing + separation of concerns).
+- **Neural work and dub-track assembly/DSP in the Python sidecar** (clean localhost process boundary;
+  C# owns orchestration and pure isochrony math).
 - **Additive & frozen-safe**: every change is opt-in; ASR/translation results never change.
 - **Ear-test on real content on the real 5090** before declaring any phase done — gates miss it.
 
@@ -70,11 +71,10 @@ non-Russian target languages; bundling non-commercial models.
 - **`DubSidecarHost`** (run-scoped: owns python child + HttpClient + port + readiness + watchdog +
   **Job Object `KILL_ON_JOB_CLOSE`**) + `LocalCosyVoiceTtsService` (cheap per-file over the host).
   One instance process-wide; built from a `DubbingConfig` snapshot; port via stdout `DUB_PORT`.
-- `DubbingRenderer` — synth per line → Silero stress pre-pass → **capped `atempo` + drift-reset** →
-  **adelay onto a full-length silence bed** → **`sidechaincompress` duck** (via
-  `-filter_complex_script`) → encode `video.ru.dub.flac` (all DSP = bundled ffmpeg/CliWrap).
-- **Pure, unit-tested:** `DubbingFilterGraph` (adelay bed + sidechaincompress + aresample/channels),
-  `DubbingIsochrony` (atempo clamp + drift-reset-at-≥300ms), `DubbingOutputPathBuilder`.
+- `DubbingRenderer` - synth per line -> Silero stress pre-pass -> **capped `atempo` + drift-reset**
+  -> sidecar placement on a full-length dub bed -> envelope duck/mix -> encode
+  `video.ru.dub.flac` (current assembly/DSP = `dub_sidecar/server.py` via localhost HTTP).
+- **Pure, unit-tested:** `DubbingIsochrony` (atempo clamp + drift-reset-at-300ms), `DubbingOutputPathBuilder`.
 - Batch integration: **optional ctor param** `IDubbingRenderer? dubber = null`; hook in
   `TranslateAndSaveAsync` between write and Completed, guarded by `dubber != null &&
   options.GenerateDubbing`, own `.ru.dub` overwrite check; **force serialize-mode when dubbing on**
@@ -83,7 +83,7 @@ non-Russian target languages; bundling non-commercial models.
 - `DubbedAudioAutoLoader` — on player-open, add `.ru.dub.*` to `ExternalAudioStreams` **on the UI
   dispatcher** (appears under the existing **Audio ▸ External** menu).
 - `Config.Subtitles.DubbingConfig` (additive, no new converter) + minimal settings section.
-- `dub_sidecar/server.py` (FastAPI `/health` + `/synthesize`, port-0 + `DUB_PORT`, parent-PID
+- `dub_sidecar/server.py` (stdlib HTTP `/health` + `/synthesize`, port-0 + `DUB_PORT`, parent-PID
   self-terminate, **`--mock` mode**) + pinned `pyproject.toml`/`uv.lock` (no `ttsfrd`, no NC pkgs) —
   **committed as a contract artifact, not stood up**.
 - `DubbingEngineProvisioner` — thin shell-out to the `uv` binary with a documented command sequence +

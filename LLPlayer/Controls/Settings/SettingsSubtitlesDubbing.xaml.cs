@@ -62,17 +62,18 @@ public class SettingsSubtitlesDubbingVM : Bindable
         if (id.Length == 0)
             return;
 
-        // Ignore a duplicate of a built-in or an already-listed custom id (case-insensitive).
-        bool alreadyKnown = VoiceBankResolver.Resolve(id) is not null
-            || CustomVoiceIds.Any(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase));
-        if (alreadyKnown)
+        bool alreadyDeclaredCustom = CustomVoiceIds.Any(x => string.Equals(x, id, StringComparison.OrdinalIgnoreCase));
+        if (VoiceBankResolver.Resolve(id) is not null || alreadyDeclaredCustom)
             return;
 
+        bool alreadyVisible = VoiceBankResolver.ContainsVoiceId(Voices, id);
         CustomVoiceIds.Add(id);
         PersistCustomVoiceIds();
 
-        // Append to the picker without clearing it (keeps the active selection intact).
-        Voices.Add(VoiceBankResolver.CustomVoice(id));
+        // Append to the picker without clearing it (keeps the active selection intact). If the id is already a
+        // hand-edited selected placeholder, persisting it above is enough.
+        if (!alreadyVisible)
+            Voices.Add(VoiceBankResolver.CustomVoice(id));
     });
 
     public DelegateCommand CmdRemoveVoiceId => field ??= new(() =>

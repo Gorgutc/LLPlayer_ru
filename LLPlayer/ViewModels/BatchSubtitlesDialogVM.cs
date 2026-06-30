@@ -53,9 +53,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         GenerateDubbing = FL.Config.BatchSubtitles.GenerateDubbing;
         PreferRussianAudio = FL.Config.BatchSubtitles.PreferRussianAudio;
         WatchFolder = FL.Config.BatchSubtitles.WatchFolder;
-        Voices = VoiceBankResolver.ForConfig(
-            FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId,
-            FL.PlayerConfig.Subtitles.DubbingConfig.CustomVoiceIds);
+        RefreshVoices();
+        FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged += OnDubbingConfigPropertyChanged;
         _initializing = false;
 
         // NOTE: subscription to _activity.CancelRequested is done in OnDialogOpened (paired with the -= in
@@ -187,7 +186,34 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
     // sidecar); includes the current DefaultVoiceId even if it is not a known preset so the ComboBox
     // never blanks. The selected value writes through to DubbingConfig.DefaultVoiceId, which the renderer
     // reads live at run start (BatchSubtitlesDialogVM builds DubbingRenderer from the live config).
-    public IReadOnlyList<TtsVoice> Voices { get; }
+    public ObservableCollection<TtsVoice> Voices { get; } = new();
+
+    private void OnDubbingConfigPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DubbingConfig.DefaultVoiceId) or nameof(DubbingConfig.CustomVoiceIds))
+            RefreshVoices();
+    }
+
+    public void RefreshVoices()
+    {
+        if (Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+        {
+            dispatcher.Invoke(RefreshVoices);
+            return;
+        }
+
+        IReadOnlyList<TtsVoice> refreshed = VoiceBankResolver.ForConfig(
+            FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId,
+            FL.PlayerConfig.Subtitles.DubbingConfig.CustomVoiceIds);
+
+        for (int i = Voices.Count - 1; i >= 0; i--)
+            if (!VoiceBankResolver.ContainsVoiceId(refreshed, Voices[i].Id))
+                Voices.RemoveAt(i);
+
+        foreach (TtsVoice voice in refreshed)
+            if (!VoiceBankResolver.ContainsVoiceId(Voices, voice.Id))
+                Voices.Add(voice);
+    }
 
     // When on, a file with a Russian-tagged audio track has that track transcribed (Russian subtitles, no
     // translation); files without a Russian track are transcribed + translated as before. A per-file override
@@ -1117,6 +1143,7 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
         _watcher = null;
         UnsubscribeJobs();
         _activity.CancelRequested -= OnAppQuitCancelRequested;
+        FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged -= OnDubbingConfigPropertyChanged;
         // Drop the dialog-open flag so the app can leave the tray / restore the player once nothing is
         // running. If a run was in progress, the cancellation above lets RunAsync's finally clear IsRunning
         // (best-effort — on an app quit the process may exit before that continuation runs).

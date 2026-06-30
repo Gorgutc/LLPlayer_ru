@@ -16,4 +16,5 @@ Review WPF changes as desktop UI, not web UI.
 - Dispatcher usage is explicit when crossing background/UI boundaries.
 - Text fits and keyboard/mouse shortcuts remain discoverable in app surfaces.
 
-Build with `dotnet build --no-restore -warnaserror .\LLPlayer`.
+For C#/XAML changes, prefer `.\scripts\codex\verify.ps1` before handoff; use
+`dotnet build --no-restore -warnaserror .\LLPlayer` only as the narrower local build slice.

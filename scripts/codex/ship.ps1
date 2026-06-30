@@ -34,7 +34,7 @@ try {
     New-Item -ItemType Directory -Path $pluginPublish -Force | Out-Null
 
     Invoke-Checked dotnet "restore" ".\LLPlayer\LLPlayer.csproj" "/p:PublishReadyToRun=true" "-warnaserror"
-    Invoke-Checked dotnet "msbuild" ".\LLPlayer\LLPlayer.csproj" "/t:Publish" "/p:PublishProfile=FolderProfile" "/p:PublishDir=$appPublish"
+    Invoke-Checked dotnet "msbuild" ".\LLPlayer\LLPlayer.csproj" "/t:Publish" "/p:PublishProfile=FolderProfile" "/p:PublishDir=$appPublish" "/warnaserror"
 
     if (-not (Test-Path (Join-Path $appPublish "LLPlayer.exe"))) {
         throw "Publish smoke did not produce LLPlayer.exe."
@@ -87,7 +87,7 @@ try {
     }
 
     Invoke-Checked dotnet "restore" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/p:PublishReadyToRun=true" "-warnaserror"
-    Invoke-Checked dotnet "msbuild" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/t:Publish" "/p:PublishProfile=FolderProfile" "/p:PublishDir=$pluginPublish"
+    Invoke-Checked dotnet "msbuild" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/t:Publish" "/p:PublishProfile=FolderProfile" "/p:PublishDir=$pluginPublish" "/warnaserror"
 
     $pluginOut = Join-Path $appPublish "Plugins\YoutubeDL"
     New-Item -ItemType Directory -Path $pluginOut -Force | Out-Null
