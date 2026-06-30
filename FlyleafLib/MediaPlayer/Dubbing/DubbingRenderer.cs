@@ -68,7 +68,7 @@ public sealed class DubbingRenderer : IDubbingRenderer
 
             int targetMs = (int)System.Math.Round(System.Math.Max(1, lines[i].SlotMs));
             TtsResult res = await host.SynthesizeAsync(
-                new TtsRequest(lines[i].Text, _voiceId, targetMs), token).ConfigureAwait(false);
+                new TtsRequest(lines[i].Text, ResolveVoiceId(lines[i].VoiceId, _voiceId), targetMs), token).ConfigureAwait(false);
 
             double f = DubbingIsochrony.ComputeAtempo(res.DurationMs, lines[i].SlotMs, _atempoMin, _atempoMax);
             atempo[i] = f;
@@ -178,8 +178,11 @@ public sealed class DubbingRenderer : IDubbingRenderer
     }
 
     // Russian lines to dub: prefer the translated text, fall back to the (already-Russian) source text.
-    // Ordered by start time; lines with no usable text or a non-positive slot are skipped.
-    private static List<DubbingLine> BuildLines(IReadOnlyList<SubtitleData> subtitles)
+    // Ordered by start time; lines with no usable text or a non-positive slot are skipped. Each line carries its
+    // optional per-line voice override (F-16 phase 2a) — a blank AssignedVoiceId becomes null so RenderAsync falls
+    // back to the run's default voice. internal for unit tests (the mapping must stay byte-identical when no cue
+    // carries an override).
+    internal static List<DubbingLine> BuildLines(IReadOnlyList<SubtitleData> subtitles)
     {
         return subtitles
             .Where(s => !string.IsNullOrWhiteSpace(s.TranslatedText) || !string.IsNullOrWhiteSpace(s.Text))
@@ -187,9 +190,16 @@ public sealed class DubbingRenderer : IDubbingRenderer
             .Select((s, index) =>
             {
                 string text = !string.IsNullOrWhiteSpace(s.TranslatedText) ? s.TranslatedText! : s.Text!;
-                return new DubbingLine(index, text.Trim(), s.StartTime, s.EndTime);
+                string? voiceId = string.IsNullOrWhiteSpace(s.AssignedVoiceId) ? null : s.AssignedVoiceId.Trim();
+                return new DubbingLine(index, text.Trim(), s.StartTime, s.EndTime, voiceId);
             })
             .Where(l => l.SlotMs > 0 && !string.IsNullOrWhiteSpace(l.Text))
             .ToList();
     }
+
+    // Per-line dub voice (F-16 phase 2a): a cue's per-line override wins; a blank/absent override falls back to the
+    // run's snapshotted default voice. With no overrides this returns the default for every line, so the
+    // synthesized request — and the whole dub — is byte-identical to the single-voice render. internal for tests.
+    internal static string ResolveVoiceId(string? lineVoiceId, string defaultVoiceId)
+        => string.IsNullOrWhiteSpace(lineVoiceId) ? defaultVoiceId : lineVoiceId;
 }

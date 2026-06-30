@@ -60,4 +60,18 @@ public partial class SubtitlesSidebar : UserControl
     {
         _ = WordPopupControl.OnWordClicked(e);
     }
+
+    /// <summary>
+    /// F-16 phase 2a: open the per-line dub-voice picker. The voice choices live in a <see cref="ContextMenu"/>
+    /// opened on left-click (a dropdown of the GPU-free voice bank); selecting one sets the cue's
+    /// <c>AssignedVoiceId</c> via <c>SubtitlesSidebarVM.CmdSubSetVoice</c>.
+    /// </summary>
+    private void SubVoiceButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { ContextMenu: { } menu } button)
+        {
+            menu.PlacementTarget = button;
+            menu.IsOpen = true;
+        }
+    }
 }

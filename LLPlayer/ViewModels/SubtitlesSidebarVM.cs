@@ -2,6 +2,8 @@
 using System.Windows.Data;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
+using FlyleafLib.MediaPlayer.Dubbing;
+using LLPlayer.Converters;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
 
@@ -16,6 +18,8 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         FL = fl;
 
         FL.Config.PropertyChanged += OnConfigOnPropertyChanged;
+        // F-16 phase 2a: keep each row's per-line dub-voice menu in sync with the dub voice bank.
+        FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged += OnDubbingConfigPropertyChanged;
 
         // Initialize filtered view for the sidebar
         for (int i = 0; i < _filteredSubs.Length; i++)
@@ -27,6 +31,14 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
     public void Dispose()
     {
         FL.Config.PropertyChanged -= OnConfigOnPropertyChanged;
+        FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged -= OnDubbingConfigPropertyChanged;
+    }
+
+    private void OnDubbingConfigPropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        // Keep each row's per-line dub-voice menu (DubVoiceMenuItems) in sync with the dub voice bank.
+        if (args.PropertyName is nameof(DubbingConfig.DefaultVoiceId) or nameof(DubbingConfig.CustomVoiceIds))
+            OnPropertyChanged(nameof(DubVoiceMenuItems));
     }
 
     private void OnConfigOnPropertyChanged(object? sender, PropertyChangedEventArgs args)
@@ -156,6 +168,37 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         FL.Player.Activity.ForceActive();
 
         FL.PlayerConfig.Subtitles[SubIndex].Delay = newDelay;
+    });
+
+    // F-16 phase 2a: the voice choices for a sidebar row's per-line dub-voice menu — a leading "Use default
+    // voice" entry (empty id) that clears any override, then the GPU-free voice bank (built-in presets + the
+    // user's custom ids), exactly as the Settings/batch pickers. Rebuilt when the dub voice config changes.
+    public IReadOnlyList<TtsVoice> DubVoiceMenuItems
+    {
+        get
+        {
+            DubbingConfig cfg = FL.PlayerConfig.Subtitles.DubbingConfig;
+            IReadOnlyList<TtsVoice> voices = VoiceBankResolver.ForConfig(cfg.DefaultVoiceId, cfg.CustomVoiceIds);
+
+            List<TtsVoice> items = new(voices.Count + 1)
+            {
+                new TtsVoice(string.Empty, "Use default voice", string.Empty, string.Empty),
+            };
+            items.AddRange(voices);
+            return items;
+        }
+    }
+
+    // F-16 phase 2a: assign (or clear) a per-line dub voice on a sidebar cue. The "use default voice" entry (or a
+    // blank id) clears the override (null) so the renderer falls back to DubbingConfig.DefaultVoiceId; otherwise
+    // the trimmed id is stored and passed verbatim to the engine at dub time. Interactive/in-memory only.
+    public DelegateCommand<SubVoiceAssignment> CmdSubSetVoice => field ??= new(assignment =>
+    {
+        if (assignment?.Sub is null)
+            return;
+
+        assignment.Sub.AssignedVoiceId =
+            string.IsNullOrWhiteSpace(assignment.VoiceId) ? null : assignment.VoiceId.Trim();
     });
 
     public DelegateCommand CmdClearSearch => field ??= new(() =>

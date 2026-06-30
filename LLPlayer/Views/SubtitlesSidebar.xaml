@@ -640,6 +640,7 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <Button
@@ -688,6 +689,56 @@
                             <materialDesign:PackIcon Kind="Sync"
                                 Width="20"
                                 Height="20" />
+                        </Button>
+
+                        <!-- Assign a per-line dub voice (F-16 phase 2a). Left-click opens a context menu of the
+                             GPU-free voice bank (built-in presets + custom ids) plus a "use default voice" entry;
+                             the icon lights (Primary, full opacity) when this cue carries an override. Additive —
+                             no effect unless the AI dub is generated; the override is interactive/in-memory only.
+                             Tag carries the VM so the out-of-tree menu can reach its command + voice list. -->
+                        <Button
+                            x:Name="SubVoiceButton"
+                            Grid.Column="3"
+                            AutomationProperties.Name="Assign a dub voice to this subtitle line"
+                            FlowDirection="LeftToRight"
+                            ToolTip="Assign a dub voice for this line (overrides the default voice in the AI dub)."
+                            Tag="{Binding DataContext, ElementName=SubtitleListBox}"
+                            Click="SubVoiceButton_OnClick"
+                            materialDesign:RippleAssist.Feedback="Transparent">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource SubIconButton}">
+                                    <Style.Triggers>
+                                        <!-- This line carries an explicit per-line dub voice: keep it lit even at rest. -->
+                                        <DataTrigger Binding="{Binding AssignedVoiceId, Converter={StaticResource StringHasValueConv}}" Value="True">
+                                            <Setter Property="Foreground" Value="{DynamicResource MaterialDesign.Brush.Primary}" />
+                                            <Setter Property="Opacity" Value="1.0" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <materialDesign:PackIcon Kind="AccountVoice"
+                                Width="20"
+                                Height="20" />
+                            <Button.ContextMenu>
+                                <ContextMenu
+                                    Style="{StaticResource FlyleafContextMenu}"
+                                    ItemsSource="{Binding PlacementTarget.Tag.DubVoiceMenuItems, RelativeSource={RelativeSource Self}}">
+                                    <ContextMenu.ItemContainerStyle>
+                                        <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource MaterialDesignMenuItem}">
+                                            <Setter Property="Header" Value="{Binding DisplayName}" />
+                                            <Setter Property="Command" Value="{Binding PlacementTarget.Tag.CmdSubSetVoice, RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ContextMenu}}}" />
+                                            <Setter Property="CommandParameter">
+                                                <Setter.Value>
+                                                    <MultiBinding Converter="{StaticResource SubVoiceAssignmentConv}">
+                                                        <Binding Path="PlacementTarget.DataContext" RelativeSource="{RelativeSource FindAncestor, AncestorType={x:Type ContextMenu}}" />
+                                                        <Binding Path="Id" />
+                                                    </MultiBinding>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ContextMenu.ItemContainerStyle>
+                                </ContextMenu>
+                            </Button.ContextMenu>
                         </Button>
                     </Grid>
                     </Border>

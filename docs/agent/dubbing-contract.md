@@ -107,8 +107,9 @@ user explicitly asks to change that product decision.
   not yet wired into the UI). The chosen voice writes `DubbingConfig.DefaultVoiceId` (one voice for the
   whole dub); `DefaultVoiceId` is **trimmed on set** so a hand-edited config value with surrounding
   whitespace still matches the trimmed picker entries and the engine voice ids (the ComboBox never blanks).
-  **Per-line / per-speaker selection remains phase 2** (needs per-line data). The renderer
-  reads `DefaultVoiceId` live at run start, so no batch-snapshot coverage is required.
+  This single voice is the **default** for every line; **per-line manual override is phase 2a** (below) and
+  per-speaker (diarization-driven) selection remains phase 2/3. The renderer reads `DefaultVoiceId` live at run
+  start, so no batch-snapshot coverage is required.
 - **Phase 2 custom voice ids (shipped, additive):** the user can register extra voice ids
   (`DubbingConfig.CustomVoiceIds`, default empty → byte-identical) via **Settings ▸ Subtitles ▸ Dubbing ▸
   Custom voice IDs** (list + Add/Remove). Both pickers (Settings + batch dialog) merge them after the
@@ -118,6 +119,19 @@ user explicitly asks to change that product decision.
   against a running engine and **still never starts the sidecar** to populate the picker. Persisted in
   `LLPlayer.PlayerConfig.json` under `Subtitles.DubbingConfig.CustomVoiceIds` (absent-defaulting, no
   migration). The live-discovery refresh (`ResolveAsync`) remains unwired (it would require starting the GPU sidecar).
+- **Phase 2a per-line voice override (shipped, additive):** the user can assign a specific dub voice to an
+  individual subtitle line from the **sidebar per-row voice button** (a left-click context menu of the same
+  GPU-free voice bank — built-in presets + `CustomVoiceIds` — plus a leading **"Use default voice"** entry that
+  clears the override). The choice is stored on the cue as the new per-cue field `SubtitleData.AssignedVoiceId`
+  (beside `Language`/`SpeakerId`; copied in `Clone()` and at both re-segmentation split sites). The renderer
+  threads it through `DubbingRenderer.BuildLines` → `DubbingLine.VoiceId` and synthesizes each line with
+  `DubbingRenderer.ResolveVoiceId(line.VoiceId, DefaultVoiceId)` — a blank/absent override falls back to the run's
+  default voice, so a dub with **no** assignments is byte-identical to the single-voice render (the id is sent to
+  the engine verbatim, exactly as `DefaultVoiceId`). The override is **interactive / in-memory only**:
+  `SubtitleData` is never serialized, so a re-render from an existing `.ru.srt` (which carries only text + timing)
+  falls back to `DefaultVoiceId` for every line. No new persisted config and no batch-snapshot coverage (the
+  renderer still reads voices live at run start). Per-speaker (diarization-driven) auto-assignment remains
+  phase 2/3 (needs F-03).
 - **Hybrid:** by default, diarize speakers and **clone each speaker's timbre** into Russian
   (CosyVoice2 zero-shot from a per-speaker reference clip), preserving gender; **any speaker can be
   overridden** with a preset bank voice. Gender uses a license-free F0 heuristic + manual override.
