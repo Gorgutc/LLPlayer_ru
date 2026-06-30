@@ -26,4 +26,26 @@ public class DubbingConfigTests
         config!.CustomVoiceIds.Should().NotBeNull();
         config.CustomVoiceIds.Should().BeEmpty();
     }
+
+    [Fact]
+    public void DefaultVoiceId_SetWithSurroundingWhitespace_IsTrimmed()
+    {
+        // A hand-edited DefaultVoiceId with surrounding whitespace must normalize so the bound ComboBox
+        // SelectedValue equals the (trimmed) picker entries and the engine receives a clean voice id.
+        DubbingConfig config = new();
+
+        config.DefaultVoiceId = "  my-voice  ";
+
+        config.DefaultVoiceId.Should().Be("my-voice");
+    }
+
+    [Fact]
+    public void DefaultVoiceId_JsonWithSurroundingWhitespace_IsTrimmed()
+    {
+        DubbingConfig? config = JsonSerializer.Deserialize<DubbingConfig>(
+            """{"DefaultVoiceId":"  my-voice  "}""");
+
+        config.Should().NotBeNull();
+        config!.DefaultVoiceId.Should().Be("my-voice");
+    }
 }

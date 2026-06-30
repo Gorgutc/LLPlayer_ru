@@ -160,6 +160,29 @@ public class VoiceBankResolverTests
     }
 
     [Fact]
+    public void ForConfig_SelectedWithSurroundingWhitespace_AppendsTrimmedPlaceholder()
+    {
+        // The selected id is trimmed before being appended, so every picker entry's Id is canonical/trimmed
+        // (consistent with custom-id handling). The bound SelectedValue matches because DubbingConfig
+        // .DefaultVoiceId is itself trimmed on set (see DubbingConfigTests), so the two sides agree and the
+        // ComboBox never blanks on a hand-edited whitespace-padded DefaultVoiceId.
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig(" my-voice ", []);
+
+        result.Should().HaveCount(3);
+        result[2].Id.Should().Be("my-voice");
+    }
+
+    [Fact]
+    public void ForConfig_SelectedWhitespaceVariantOfExistingId_NotDuplicated()
+    {
+        // The selected id is deduped on its TRIMMED form, so a whitespace-padded variant of a built-in id
+        // adds no spurious placeholder (it collapses onto the existing built-in entry).
+        IReadOnlyList<TtsVoice> result = VoiceBankResolver.ForConfig("  ru-preset-1  ", ["custom-a"]);
+
+        result.Select(v => v.Id).Should().Equal("ru-preset-1", "ru-preset-2", "custom-a");
+    }
+
+    [Fact]
     public void ContainsVoiceId_MatchesExistingPickerEntries_CaseInsensitive()
     {
         IReadOnlyList<TtsVoice> voices = VoiceBankResolver.ForConfig("custom-a", []);
@@ -173,6 +196,34 @@ public class VoiceBankResolverTests
         VoiceBankResolver.ContainsVoiceId(VoiceBankResolver.BuiltIn, null).Should().BeFalse();
         VoiceBankResolver.ContainsVoiceId(VoiceBankResolver.BuiltIn, "   ").Should().BeFalse();
         VoiceBankResolver.ContainsVoiceId(VoiceBankResolver.BuiltIn, "missing").Should().BeFalse();
+    }
+
+    [Fact]
+    public void ContainsVoiceId_TrimsQueryBeforeMatching()
+    {
+        // The query id is trimmed before comparison, mirroring how ForConfig materializes custom entries.
+        // Without the trim, "  custom-a  " != "custom-a" and this would return false.
+        IReadOnlyList<TtsVoice> voices = VoiceBankResolver.ForConfig("custom-a", []);
+
+        VoiceBankResolver.ContainsVoiceId(voices, "  custom-a  ").Should().BeTrue();
+    }
+
+    [Fact]
+    public void ContainsVoiceId_NullVoices_ReturnsFalse()
+    {
+        // Defensive guard: a null picker list returns false instead of throwing.
+        VoiceBankResolver.ContainsVoiceId(null, "custom-a").Should().BeFalse();
+    }
+
+    [Fact]
+    public void ContainsVoiceId_NullElementInList_IsSkipped_DoesNotThrow()
+    {
+        // Defensive guard: a null element must be skipped, not dereferenced. The "missing" query forces a full
+        // scan past the null element; without the per-element null guard this would throw.
+        TtsVoice[] voices = [new TtsVoice("custom-a", "custom-a", "unknown", ""), null!];
+
+        VoiceBankResolver.ContainsVoiceId(voices, "missing").Should().BeFalse();
+        VoiceBankResolver.ContainsVoiceId(voices, "custom-a").Should().BeTrue();
     }
 
     // ---- ResolveAsync: phase-2 merge (fail-soft, built-in wins, dedup) ----

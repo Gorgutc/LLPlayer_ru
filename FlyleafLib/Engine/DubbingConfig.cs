@@ -29,8 +29,11 @@ public class DubbingConfig : NotifyPropertyChanged
 
     public string Model { get; set => Set(ref field, value); } = "cosyvoice2-0.5b";
 
-    /// <summary>MVP single preset Russian voice; later overridable per speaker from the voice bank.</summary>
-    public string DefaultVoiceId { get; set => Set(ref field, value); } = "ru-preset-1";
+    /// <summary>MVP single preset Russian voice; later overridable per speaker from the voice bank.
+    /// Trimmed on set (like the picker trims custom ids) so a hand-edited config value with surrounding
+    /// whitespace still matches the trimmed voice-picker entries and the engine's voice ids — otherwise the
+    /// raw bound <c>SelectedValue</c> would not equal any (trimmed) picker entry and the ComboBox would blank.</summary>
+    public string DefaultVoiceId { get; set => Set(ref field, value?.Trim() ?? ""); } = "ru-preset-1";
 
     /// <summary>User-declared extra voice ids merged into the voice picker (e.g. presets the user added to the
     /// local sidecar's <c>VOICES</c>), so a custom voice can be selected without hand-editing this file.

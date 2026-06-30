@@ -105,7 +105,9 @@ user explicitly asks to change that product decision.
   sidecar** to enumerate voices; the engine `ITtsService.GetVoicesAsync` stays the phase-2 live-discovery
   seam, surfaced by `VoiceBankResolver.ResolveAsync` (fail-soft; built-in metadata wins on id collision;
   not yet wired into the UI). The chosen voice writes `DubbingConfig.DefaultVoiceId` (one voice for the
-  whole dub); **per-line / per-speaker selection remains phase 2** (needs per-line data). The renderer
+  whole dub); `DefaultVoiceId` is **trimmed on set** so a hand-edited config value with surrounding
+  whitespace still matches the trimmed picker entries and the engine voice ids (the ComboBox never blanks).
+  **Per-line / per-speaker selection remains phase 2** (needs per-line data). The renderer
   reads `DefaultVoiceId` live at run start, so no batch-snapshot coverage is required.
 - **Phase 2 custom voice ids (shipped, additive):** the user can register extra voice ids
   (`DubbingConfig.CustomVoiceIds`, default empty → byte-identical) via **Settings ▸ Subtitles ▸ Dubbing ▸
