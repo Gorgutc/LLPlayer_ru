@@ -521,7 +521,7 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > браузерное расширение — заводить отдельной крупной задачей.
 Сейчас словарь — через попап перевода слова (F-11) и буфер обмена (FAQ).
 
-### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · IN-PROGRESS (фаза 1 voice-bank ✅ PR #93 v0.3.30; фаза 2 частично: custom voice-ID ✅ PR #96 v0.3.31; остаток фаз 2-6 TODO)
+### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · IN-PROGRESS (фаза 1 voice-bank ✅ PR #93 v0.3.30; фаза 2 custom voice-ID ✅ PR #96 v0.3.31; фаза 2a per-line voice ✅ PR #106 v0.3.35; остаток фаз 2-6 TODO)
 > ⚙️ **Фаза 1 (voice-bank) — срез отгружен (PR #93, merge `526a1a3`, v0.3.30, 2026-06-28).** Пользователь
 > выбирает **голос дубляжа** (банк пресетов). Аддитивно/opt-in; default (`DefaultVoiceId=ru-preset-1`, дубляж
 > выкл.) **byte-identical**. **Pure GPU-free `FlyleafLib/MediaPlayer/Dubbing/VoiceBankResolver.cs`**: `BuiltIn`
@@ -551,6 +551,23 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > **Остаток фазы 2:** per-line / per-speaker выбор + diarization-gender (нужен F-03 + per-line данные), AAC/m4a
 > энкод в sidecar (Python+GPU), pre-render доп. голосов + live-discovery `ResolveAsync` refresh (= owner GPU
 > first-run). Детали: второй мозг `Sessions/2026-06-28-handoff-f16-custom-voices.md`.
+> ⚙️ **Фаза 2a (per-line voice override) — отгружена (PR [#106](https://github.com/Gorgutc/LLPlayer_ru/pull/106), merge `acafd388`, v0.3.35, 2026-06-30).** Пользователь назначает **отдельный голос дубляжа на строку субтитра**
+> из per-row кнопки в боковой панели субтитров. Аддитивно/opt-in, default (нет назначений) → **byte-identical**
+> (сайдкар уже принимает per-line `voice_id` → Python не тронут). Inert per-cue `SubtitleData.AssignedVoiceId`
+> (`string?`, notifying, default null) по паттерну `Language`/`SpeakerId` → копируется в `Clone()` + на split-cue
+> обоих re-seg сайтов; `DubbingLine.VoiceId`; `DubbingRenderer.BuildLines` (→internal, trim→null) +
+> `ResolveVoiceId(line.VoiceId, _voiceId)` fallback к снапшоту `DefaultVoiceId`. UI: per-row voice-кнопка
+> (`AccountVoice`, `Button`+`ContextMenu` банка `VoiceBankResolver.ForConfig` + «Use default voice»; out-of-tree
+> меню достаёт VM через `Tag`=VM + `PlacementTarget`) + VM `DubVoiceMenuItems`/`CmdSubSetVoice` + подписка на
+> `DubbingConfig`. **Override interactive/in-memory only** — `SubtitleData` не сериализуется, а батч-дубляж читает
+> `.ru.srt` файл → override теряется при re-рендере из готового srt (документировано; companion-json persistence =
+> follow-up). Контракты dubbing/wpf-design/media-runtime аддитивно; config-data НЕ тронут (поле runtime).
+> **Решения владельца (AskUserQuestion ×3):** seam+per-row UI / кнопка в сайдбаре / interactive-only. Многоагентно:
+> верификация (8) → дизайн (4) → adversarial-ревью (11 агентов, 5 линз: **SHIP, 0 critical/important**;
+> byte-identical+dataflow 0 находок; 4 lifecycle/UI = false-positive/nit; 2 doc-fix). Гейты build `-warnaserror`
+> **0/0 ×3** + тесты **1063/1063** (+14) + verify.ps1 green; `.exe` launch 0.3.35 чистый. **Остаток:** per-speaker
+> (нужен F-03 диаризация), AAC-энкод, pre-render голосов, companion-json — GPU/follow-up. Детали: второй мозг
+> `Sessions/2026-06-30-handoff-f16-perline-voice.md`.
 Дубляж — Phase 0 (PR #35 влит, CosyVoice2 в `dub_sidecar/`). SE предлагает много TTS (Edge/Kokoro/OmniVoice
 voice-cloning). **Решение:** фазы 1-6 из [[2026-06-23-handoff-dubbing-mvp]] (мульти-голос, качество,
 diarization-aware). **Рассуждение:** крупно; держать как продолжение существующей фичи.
