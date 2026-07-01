@@ -370,3 +370,5 @@ tesseractmodels/
 DubEngine/
 dubmodels/
 *.ru.dub.*
+# F-16: per-line dub voice assignment companion files (video.ru.voices.json) — user runtime data beside media.
+*.ru.voices.json

@@ -55,6 +55,38 @@ public sealed class DubbingVoiceAssignmentMap : IDubbingVoiceAssignmentProvider
             });
     }
 
+    /// <summary>
+    /// Builds a map from persisted companion entries (F-16 persistence). Mirrors
+    /// <see cref="FromCurrentSubtitles"/> but keyed off already-computed SRT-millisecond windows instead of live
+    /// cues. Blank voice ids are skipped; the first entry per timing window wins.
+    /// </summary>
+    public static DubbingVoiceAssignmentMap FromEntries(
+        string? mediaPath,
+        IEnumerable<VoiceAssignmentEntry>? entries)
+    {
+        string? normalizedPath = NormalizePath(mediaPath);
+        if (normalizedPath is null || entries is null)
+            return Empty;
+
+        Dictionary<(long StartMs, long EndMs), string> byTiming = [];
+        foreach (VoiceAssignmentEntry entry in entries)
+        {
+            if (entry is null || string.IsNullOrWhiteSpace(entry.VoiceId))
+                continue;
+
+            byTiming.TryAdd((entry.StartMs, entry.EndMs), entry.VoiceId.Trim());
+        }
+
+        if (byTiming.Count == 0)
+            return Empty;
+
+        return new DubbingVoiceAssignmentMap(
+            new Dictionary<string, Dictionary<(long StartMs, long EndMs), string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                [normalizedPath] = byTiming
+            });
+    }
+
     public void Apply(string mediaPath, IReadOnlyList<SubtitleData> subtitles)
     {
         string? normalizedPath = NormalizePath(mediaPath);
@@ -72,9 +104,14 @@ public sealed class DubbingVoiceAssignmentMap : IDubbingVoiceAssignmentProvider
     }
 
     private static (long StartMs, long EndMs) TimingKey(SubtitleData sub)
-        => (ToSrtMilliseconds(sub.StartTime), ToSrtMilliseconds(sub.EndTime));
+        => (ToTimingMilliseconds(sub.StartTime), ToTimingMilliseconds(sub.EndTime));
 
-    private static long ToSrtMilliseconds(TimeSpan time)
+    /// <summary>
+    /// The SRT-millisecond timing key used to match a cue to a voice assignment (truncates to whole milliseconds,
+    /// clamped at 0). Shared with <see cref="DubbingVoiceAssignmentStore"/> so a saved and a reloaded cue key
+    /// identically.
+    /// </summary>
+    public static long ToTimingMilliseconds(TimeSpan time)
         => (long)Math.Max(0, time.TotalMilliseconds);
 
     private static string? NormalizePath(string? path)

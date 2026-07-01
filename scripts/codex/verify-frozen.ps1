@@ -147,6 +147,8 @@ try {
     Require-Text ".\docs\agent\dubbing-contract.md" "current-session / in-memory only" "Dubbing contract must keep per-line voice persistence boundary explicit."
     Require-Text ".\docs\agent\dubbing-contract.md" "DubbingVoiceAssignmentMap" "Dubbing contract must document per-line voice assignment map."
     Require-Text ".\docs\agent\dubbing-contract.md" "DefaultVoiceId.*normalized on set" "Dubbing contract must document DefaultVoiceId normalization."
+    Require-Text ".\docs\agent\dubbing-contract.md" "PersistPerLineVoices" "Dubbing contract must document opt-in per-line voice persistence."
+    Require-Text ".\docs\agent\config-data-contract.md" "video\.ru\.voices\.json" "Config-data contract must document the per-line voice companion file."
     Require-Text ".\docs\agent\dubbing\dubbing-roadmap.md" "Phase 2a progress" "Dubbing roadmap must include per-line voice phase 2a progress."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "verification_reviewer" "Subagent review matrix must require verification review."
     Require-Text ".\.codex\config.toml" "LLPlayer_ru" ".codex/config.toml must describe LLPlayer_ru."
@@ -196,6 +198,7 @@ try {
         "DubEngine/",
         "dubmodels/",
         "*.ru.dub.*",
+        "*.ru.voices.json",
         ".env*"
     )) {
         if ($gitignore -notmatch [regex]::Escape($pattern)) {
@@ -257,6 +260,7 @@ try {
         ":(glob)**/DubEngine/**" `
         ":(glob)**/dubmodels/**" `
         ":(glob)**/*.ru.dub.*" `
+        ":(glob)**/*.ru.voices.json" `
         ":(glob)**/bin/**" `
         ":(glob)**/obj/**" `
         ":(glob)**/publish/**")

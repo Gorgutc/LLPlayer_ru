@@ -56,6 +56,10 @@ try {
     if ($publishedDubOutputs.Count -gt 0) {
         throw "Publish smoke must not include rendered dub output(s): $($publishedDubOutputs.FullName -join ', ')."
     }
+    $publishedVoiceAssignments = @(Get-ChildItem $appPublish -Filter "*.ru.voices.json" -Recurse -ErrorAction SilentlyContinue)
+    if ($publishedVoiceAssignments.Count -gt 0) {
+        throw "Publish smoke must not include per-line voice assignment file(s): $($publishedVoiceAssignments.FullName -join ', ')."
+    }
 
     $pathsToRemove = @(
         "runtimes\noavx\linux-x64",

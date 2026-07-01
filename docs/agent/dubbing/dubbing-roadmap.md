@@ -61,8 +61,15 @@ non-Russian target languages; bundling non-commercial models.
 > `SubtitleData.AssignedVoiceId`; `DubbingRenderer.BuildLines` sends a per-line `voice_id` with fallback to
 > `DubbingConfig.DefaultVoiceId`. Batch dubbing now receives a current-session `DubbingVoiceAssignmentMap`
 > snapshot from the open local media, so matching jobs apply row voices to both fresh ASR/translation output
-> and existing `.ru.srt` render-only output. No new persisted config/SRT format; after restart or timing/path
-> mismatch, render falls back to the default voice.
+> and existing `.ru.srt` render-only output. After restart or timing/path mismatch, render falls back to the
+> default voice — unless the opt-in persistence below is on.
+>
+> **Phase 2a persistence (F-16, opt-in, since 0.3.36):** the default-OFF toggle `Subtitles.PersistPerLineVoices`
+> mirrors per-line overrides to a `video.ru.voices.json` companion file (pure `DubbingVoiceAssignmentStore`:
+> path builder + tolerant JSON + atomic save + `LoadMap`; the name avoids the `.ru.dub.*` dub-detection glob).
+> Interactive edits save it, opening the media restores it onto the cues (`Subtitles.Load`/`EnableASR`,
+> fill-empty), and batch dubbing layers a `DiskVoiceAssignmentProvider` under the current-session snapshot so any
+> file's saved voices apply. Default OFF → byte-identical; the file is git-ignored user runtime data.
 
 ## This session's sprint (Phase 0)
 

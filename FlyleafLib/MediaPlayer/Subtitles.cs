@@ -1,5 +1,6 @@
 ﻿using FlyleafLib.MediaFramework.MediaContext;
 using FlyleafLib.MediaFramework.MediaStream;
+using FlyleafLib.MediaPlayer.Dubbing;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -654,6 +655,51 @@ public class Subtitle : NotifyPropertyChanged
                 _player.SubtitlesOCR.Do(_subIndex, _player.SubtitlesManager[_subIndex].Subs.ToList(), curTime);
             }
         }
+
+        RestorePersistedVoiceAssignments();
+    }
+
+    // F-16: opt-in restore of persisted per-line dub voice overrides (video.ru.voices.json) onto the just-loaded
+    // cues, so a user's sidebar voice choices reappear after an app restart / dub re-render. Best-effort, gated by
+    // Subtitles.PersistPerLineVoices, and fill-empty (a value set this session is never clobbered — Apply skips cues
+    // that already have an override). Byte-identical when the toggle is off or no companion file exists.
+    private void RestorePersistedVoiceAssignments()
+    {
+        if (!Config.Subtitles.PersistPerLineVoices)
+            return;
+
+        string mediaPath = ResolveLocalMediaPath();
+        if (mediaPath is null)
+            return;
+
+        List<SubtitleData> subs = _player.SubtitlesManager[_subIndex].SnapshotSubs();
+        if (subs.Count == 0)
+            return;
+
+        DubbingVoiceAssignmentStore.LoadMap(mediaPath).Apply(mediaPath, subs);
+    }
+
+    // The full path of the currently open LOCAL media (video), or null for web/streams. The per-line voice
+    // companion is keyed to this path (mirrors BatchSubtitlesDialogVM.GetCurrentLocalMediaPath / DubbedAudioAutoLoader).
+    private string ResolveLocalMediaPath()
+    {
+        string[] candidates =
+        [
+            _player.Playlist.Selected?.Url,
+            _player.Playlist.Selected?.DirectUrl,
+            _player.Playlist.Url,
+        ];
+
+        foreach (string candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate) || !File.Exists(candidate))
+                continue;
+
+            try { return Path.GetFullPath(candidate); }
+            catch { return candidate; }
+        }
+
+        return null;
     }
 
     internal void Enable()
@@ -708,6 +754,11 @@ public class Subtitle : NotifyPropertyChanged
                 {
                     isDone = _player.SubtitlesASR.Execute(_subIndex, url, streamIndex, type, curTime);
                 }
+
+                // F-16: restore persisted per-line voices onto the freshly transcribed cues too (same gated,
+                // fill-empty, best-effort restore as the loaded-subtitle path), so re-ASR of a file the user
+                // previously voiced re-applies those choices.
+                RestorePersistedVoiceAssignments();
 
                 if (!isDone)
                 {
