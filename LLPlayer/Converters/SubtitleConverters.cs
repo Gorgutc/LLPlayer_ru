@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Media.Imaging;
+using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Services;
 
@@ -262,5 +263,35 @@ public class StringHasValueConverter : IValueConverter
         => value is string s && !string.IsNullOrWhiteSpace(s);
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>Formats a cue's <see cref="Language"/> as the lower-case ISO 639-1 badge code ("" when the cue has
+/// no resolvable language). Thin wrapper over the unit-tested <see cref="LanguageBadge"/> helper.</summary>
+public class SubLanguageBadgeConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => LanguageBadge.ToBadgeCode(value as Language);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
+/// <summary>Visibility of the sidebar language badge. values[0] = the cue's Language, values[1] = the
+/// ASRPerSegmentLanguage config gate (tolerates DependencyProperty.UnsetValue while the tree builds → hidden).
+/// The gate must NOT be read from config inside the converter: binding it keeps the badges live when the
+/// Settings toggle flips.</summary>
+public class SubLanguageBadgeVisibilityConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length != 2)
+            return Visibility.Collapsed;
+
+        bool gate = values[1] is bool b && b;
+        return LanguageBadge.ShouldShow(gate, values[0] as Language) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }

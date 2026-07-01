@@ -124,7 +124,7 @@ public class WhisperLanguage : IEquatable<WhisperLanguage>
         {
             Code = kv.Key,
             EnglishName = UpperFirstOfWords(kv.Value)
-        }).OrderBy(l => l.EnglishName).ToList();
+        }).OrderBy(l => l.EnglishName, StringComparer.InvariantCulture).ToList(); // pinned: host-culture collation must not reorder the picker (e.g. cs-CZ "ch"); mirrors Language.AllLanguages
     }
 
     private static string UpperFirstOfWords(string input)

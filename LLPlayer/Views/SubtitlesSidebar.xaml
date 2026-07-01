@@ -641,6 +641,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <Button
@@ -740,6 +741,32 @@
                                 </ContextMenu>
                             </Button.ContextMenu>
                         </Button>
+
+                        <!-- Per-cue ASR language badge (T-10 follow-up). Visible only when per-segment language
+                             detection is ON and the cue carries a resolvable code: ASR stamps Language on every
+                             cue even with the toggle off (mirroring the pinned transcript language), so the gate
+                             is what keeps the default UI byte-identical. Loaded/translated cues never set it. -->
+                        <TextBlock
+                            x:Name="SubLanguageBadge"
+                            Grid.Column="4"
+                            FlowDirection="LeftToRight"
+                            VerticalAlignment="Center"
+                            TextAlignment="Center"
+                            Margin="4 0 2 0"
+                            FontSize="10"
+                            MinWidth="18"
+                            Foreground="{DynamicResource MaterialDesignBody}"
+                            Opacity="0.6"
+                            ToolTipService.InitialShowDelay="200"
+                            ToolTip="{Binding Language.DisplayName}"
+                            Text="{Binding Language, Converter={StaticResource SubLanguageBadgeConv}, Mode=OneWay}">
+                            <TextBlock.Visibility>
+                                <MultiBinding Converter="{StaticResource SubLanguageBadgeVisibilityConv}" Mode="OneWay">
+                                    <Binding Path="Language" />
+                                    <Binding ElementName="SubtitleListBox" Path="DataContext.FL.PlayerConfig.Subtitles.ASRPerSegmentLanguage" />
+                                </MultiBinding>
+                            </TextBlock.Visibility>
+                        </TextBlock>
                     </Grid>
                     </Border>
                 </DataTemplate>
