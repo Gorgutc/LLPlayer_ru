@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using AwesomeAssertions;
 using FlyleafLib.MediaPlayer.Batch;
+using FlyleafLib.MediaPlayer.Dubbing;
 using FlyleafLib.MediaPlayer.Translation;
 
 namespace FlyleafLib.MediaPlayer;
@@ -341,11 +342,95 @@ public class BatchSubtitleProcessorTests
         }
     }
 
-    private static SubtitleData CreateSub(string text) => new()
+    [Fact]
+    public async Task ProcessAsync_DubbingFreshResult_AppliesCurrentSubtitleVoiceAssignments()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string video = Path.Combine(tempDir, "video.mkv");
+            File.WriteAllText(video, "");
+
+            var asr = new FakeAsrTranscriber(_ =>
+                Task.FromResult(new BatchAsrResult(
+                    [CreateSub("hello")],
+                    Language.Russian)));
+            var dubber = new RecordingDubbingRenderer();
+            IDubbingVoiceAssignmentProvider assignments = DubbingVoiceAssignmentMap.FromCurrentSubtitles(
+                video,
+                [CreateSub("hello", "voice-a")]);
+
+            var processor = new BatchSubtitleProcessor(
+                asr,
+                new FakeBatchTranslator(),
+                new MemorySubtitleWriter(),
+                new BatchSubtitleOptions { GenerateDubbing = true, OverwriteExisting = true },
+                progress: null,
+                dubber,
+                assignments);
+
+            await processor.ProcessAsync([new BatchSubtitleJob(video)], CancellationToken.None);
+
+            dubber.Rendered.Should().ContainSingle();
+            dubber.Rendered[0].Subtitles.Should().ContainSingle()
+                .Which.AssignedVoiceId.Should().Be("voice-a");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ProcessAsync_DubbingExistingSrt_AppliesCurrentSubtitleVoiceAssignments()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string video = Path.Combine(tempDir, "video.mkv");
+            File.WriteAllText(video, "");
+            File.WriteAllText(
+                SubtitleOutputPathBuilder.BuildRussianSrtPath(video),
+                """
+                1
+                00:00:00,000 --> 00:00:01,000
+                привет
+                """);
+
+            var dubber = new RecordingDubbingRenderer();
+            IDubbingVoiceAssignmentProvider assignments = DubbingVoiceAssignmentMap.FromCurrentSubtitles(
+                video,
+                [CreateSub("hello", "voice-a")]);
+
+            var processor = new BatchSubtitleProcessor(
+                new FakeAsrTranscriber(_ => throw new InvalidOperationException("ASR should not run")),
+                new FakeBatchTranslator(),
+                new MemorySubtitleWriter(),
+                new BatchSubtitleOptions { GenerateDubbing = true, OverwriteExisting = false },
+                progress: null,
+                dubber,
+                assignments);
+
+            await processor.ProcessAsync([new BatchSubtitleJob(video)], CancellationToken.None);
+
+            dubber.Rendered.Should().ContainSingle();
+            dubber.Rendered[0].Subtitles.Should().ContainSingle()
+                .Which.AssignedVoiceId.Should().Be("voice-a");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    private static SubtitleData CreateSub(string text, string? voiceId = null) => new()
     {
         Text = text,
         StartTime = TimeSpan.Zero,
-        EndTime = TimeSpan.FromSeconds(1)
+        EndTime = TimeSpan.FromSeconds(1),
+        AssignedVoiceId = voiceId,
     };
 
     private sealed class FakeAsrTranscriber(Func<string, Task<BatchAsrResult>> transcribe)
@@ -396,5 +481,23 @@ public class BatchSubtitleProcessorTests
             Writes.Add((outputPath, subtitles.Select(s => s.DisplayText ?? string.Empty).ToArray()));
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class RecordingDubbingRenderer : IDubbingRenderer
+    {
+        public List<(string MediaPath, string OutputPath, List<SubtitleData> Subtitles)> Rendered { get; } = [];
+
+        public Task RenderAsync(
+            IReadOnlyList<SubtitleData> translatedSubtitles,
+            string mediaPath,
+            string outputPath,
+            IProgress<DubbingProgress>? progress,
+            CancellationToken token)
+        {
+            Rendered.Add((mediaPath, outputPath, translatedSubtitles.Select(s => s.Clone()).ToList()));
+            return Task.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

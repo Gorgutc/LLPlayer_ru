@@ -118,7 +118,7 @@
                         <TreeViewItem
                             Header="Dubbing"
                             Tag="SettingsSubtitlesDubbing"
-                            Uid="AI dubbing dub TTS voice custom voice IDs ducking atempo FLAC output format"
+                            Uid="AI dubbing dub TTS voice custom voice IDs per-line line row sidebar voice override ducking atempo FLAC output format"
                             FontSize="14"
                             FontWeight="Normal" />
                     </TreeViewItem>
