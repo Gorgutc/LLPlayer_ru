@@ -137,8 +137,20 @@ user explicitly asks to change that product decision.
   `IDubbingVoiceAssignmentProvider`; when a batch job's media path and cue millisecond timings match, the
   provider applies them to both fresh ASR/translation subtitles and existing `.ru.srt` subtitles just before
   render. After restart, with no matching open media, or with mismatched timings, render falls back to
-  `DefaultVoiceId` for every line. No new persisted config. Per-speaker (diarization-driven) auto-assignment
-  remains phase 2/3 (needs F-03).
+  `DefaultVoiceId` for every line (unless the opt-in persistence below restored them). Per-speaker
+  (diarization-driven) auto-assignment remains phase 2/3 (needs F-03).
+- **Phase 2a persistence (opt-in, F-16, since 0.3.37):** the default-OFF toggle `Subtitles.PersistPerLineVoices`
+  mirrors per-line overrides to a companion JSON file beside the media — `video.ru.voices.json` (deliberately NOT
+  a `.ru.dub.*` name, so the dub-detection glob `{name}.ru.dub.*` does not mistake it for a rendered dub). Pure
+  logic lives in `DubbingVoiceAssignmentStore` (path builder + tolerant JSON round-trip + atomic temp-file save +
+  `LoadMap`). Assigning or clearing a sidebar voice writes the file atomically (`SaveAtomic`; clearing every
+  override deletes it); opening the media restores the saved voices onto the loaded/ASR cues (`Subtitles.Load` /
+  `EnableASR`, fill-empty so a fresh in-session edit still wins); and a batch dub layers a
+  `DiskVoiceAssignmentProvider` UNDER the current-session snapshot (`CompositeVoiceAssignmentProvider`) so any
+  batch file with a companion dubs with its saved voices, not just the open one. Matching uses the same
+  SRT-millisecond `[start,end]` key, so a re-segmented/edited cue that no longer matches is silently skipped; it
+  never throws on a missing/corrupt/locked file. Default OFF → byte-identical: nothing is written, restored, or
+  read. The companion file is user runtime data (git-ignored and rejected from release packages, like `*.ru.dub.*`).
 - **Hybrid:** by default, diarize speakers and **clone each speaker's timbre** into Russian
   (CosyVoice2 zero-shot from a per-speaker reference clip), preserving gender; **any speaker can be
   overridden** with a preset bank voice. Gender uses a license-free F0 heuristic + manual override.

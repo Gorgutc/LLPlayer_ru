@@ -81,6 +81,10 @@ public static class BatchSubtitleConfigSnapshot
             SubtitleMaxCueDurationSec = source.SubtitleMaxCueDurationSec,
             SubtitleMinCueDurationSec = source.SubtitleMinCueDurationSec,
             FixAllCaps = source.FixAllCaps,
+            // F-16 persistence flag: a scalar on SubtitlesConfig, so the reflection-completeness guard requires it
+            // here. The batch path does not read it directly (the dialog composes the disk voice provider), but it
+            // is copied for snapshot parity per the scalar-completeness guard.
+            PersistPerLineVoices = source.PersistPerLineVoices,
             TesseractOcrRegions = new Dictionary<string, string>(source.TesseractOcrRegions),
             MsOcrRegions = new Dictionary<string, string>(source.MsOcrRegions),
             TranslateServiceType = source.TranslateServiceType,

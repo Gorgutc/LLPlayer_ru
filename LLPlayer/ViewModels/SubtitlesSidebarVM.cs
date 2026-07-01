@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.IO;
 using System.Windows.Data;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
@@ -199,7 +200,51 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
 
         assignment.Sub.AssignedVoiceId =
             string.IsNullOrWhiteSpace(assignment.VoiceId) ? null : assignment.VoiceId.Trim();
+
+        PersistVoiceAssignments();
     });
+
+    // F-16 persistence (opt-in): mirror per-line voice edits to the companion file (video.ru.voices.json) beside
+    // the open local media so they survive a restart / dub re-render. Best-effort; the store swallows I/O errors and
+    // writes nothing (deletes any stale file) when no assignments remain. No-op when the toggle is off.
+    private void PersistVoiceAssignments()
+    {
+        if (!FL.PlayerConfig.Subtitles.PersistPerLineVoices)
+            return;
+
+        string? mediaPath = GetCurrentLocalMediaPath();
+        if (mediaPath is null)
+            return;
+
+        List<SubtitleData> all = [];
+        for (int i = 0; i < 2; i++)
+            all.AddRange(FL.Player.SubtitlesManager[i].SnapshotSubs());
+
+        DubbingVoiceAssignmentStore.SaveAtomic(mediaPath, all);
+    }
+
+    // The full path of the currently open LOCAL media (video), or null for web/streams (mirrors
+    // BatchSubtitlesDialogVM.GetCurrentLocalMediaPath).
+    private string? GetCurrentLocalMediaPath()
+    {
+        string?[] candidates =
+        [
+            FL.Player.Playlist.Selected?.Url,
+            FL.Player.Playlist.Selected?.DirectUrl,
+            FL.Player.Playlist.Url,
+        ];
+
+        foreach (string? candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate) || !File.Exists(candidate))
+                continue;
+
+            try { return Path.GetFullPath(candidate); }
+            catch { return candidate; }
+        }
+
+        return null;
+    }
 
     public DelegateCommand CmdClearSearch => field ??= new(() =>
     {

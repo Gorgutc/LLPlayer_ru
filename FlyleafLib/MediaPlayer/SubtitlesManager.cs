@@ -205,6 +205,20 @@ public class SubManager : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// A thread-safe copy of the current cues. Enumerating <see cref="Subs"/> directly off the owning code path is
+    /// unsafe: it is mutated on background ASR/OCR threads under <c>_subsLocker</c> (the same lock WPF uses via
+    /// <c>EnableCollectionSynchronization</c>), so take the copy under that lock. The <see cref="SubtitleData"/>
+    /// references are shared (not cloned), so a caller that mutates a returned cue mutates the live cue.
+    /// </summary>
+    public List<SubtitleData> SnapshotSubs()
+    {
+        lock (_subsLocker)
+        {
+            return Subs.ToList();
+        }
+    }
+
     public SubtitleData? GetCurrent()
     {
         lock (_subsLocker)

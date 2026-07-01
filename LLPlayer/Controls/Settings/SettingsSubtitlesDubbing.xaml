@@ -141,6 +141,21 @@
                     </StackPanel>
                 </StackPanel>
             </GroupBox>
+
+            <GroupBox Header="Persistence">
+                <StackPanel>
+                    <CheckBox
+                        Content="Persist per-line voices"
+                        AutomationProperties.Name="Persist per-line voices"
+                        IsChecked="{Binding FL.PlayerConfig.Subtitles.PersistPerLineVoices}"
+                        ToolTip="Save per-line voice choices to a companion file (video.ru.voices.json) beside the media so they survive an app restart and a dub re-render. Off by default; when off nothing is written or restored." />
+                    <TextBlock
+                        Margin="0 8 0 0"
+                        TextWrapping="Wrap"
+                        Foreground="{DynamicResource MaterialDesignBodyLight}"
+                        Text="When on, assigning a sidebar per-line voice writes a small JSON file next to the video; reopening the video restores those choices, and a batch dub applies them (for any file that has one). Clearing all overrides removes the file." />
+                </StackPanel>
+            </GroupBox>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

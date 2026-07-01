@@ -1483,6 +1483,15 @@ public class Config : NotifyPropertyChanged
         /// ASR path and batch generation only (NOT to loaded/authored subtitles). Additive/absent-defaulting.
         /// </summary>
         public bool FixAllCaps { get; set => Set(ref field, value); } = true;
+
+        /// <summary>
+        /// F-16: persist per-line dub voice overrides (<see cref="SubtitleData.AssignedVoiceId"/>) to a companion
+        /// file beside the media (video.ru.voices.json) so a user's sidebar voice choices survive an app restart and
+        /// a dub re-render. Opt-in, default OFF → byte-identical: with it off nothing is written and nothing is
+        /// restored. When on, an interactive assignment saves the companion, opening the media restores it into the
+        /// sidebar, and a batch dub applies the saved voices. Only ever touches the AI-dub voice mapping.
+        /// </summary>
+        public bool PersistPerLineVoices { get; set => Set(ref field, value); } = false;
         #endregion
 
         #region OCR

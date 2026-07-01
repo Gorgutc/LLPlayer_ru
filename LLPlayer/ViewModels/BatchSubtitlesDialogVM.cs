@@ -842,24 +842,39 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
     private IDubbingVoiceAssignmentProvider? CreateCurrentDubbingVoiceAssignments()
     {
-        string? mediaPath = GetCurrentLocalMediaPath();
-        if (mediaPath is null)
-            return null;
+        List<IDubbingVoiceAssignmentProvider> providers = [];
 
-        List<SubtitleData> assigned = [];
-        for (int i = 0; i < 2; i++)
+        // Current-session snapshot: the live sidebar per-line voices for the open local media (highest priority).
+        string? mediaPath = GetCurrentLocalMediaPath();
+        if (mediaPath is not null)
         {
-            foreach (SubtitleData sub in FL.Player.SubtitlesManager[i].Subs)
+            List<SubtitleData> assigned = [];
+            for (int i = 0; i < 2; i++)
             {
-                if (!string.IsNullOrWhiteSpace(sub.AssignedVoiceId))
-                    assigned.Add(sub.Clone());
+                foreach (SubtitleData sub in FL.Player.SubtitlesManager[i].SnapshotSubs())
+                {
+                    if (!string.IsNullOrWhiteSpace(sub.AssignedVoiceId))
+                        assigned.Add(sub.Clone());
+                }
             }
+
+            if (assigned.Count > 0)
+                providers.Add(DubbingVoiceAssignmentMap.FromCurrentSubtitles(mediaPath, assigned));
         }
 
-        if (assigned.Count == 0)
-            return null;
+        // F-16 persistence (opt-in): also apply per-line voices saved on disk (video.ru.voices.json) for EACH batch
+        // file, so a "translate now, dub later, restart" run still uses the user's saved voices — for any file in the
+        // batch, not just the currently open one. Current-session choices (added first) win; the disk provider fills
+        // the rest.
+        if (FL.PlayerConfig.Subtitles.PersistPerLineVoices)
+            providers.Add(new DiskVoiceAssignmentProvider());
 
-        return DubbingVoiceAssignmentMap.FromCurrentSubtitles(mediaPath, assigned);
+        return providers.Count switch
+        {
+            0 => null,
+            1 => providers[0],
+            _ => new CompositeVoiceAssignmentProvider([.. providers])
+        };
     }
 
     private string? GetCurrentLocalMediaPath()
