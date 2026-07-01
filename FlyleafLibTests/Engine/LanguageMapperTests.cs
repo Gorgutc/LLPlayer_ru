@@ -136,13 +136,34 @@ public class LanguageMapperTests
     [Fact]
     public void GetWhisperLanguages_IsSortedByEnglishName()
     {
-        // Production sorts with LINQ OrderBy's Comparer<string>.Default; BeInAscendingOrder also uses
-        // Comparer<string>.Default, so both share the same ambient (current-culture) comparer and agree on
-        // any host culture. The names are ASCII title-case, so the order is in practice identical to
-        // ordinal/invariant regardless of locale. (NOTE: production GetWhisperLanguages does not pin
-        // StringComparer.InvariantCulture the way Language.AllLanguages does — harmless for ASCII names,
-        // noted as a possible production follow-up; out of scope for this tests-only change.)
-        WhisperLanguage.GetWhisperLanguages().Should().BeInAscendingOrder(l => l.EnglishName);
+        // Production pins StringComparer.InvariantCulture (mirroring Language.AllLanguages), so the order is
+        // deterministic on any host culture; assert with the same explicit comparer.
+        WhisperLanguage.GetWhisperLanguages()
+            .Should().BeInAscendingOrder(l => l.EnglishName, StringComparer.InvariantCulture);
+    }
+
+    [Fact]
+    public void GetWhisperLanguages_OrderIsCultureInvariant_UnderCzechCulture()
+    {
+        // Culture guard for the pinned comparer: Czech collates "ch" as a single letter AFTER "h", so an
+        // ambient-culture OrderBy under cs-CZ moves "Chinese" past every H-name (Haitian Creole … Hungarian)
+        // — proven RED without the StringComparer.InvariantCulture pin. With the pin the order is identical
+        // on every host culture, so these asserts are stable regardless of the ICU version (T-03 lesson:
+        // only assert invariant-stable expectations).
+        CultureInfo original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("cs-CZ");
+
+            var names = WhisperLanguage.GetWhisperLanguages().Select(l => l.EnglishName).ToList();
+
+            names.Should().Equal(names.OrderBy(n => n, StringComparer.InvariantCulture));
+            names.IndexOf("Chinese").Should().BeLessThan(names.IndexOf("Croatian"));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
     }
 
     [Theory]

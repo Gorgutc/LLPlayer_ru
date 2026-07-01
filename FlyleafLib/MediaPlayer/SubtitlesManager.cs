@@ -1102,8 +1102,10 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
     /// Source language of this cue as reported by ASR (T-10), or null when unknown / not applicable (loaded or
     /// translated subtitles do not set it). Inert metadata — it does not change rendering by itself. With the
     /// per-segment ASR toggle off it mirrors the pinned transcript language; on, it is the cue's own detected language.
+    /// Notifies (like <see cref="AssignedVoiceId"/>) so the sidebar language badge stays live if a future writer
+    /// mutates it post-Add; today it is only set in object initializers before Add.
     /// </summary>
-    public Language? Language { get; set; }
+    public Language? Language { get; set => Set(ref field, value); }
 
     /// <summary>
     /// Speaker label for this cue (F-03 diarization prep), or null when unknown / not applicable. Inert metadata —

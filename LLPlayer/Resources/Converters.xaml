@@ -55,5 +55,7 @@
     <conv:SubBitmapImageSourceConverter x:Key="SubBitmapImageSourceConv"/>
     <conv:SubIndexToDisplayStringConverter x:Key="SubIndexToDisplayStringConv"/>
     <conv:SubVoiceAssignmentConverter x:Key="SubVoiceAssignmentConv"/>
+    <conv:SubLanguageBadgeConverter x:Key="SubLanguageBadgeConv"/>
+    <conv:SubLanguageBadgeVisibilityConverter x:Key="SubLanguageBadgeVisibilityConv"/>
 
 </ResourceDictionary>
