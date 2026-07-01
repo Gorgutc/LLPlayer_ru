@@ -64,7 +64,7 @@ non-Russian target languages; bundling non-commercial models.
 > and existing `.ru.srt` render-only output. After restart or timing/path mismatch, render falls back to the
 > default voice — unless the opt-in persistence below is on.
 >
-> **Phase 2a persistence (F-16, opt-in, since 0.3.36):** the default-OFF toggle `Subtitles.PersistPerLineVoices`
+> **Phase 2a persistence (F-16, opt-in, since 0.3.37):** the default-OFF toggle `Subtitles.PersistPerLineVoices`
 > mirrors per-line overrides to a `video.ru.voices.json` companion file (pure `DubbingVoiceAssignmentStore`:
 > path builder + tolerant JSON + atomic save + `LoadMap`; the name avoids the `.ru.dub.*` dub-detection glob).
 > Interactive edits save it, opening the media restores it onto the cues (`Subtitles.Load`/`EnableASR`,

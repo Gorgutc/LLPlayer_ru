@@ -139,7 +139,7 @@ user explicitly asks to change that product decision.
   render. After restart, with no matching open media, or with mismatched timings, render falls back to
   `DefaultVoiceId` for every line (unless the opt-in persistence below restored them). Per-speaker
   (diarization-driven) auto-assignment remains phase 2/3 (needs F-03).
-- **Phase 2a persistence (opt-in, F-16, since 0.3.36):** the default-OFF toggle `Subtitles.PersistPerLineVoices`
+- **Phase 2a persistence (opt-in, F-16, since 0.3.37):** the default-OFF toggle `Subtitles.PersistPerLineVoices`
   mirrors per-line overrides to a companion JSON file beside the media — `video.ru.voices.json` (deliberately NOT
   a `.ru.dub.*` name, so the dub-detection glob `{name}.ru.dub.*` does not mistake it for a rendered dub). Pure
   logic lives in `DubbingVoiceAssignmentStore` (path builder + tolerant JSON round-trip + atomic temp-file save +

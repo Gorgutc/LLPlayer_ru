@@ -1,4 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Text.Json.Serialization;
 using AwesomeAssertions;
+using FlyleafLib.MediaPlayer.Dubbing;
 using FlyleafLib.MediaPlayer.Translation;
 
 namespace FlyleafLib.MediaPlayer.Batch;
@@ -174,5 +179,124 @@ public class BatchSubtitleConfigSnapshotTests
 
         snapshot.Audio.Languages.Clear();
         config.Audio.Languages.Select(l => l.ISO6391).Should().Equal("ja");
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldSnapshotUserDubbingConfig()
+    {
+        // F-05-gap regression (RED-without-fix): before the fix the batch snapshot never copied the nested
+        // DubbingConfig, so a batch/headless dub built off the snapshot silently used a fresh default
+        // (ru-preset-1, empty custom ids, DuckingPercent 15, atempo 0.9–1.15). Dropping CloneDubbingConfig fails
+        // every assertion below.
+        Config config = NewTestConfig();
+        DubbingConfig live = config.Subtitles.DubbingConfig;
+        live.TtsServiceType = TtsServiceType.ElevenLabs;
+        live.DefaultVoiceId = "ru-preset-2";
+        live.CustomVoiceIds = ["studio-anna", "studio-boris"];
+        live.DuckingPercent = 40;
+        live.AtempoMin = 0.8;
+        live.AtempoMax = 1.3;
+        // Deliberately NON-default (default is "flac") so this assertion actually guards the OutputFormat copy —
+        // the config setter stores the string verbatim (the FLAC-only constraint is a picker/renderer concern).
+        live.OutputFormat = "wav";
+        live.StressNormalization = false;
+        live.Model = "cosyvoice2-custom";
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config.Subtitles);
+
+        snapshot.DubbingConfig.Should().NotBeSameAs(live);
+        snapshot.DubbingConfig.TtsServiceType.Should().Be(TtsServiceType.ElevenLabs);
+        snapshot.DubbingConfig.DefaultVoiceId.Should().Be("ru-preset-2");
+        snapshot.DubbingConfig.CustomVoiceIds.Should().Equal("studio-anna", "studio-boris");
+        snapshot.DubbingConfig.DuckingPercent.Should().Be(40);
+        snapshot.DubbingConfig.AtempoMin.Should().Be(0.8);
+        snapshot.DubbingConfig.AtempoMax.Should().Be(1.3);
+        snapshot.DubbingConfig.OutputFormat.Should().Be("wav");
+        snapshot.DubbingConfig.StressNormalization.Should().BeFalse();
+        snapshot.DubbingConfig.Model.Should().Be("cosyvoice2-custom");
+
+        // The CustomVoiceIds list is an independent deep copy — a later live-config edit must not bleed into it.
+        snapshot.DubbingConfig.CustomVoiceIds.Should().NotBeSameAs(live.CustomVoiceIds);
+        live.CustomVoiceIds = ["studio-anna", "studio-boris", "studio-clara"];
+        snapshot.DubbingConfig.CustomVoiceIds.Should().Equal("studio-anna", "studio-boris");
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldCopyEveryWritableDubbingConfigSetting()
+    {
+        // Completeness guard for the nested DubbingConfig (F-05-gap). The SubtitlesConfig scalar reflection guard
+        // (BatchSubtitleTranslatorTests.CreateSubtitlesConfig_ShouldCopyEveryScalarSubtitlesConfigSetting)
+        // explicitly SKIPS nested config objects, so without a dedicated guard a forgotten DubbingConfig field
+        // would silently fall back to a default in the snapshot. Enumerates every public, settable, persisted
+        // property on DubbingConfig, mutates it away from its default on the source, snapshots, then asserts the
+        // snapshot carried the value over. If you add a new DubbingConfig setting, copy it in CloneDubbingConfig.
+        Config config = NewTestConfig();
+
+        Type type = typeof(DubbingConfig);
+        DubbingConfig source = config.Subtitles.DubbingConfig;
+
+        List<PropertyInfo> props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.DeclaringType == type)
+            .Where(p => p is { CanRead: true, CanWrite: true } && p.SetMethod!.IsPublic)
+            .Where(p => p.GetCustomAttribute<JsonIgnoreAttribute>() == null)
+            .ToList();
+
+        props.Should().NotBeEmpty("the guard must actually enumerate DubbingConfig settings");
+
+        foreach (PropertyInfo prop in props)
+        {
+            bool isList = prop.PropertyType == typeof(List<string>);
+            (isList || IsScalarSettingType(prop.PropertyType)).Should().BeTrue(
+                $"the DubbingConfig guard must know how to probe DubbingConfig.{prop.Name} (type {prop.PropertyType}) — extend it");
+
+            object? mutated = isList
+                ? new List<string> { "probe-voice-a", "probe-voice-b" }
+                : NextDistinctValue(prop.PropertyType, prop.GetValue(source));
+            prop.SetValue(source, mutated);
+        }
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config.Subtitles);
+
+        foreach (PropertyInfo prop in props)
+        {
+            object? expected = prop.GetValue(source);
+            object? actual = prop.GetValue(snapshot.DubbingConfig);
+
+            if (prop.PropertyType == typeof(List<string>))
+                ((List<string>)actual!).Should().Equal(
+                    (List<string>)expected!, $"the batch snapshot must copy DubbingConfig.{prop.Name}");
+            else
+                actual.Should().Be(expected, $"the batch snapshot must copy DubbingConfig.{prop.Name}");
+        }
+    }
+
+    private static bool IsScalarSettingType(Type t)
+    {
+        Type u = Nullable.GetUnderlyingType(t) ?? t;
+        return u.IsEnum
+            || u == typeof(bool) || u == typeof(int) || u == typeof(long)
+            || u == typeof(double) || u == typeof(float) || u == typeof(string);
+    }
+
+    private static object? NextDistinctValue(Type t, object? current)
+    {
+        Type u = Nullable.GetUnderlyingType(t) ?? t;
+
+        if (u.IsEnum)
+        {
+            foreach (object v in Enum.GetValues(u))
+                if (!v.Equals(current))
+                    return v;
+            return current;
+        }
+
+        if (u == typeof(bool)) return !(bool)(current ?? false);
+        if (u == typeof(int)) return (int)(current ?? 0) + 1;
+        if (u == typeof(long)) return (long)(current ?? 0L) + 1L;
+        if (u == typeof(double)) return (double)(current ?? 0d) + 1d;
+        if (u == typeof(float)) return (float)(current ?? 0f) + 1f;
+        if (u == typeof(string)) return (current as string ?? "") + "_probe";
+
+        return current;
     }
 }
