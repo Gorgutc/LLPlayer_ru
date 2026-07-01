@@ -99,6 +99,16 @@ public static class BatchSubtitleConfigSnapshot
         snapshot.FasterWhisperConfig = CloneFasterWhisperConfig(source.FasterWhisperConfig);
         snapshot.TranslateChatConfig = CloneTranslateChatConfig(source.TranslateChatConfig);
         snapshot.TranslateServiceSettings = CloneTranslateServiceSettings(source.TranslateServiceSettings);
+        // F-05-gap: deep-copy the nested AI-dubbing config for snapshot self-consistency, so any headless/
+        // snapshot-based dub would inherit the user's Settings ▸ Subtitles ▸ Dubbing selection (voice, custom voice
+        // ids, ducking, atempo range, format) instead of a fresh default DubbingConfig. No consumer reads the
+        // snapshot's DubbingConfig today (the live batch dub in BatchSubtitlesDialogVM builds its DubbingRenderer
+        // from PlayerConfig directly, not this snapshot), so this is completeness/future-proofing with no runtime
+        // change — but like the other nested configs it is invisible to the SubtitlesConfig scalar
+        // reflection-completeness guard (which skips nested objects), so leaving it out would silently leave the
+        // snapshot's copy at the default. Pinned by the DubbingConfig guard + focused regression in
+        // BatchSubtitleConfigSnapshotTests.
+        snapshot.DubbingConfig = CloneDubbingConfig(source.DubbingConfig);
         snapshot.TranslateTargetLanguage = TargetLanguage.Russian;
 
         // Per-slot subtitle language preferences + unknown-source fallbacks (primary/secondary). These were dropped
@@ -183,6 +193,29 @@ public static class BatchSubtitleConfigSnapshot
             NoContext = source.NoContext,
             AudioContextSize = source.AudioContextSize,
             Prompt = source.Prompt
+        };
+    }
+
+    private static DubbingConfig CloneDubbingConfig(DubbingConfig source)
+    {
+        // Every settable DubbingConfig field is carried over (F-05-gap). CustomVoiceIds is materialized into an
+        // independent list so a later UI edit cannot bleed into the snapshot; the DefaultVoiceId/CustomVoiceIds
+        // setters re-run their idempotent normalization on assignment (the source is already normalized). If you
+        // add a new DubbingConfig setting, copy it here — the DubbingConfig reflection-completeness guard in
+        // BatchSubtitleConfigSnapshotTests fails until you do.
+        return new DubbingConfig
+        {
+            TtsServiceType = source.TtsServiceType,
+            UseManualEngine = source.UseManualEngine,
+            ManualVenvPython = source.ManualVenvPython,
+            Model = source.Model,
+            DefaultVoiceId = source.DefaultVoiceId,
+            CustomVoiceIds = new List<string>(source.CustomVoiceIds),
+            DuckingPercent = source.DuckingPercent,
+            AtempoMin = source.AtempoMin,
+            AtempoMax = source.AtempoMax,
+            StressNormalization = source.StressNormalization,
+            OutputFormat = source.OutputFormat
         };
     }
 

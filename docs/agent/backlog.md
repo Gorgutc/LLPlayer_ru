@@ -344,8 +344,18 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 > т.к. ленивые геттеры зовут `GetSystemLanguages()`, который NRE'ит в headless). + focused regression-тест
 > (RED-without-fix доказан) + **reflection-completeness guard** по всем скалярным settable-полям `SubtitlesConfig`
 > (allow-list: `TranslateTargetLanguage`) — закрывает рекуррентный класс «батч-снапшот забыл поле». Тесты 237/237.
-> **Известный смежный gap (НЕ в этом PR):** снапшот не копирует вложенный `DubbingConfig` (тот же класс; влияние
-> ~нулевое для headless-батча, но молча) → отдельный follow-up.
+> **✅ Смежный gap ЗАКРЫТ (v0.3.36, 2026-07-01):** `CreateSubtitlesConfig` теперь глубоко копирует вложенный
+> `DubbingConfig` через `CloneDubbingConfig` (все settable-поля: `TtsServiceType`, `UseManualEngine`,
+> `ManualVenvPython`, `Model`, `DefaultVoiceId`, `CustomVoiceIds` — независимый список, `DuckingPercent`,
+> `AtempoMin/Max`, `StressNormalization`, `OutputFormat`) — как остальные вложенные конфиги, он невидим для
+> скалярного reflection-guard'а `SubtitlesConfig` (тот пропускает вложенные объекты), поэтому объект снапшота
+> раньше молча оставался дефолтным (дефолтный голос/пустые custom-id/дефолтные ducking/atempo). **Это
+> latent-фикс / самосогласованность снапшота: снапшотный `DubbingConfig` сейчас не читает ни один потребитель**
+> (живой батч-дубляж в `BatchSubtitlesDialogVM` строит `DubbingRenderer` из живого `PlayerConfig`, не из снапшота),
+> т.е. рантайм-поведение не меняется — фикс закрывает гап на будущее (headless/snapshot-based дубляж) и держит
+> parity с остальными вложенными клонами. + focused regression-тест (RED-without-fix доказан) + **отдельный
+> reflection-completeness guard** по всем settable-полям `DubbingConfig`. Дефолтный `DubbingConfig` → snapshot
+> byte-identical.
 **Решение (остаток):** аудит авто-подбора/открытия внешних субтитров (per-slot язык). **Рассуждение:** ядро
 изучения языка; в upstream Roadmap «Now»; остаток мал.
 
