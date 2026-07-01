@@ -14,6 +14,7 @@ public sealed class BatchSubtitleProcessor
     private readonly BatchSubtitleOptions _options;
     private readonly IProgress<BatchSubtitleProgress>? _progress;
     private readonly IDubbingRenderer? _dubber;
+    private readonly IDubbingVoiceAssignmentProvider? _voiceAssignments;
 
     public BatchSubtitleProcessor(
         IBatchAsrTranscriber asrTranscriber,
@@ -21,7 +22,8 @@ public sealed class BatchSubtitleProcessor
         IBatchSubtitleWriter writer,
         BatchSubtitleOptions options,
         IProgress<BatchSubtitleProgress>? progress = null,
-        IDubbingRenderer? dubber = null)
+        IDubbingRenderer? dubber = null,
+        IDubbingVoiceAssignmentProvider? voiceAssignments = null)
     {
         _asrTranscriber = asrTranscriber;
         _translator = translator;
@@ -29,6 +31,7 @@ public sealed class BatchSubtitleProcessor
         _options = options;
         _progress = progress;
         _dubber = dubber;
+        _voiceAssignments = voiceAssignments;
     }
 
     private bool DubbingEnabled => _options.GenerateDubbing && _dubber is not null;
@@ -236,6 +239,7 @@ public sealed class BatchSubtitleProcessor
         Report(job, BatchSubtitleStatus.Saving);
         await _writer.WriteAsync(subtitles, job.OutputPath, _options.OverwriteExisting, token);
 
+        _voiceAssignments?.Apply(job.MediaPath, subtitles);
         await DubIfEnabledAsync(job, subtitles, token);
 
         Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
@@ -257,7 +261,10 @@ public sealed class BatchSubtitleProcessor
             {
                 List<SubtitleData> existing = DubbingSrtReader.ParseFile(job.OutputPath);
                 if (existing.Count > 0)
+                {
+                    _voiceAssignments?.Apply(job.MediaPath, existing);
                     await DubIfEnabledAsync(job, existing, token);
+                }
             }
         }
 

@@ -737,6 +737,9 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
 
             DubbingConfig dubbingConfig = FL.PlayerConfig.Subtitles.DubbingConfig;
             dubber = GenerateDubbing ? new DubbingRenderer(dubbingConfig) : null;
+            IDubbingVoiceAssignmentProvider? voiceAssignments = GenerateDubbing
+                ? CreateCurrentDubbingVoiceAssignments()
+                : null;
 
             BatchSubtitleProcessor processor = new(
                 new BatchAsrTranscriber(
@@ -758,7 +761,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                     DubbingOutputFormat = dubbingConfig.OutputFormat
                 },
                 progress,
-                dubber);
+                dubber,
+                voiceAssignments);
 
             await processor.ProcessAsync(workerJobs, _cts.Token);
         }
@@ -834,6 +838,55 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             return Path.GetDirectoryName(SelectedJob.OutputPath);
 
         return FolderPath;
+    }
+
+    private IDubbingVoiceAssignmentProvider? CreateCurrentDubbingVoiceAssignments()
+    {
+        string? mediaPath = GetCurrentLocalMediaPath();
+        if (mediaPath is null)
+            return null;
+
+        List<SubtitleData> assigned = [];
+        for (int i = 0; i < 2; i++)
+        {
+            foreach (SubtitleData sub in FL.Player.SubtitlesManager[i].Subs)
+            {
+                if (!string.IsNullOrWhiteSpace(sub.AssignedVoiceId))
+                    assigned.Add(sub.Clone());
+            }
+        }
+
+        if (assigned.Count == 0)
+            return null;
+
+        return DubbingVoiceAssignmentMap.FromCurrentSubtitles(mediaPath, assigned);
+    }
+
+    private string? GetCurrentLocalMediaPath()
+    {
+        string?[] candidates =
+        [
+            FL.Player.Playlist.Selected?.Url,
+            FL.Player.Playlist.Selected?.DirectUrl,
+            FL.Player.Playlist.Url,
+        ];
+
+        foreach (string? candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate) || !File.Exists(candidate))
+                continue;
+
+            try
+            {
+                return Path.GetFullPath(candidate);
+            }
+            catch
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private void PersistBatchDefaults()

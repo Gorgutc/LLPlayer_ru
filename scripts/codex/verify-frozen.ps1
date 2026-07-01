@@ -58,6 +58,23 @@ try {
     Require-Text ".\.github\actions\build-package\action.yml" "DubEngine" "Release package action must reject dubbing runtime venv artifacts."
     Require-Text ".\.github\actions\build-package\action.yml" "dubmodels" "Release package action must reject downloaded dubbing model artifacts."
     Require-Text ".\.github\actions\build-package\action.yml" "\*\.ru\.dub\.\*" "Release package action must reject rendered dub output artifacts."
+    Require-Text ".\.github\actions\build-package\action.yml" "Release package is missing required file" "Release package action must positively validate required publish contents."
+    Require-Text ".\.github\actions\build-package\action.yml" "LLPlayer\.exe" "Release package action must verify LLPlayer.exe is present."
+    foreach ($ffmpegDll in @(
+        "avcodec-62\.dll",
+        "avdevice-62\.dll",
+        "avfilter-11\.dll",
+        "avformat-62\.dll",
+        "avutil-60\.dll",
+        "swresample-6\.dll",
+        "swscale-9\.dll"
+    )) {
+        Require-Text ".\.github\actions\build-package\action.yml" "FFmpeg\\$ffmpegDll" "Release package action must verify FFmpeg DLL $ffmpegDll is present."
+        Require-Text ".\scripts\codex\ship.ps1" $ffmpegDll "Ship smoke must verify copied FFmpeg DLL $ffmpegDll is present."
+    }
+    Require-Text ".\.github\actions\build-package\action.yml" "Plugins\\YoutubeDL\\YoutubeDL\.dll" "Release package action must verify YoutubeDL.dll is present."
+    Require-Text ".\.github\actions\build-package\action.yml" "dub_sidecar\\uv\.lock" "Release package action must verify committed dubbing lockfile is present."
+    Require-Text ".\.github\actions\build-package\action.yml" "Get-ChildItem \`$pub -Directory -Recurse" "Release package action must recursively reject dubbing runtime/model directories."
     Require-Text ".\.github\workflows\build.yml" "dotnet restore -warnaserror" "Build workflow restore must treat NuGet audit warnings as errors."
     Require-Text ".\scripts\codex\verify.ps1" 'Invoke-Checked dotnet "restore" "-warnaserror"' "Full verification restore must treat NuGet audit warnings as errors."
     Require-Text ".\scripts\codex\ship.ps1" 'Invoke-Checked dotnet "restore" "\.\\LLPlayer\\LLPlayer\.csproj" "/p:PublishReadyToRun=true" "-warnaserror"' "Ship smoke app restore must treat NuGet audit warnings as errors."
@@ -76,7 +93,10 @@ try {
     Require-Text ".\scripts\codex\ship.ps1" "dub_sidecar\\uv\.lock" "Ship smoke must verify committed dubbing lockfile is published."
     Require-Text ".\scripts\codex\ship.ps1" "DubEngine" "Ship smoke must verify dubbing runtime engine is not published."
     Require-Text ".\scripts\codex\ship.ps1" "\*\.ru\.dub\.\*" "Ship smoke must verify rendered dub outputs are not published."
+    Require-Text ".\scripts\codex\ship.ps1" "Get-ChildItem \`$appPublish -Directory -Recurse" "Ship smoke must recursively reject dubbing runtime/model directories."
     Require-Text ".\scripts\codex\ship.ps1" "7-Zip is not installed" "Ship smoke must document local 7-Zip dry-run fallback."
+    Require-Text ".\docs\agent\dependency-baseline.md" "positively validate required publish contents" "Dependency baseline must document release positive content validation."
+    Require-Text ".\docs\agent\dependency-baseline.md" "recursively reject dubbing runtime/model/output artifacts" "Dependency baseline must document recursive dubbing artifact rejection."
     Require-Text ".\docs\agent\frozen-decisions.md" "product-behavior-contract\.md" "Frozen decisions must link product behavior contract."
     Require-Text ".\docs\agent\frozen-decisions.md" "wpf-design-contract\.md" "Frozen decisions must link WPF design contract."
     Require-Text ".\docs\agent\frozen-decisions.md" "media-runtime-contract\.md" "Frozen decisions must link media runtime contract."
@@ -88,10 +108,14 @@ try {
     Require-Text ".\docs\agent\wpf-design-contract.md" "Settings Keys is an editable DataGrid workflow" "WPF contract must preserve Settings Keys workflow."
     Require-Text ".\docs\agent\wpf-design-contract.md" "Text subtitle interaction is part of the learning workflow" "WPF contract must preserve subtitle word/mouse workflow."
     Require-Text ".\docs\agent\wpf-design-contract.md" "ShowSingleton" "WPF contract must preserve dialog singleton behavior."
+    Require-Text ".\docs\agent\wpf-design-contract.md" "BatchSubtitlesDialogVM.*snapshots the assigned rows" "WPF contract must document current-session per-line voice batch snapshot."
+    Require-Text ".\LLPlayer\Controls\Settings\SettingsSubtitlesDubbing.xaml" "sidebar per-line overrides can change individual lines" "Dubbing settings text must not describe per-line voice as a future-only phase."
+    Require-Text ".\LLPlayer\Views\SettingsDialog.xaml" "per-line line row sidebar voice override" "Settings search keywords must include per-line dubbing voice override terms."
     Require-Text ".\docs\agent\media-runtime-contract.md" "PacketQueue" "Media runtime contract must preserve native queue ownership guidance."
     Require-Text ".\docs\agent\media-runtime-contract.md" "Leading-colon paths" "Media runtime contract must preserve colon path resolution."
     Require-Text ".\docs\agent\media-runtime-contract.md" "WPF Dispatcher Boundaries" "Media runtime contract must preserve dispatcher boundaries."
     Require-Text ".\docs\agent\media-runtime-contract.md" "IScrapeItem" "Media runtime contract must preserve scrape item plugin hook."
+    Require-Text ".\docs\agent\media-runtime-contract.md" "DubbingVoiceAssignmentMap" "Media runtime contract must document per-line voice assignment map in batch dubbing."
     Require-Text ".\FlyleafLib\MediaPlayer\Translation\TranslateChatConfig.cs" "TranslateMethod\s*\{[^\r\n}]*\}\s*=\s*ChatTranslateMethod\.ContextWindow\s*;" "TranslateChatConfig must keep ContextWindow as the default LLM chat method."
     Require-Text ".\FlyleafLib\MediaPlayer\Translation\TranslateChatConfig.cs" "GrammarCheckEnabled\s*\{[^\r\n}]*\}\s*=\s*true\s*;" "TranslateChatConfig must keep GrammarCheckEnabled default on."
     Require-Text ".\FlyleafLib\Engine\Config.cs" "SubtitleMaxCharsPerLine\s*\{[^\r\n}]*\}\s*=\s*48\s*;" "SubtitleMaxCharsPerLine default must remain 48."
@@ -109,6 +133,8 @@ try {
     Require-Text ".\FlyleafLib\Engine\Config.cs" '(?s)loadedVer\s*<=\s*System\.Version\.Parse\("0\.3\.8"\).*MigrateLocalLlmTimeoutDefault\(Subtitles\.TranslateServiceSettings\).*TimeoutMs\s*==\s*60000.*TimeoutMs\s*=\s*180000' "Config.UpdateDefault must invoke MigrateLocalLlmTimeoutDefault under the 0.3.8 gate and migrate the old 60000 local LLM timeout default to 180000."
     Require-Text ".\docs\agent\config-data-contract.md" "LLPlayer\.PlayerConfig\.json" "Config contract must mention runtime player config."
     Require-Text ".\docs\agent\config-data-contract.md" "Settings Keys edits the live key-binding list" "Config contract must preserve Settings Keys behavior."
+    Require-Text ".\docs\agent\config-data-contract.md" "DefaultVoiceId.*normalized on set" "Config contract must document dubbing default voice normalization."
+    Require-Text ".\docs\agent\config-data-contract.md" "CustomVoiceIds.*non-null list" "Config contract must document custom voice id normalization."
     Require-Text ".\docs\agent\dependency-baseline.md" "net10\.0-windows10\.0\.18362\.0" "Dependency baseline must preserve target framework."
     Require-Text ".\docs\agent\dependency-baseline.md" "Vortice\.Direct3D11.*3\.7\.6-beta" "Dependency baseline must freeze Vortice versions."
     Require-Text ".\docs\agent\dependency-baseline.md" "Whisper\.net\.Runtime\.Cuda\.Windows.*1\.9\.0" "Dependency baseline must freeze Whisper runtime versions."
@@ -116,6 +142,12 @@ try {
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "Save & Close" "Manual smoke matrix must cover settings persistence."
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "Left-click a subtitle word" "Manual smoke matrix must cover subtitle word lookup."
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "Open CheatSheet with F1" "Manual smoke matrix must cover CheatSheet workflow."
+    Require-Text ".\docs\agent\manual-smoke-matrix.md" "current-session assignment also reaches the SRT-only render path" "Manual smoke matrix must cover per-line voice batch render from existing SRT."
+    Require-Text ".\docs\agent\dubbing-contract.md" "IDubbingVoiceAssignmentProvider" "Dubbing contract must document per-line voice assignment provider."
+    Require-Text ".\docs\agent\dubbing-contract.md" "current-session / in-memory only" "Dubbing contract must keep per-line voice persistence boundary explicit."
+    Require-Text ".\docs\agent\dubbing-contract.md" "DubbingVoiceAssignmentMap" "Dubbing contract must document per-line voice assignment map."
+    Require-Text ".\docs\agent\dubbing-contract.md" "DefaultVoiceId.*normalized on set" "Dubbing contract must document DefaultVoiceId normalization."
+    Require-Text ".\docs\agent\dubbing\dubbing-roadmap.md" "Phase 2a progress" "Dubbing roadmap must include per-line voice phase 2a progress."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "verification_reviewer" "Subagent review matrix must require verification review."
     Require-Text ".\.codex\config.toml" "LLPlayer_ru" ".codex/config.toml must describe LLPlayer_ru."
     Require-Text ".\LLPlayer\LLPlayer.csproj" "dub_sidecar\\uv\.lock" "LLPlayer publish items must include dub_sidecar/uv.lock."

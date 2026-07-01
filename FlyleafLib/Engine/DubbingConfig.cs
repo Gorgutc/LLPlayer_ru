@@ -30,16 +30,17 @@ public class DubbingConfig : NotifyPropertyChanged
     public string Model { get; set => Set(ref field, value); } = "cosyvoice2-0.5b";
 
     /// <summary>MVP single preset Russian voice; later overridable per speaker from the voice bank.
-    /// Trimmed on set (like the picker trims custom ids) so a hand-edited config value with surrounding
-    /// whitespace still matches the trimmed voice-picker entries and the engine's voice ids — otherwise the
-    /// raw bound <c>SelectedValue</c> would not equal any (trimmed) picker entry and the ComboBox would blank.</summary>
-    public string DefaultVoiceId { get; set => Set(ref field, value?.Trim() ?? ""); } = "ru-preset-1";
+    /// Normalized on set (trim, null/blank -> built-in default, known built-ins -> canonical id) so a
+    /// hand-edited config value still matches the picker entries and the engine's voice ids — otherwise the raw
+    /// bound <c>SelectedValue</c> could fail to equal any picker entry and the ComboBox would blank.</summary>
+    public string DefaultVoiceId { get; set => Set(ref field, NormalizeDefaultVoiceId(value)); } = "ru-preset-1";
 
     /// <summary>User-declared extra voice ids merged into the voice picker (e.g. presets the user added to the
     /// local sidecar's <c>VOICES</c>), so a custom voice can be selected without hand-editing this file.
     /// Default empty → byte-identical (the picker shows only the built-in bank). The id is passed to the
-    /// engine verbatim at synth time; LLPlayer does not validate it against a running engine.</summary>
-    public List<string> CustomVoiceIds { get; set => Set(ref field, value ?? new()); } = new();
+    /// engine verbatim at synth time; LLPlayer does not validate it against a running engine. Normalized on set:
+    /// trim, skip blanks/nulls, and dedup case-insensitively in declared order.</summary>
+    public List<string> CustomVoiceIds { get; set => Set(ref field, NormalizeCustomVoiceIds(value)); } = new();
 
     /// <summary>Original-audio level under the dub during dubbed spans, 0..100. Drives the duck depth.
     /// Clamped to its valid range on set so a hand-edited config or UI echo cannot push it out of bounds.</summary>
@@ -56,4 +57,33 @@ public class DubbingConfig : NotifyPropertyChanged
     /// sidecar currently encodes — a non-FLAC value degrades to a FLAC bitstream, so the picker UI
     /// offers FLAC only until a real AAC/m4a path exists.</summary>
     public string OutputFormat { get; set => Set(ref field, value); } = DubbingOutputPathBuilder.DefaultExtension;
+
+    private static string NormalizeDefaultVoiceId(string? value)
+    {
+        string trimmed = value?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0)
+            return VoiceBankResolver.BuiltIn[0].Id;
+
+        return VoiceBankResolver.Resolve(trimmed)?.Id ?? trimmed;
+    }
+
+    private static List<string> NormalizeCustomVoiceIds(IEnumerable<string?>? value)
+    {
+        if (value is null)
+            return new();
+
+        List<string> result = [];
+        HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string? id in value)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                continue;
+
+            string trimmed = id.Trim();
+            if (seen.Add(trimmed))
+                result.Add(trimmed);
+        }
+
+        return result;
+    }
 }

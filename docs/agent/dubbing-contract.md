@@ -37,7 +37,9 @@ user explicitly asks to change that product decision.
 - Dubbing reuses the **batch** pipeline. The render is an **optional step after** subtitle
   translation/write inside `BatchSubtitleProcessor.TranslateAndSaveAsync` (between the SRT write and
   the `Completed` report), gated on an **optional ctor-injected** `IDubbingRenderer? dubber` (null ⇒
-  unchanged behavior) **and** `options.GenerateDubbing`. ASR and translation results are never
+  unchanged behavior) **and** `options.GenerateDubbing`. An optional
+  `IDubbingVoiceAssignmentProvider?` can apply current-session sidebar `AssignedVoiceId` snapshots just
+  before render; null preserves the single-voice behavior. ASR and translation results are never
   altered by the presence of dubbing.
 - **GPU-no-overlap invariant:** the GPU TTS render must **not** run in the concurrent pipelined
   translation worker. When `GenerateDubbing` is on, processing **forces serialize-mode** (ASR →
@@ -93,8 +95,8 @@ user explicitly asks to change that product decision.
   separation, or voice bank. The whole dub is one narrator over the original **ducked** during dubbed
   spans — a single-voice Russian voiceover. The C# slice and committed `dub_sidecar/server.py` ship
   as a **compiled, frozen-safe contract artifact**; the neural render is owner first-run (see
-  roadmap DoD). A `--mock` sidecar mode allows deterministic off-GPU validation of the C# +
-  FFmpeg-assembly path.
+  roadmap DoD). A `--mock` sidecar mode allows deterministic off-GPU validation of the C# orchestration +
+  sidecar assembly path.
 
 ## Voices (Phase 1–3 — planned)
 
@@ -105,16 +107,18 @@ user explicitly asks to change that product decision.
   sidecar** to enumerate voices; the engine `ITtsService.GetVoicesAsync` stays the phase-2 live-discovery
   seam, surfaced by `VoiceBankResolver.ResolveAsync` (fail-soft; built-in metadata wins on id collision;
   not yet wired into the UI). The chosen voice writes `DubbingConfig.DefaultVoiceId` (one voice for the
-  whole dub); `DefaultVoiceId` is **trimmed on set** so a hand-edited config value with surrounding
-  whitespace still matches the trimmed picker entries and the engine voice ids (the ComboBox never blanks).
+  whole dub); `DefaultVoiceId` is **normalized on set** (trim, blank/null -> built-in default
+  `ru-preset-1`, known built-in ids -> canonical casing) so a hand-edited config value still matches the
+  picker entries and the engine voice ids (the ComboBox never blanks).
   This single voice is the **default** for every line; **per-line manual override is phase 2a** (below) and
   per-speaker (diarization-driven) selection remains phase 2/3. The renderer reads `DefaultVoiceId` live at run
   start, so no batch-snapshot coverage is required.
 - **Phase 2 custom voice ids (shipped, additive):** the user can register extra voice ids
   (`DubbingConfig.CustomVoiceIds`, default empty → byte-identical) via **Settings ▸ Subtitles ▸ Dubbing ▸
   Custom voice IDs** (list + Add/Remove). Both pickers (Settings + batch dialog) merge them after the
-  built-in bank via `VoiceBankResolver.ForConfig(selected, customVoiceIds)` (trim, dedup by Id
-  OrdinalIgnoreCase, declared order; the selected id stays selectable). The id is sent to the engine
+  built-in bank via `VoiceBankResolver.ForConfig(selected, customVoiceIds)`; the persisted list is normalized
+  on set (trim, skip blanks/nulls, dedup by Id OrdinalIgnoreCase, declared order), and the selected id stays
+  selectable. The id is sent to the engine
   **verbatim** at synth time (`DefaultVoiceId` → `TtsRequest.VoiceId`); LLPlayer does not validate it
   against a running engine and **still never starts the sidecar** to populate the picker. Persisted in
   `LLPlayer.PlayerConfig.json` under `Subtitles.DubbingConfig.CustomVoiceIds` (absent-defaulting, no
@@ -127,11 +131,14 @@ user explicitly asks to change that product decision.
   threads it through `DubbingRenderer.BuildLines` → `DubbingLine.VoiceId` and synthesizes each line with
   `DubbingRenderer.ResolveVoiceId(line.VoiceId, DefaultVoiceId)` — a blank/absent override falls back to the run's
   default voice, so a dub with **no** assignments is byte-identical to the single-voice render (the id is sent to
-  the engine verbatim, exactly as `DefaultVoiceId`). The override is **interactive / in-memory only**:
-  `SubtitleData` is never serialized, so a re-render from an existing `.ru.srt` (which carries only text + timing)
-  falls back to `DefaultVoiceId` for every line. No new persisted config and no batch-snapshot coverage (the
-  renderer still reads voices live at run start). Per-speaker (diarization-driven) auto-assignment remains
-  phase 2/3 (needs F-03).
+  the engine verbatim, exactly as `DefaultVoiceId`). The override is **current-session / in-memory only**:
+  `SubtitleData` is never serialized to SRT or config, but `BatchSubtitlesDialogVM` snapshots overrides from the
+  currently open local media and passes them through `DubbingVoiceAssignmentMap` /
+  `IDubbingVoiceAssignmentProvider`; when a batch job's media path and cue millisecond timings match, the
+  provider applies them to both fresh ASR/translation subtitles and existing `.ru.srt` subtitles just before
+  render. After restart, with no matching open media, or with mismatched timings, render falls back to
+  `DefaultVoiceId` for every line. No new persisted config. Per-speaker (diarization-driven) auto-assignment
+  remains phase 2/3 (needs F-03).
 - **Hybrid:** by default, diarize speakers and **clone each speaker's timbre** into Russian
   (CosyVoice2 zero-shot from a per-speaker reference clip), preserving gender; **any speaker can be
   overridden** with a preset bank voice. Gender uses a license-free F0 heuristic + manual override.
@@ -175,8 +182,8 @@ user explicitly asks to change that product decision.
   gender, NLLB-200, `ttsfrd`.
 - A **build gate** (`scripts/codex/check-dub-licenses.ps1`, run by `verify-fast`) fails if any
   non-commercial / unvetted package (TTS/coqui, xtts, f5-tts, nemo, indextts, nllb, ttsfrd) appears
-  in the committed `dub_sidecar` manifests — `pyproject.toml` dependency lines now, and `uv.lock`
-  once generated at provisioning.
+  in the committed `dub_sidecar` manifests — `pyproject.toml` dependency lines and the committed
+  `uv.lock`.
 - A full **NOTICES** screen ships covering the GPLv3 app + FFmpeg (with §6 written offer now covering
   `dub_sidecar/`) and every bundled component's attribution. The pre-existing FFmpeg GPL
   source-offer obligation must be verified by the owner and **not widened** by dubbing.

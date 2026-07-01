@@ -108,13 +108,13 @@ arxiv.org/pdf/2110.03847 (verbosity control) · ffmpeg-cookbook.com (atempo)
 
 ## 5. .NET integration of the Python ML
 
-**Decision:** Mirror the existing faster-whisper CliWrap sidecar **but upgrade the transport to a
-LONG-LIVED localhost HTTP server** (FastAPI/uvicorn on 127.0.0.1:ephemeral) launched/supervised by
-C# via CliWrap with a readiness probe + graceful shutdown (reuse PR #33/#34 lifecycle/tray). Models
-load **once**; whole-file ops are single requests, per-segment synth are individual requests; return
-**temp WAV paths (not base64)**. Provision a **dedicated, lockfile-pinned dub venv via the `uv`
-standalone binary**, SEPARATE from the ASR env. **Do all DSP in bundled FFmpeg** (neural in Python,
-DSP in ffmpeg).
+**Current implementation correction:** the early design said to mirror the faster-whisper CliWrap path.
+The shipped dubbing path instead uses raw `System.Diagnostics.Process` so the child can be placed in a
+Windows Job Object, then talks to a LONG-LIVED localhost HTTP sidecar (127.0.0.1:ephemeral, port from
+`DUB_PORT=` stdout, bounded readiness probe, graceful shutdown). Models load **once**; per-segment synth
+returns temp WAV paths (not base64), and the Python sidecar performs stretch/placement/duck/mix/encode
+from the immutable run snapshot. The dedicated dub venv is still lockfile-pinned and provisioned via the
+`uv` standalone binary, separate from the ASR env.
 
 **Verification corrections:**
 - ✅ **sm_120 is no longer bleeding-edge:** PyTorch **2.7.0 was the first STABLE release with cu128

@@ -44,9 +44,9 @@ non-Russian target languages; bundling non-commercial models.
 > `VoiceBankResolver` (GPU-free preset bank mirroring `dub_sidecar/server.py` VOICES + fail-soft
 > `ResolveAsync` engine-merge seam) plus a voice picker in the batch dialog and a new **Settings ▸
 > Subtitles ▸ Dubbing** section (voice / ducking / atempo / output format). Selecting a voice writes
-> `DubbingConfig.DefaultVoiceId` (one voice per dub). **Still phase-2:** per-line / per-speaker selection
-> (needs diarization + per-line data) and the manual gender override UI; pre-rendering additional preset
-> voices is owner first-run on the GPU.
+> `DubbingConfig.DefaultVoiceId` (one voice per dub). Per-line manual override shipped later in phase 2a;
+> **still phase-2/3:** per-speaker selection (needs diarization) and the manual gender override UI;
+> pre-rendering additional preset voices is owner first-run on the GPU.
 >
 > **Phase 2 progress (F-16, custom voice ids — shipped v0.3.31):** the voice picker now merges
 > user-declared `DubbingConfig.CustomVoiceIds` with the built-in bank via the new
@@ -56,6 +56,13 @@ non-Russian target languages; bundling non-commercial models.
 > `DefaultVoiceId`) without hand-editing config — GPU-free, default empty → byte-identical, no engine
 > probe. **Still phase-2:** diarization + per-speaker presets + F0/manual gender override UI; the engine
 > live-discovery refresh (`ResolveAsync`) remains unwired (it would require starting the GPU sidecar).
+>
+> **Phase 2a progress (F-16, per-line voice override):** the sidebar row voice button writes
+> `SubtitleData.AssignedVoiceId`; `DubbingRenderer.BuildLines` sends a per-line `voice_id` with fallback to
+> `DubbingConfig.DefaultVoiceId`. Batch dubbing now receives a current-session `DubbingVoiceAssignmentMap`
+> snapshot from the open local media, so matching jobs apply row voices to both fresh ASR/translation output
+> and existing `.ru.srt` render-only output. No new persisted config/SRT format; after restart or timing/path
+> mismatch, render falls back to the default voice.
 
 ## This session's sprint (Phase 0)
 

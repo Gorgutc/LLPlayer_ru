@@ -565,7 +565,7 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > **Решения владельца (AskUserQuestion ×3):** seam+per-row UI / кнопка в сайдбаре / interactive-only. Многоагентно:
 > верификация (8) → дизайн (4) → adversarial-ревью (11 агентов, 5 линз: **SHIP, 0 critical/important**;
 > byte-identical+dataflow 0 находок; 4 lifecycle/UI = false-positive/nit; 2 doc-fix). Гейты build `-warnaserror`
-> **0/0 ×3** + тесты **1063/1063** (+14) + verify.ps1 green; `.exe` launch 0.3.35 чистый. **Остаток:** per-speaker
+> **0/0 ×3** + тесты **1063/1063** (+14) + verify.ps1 green; `.exe` launch 0.3.35 чистый. **2026-07-01 monitor follow-up:** batch dubbing теперь применяет current-session `DubbingVoiceAssignmentMap` к свежим субтитрам и existing `.ru.srt` render-only path; `DubbingConfig.DefaultVoiceId`/`CustomVoiceIds` нормализуются fail-closed; packaging checks усилены positive content validation + recursive `DubEngine`/`dubmodels` rejection. Тесты **1079/1079** (+16). **Остаток:** per-speaker
 > (нужен F-03 диаризация), AAC-энкод, pre-render голосов, companion-json — GPU/follow-up. Детали: второй мозг
 > `Sessions/2026-06-30-handoff-f16-perline-voice.md`.
 Дубляж — Phase 0 (PR #35 влит, CosyVoice2 в `dub_sidecar/`). SE предлагает много TTS (Edge/Kokoro/OmniVoice
@@ -607,7 +607,7 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 1049/1049** (на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
+**Тесты: 1079/1079** (на 2026-07-01: monitor follow-up добавил +16 регрессов для `DubbingConfig` normalization, `DubbingVoiceAssignmentMap`, и batch dubbing per-line voice bridge → 1079; на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
 > **Прогресс 2026-06-28 (PR #98, +100 тестов → 1026, tests-only):** покрыты ранее непокрытые
@@ -825,7 +825,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 18 | ~~**F-09**~~ ✅ | Watch-folder авто-batch → DONE PR #74 v0.3.22 | 🟢 | ⓢ-Ⓜ |
 | 19 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | 🟢 | Ⓛ |
 | 20 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | 🟢 | Ⓛ |
-| 21 | **F-16** | Дубляж: фаза 1 voice-bank ✅ PR #93 v0.3.30; фазы 2-6 TODO | 🟢 | Ⓛ |
+| 21 | **F-16** | Дубляж: voice-bank ✅ PR #93; custom voice-ID ✅ PR #96; per-line voice ✅ PR #106 + monitor bridge; per-speaker/фазы 3-6 TODO | 🟢 | Ⓛ |
 | 22 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 (A-B повтор DONE v0.3.27) | 🟢 | Ⓛ |
 | 23 | ~~**T-07**~~ ✅ | SrtExporter теги `<i>` → DONE PR #59 v0.3.13 | 🟢 | ⓢ |
 | 24 | ~~**T-08/T-09**~~ ✅ + **T-10** | fold-back/silence-split ✅ DONE PR #69 v0.3.19; **T-10** per-seg lang ⚠️ конфликт F-17 (OPEN) | 🟢 | Ⓜ/Ⓛ |
@@ -834,7 +834,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-06-29 (v0.3.33):** T-03(ongoing), F-03(prep-срез SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO), F-16(фаза 1 ✅; фазы 2-6 TODO), F-13, F-02-full(Demucs, по триггеру). **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
+> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-07-01 (v0.3.35):** T-03(ongoing), F-03(prep-срез SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO), F-16(per-line voice ✅; per-speaker/фазы 3-6 TODO), F-13, F-02-full(Demucs, по триггеру). **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
 
 ## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
 
@@ -862,14 +862,14 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 20 | **F-15** | Yomitan/10ten мост | Ⓜ-Ⓛ | 🟡 |
 | 21 | ~~**F-02 срез**~~ ✅ | ASR денойз → DONE PR #76 v0.3.23; **полный Demucs-сайдкар = STANDBY (по триггеру)** | Ⓛ | 🟠 |
 | 22 | **F-03** | Диаризация (сайдкар) | Ⓛ | 🟡 |
-| 23 | **F-16** | Дубляж: фаза 1 voice-bank ✅ v0.3.30; фазы 2-6 TODO | Ⓛ | 🟢 |
+| 23 | **F-16** | Дубляж: voice-bank/custom/per-line ✅; per-speaker/фазы 3-6 TODO | Ⓛ | 🟢 |
 | 24 | ~~**F-10**~~ ✅ | Anki / Word Management → DONE PR #79 v0.3.24 | Ⓛ | 🟢 |
 | 25 | ~~**F-11**~~ ✅ | Dictionary API (определения слов + авто-Anki) → DONE PR #82 v0.3.25 | Ⓛ | 🟢 |
 | 26 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 | Ⓛ | 🟢 |
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | — | 🟢 |
 
-> ✅ **Открыто на 2026-06-29 (v0.3.33), легче→тяжелее:** T-03(ongoing) · F-03(prep SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO) · F-16(фаза 1 ✅ v0.3.30; фазы 2-6 TODO) · F-02-full(Demucs, по триггеру) · F-13. **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
+> ✅ **Открыто на 2026-07-01 (v0.3.35), легче→тяжелее:** T-03(ongoing) · F-03(prep SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO) · F-16(per-line voice ✅; per-speaker/фазы 3-6 TODO) · F-02-full(Demucs, по триггеру) · F-13. **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
 
 ---
 

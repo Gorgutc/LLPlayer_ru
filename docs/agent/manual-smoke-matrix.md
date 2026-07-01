@@ -88,12 +88,13 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Kill/cancel during dubbing and confirm no orphan Python process remains, VRAM is released, and no partial `video.ru.dub.*` output remains.
 - Open a video with an existing non-empty `video.ru.dub.flac`; confirm it appears under Audio ▸ External and plays in sync at 0:00, mid-video, and near the end.
 - Re-run batch with an existing `video.ru.srt` but no `video.ru.dub.*`; confirm the default run renders the dub from the existing SRT without re-running ASR/translation.
+- On an open local video, assign a sidebar per-line dub voice on one subtitle row, then run a dubbing batch for that same file and confirm the generated dub uses the row voice for that line while unassigned lines use the default voice. Repeat with an existing `video.ru.srt` and no `video.ru.dub.*` to confirm the current-session assignment also reaches the SRT-only render path; restart the app and confirm the assignment is not persisted.
 - Ear-test CosyVoice2 Russian on real content: voice is Russian, ducking is audible, and the original audio remains present.
 - Launch the published `.exe` on the target RTX 5090 machine with `GenerateDubbing=false`, then run one mock/real dubbing smoke if the local engine is provisioned.
 
 ## Packaging
 
 - Run `scripts/codex/ship.ps1`.
-- Confirm publish output contains `LLPlayer.exe`, `LLPlayer/lib/7z.dll`, copied `FFmpeg`, `Plugins/YoutubeDL/YoutubeDL.dll`, and `YoutubeDL.pdb`.
+- Confirm publish output contains `LLPlayer.exe`, `lib/7z.dll`, all copied `FFmpeg/*.dll`, `Plugins/YoutubeDL/YoutubeDL.dll`, and `YoutubeDL.pdb`.
 - Confirm publish output contains committed dubbing sidecar source (`dub_sidecar/server.py`, `pyproject.toml`, `uv.lock`, `README.md`) and does not contain dubbing runtime/model/output artifacts (`DubEngine`, `dubmodels`, `*.ru.dub.*`).
 - Do not require network download of `yt-dlp.exe` for local smoke unless explicitly shipping a release.

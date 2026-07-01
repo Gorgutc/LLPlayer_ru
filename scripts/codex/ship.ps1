@@ -47,10 +47,10 @@ try {
             throw "Publish smoke is missing committed dubbing sidecar source $sidecarSource."
         }
     }
-    foreach ($forbiddenDubRuntime in @("DubEngine", "dubmodels")) {
-        if (Test-Path (Join-Path $appPublish $forbiddenDubRuntime)) {
-            throw "Publish smoke must not include dubbing runtime data $forbiddenDubRuntime."
-        }
+    $forbiddenDubRuntimeDirs = @(Get-ChildItem $appPublish -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -in @("DubEngine", "dubmodels") })
+    if ($forbiddenDubRuntimeDirs.Count -gt 0) {
+        throw "Publish smoke must not include dubbing runtime data folder(s): $($forbiddenDubRuntimeDirs.FullName -join ', ')."
     }
     $publishedDubOutputs = @(Get-ChildItem $appPublish -Filter "*.ru.dub.*" -Recurse -ErrorAction SilentlyContinue)
     if ($publishedDubOutputs.Count -gt 0) {
@@ -82,8 +82,18 @@ try {
     }
 
     Copy-Item ".\FFmpeg" -Destination $appPublish -Recurse -Force
-    if (-not (Test-Path (Join-Path $appPublish "FFmpeg\avcodec-62.dll"))) {
-        throw "Publish smoke is missing copied FFmpeg DLLs."
+    foreach ($ffmpegDll in @(
+        "avcodec-62.dll",
+        "avdevice-62.dll",
+        "avfilter-11.dll",
+        "avformat-62.dll",
+        "avutil-60.dll",
+        "swresample-6.dll",
+        "swscale-9.dll"
+    )) {
+        if (-not (Test-Path (Join-Path $appPublish "FFmpeg\$ffmpegDll"))) {
+            throw "Publish smoke is missing copied FFmpeg DLL $ffmpegDll."
+        }
     }
 
     Invoke-Checked dotnet "restore" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/p:PublishReadyToRun=true" "-warnaserror"
@@ -107,6 +117,14 @@ try {
         "yt-dlp GitHub release URL" = "https://github.com/yt-dlp/yt-dlp/releases/download/`$ver/yt-dlp.exe"
         "yt-dlp download command" = "Invoke-WebRequest"
         "yt-dlp placeholder" = "yt-dlp.exe_here"
+        "release required content check" = "Release package is missing required file"
+        "release recursive dub runtime rejection" = "Get-ChildItem `$pub -Directory -Recurse"
+        "release FFmpeg avdevice check" = "FFmpeg\avdevice-62.dll"
+        "release FFmpeg avfilter check" = "FFmpeg\avfilter-11.dll"
+        "release FFmpeg avformat check" = "FFmpeg\avformat-62.dll"
+        "release FFmpeg avutil check" = "FFmpeg\avutil-60.dll"
+        "release FFmpeg swresample check" = "FFmpeg\swresample-6.dll"
+        "release FFmpeg swscale check" = "FFmpeg\swscale-9.dll"
         "7-Zip executable" = "C:\Program Files\7-Zip\7z.exe"
         "7-Zip add command" = " a -t7z -mx=8 -mmt=4 "
     }

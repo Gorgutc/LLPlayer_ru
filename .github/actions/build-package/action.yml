@@ -95,11 +95,36 @@ runs:
       shell: pwsh
       run: |
         $pub = "${{ runner.temp }}\publish"
-        foreach ($forbiddenDubRuntime in @("DubEngine", "dubmodels")) {
-          if (Test-Path "$pub\$forbiddenDubRuntime") {
-            throw "Release package must not include dubbing runtime data $forbiddenDubRuntime."
+        foreach ($requiredFile in @(
+          "LLPlayer.exe"
+          "lib\7z.dll"
+          "FFmpeg\avcodec-62.dll"
+          "FFmpeg\avdevice-62.dll"
+          "FFmpeg\avfilter-11.dll"
+          "FFmpeg\avformat-62.dll"
+          "FFmpeg\avutil-60.dll"
+          "FFmpeg\swresample-6.dll"
+          "FFmpeg\swscale-9.dll"
+          "Plugins\YoutubeDL\YoutubeDL.dll"
+          "Plugins\YoutubeDL\YoutubeDL.pdb"
+          "Plugins\YoutubeDL\yt-dlp.exe_here"
+          "Plugins\YoutubeDL\yt-dlp.exe"
+          "dub_sidecar\server.py"
+          "dub_sidecar\pyproject.toml"
+          "dub_sidecar\uv.lock"
+          "dub_sidecar\README.md"
+        )) {
+          if (-not (Test-Path (Join-Path $pub $requiredFile))) {
+            throw "Release package is missing required file $requiredFile."
           }
         }
+
+        $forbiddenDubRuntimeDirs = @(Get-ChildItem $pub -Directory -Recurse -ErrorAction SilentlyContinue |
+          Where-Object { $_.Name -in @("DubEngine", "dubmodels") })
+        if ($forbiddenDubRuntimeDirs.Count -gt 0) {
+          throw "Release package must not include dubbing runtime data folder(s): $($forbiddenDubRuntimeDirs.FullName -join ', ')."
+        }
+
         $publishedDubOutputs = @(Get-ChildItem $pub -Filter "*.ru.dub.*" -Recurse -ErrorAction SilentlyContinue)
         if ($publishedDubOutputs.Count -gt 0) {
           throw "Release package must not include rendered dub output(s): $($publishedDubOutputs.FullName -join ', ')."

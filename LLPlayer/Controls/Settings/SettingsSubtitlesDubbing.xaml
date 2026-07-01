@@ -22,7 +22,7 @@
             <TextBlock
                 Margin="0 0 0 16"
                 Foreground="{DynamicResource MaterialDesignBodyLight}"
-                Text="AI dubbing renders a Russian voice-over track (video.ru.dub.*) beside each video using the local TTS engine (opt-in, run from the Batch dialog). Phase 1 uses a single voice for the whole dub; per-speaker selection comes later." />
+                Text="AI dubbing renders a Russian voice-over track (video.ru.dub.*) beside each video using the local TTS engine (opt-in, run from the Batch dialog). The batch default voice applies to every line; sidebar per-line overrides can change individual lines in the current session. Per-speaker selection comes later." />
 
             <GroupBox Header="Voice">
                 <StackPanel>
@@ -37,7 +37,7 @@
                             DisplayMemberPath="DisplayName"
                             SelectedValuePath="Id"
                             SelectedValue="{Binding FL.PlayerConfig.Subtitles.DubbingConfig.DefaultVoiceId}"
-                            ToolTip="The preset voice used for the whole dubbed track. Per-line / per-speaker selection is a later phase." />
+                            ToolTip="The default voice used for dubbed lines. Sidebar per-line overrides can change individual lines for the current open file; per-speaker selection is later." />
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Margin="0 12 0 0">
