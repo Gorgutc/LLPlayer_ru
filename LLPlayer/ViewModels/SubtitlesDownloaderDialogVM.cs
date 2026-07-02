@@ -108,7 +108,13 @@ public class SubtitlesDownloaderDialogVM : Bindable, IDialogAware
         }
 
         string subDir = Path.Combine(Path.GetTempPath(), App.Name, "Subs");
-        string subPath = Path.Combine(subDir, sub.SubFileName);
+        // sub.SubFileName comes from the OpenSubtitles API; a "..\..\x.srt" or absolute path would otherwise
+        // let a hostile/spoofed response write outside subDir. Resolve to a name-only path inside subDir.
+        string? subPath = Utils.GetSafeFileNameChildPath(subDir, sub.SubFileName);
+        if (subPath == null)
+        {
+            throw new InvalidOperationException($"Invalid subtitle file name: '{sub.SubFileName}'");
+        }
         if (!Directory.Exists(subDir))
         {
             Directory.CreateDirectory(subDir);

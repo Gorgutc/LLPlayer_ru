@@ -500,6 +500,14 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
     }
     public OpenResults Open()
     {
+        // Playlist.Url is attacker-controllable (pasted links, .m3u/.pls entries). It is interpolated into a
+        // quoted process argument below, so a raw '"' could inject arbitrary yt-dlp flags (e.g. --exec) → RCE.
+        if (!IsSafeProcessUrl(Playlist.Url))
+        {
+            Log.Error("Refusing to launch yt-dlp: unsafe or invalid URL");
+            return new("Unsafe or invalid URL");
+        }
+
         try
         {
             lock (procLocker)

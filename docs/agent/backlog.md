@@ -620,7 +620,10 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 1133/1133** (на 2026-07-02 (сессия #16-монитор, PR #112 merge `e96c41d`): monitor follow-up +1 `GetWhisperLanguages_TitleCaseIsCultureInvariant_UnderTurkishCulture` вместе с прод-фиксом `char.ToUpper`→`char.ToUpperInvariant` в `WhisperLanguage.cs` → 1133. См. также новую секцию **§8 «Аудит здоровья кода» (HC-*)** — бэклог находок аудита сессии #16, ранжирован простое→сложное; конкретные тест-пробелы аудита — HC-34/HC-39/HC-40. На 2026-07-01 (сессия #15, v0.3.38): срез №5 +31 — `LanguageBadgeTests` (11: код/гейт сайдбар-бейджа языка, см. T-10 follow-up ниже), `UtilsFindNextAvailableFileTests` (8: next-free «name (N).ext», regex-стрип суффикса `(N)`, обе стороны границы 100 слотов — слот 100 занимается + null после 100), `ImageProcessorTests` (11: OCR `BlackText`/`AddPadding` — размеры/PixelFormat/пиксели вне блендинг-границ), culture-guard `GetWhisperLanguages_OrderIsCultureInvariant_UnderCzechCulture` (+1) вместе с прод-фиксом FS-orderby: `WhisperLanguage.GetWhisperLanguages` OrderBy теперь пиннит `StringComparer.InvariantCulture` (зеркало `Language.AllLanguages`; **RED-without-fix доказан под cs-CZ** — чешская «ch»-диграф-коллация смещала «Chinese» за H-имена; да-DK «aa»-пробник оказался вакуумным — пары различаются ДО диграфа) → 1132. SKIP-решения среза №5: `Interrupter` (frozen media-runtime + FFmpeg-callback → интеграционный путь), `SubtitlesOCR.Binarize` (private unsafe — seam не оправдан), `GetUniqueId` (тавтология Interlocked). Ранее: на 2026-07-01 (поздн.): F-16 companion-json persistence v0.3.37 +20 `DubbingVoiceAssignmentStoreTests` (ToJson/FromJson round-trip, atomic Save/LoadMap, disk/composite providers) → 1101; на 2026-07-01 (сред.): F-05-gap DubbingConfig-снапшот PR #109 +2 (regression + reflection-guard) → 1081; на 2026-07-01 (ранее): monitor follow-up добавил +16 регрессов для `DubbingConfig` normalization, `DubbingVoiceAssignmentMap`, и batch dubbing per-line voice bridge → 1079; на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
+**Тесты: 1163/1163** (на 2026-07-02 (сессия #18, security-бандл HC-01/05/35, v0.3.39): +30 —
+`ProcessUrlSafetyTests` (15: валидация URL для аргумента процесса, инъекционные негативы),
+`SafeChildPathTests` (11: safe-child-path против traversal/absolute), `NullTerminatedUtf16Tests` (4:
+null-терминированный CF_UNICODETEXT-буфер) → 1163. Ранее на 2026-07-02 (сессия #16-монитор, PR #112 merge `e96c41d`): monitor follow-up +1 `GetWhisperLanguages_TitleCaseIsCultureInvariant_UnderTurkishCulture` вместе с прод-фиксом `char.ToUpper`→`char.ToUpperInvariant` в `WhisperLanguage.cs` → 1133. См. также новую секцию **§8 «Аудит здоровья кода» (HC-*)** — бэклог находок аудита сессии #16, ранжирован простое→сложное; конкретные тест-пробелы аудита — HC-34/HC-39/HC-40. На 2026-07-01 (сессия #15, v0.3.38): срез №5 +31 — `LanguageBadgeTests` (11: код/гейт сайдбар-бейджа языка, см. T-10 follow-up ниже), `UtilsFindNextAvailableFileTests` (8: next-free «name (N).ext», regex-стрип суффикса `(N)`, обе стороны границы 100 слотов — слот 100 занимается + null после 100), `ImageProcessorTests` (11: OCR `BlackText`/`AddPadding` — размеры/PixelFormat/пиксели вне блендинг-границ), culture-guard `GetWhisperLanguages_OrderIsCultureInvariant_UnderCzechCulture` (+1) вместе с прод-фиксом FS-orderby: `WhisperLanguage.GetWhisperLanguages` OrderBy теперь пиннит `StringComparer.InvariantCulture` (зеркало `Language.AllLanguages`; **RED-without-fix доказан под cs-CZ** — чешская «ch»-диграф-коллация смещала «Chinese» за H-имена; да-DK «aa»-пробник оказался вакуумным — пары различаются ДО диграфа) → 1132. SKIP-решения среза №5: `Interrupter` (frozen media-runtime + FFmpeg-callback → интеграционный путь), `SubtitlesOCR.Binarize` (private unsafe — seam не оправдан), `GetUniqueId` (тавтология Interlocked). Ранее: на 2026-07-01 (поздн.): F-16 companion-json persistence v0.3.37 +20 `DubbingVoiceAssignmentStoreTests` (ToJson/FromJson round-trip, atomic Save/LoadMap, disk/composite providers) → 1101; на 2026-07-01 (сред.): F-05-gap DubbingConfig-снапшот PR #109 +2 (regression + reflection-guard) → 1081; на 2026-07-01 (ранее): monitor follow-up добавил +16 регрессов для `DubbingConfig` normalization, `DubbingVoiceAssignmentMap`, и batch dubbing per-line voice bridge → 1079; на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
 > **Прогресс 2026-06-28 (PR #98, +100 тестов → 1026, tests-only):** покрыты ранее непокрытые
@@ -951,13 +954,17 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 
 **🔴/🟠 высокая важность:**
 
-- **HC-01 — Инъекция аргументов yt-dlp через URL 🔴 ⓢ · `Plugins/YoutubeDL/YoutubeDL.cs:523`** (security)
+- **HC-01 — Инъекция аргументов yt-dlp через URL 🔴 ⓢ · `Plugins/YoutubeDL/YoutubeDL.cs:523`** (security) · ✅ **DONE (v0.3.39, 2026-07-02, сессия #18)**
   - Проблема: `Arguments = $"...{Options["ExtraArguments"]} ... \"{Playlist.Url}\" ..."` — сырая интерполяция URL в
     командную строку (`UseShellExecute=false`). URL с `"` разрывает кавычки и внедряет произвольные флаги yt-dlp,
     включая `--exec <cmd>` → выполнение команды. Открытие вредоносной ссылки/плейлиста = RCE.
   - Решение: собирать аргументы через `ProcessStartInfo.ArgumentList` (без ручного квотирования) либо жёстко
     экранировать/валидировать URL (запрет `"`, только http/https-схемы) до подстановки.
   - Зачем: пользовательский ввод (в т.ч. из .m3u/ссылок) не должен управлять флагами внешнего процесса.
+  - ✅ **Сделано:** новый чистый гейт `Utils.IsSafeProcessUrl(url)` (отвергает `"`, `\`, control-символы; требует
+    абсолютный http/https-URI) + ранний возврат в начале `YoutubeDL.Open()` до запуска процесса. Легитимные
+    (percent-encoded) URL проходят byte-identical. Тесты `FlyleafLibTests/Utils/ProcessUrlSafetyTests.cs` (15,
+    вкл. инъекционные негативы `http://x/"--exec` — RED-without-fix подтверждён). adversarial `/code-review` → Approve.
 - **HC-02 — `MenuAudioStreams` без `x:Shared="False"` 🟠 ⓢ · `LLPlayer/Resources/PopupMenu.xaml:17`**
   - Проблема: ресурс из живых `MenuItem` используется ItemsSource'ом двух меню (FlyleafBar `:219` + PopupMenu `:381`);
     соседние `MenuVideoStreams`/`MenuSubtitlesStreams(2)` намеренно помечены `x:Shared="False"`, этот — нет. WPF не
@@ -981,11 +988,16 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 
 **🟡 средняя важность:**
 
-- **HC-05 — Path traversal при загрузке субтитров OpenSubtitles 🟠 ⓢ · `LLPlayer/ViewModels/SubtitlesDownloaderDialogVM.cs:111`** (security)
+- **HC-05 — Path traversal при загрузке субтитров OpenSubtitles 🟠 ⓢ · `LLPlayer/ViewModels/SubtitlesDownloaderDialogVM.cs:111`** (security) · ✅ **DONE (v0.3.39, 2026-07-02, сессия #18)**
   - Проблема: `Path.Combine(subDir, sub.SubFileName)` — `SubFileName` приходит из удалённого API; `..\..\name.srt`
     или абсолютный путь пишет `.srt`/`.ass` вне temp (whitelist на строке 123 проверяет только расширение, не путь).
   - Решение: брать только `Path.GetFileName(sub.SubFileName)` и проверять, что итог остаётся внутри `subDir`.
   - Зачем: ответ стороннего/подменённого API не должен управлять путём записи на диск.
+  - ✅ **Сделано:** новый чистый `Utils.GetSafeFileNameChildPath(baseDir, name)` (strip директорий через `GetFileName`
+    + пост-strip гейт `IsNullOrEmpty`/`.`/`..` + финальный `StartsWith(baseFull + sep)` против traversal/абсолютных
+    путей) заменил сырой `Path.Combine`; при `null` — `InvalidOperationException` (как у соседней проверки расширения).
+    Тесты `FlyleafLibTests/Utils/SafeChildPathTests.cs` (11: traversal/absolute остаются внутри subDir; завершающий
+    сепаратор → null). adversarial `/code-review` → Approve.
 - **HC-06 — `SubtitleReader.ReadAll` разыменовывает `sub.rects[0]` без проверки `num_rects` 🟡 ⓢ (краш процесса) · `FlyleafLib/MediaPlayer/SubtitlesManager.cs:877`**
   - Проблема: гард `num_rects<1` только в ветке `IsBitmap && prevSub != null`. Если первый пакет bitmap-потока —
     clear/end-сегмент (`num_rects=0`, `prevSub==null`), доходит до `switch(sub.rects[0]->type)` при `rects==NULL` →
@@ -1177,11 +1189,14 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     бизнес-логика (throw на Unknown, запрет same-language кроме китайских регионов, маппинг) без единого теста.
   - Решение: прокинуть `TestContext.Current.CancellationToken`/`WaitAsync(10s)`; добавить `TranslateServiceHelperTests`.
   - Зачем: защита от deadlock-регрессий и рефакторинга языковой логики.
-- **HC-35 — Buffer null-терминатор в `WindowsClipboard.SetText` 🟢 ⓢ · `LLPlayer/Extensions/WindowsClipboard.cs:34`** (security/корректность)
+- **HC-35 — Buffer null-терминатор в `WindowsClipboard.SetText` 🟢 ⓢ · `LLPlayer/Extensions/WindowsClipboard.cs:34`** (security/корректность) · ✅ **DONE (v0.3.39, 2026-07-02, сессия #18)**
   - Проблема: `AllocHGlobal((len+1)*2)` не зануляет память, а `Marshal.Copy(..., len)` копирует только `len` символов —
     null-терминатор `CF_UNICODETEXT` не пишется → возможен мусорный хвост во вставленном тексте.
   - Решение: копировать `len+1` символов из массива с явным `\0` в конце (или занулять последние 2 байта).
   - Зачем: копирование субтитра/слова может дать мусор в буфере обмена.
+  - ✅ **Сделано:** новый чистый `Utils.ToNullTerminatedUtf16(text)` (буфер `len+1` с явным `'\0'`) + `Marshal.Copy(chars,
+    0, target, chars.Length)` в `SetText`. Тесты `FlyleafLibTests/Utils/NullTerminatedUtf16Tests.cs` (4). (Native
+    P/Invoke-путь `SetText` сам по себе вне юнит-охвата — LLPlayer без тест-проекта — покрыт корректностью хелпера + ручным smoke.)
 
 ### 8b. Ⓜ Средние (тир 2) — требуют рефакторинга/нового API/тестового каркаса
 

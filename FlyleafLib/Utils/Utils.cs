@@ -881,6 +881,73 @@ public static partial class Utils
     #nullable disable
     #endregion
 
+    #region Security helpers (HC-01 / HC-05 / HC-35)
+    #nullable enable
+    /// <summary>
+    /// True only for a well-formed absolute http/https URL that is safe to interpolate into a
+    /// quoted Windows process argument. Rejects '"' and '\' (which break out of the surrounding
+    /// quotes when parsed by CommandLineToArgvW) and any control characters. A legitimate URL
+    /// percent-encodes all of these, so no valid input is lost.
+    /// </summary>
+    public static bool IsSafeProcessUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        foreach (char c in url)
+            if (c == '"' || c == '\\' || char.IsControl(c))
+                return false;
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+            return false;
+
+        return uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="untrustedName"/> to a path directly inside <paramref name="baseDir"/>,
+    /// stripping any directory components (path traversal, absolute paths) it may carry. Returns null
+    /// when the name is empty, is "."/".." or would resolve outside <paramref name="baseDir"/>.
+    /// </summary>
+    public static string? GetSafeFileNameChildPath(string baseDir, string? untrustedName)
+    {
+        if (string.IsNullOrEmpty(baseDir) || string.IsNullOrEmpty(untrustedName))
+            return null;
+
+        string fileName = Path.GetFileName(untrustedName);
+        if (string.IsNullOrEmpty(fileName) || fileName == "." || fileName == "..")
+            return null;
+
+        string baseFull = Path.GetFullPath(baseDir);
+        string full     = Path.GetFullPath(Path.Combine(baseFull, fileName));
+
+        string baseWithSep = baseFull.EndsWith(Path.DirectorySeparatorChar)
+            ? baseFull
+            : baseFull + Path.DirectorySeparatorChar;
+
+        if (!full.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return full;
+    }
+
+    /// <summary>
+    /// Copies <paramref name="text"/> into a char[] with an explicit trailing '\0'. Native consumers of
+    /// CF_UNICODETEXT require the null terminator; a raw ToCharArray() omits it and leaves a garbage tail.
+    /// </summary>
+    public static char[] ToNullTerminatedUtf16(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        char[] buffer = new char[text.Length + 1];
+        text.CopyTo(0, buffer, 0, text.Length);
+        buffer[text.Length] = '\0';
+        return buffer;
+    }
+    #nullable disable
+    #endregion
+
     public static string TruncateString(string str, int maxLength, string suffix = "...")
     {
         if (string.IsNullOrEmpty(str))
