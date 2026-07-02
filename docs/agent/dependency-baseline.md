@@ -74,7 +74,11 @@ These tracked files are intentional release/runtime assets:
 - `LLPlayer/lib/license.7z.txt`
 - `Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
 
-Do not add downloaded `yt-dlp.exe`, Whisper/faster-whisper engines or models, Tesseract data, dubbing runtime data (`DubEngine/`, `dubmodels/`, `*.ru.dub.*`), runtime JSON, crash logs, dumps, recordings, snapshots, publish output, `bin`, or `obj` as tracked files.
+Do not add downloaded `yt-dlp.exe`, Whisper/faster-whisper engines or models, Tesseract data, dubbing runtime data (`DubEngine/`, `dubmodels/`, `*.ru.dub.*`, `*.ru.voices.json`), runtime JSON, crash logs, dumps, recordings, snapshots, publish output, `bin`, or `obj` as tracked files.
+
+## Dubbing Sidecar Lock
+
+`dub_sidecar/pyproject.toml` keeps the broad project requirement (`torch>=2.7.0`) routed to the `pytorch-cu128` index, while committed `dub_sidecar/uv.lock` freezes the reviewed runtime resolution to `torch` `2.11.0+cu128` from `https://download.pytorch.org/whl/cu128`. Changing the resolved torch version or CUDA wheel index is dependency work, not incidental cleanup, and requires `scripts/codex/verify.ps1`, `scripts/codex/check-dub-licenses.ps1`, and relevant dubbing smoke on the target Windows/RTX 5090 environment.
 
 ## VC++ Redistributable
 
@@ -90,5 +94,5 @@ Whisper/ASR diagnostics already ask users whether Microsoft Visual C++ Redistrib
 
 - `.github/actions/build-package/action.yml` is the source of truth for release-only cleanup, `yt-dlp.exe` download, and 7-Zip archive creation.
 - The runtime cleanup list is intentionally strict. Local `scripts/codex/ship.ps1` should fail if expected cleanup targets disappear instead of silently passing a layout that the GitHub Action would fail.
-- The release action must positively validate required publish contents (`LLPlayer.exe`, `lib/7z.dll`, all copied `FFmpeg/*.dll`, `Plugins/YoutubeDL/YoutubeDL.dll`, `YoutubeDL.pdb`, `yt-dlp.exe`, and committed `dub_sidecar` source) and recursively reject dubbing runtime/model/output artifacts (`DubEngine`, `dubmodels`, `*.ru.dub.*`).
+- The release action must positively validate required publish contents (`LLPlayer.exe`, `lib/7z.dll`, all copied `FFmpeg/*.dll`, `Plugins/YoutubeDL/YoutubeDL.dll`, `YoutubeDL.pdb`, `yt-dlp.exe`, and committed `dub_sidecar` source) and recursively reject dubbing runtime/model/output artifacts (`DubEngine`, `dubmodels`, `*.ru.dub.*`, `*.ru.voices.json`).
 - Local ship smoke creates the `Plugins/YoutubeDL/yt-dlp.exe_here` placeholder and verifies the release action markers for `yt-dlp.exe` download, positive content checks, recursive dubbing-artifact rejection, and 7-Zip archive command. It does not download `yt-dlp.exe` unless a future release task explicitly requests network packaging.

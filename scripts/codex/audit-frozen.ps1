@@ -94,7 +94,7 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify-fast")
         }
-        if ($normalized -match '^(LLPlayer/.*\.xaml|LLPlayer/(Views|Controls|ViewModels|Themes|Resources)/)') {
+        if ($normalized -match '^(LLPlayer/.*\.xaml|LLPlayer/(Views|Controls|ViewModels|Converters|Themes|Resources)/)') {
             $contracts.Add("wpf-design-contract.md")
             $contracts.Add("product-behavior-contract.md")
             $agents.Add("wpf_xaml_reviewer")
@@ -117,6 +117,13 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
             $gates.Add("playback smoke")
+        }
+        if ($normalized -match '^FlyleafLib/Utils/') {
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
         }
         if ($normalized -match '^FlyleafLib/MediaPlayer/Dubbing/') {
             $contracts.Add("dubbing-contract.md")
@@ -151,6 +158,22 @@ try {
             $agents.Add("packaging_release_reviewer")
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
+        }
+        if ($normalized -match '^FlyleafLibTests/') {
+            $contracts.Add("test coverage")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+        }
+        if ($normalized -match '(^|/).*\.csproj$|\.sln$|^Directory\.Build\.|^Directory\.Packages\.props$|^global\.json$') {
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+            if ($normalized -match '^(LLPlayer/|Plugins/YoutubeDL/).*\.csproj$') {
+                $gates.Add("ship")
+            }
         }
 
         if ($contracts.Count -eq 0) {

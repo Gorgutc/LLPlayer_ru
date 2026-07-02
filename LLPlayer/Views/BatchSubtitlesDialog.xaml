@@ -73,7 +73,14 @@
         </Grid>
 
         <DockPanel Grid.Row="1" Margin="0 0 0 10">
-            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+            <TextBlock
+                DockPanel.Dock="Right"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource MaterialDesignBodyLight}"
+                Text="{Binding FL.PlayerConfig.Subtitles.TranslateServiceType, StringFormat=Translate: {0} -> Russian}" />
+
+            <WrapPanel DockPanel.Dock="Left" Orientation="Horizontal">
                 <CheckBox
                     Margin="0 0 18 0"
                     VerticalAlignment="Center"
@@ -145,14 +152,7 @@
                     Content="Watch folder (auto-process new)"
                     ToolTip="Watch the selected folder and automatically transcribe new video files as they appear (once they finish copying). Processing starts when nothing else is running; otherwise the new files queue and run next. The Recursive, Overwrite, and friendliness (Smooth / CPU-while-active) options above still apply. Watching keeps running while this window is minimized to the tray and stops when you close it."
                     IsChecked="{Binding WatchFolder}" />
-            </StackPanel>
-
-            <TextBlock
-                DockPanel.Dock="Right"
-                HorizontalAlignment="Right"
-                VerticalAlignment="Center"
-                Foreground="{DynamicResource MaterialDesignBodyLight}"
-                Text="{Binding FL.PlayerConfig.Subtitles.TranslateServiceType, StringFormat=Translate: {0} -> Russian}" />
+            </WrapPanel>
         </DockPanel>
 
         <Grid Grid.Row="2">

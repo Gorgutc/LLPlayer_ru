@@ -110,7 +110,7 @@ non-Russian target languages; bundling non-commercial models.
 budget. The MVP is a single-voice *закадровый* voiceover over ducked original.
 
 **Definition of done — `.exe` (merge gate):**
-- `dotnet build -warnaserror` 0/0 (LLPlayer + Plugins/YoutubeDL); `dotnet test` green; `verify`
+- Documented baseline commands stay green: `dotnet restore -warnaserror`, `dotnet build --no-restore -warnaserror .\LLPlayer`, `dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL`, `dotnet test --no-restore .\FlyleafLibTests`, and `verify`
   (frozen) green **including the new NC-package lockfile gate**; multi-agent `/review`
   Critical/Important closed.
 - Published `.exe` **launches**, and a launch-test with **`GenerateDubbing=false` proves
