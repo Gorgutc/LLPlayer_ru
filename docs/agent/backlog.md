@@ -1,8 +1,10 @@
 # LLPlayer_ru — Task Backlog (рабочий бэклог)
 
 > **Назначение:** единый, максимально подробный список незакрытых задач для работы в будущих сессиях.
-> Каждая задача имеет стабильный ID (`B-`/`F-`/`T-`), описание, файлы, ссылки, важность, сложность, статус
+> Каждая задача имеет стабильный ID (`B-`/`F-`/`T-`/`HC-`), описание, файлы, ссылки, важность, сложность, статус
 > и мои рассуждения. В конце — два ранжирования: **по важности** и **по сложности**.
+> **§8 (HC-*) — находки многоагентного аудита здоровья кода (сессия #16, 2026-07-02): 44 подтверждённых задачи,
+> ранжированы простое→сложное (ⓢ→Ⓜ→Ⓛ); начинать оттуда для планомерной чистки багов/мёртвого кода/дублей.**
 >
 > Создан 2026-06-25 (сессия-анализ). Жив (living) — обновлять по мере закрытия задач.
 > Дополняет, а не заменяет: `docs/agent/*-contract.md` (frozen-контракты), второй мозг
@@ -618,7 +620,7 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 1132/1132** (на 2026-07-01 (сессия #15, v0.3.38): срез №5 +31 — `LanguageBadgeTests` (11: код/гейт сайдбар-бейджа языка, см. T-10 follow-up ниже), `UtilsFindNextAvailableFileTests` (8: next-free «name (N).ext», regex-стрип суффикса `(N)`, обе стороны границы 100 слотов — слот 100 занимается + null после 100), `ImageProcessorTests` (11: OCR `BlackText`/`AddPadding` — размеры/PixelFormat/пиксели вне блендинг-границ), culture-guard `GetWhisperLanguages_OrderIsCultureInvariant_UnderCzechCulture` (+1) вместе с прод-фиксом FS-orderby: `WhisperLanguage.GetWhisperLanguages` OrderBy теперь пиннит `StringComparer.InvariantCulture` (зеркало `Language.AllLanguages`; **RED-without-fix доказан под cs-CZ** — чешская «ch»-диграф-коллация смещала «Chinese» за H-имена; да-DK «aa»-пробник оказался вакуумным — пары различаются ДО диграфа) → 1132. SKIP-решения среза №5: `Interrupter` (frozen media-runtime + FFmpeg-callback → интеграционный путь), `SubtitlesOCR.Binarize` (private unsafe — seam не оправдан), `GetUniqueId` (тавтология Interlocked). Ранее: на 2026-07-01 (поздн.): F-16 companion-json persistence v0.3.37 +20 `DubbingVoiceAssignmentStoreTests` (ToJson/FromJson round-trip, atomic Save/LoadMap, disk/composite providers) → 1101; на 2026-07-01 (сред.): F-05-gap DubbingConfig-снапшот PR #109 +2 (regression + reflection-guard) → 1081; на 2026-07-01 (ранее): monitor follow-up добавил +16 регрессов для `DubbingConfig` normalization, `DubbingVoiceAssignmentMap`, и batch dubbing per-line voice bridge → 1079; на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
+**Тесты: 1133/1133** (на 2026-07-02 (сессия #16-монитор, PR #112 merge `e96c41d`): monitor follow-up +1 `GetWhisperLanguages_TitleCaseIsCultureInvariant_UnderTurkishCulture` вместе с прод-фиксом `char.ToUpper`→`char.ToUpperInvariant` в `WhisperLanguage.cs` → 1133. См. также новую секцию **§8 «Аудит здоровья кода» (HC-*)** — бэклог находок аудита сессии #16, ранжирован простое→сложное; конкретные тест-пробелы аудита — HC-34/HC-39/HC-40. На 2026-07-01 (сессия #15, v0.3.38): срез №5 +31 — `LanguageBadgeTests` (11: код/гейт сайдбар-бейджа языка, см. T-10 follow-up ниже), `UtilsFindNextAvailableFileTests` (8: next-free «name (N).ext», regex-стрип суффикса `(N)`, обе стороны границы 100 слотов — слот 100 занимается + null после 100), `ImageProcessorTests` (11: OCR `BlackText`/`AddPadding` — размеры/PixelFormat/пиксели вне блендинг-границ), culture-guard `GetWhisperLanguages_OrderIsCultureInvariant_UnderCzechCulture` (+1) вместе с прод-фиксом FS-orderby: `WhisperLanguage.GetWhisperLanguages` OrderBy теперь пиннит `StringComparer.InvariantCulture` (зеркало `Language.AllLanguages`; **RED-without-fix доказан под cs-CZ** — чешская «ch»-диграф-коллация смещала «Chinese» за H-имена; да-DK «aa»-пробник оказался вакуумным — пары различаются ДО диграфа) → 1132. SKIP-решения среза №5: `Interrupter` (frozen media-runtime + FFmpeg-callback → интеграционный путь), `SubtitlesOCR.Binarize` (private unsafe — seam не оправдан), `GetUniqueId` (тавтология Interlocked). Ранее: на 2026-07-01 (поздн.): F-16 companion-json persistence v0.3.37 +20 `DubbingVoiceAssignmentStoreTests` (ToJson/FromJson round-trip, atomic Save/LoadMap, disk/composite providers) → 1101; на 2026-07-01 (сред.): F-05-gap DubbingConfig-снапшот PR #109 +2 (regression + reflection-guard) → 1081; на 2026-07-01 (ранее): monitor follow-up добавил +16 регрессов для `DubbingConfig` normalization, `DubbingVoiceAssignmentMap`, и batch dubbing per-line voice bridge → 1079; на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
 > **Прогресс 2026-06-28 (PR #98, +100 тестов → 1026, tests-only):** покрыты ранее непокрытые
@@ -925,3 +927,361 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   у остальных измерений верификаторы упали). При нестабильности — снижать concurrency / верифицировать
   ключевые находки основным циклом.
 - **Build-гряз:** наши локальные publish-сборки не встраивают git-SHA → см. B-01.
+
+---
+
+## 8. 🩺 АУДИТ ЗДОРОВЬЯ КОДА — 2026-07-02 (сессия #16), находки HC-*
+
+> **Как это получено.** Многоагентный workflow (`wf_90189221-a97`): 13 finder-линз (threading, утечки
+> ресурсов, WPF/UI, мёртвый код, дубли, логика субтитров, ASR/перевод, дубляж, конфиг/персистентность, perf,
+> дрейф контрактов/гейтов, качество тестов, упаковка/native) → дедуп → **адверсариальная верификация каждой
+> находки скептиками** (critical/high — 3 линзы, medium/low — 1; убивает строгое большинство опровержений) →
+> критик полноты. Итог: 82 сырых → 76 после дедупа → **65 подтверждено, 11 опровергнуто**. Плюс 3 security-
+> находки критика верифицированы основным циклом вручную. Прогон на v0.3.38+monitor-fixes (main `e96c41d`),
+> гейты зелёные (build `-warnaserror` 0/0 ×3, тесты **1133/1133**).
+>
+> **Что это НЕ.** Ни одна из HC-задач не была пофикшена в сессии #16 (docs-only PR). Это чистый бэклог для
+> будущих сессий. Ранжирование ниже — **от простого к сложному** (ⓢ → Ⓜ → Ⓛ, внутри тира по важности).
+> App-код трогать по одной задаче/бандлу за сессию, с гейтами + adversarial-ревью + launch-тестом (как обычно).
+>
+> **Важность:** 🔴 критич. (RCE) · 🟠 высокая (high) · 🟡 средняя (medium) · 🟢 низкая (low). **Сложность:** ⓢ · Ⓜ · Ⓛ.
+> Опровергнутые находки (11) и не-верифицированные кандидаты раунда №2 — в конце секции.
+
+### 8a. ⓢ Простые (тир 1) — точечные правки, обычно одна-две строки
+
+**🔴/🟠 высокая важность:**
+
+- **HC-01 — Инъекция аргументов yt-dlp через URL 🔴 ⓢ · `Plugins/YoutubeDL/YoutubeDL.cs:523`** (security)
+  - Проблема: `Arguments = $"...{Options["ExtraArguments"]} ... \"{Playlist.Url}\" ..."` — сырая интерполяция URL в
+    командную строку (`UseShellExecute=false`). URL с `"` разрывает кавычки и внедряет произвольные флаги yt-dlp,
+    включая `--exec <cmd>` → выполнение команды. Открытие вредоносной ссылки/плейлиста = RCE.
+  - Решение: собирать аргументы через `ProcessStartInfo.ArgumentList` (без ручного квотирования) либо жёстко
+    экранировать/валидировать URL (запрет `"`, только http/https-схемы) до подстановки.
+  - Зачем: пользовательский ввод (в т.ч. из .m3u/ссылок) не должен управлять флагами внешнего процесса.
+- **HC-02 — `MenuAudioStreams` без `x:Shared="False"` 🟠 ⓢ · `LLPlayer/Resources/PopupMenu.xaml:17`**
+  - Проблема: ресурс из живых `MenuItem` используется ItemsSource'ом двух меню (FlyleafBar `:219` + PopupMenu `:381`);
+    соседние `MenuVideoStreams`/`MenuSubtitlesStreams(2)` намеренно помечены `x:Shared="False"`, этот — нет. WPF не
+    может вставить один элемент в два визуальных дерева → пункты audio-streams мигают/пропадают в одном из меню.
+  - Решение: добавить `x:Shared="False"` к `MenuAudioStreams` (как у соседних).
+  - Зачем: единственный audio-меню-ресурс выпал из уже применённого паттерна — прямая UI-регрессия.
+- **HC-03 — `SSAtoSubStyles`: доступы `code[1]`/`code[2]`/`s[i-1]` и `Substring` без проверки длины 🟠 ⓢ · `FlyleafLib/MediaFramework/MediaFrame/SubtitlesFrame.cs:88`**
+  - Проблема: на пограничном ASS-тексте падает: незакрытый `{\` → `Substring(i, -1)` (ArgumentOutOfRange); `{\}` →
+    `code[1]`, `{\b}` → `code[2]` вне границ; мёртвый гард `codeLen == -1` не срабатывает. Вход `"{\i1 Hello"`
+    (без `}`) при загрузке → падение парсинга всей дорожки субтитров.
+  - Решение: `int close = s.IndexOf('}', i); if (close == -1) break;` + проверять `code.Length` во всех `case` + `i > 0`.
+  - Зачем: битый/усечённый ASS (частый у скачанных сабов) не должен ронять загрузку субтитров.
+- **HC-04 — Temp-файл сборки `<out>.part` попадает под glob-детект `.ru.dub.*` 🟠 ⓢ · `dub_sidecar/server.py:263`**
+  - Проблема: атомарная запись через `movie.ru.dub.flac.part` рядом с медиа; при креше/kill во время `assemble`
+    остаётся усечённый `.part`, который матчится `ResolveExistingRussianDubPath` glob'ом `{name}.ru.dub.*` →
+    (а) `DubExistsAnyFormat=true` навсегда блокирует ре-рендер при `OverwriteExisting=false`; (б) auto-loader
+    цепляет огрызок как аудио.
+  - Решение: писать temp вне glob-паттерна (в `work_dir` или dotted `.{basename}.{pid}.tmp`) либо фильтровать
+    `*.part/*.tmp` в резолвере; best-effort удаление залипших `.part` при старте рендера.
+  - Зачем: одна незавершённая сборка молча ломает дубляж файла до ручной чистки.
+
+**🟡 средняя важность:**
+
+- **HC-05 — Path traversal при загрузке субтитров OpenSubtitles 🟠 ⓢ · `LLPlayer/ViewModels/SubtitlesDownloaderDialogVM.cs:111`** (security)
+  - Проблема: `Path.Combine(subDir, sub.SubFileName)` — `SubFileName` приходит из удалённого API; `..\..\name.srt`
+    или абсолютный путь пишет `.srt`/`.ass` вне temp (whitelist на строке 123 проверяет только расширение, не путь).
+  - Решение: брать только `Path.GetFileName(sub.SubFileName)` и проверять, что итог остаётся внутри `subDir`.
+  - Зачем: ответ стороннего/подменённого API не должен управлять путём записи на диск.
+- **HC-06 — `SubtitleReader.ReadAll` разыменовывает `sub.rects[0]` без проверки `num_rects` 🟡 ⓢ (краш процесса) · `FlyleafLib/MediaPlayer/SubtitlesManager.cs:877`**
+  - Проблема: гард `num_rects<1` только в ветке `IsBitmap && prevSub != null`. Если первый пакет bitmap-потока —
+    clear/end-сегмент (`num_rects=0`, `prevSub==null`), доходит до `switch(sub.rects[0]->type)` при `rects==NULL` →
+    AccessViolationException (в .NET не перехватывается → падение процесса). Живой декодер этот вход обрабатывает.
+  - Решение: сразу после получения pts общий гард `if (sub.num_rects < 1) { ...; continue; }` (зеркально `SubtitlesDecoder.cs:222`).
+  - Зачем: валидный вход (пустой bitmap-cue) роняет весь процесс.
+- **HC-07 — `Raise(LanguageName)` передаёт значение свойства вместо имени 🟡 ⓢ · `FlyleafLib/Engine/WhisperConfig.cs:48`**
+  - Проблема: сеттеры `Language`/`LanguageDetection`/`Translate` зовут `Raise(LanguageName)` при
+    `[CallerMemberName]`-сигнатуре → в `PropertyChanged` уходит текущее значение («Auto»…) как имя свойства;
+    уведомление о `LanguageName` не поднимается → заголовки меню «ASR ({0})» не обновляются при смене языка.
+  - Решение: заменить три вызова на `Raise(nameof(LanguageName))`.
+  - Зачем: пункты меню ASR показывают устаревший язык до перезахода.
+- **HC-08 — `TranslateLanguage` остаётся null при дефолте `EnglishAmerican` 🟡 ⓢ · `FlyleafLib/Engine/Config.cs:1526`**
+  - Проблема: `[JsonIgnore] TranslateLanguage` инициализируется только в сеттере `TranslateTargetLanguage`, а тот
+    не срабатывает при равенстве дефолту → у конфига/культуры с `EnglishAmerican` поле остаётся null всю сессию
+    (потенциальный NRE в потребителях, напр. `WordPopup.xaml.cs:516`).
+  - Решение: сделать `TranslateLanguage` вычисляемым (`=> Language.Get(TranslateTargetLanguage.ToISO6391())`) + null-guard; регресс-тест round-trip с `EnglishAmerican`.
+  - Зачем: дефолтная конфигурация оставляет производное поле неинициализированным.
+- **HC-09 — Бэкфилл `Ctrl+K` (OpenCommandPalette) создаёт дубликат хоткея 🟡 ⓢ · `LLPlayer/Services/FlyleafLoader.cs:104`**
+  - Проблема: бэкфилл проверяет только отсутствие `ActionName==OpenCommandPalette`, не занятость аккорда, и не
+    version-gated (каждый запуск). Удалил палитру и назначил Ctrl+K другому → на старте добавляется второй Ctrl+K →
+    `SettingsKeys` блокирует Apply всей вкладки (`DuplicationCount==0`), первый матч затеняет палитру.
+  - Решение: добавлять биндинг только если аккорд Ctrl+K свободен, и сделать бэкфилл one-shot через version-гейт.
+  - Зачем: приложение само создаёт конфликт хоткеев, который блокирует настройку клавиш.
+- **HC-10 — Сбой Save version-штампа внутри try загрузки → ложное «Cannot load» + `Environment.Exit(1)` 🟡 ⓢ · `LLPlayer/Services/FlyleafManager.cs:58`** (см. также `FlyleafLoader.cs:25/65`)
+  - Проблема: миграционный `Save` version-stamp выполняется внутри того же try, что и загрузка. Конфиг валиден, но
+    запись временно невозможна (файл залочен AV/OneDrive, каталог RO) → «Cannot load…, review/delete config» + Exit(1).
+    Приложение не стартует, хотя конфиг цел.
+  - Решение: вынести миграционный Save в отдельный try/catch (при сбое — лог + продолжить; миграции идемпотентны).
+  - Зачем: транзиентная блокировка файла не должна мешать запуску с валидным конфигом.
+- **HC-11 — `SevenZipBase.SetLibraryPath("lib/7z.dll")` по CWD-относительному пути 🟡 ⓢ · `LLPlayer/ViewModels/WhisperEngineDownloadDialogVM.cs:164`**
+  - Проблема: относительный путь резолвится от CWD процесса; приложение нигде не делает `SetCurrentDirectory(BaseDirectory)`.
+    Запуск через ассоциацию файлов/ярлык с чужим «Start in» → CWD ≠ папка установки → `SevenZipLibraryException`,
+    распаковка Whisper-движка ломается.
+  - Решение: `SevenZipBase.SetLibraryPath(Path.Combine(AppContext.BaseDirectory, "lib", "7z.dll"))`.
+  - Зачем: native-либа должна грузиться от каталога приложения, а не от CWD.
+- **HC-12 — Дефолтный пин yt-dlp `2025.08.20` протух 🟡 ⓢ · `.github/actions/build-package/action.yml:10`**
+  - Проблема: экшен качает `yt-dlp.exe` версии из input с default `2025.08.20`, но ни один release-workflow input не
+    передаёт → все релизы пакуют ~годовой давности бинарь, который почти гарантированно не работает на актуальном
+    YouTube (nsig/player). Самообновления (`-U`) в коде нет.
+  - Решение: вернуть шаг получения latest yt-dlp (с фиксацией версии в логе) либо регламент бампа default перед
+    релизом (+ проверка «не старше N месяцев» в `ship.ps1`).
+  - Зачем: онлайн-видео (ключевая фича плагина) ломается «из коробки» в свежих релизах.
+- **HC-13 — `DuckingPercent=0` молча превращается в 15 на стороне сайдкара 🟡 ⓢ · `dub_sidecar/server.py:209`**
+  - Проблема: C# допускает 0 («заглушить оригинал»), Python `int(req.get("ducking_percent") or 15)` — 0 falsy →
+    подставляет 15; и `max(1, …)` запрещает 0. Ducking 0% → оригинал звучит на 15% без ошибки.
+  - Решение: `dp = req.get("ducking_percent"); dp = 15 if dp is None else int(dp); ducking = max(0, min(100, dp))/100.0`.
+  - Зачем: настройка молча не соблюдается (lockstep C# ↔ Python нарушен).
+- **HC-14 — `assemble_real` игнорирует `total_ms`: хвостовые реплики обрезаются/выпадают 🟡 ⓢ · `dub_sidecar/server.py:229`**
+  - Проблема: `bed = np.zeros(total_n)` по длине декодированного оригинала; клип с `off >= total_n` выбрасывается,
+    перекрывающий конец — обрезается. Субтитр у конца файла + русская реплика длиннее слота → последняя фраза
+    дубляжа обрывается/отсутствует молча. Мок-путь `total_ms` использует честно.
+  - Решение: размер тайм-линии `max(len(original), ceil(rate*total_ms/1000))`, оригинал допаддить нулями.
+  - Зачем: конец фильма систематически теряет дубляж.
+- **HC-15 — Второй рукописный SRT-сериализатор в батче без защит `SubtitleExporter` 🟡 ⓢ · `FlyleafLib/MediaPlayer/Batch/SrtSubtitleWriter.cs:42`**
+  - Проблема: `SrtSubtitleWriter` заново пишет SRT без `NormalizeCueText` (blank-line guard) и `InvariantCulture`,
+    хотя есть чистый `SubtitleExporter.BuildSrt`. LLM вернул текст с пустой строкой, `ResegmentSubtitles=Off` →
+    пустая строка внутри cue терминирует cue в SRT → рассинхрон парсера у переведённого файла.
+  - Решение: переиспользовать `SubtitleExporter` (маппинг `SubtitleData`→`SubtitleExportLine`) через atomic temp+move;
+    минимум — звать общий `NormalizeCueText`/`FormatTime`.
+  - Зачем: батч-путь беднее интерактивного и портит SRT на реальном выводе LLM.
+- **HC-16 — `verify-frozen.ps1` не пиннит frozen-дефолты `ASRPerSegmentLanguage=false`/`PersistPerLineVoices=false` 🟡 ⓢ · `scripts/codex/verify-frozen.ps1:136`**
+  - Проблема: контракты объявляют «default false → byte-identical» frozen-границей (T-10 v0.3.32, F-16 v0.3.37), но
+    гейт пиннит соседние дефолты (`FixAllCaps`, `ASRFoldBack`…), а два новых тумблера — нет. Случайная смена дефолта
+    на true пройдёт гейт → тихая потеря byte-identical.
+  - Решение: два `Require-Text` по образцу `ASRFoldBack` (+ юнит-тест на оба дефолта).
+  - Зачем: заявленный инвариант без автопроверки.
+- **HC-17 — O(n)-цикл + полный `Refresh` ListCollectionView на тоггл `EnabledTranslated` 🟡 ⓢ · `FlyleafLib/Engine/Config.cs:1084`** (perf)
+  - Проблема: сеттер (частая горячая клавиша показа перевода) на UI-потоке идёт `foreach` по ВСЕМ cue (public-поле
+    без INPC → строки не обновятся) и зовёт `SubManager.Refresh()` → полная перестройка view (O(n)-копия под sync-локом,
+    пере-прогон фильтра, регенерация контейнеров). На длинном файле — заметный фриз на каждое нажатие.
+  - Решение: сделать `EnabledTranslated` INPC-свойством `SubtitleData` (обновятся только видимые строки), цикл под
+    `_subsLocker` по снимку; минимум — `view.DeferRefresh()` и не звать `Refresh`, когда сайдбар закрыт.
+  - Зачем: горячая клавиша даёт O(n) UI-работу на пустом месте.
+
+**🟢 низкая важность (ⓢ):**
+
+- **HC-18 — Гонки перечисления `Subs` без `SnapshotSubs()` (бандл) 🟡/🟢 ⓢ · несколько сайтов**
+  - Проблема: контракт `SnapshotSubs()` (`SubtitlesManager.cs:208-213`) требует читать `Subs` только под `_subsLocker`
+    (`EnableCollectionSynchronization` защищает лишь WPF-биндинг, не app-`foreach`). Прямое перечисление во время
+    фонового ASR/OCR-`Add`/`Clear` → `InvalidOperationException`/`ArgumentOutOfRange` на UI. Сайты:
+    `AiInsightsDialogVM.cs:118/311` (HC-18a), `SubtitlesExportDialogVM.cs:57` (HC-18b),
+    `SubtitlesSidebarVM.cs:154/165` CmdSubPlay/Sync по индексу (HC-18c), `Subtitles.cs:655` OCR-`ToList()` (HC-18d).
+  - Решение: во всех — `SnapshotSubs()` (или per-row `{Binding .}` вместо Index для Play/Sync).
+  - Зачем: повтор уже известного класса багов; частичный экспорт/AI-инсайты во время ASR роняют UI.
+- **HC-19 — Утечка per-chunk CTS и `token.Register` в FasterWhisper 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1707`**
+  - Проблема: на каждый аудио-чанк `new CancellationTokenSource` + `token.Register(...)` не диспозятся (finally чистит
+    только temp-файлы); `token` — на весь прогон → на 2-3ч фильме сотни живых регистраций/CTS; при отмене все
+    накопленные колбэки армят таймер в мёртвом CTS. Смежно: linked CTS в `AudioReader.ReadAll:504` без Dispose.
+  - Решение: `using CancellationTokenSource forceCts` + `using CancellationTokenRegistration reg = token.Register(...)`;
+    обернуть linked cts в try/finally с Dispose.
+  - Зачем: монотонный рост памяти на длинном/батч-ASR.
+- **HC-20 — Языкодетект faster-whisper: гейт глотает сегменты + lookup индексером роняет прогон 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1788`**
+  - Проблема: при `_isLanguageDetect && _detectedLanguage==null` каждая stdout-строка уходит в `continue` до строки
+    «Detected language …». Если `LanguageDetection=true`, но пользователь передал `--language xx` в `ExtraArguments`,
+    строки детекта не будет → все cue съедаются, прогон «успешно» пуст; плюс lookup языка индексером бросает на
+    неизвестном коде.
+  - Решение: `continue` только для реальной строки детекта/нематча; lookup через `TryGetValue` с фолбэком в `_manualLanguage`.
+  - Зачем: легальная power-user-ручка приводит к молча пустому ASR.
+- **HC-21 — PGS: коррекция `EndTime` зависит от наличия `Bitmap` → cue длиной +49.7 дней 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesManager.cs:866`**
+  - Проблема: при `end_display_time==uint.MaxValue` EndTime исправляется по следующему пакету только если
+    `prevSub.Bitmap?...==uint.MaxValue`; при `useBitmap=false` (режим только таймстемпов) `Bitmap==null` → конец
+    остаётся ~49.7 дней → перекрытие cue, вечное `Showing`, битый prev/next-интервал.
+  - Решение: хранить `end_display_time` независимо от `useBitmap` и корректировать по нему; последний cue клампить.
+  - Зачем: некорректные тайминги субтитров в bitmap-режиме без кэша.
+- **HC-22 — `WordPopup`: сервисы/`_cts` не освобождаются при уничтожении контрола 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:137`**
+  - Проблема: `_translateService`/`_wordDefinitionService` (каждый владеет HttpClient, для LLM — со своим handler вне
+    общего пула) диспозятся только в `Clear()` при смене настроек; при уничтожении WordPopup (сайдбар пересоздаётся
+    из DataTemplate на каждый toggle) — нет teardown → утечка соединений до GC.
+  - Решение: `Unloaded`-хендлер (или `Teardown`) с `Clear()` + `_cts?.Cancel()/Dispose()` + dispose `_pdicSender`.
+  - Зачем: повторные toggle сайдбара при LLM-переводе слов копят соединения.
+- **HC-23 — PDIC: pipe-процесс спавнится на каждый WordPopup и не убивается 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:349`**
+  - Проблема: `_pdicSender ??= Container.Resolve<PDICSender>()` (transient) в конструкторе запускает внешний exe
+    PDIC-пайпа; `Dispose` не вызывается нигде, у `PipeClient` нет финализатора → процессы копятся; сам `Dispose` —
+    `async void`.
+  - Решение: зарегистрировать `PDICSender` синглтоном (dispose при выходе) или диспозить в `Unloaded`; переписать
+    `Dispose` синхронно (try close с таймаутом / finally dispose pipe).
+  - Зачем: утечка внешних процессов при использовании словаря.
+- **HC-24 — `TakeSnapshotToFile`: GDI+ Bitmap не диспозится на успехе 🟢 ⓢ · `FlyleafLib/MediaPlayer/Player.Extra.cs:362`**
+  - Проблема: снапшот-битмап диспозится только в `catch`; на успешном пути (после Save) — до финализатора. Серия
+    снапшотов (зажатый хоткей) → быстрый рост нативной памяти/GDI-хендлов, риск исчерпания GDI-лимита (10k).
+  - Решение: `using var snapshotBitmap = …` (или try/finally).
+  - Зачем: интенсивные снапшоты копят GDI-ресурсы.
+- **HC-25 — AI Insights: кнопка Generate не активируется, если транскрипт появился после открытия 🟢 ⓢ · `LLPlayer/ViewModels/AiInsightsDialogVM.cs:309`**
+  - Проблема: `_hasText` пересчитывается только в `OnDialogOpened`/сеттере `SelectedSubIndex`. Запуск ASR + сразу
+    открыть диалог → Generate остаётся серой, пока не переключить слот ①/② или переоткрыть.
+  - Решение: подписаться на `PropertyChanged` выбранного SubManager (Count/IsLoading) на время жизни диалога,
+    вызывать `RefreshHasText`; отписка в `OnDialogClosed`.
+  - Зачем: «мёртвая» основная кнопка диалога в типичном сценарии.
+- **HC-26 — `SidebarFontWeight` сохраняется/показывается, но сайдбар его не применяет 🟢 ⓢ · `LLPlayer/Views/SubtitlesSidebar.xaml:531`**
+  - Проблема: диалог шрифта сайдбара пишет `AppConfig.SidebarFontWeight`, Settings показывает его, но список сайдбара
+    биндит только FontSize/FontFamily — FontWeight нигде не привязан.
+  - Решение: `FontWeight="{Binding FL.Config.SidebarFontWeight}"` на `SubtitleListBox` (либо убрать выбор веса из диалога).
+  - Зачем: настройка не имеет эффекта — вводит в заблуждение.
+- **HC-27 — `PersistVoiceAssignments`: синхронный I/O + двойной O(n)-снимок на UI-потоке 🟢 ⓢ · `LLPlayer/ViewModels/SubtitlesSidebarVM.cs:210`** (perf)
+  - Проблема: `CmdSubSetVoice` на UI-потоке синхронно: до 3× `File.Exists` (для SMB — блокирующие сетевые), `SnapshotSubs`
+    копирует ОБА трека (2×O(n) под локом, блокируя per-frame скример), `SaveAtomic` пишет JSON. Сетевой файл + 5000+ cue
+    + `PersistPerLineVoices=on` → фриз на каждый выбор голоса.
+  - Решение: быстрый снимок только override-cue на UI, а `File.Exists`/сериализацию/запись — в `Task.Run` с debounce.
+  - Зачем: назначение голоса замораживает UI на больших/сетевых файлах.
+- **HC-28 — Bing/Microsoft: отменённая задача access-токена залипает в кэше 🟢 ⓢ · `FlyleafLib/MediaPlayer/Translation/Services/MicrosoftTranslateServiceBase.cs:177`**
+  - Проблема: `GetAccessTokenTask` кэширует Task с токеном первого вызывающего; если Cancel пришёл во время первого
+    fetch, canceled-task остаётся в `_accessToken` → следующий перевод детерминированно фейлится «A task was canceled».
+  - Решение: в OCE-ветке compare-and-clear кэша перед throw (или fetch с `CancellationToken.None` + `WaitAsync(token)`).
+  - Зачем: один отменённый seek ломает переводчик до перезахода.
+- **HC-29 — `AtempoMin/AtempoMax` не валидируются 🟢 ⓢ · `FlyleafLib/Engine/DubbingConfig.cs:51`**
+  - Проблема: свободные TextBox без клампа. `AtempoMax<1` → переполняющие реплики ЗАМЕДЛЯЮТСЯ (drift растёт); `≤0` →
+    `librosa.time_stretch(rate<=0)` бросает → 500 → весь дубляж файла Failed. Опечатка `0.15` вместо `1.15`.
+  - Решение: в `ComputeAtempo` для `clipMs>slotMs` возвращать `Math.Max(1.0, Clamp(...))`; клампить `AtempoMin/Max` в
+    сеттерах (напр. 0.5..2.0, min≤max).
+  - Зачем: опечатка в настройке ломает весь дубляж.
+- **HC-30 — Отмена/таймаут ожидания порта сайдкара маскируется под `InvalidOperationException` 🟢 ⓢ · `FlyleafLib/MediaPlayer/Dubbing/DubSidecarHost.cs:152`**
+  - Проблема: `WaitForExitAsync(portCts.Token)` при отмене/120с-таймауте становится Canceled → бросается
+    «sidecar exited before reporting a port» при живом процессе → джоб `Failed` вместо `Canceled`.
+  - Решение: перед ошибкой `token.ThrowIfCancellationRequested()` + отдельное сообщение на таймаут; «exited before…»
+    только при `_process.HasExited`.
+  - Зачем: отмена батча выглядит как ошибка сайдкара.
+- **HC-31 — `OutlinedTextBlock`: безусловный `UpdatePen()` в Measure/Arrange 🟢 ⓢ · `LLPlayer/Controls/OutlinedTextBlock.cs:323`** (perf)
+  - Проблема: `ArrangeOverride` безусловно, `MeasureOverride` при `StrokeThicknessInitial>0` (дефолт 3) зовут
+    `UpdatePen()` → новый незамороженный `Pen` + `InvalidateVisual()` на каждый layout-проход каждого слова,
+    обесценивая `_geometryKey`-гейт; незамороженный Pen требует клона в render-поток.
+  - Решение: пересоздавать Pen только при смене входов (кэш-ключ), `pen.Freeze()`, не звать `InvalidateVisual` из
+    Measure/Arrange без изменений.
+  - Зачем: субтитр-оверлей с многими словами перерисовывается на пустом месте.
+- **HC-32 — Bundle «мёртвый код» 🟢 ⓢ · один PR-чистка**
+  - Проблема: подтверждено grep'ом по всему репо (вкл. XAML/DryIoc/JSON-сериализацию/reflection-guard) — не используется:
+    `ObservableCollectionExtensions.FindIndex` (`SubtitlesManager.cs:1243`; все `FindIndex` идут на `List<T>`);
+    `VideoConfig.SwsForce` (`Config.cs:846`, сериализуется, не читается — форс через `VideoProcessor=SwsScale`);
+    класс `Utils.ZOrderHandler` целиком (`ZOrderHandler.cs`, ~165 стр.); кластер в `Utils.cs:172` (`AddFirewallRule`,
+    `FindFileBelow`, `GetUserDownloadPath`, `DownloadFile`×2, `GetGPUCounters/GetGPUUsage`, `GZipDecompress`, ~120 стр.);
+    мёртвые P/Invoke `NativeMethods.cs:100` (`GetWindowRgn`/`GetClientRect`/`GetWindowInfo`+`WINDOWINFO`/`SetForegroundWindow`
+    + 2 закомм.); зомби-метод `SeekSubtitles` `DecoderContext.cs:309` (+вызовы :566/:588-601/:259-268, `Player.Open.cs:820`);
+    `PDICSender.Connect()` (`PDICSender.cs:73`); зомби-блок `SavedSession` `Session.cs:23-34` (ссылается на несуществующее
+    свойство). ⚠️ Каждое удаление подтвердить своим grep'ом непосредственно перед правкой (репо живёт).
+  - Решение: точечные удаления одним cleanup-PR (build `-warnaserror` = верификация).
+  - Зачем: ~500 строк мёртвого кода вводят в заблуждение и раздувают поверхность сопровождения.
+- **HC-33 — Bundle «дрейф контрактов/доков/гейтов» 🟢 ⓢ · docs/tooling-PR** (⚠️ frozen-контракты — только с одобрения владельца)
+  - Проблема: `audit-frozen.ps1:32` не маршрутизирует правки `dubbing-contract.md`/`docs/agent/dubbing/**` на доменных
+    ревьюеров из `subagent-review-matrix.md` (падают в общий бакет); `manual-smoke-matrix.md:82` не покрывает opt-in
+    M3-оверлей (`Theme.ShowM3Theme`, T-05 v0.3.29), в отличие от прочих opt-in UI-фич; `backlog.md:621` счётчик тестов
+    «1132» устарел (PR #112 → 1133), monitor-PR #112 не занесён в хронику; `ship.ps1:126` releaseTailChecks проверяет
+    6/7 FFmpeg-маркеров — пропущен ключевой `avcodec-62.dll`; `.gitignore:370` не покрывает `.venv/` (риск закоммитить
+    многогигабайтный `dub_sidecar/.venv` при `git add -A`).
+  - Решение: точечные правки гейтов/доков (не трогая frozen-контракты без запроса владельца) одним PR.
+  - Зачем: гейты «зелёные» при реальном дрейфе → ложная уверенность.
+- **HC-34 — Bundle «пробелы тестов» 🟢 ⓢ (в рамках T-03)**
+  - Проблема: await-тесты `BatchSubtitleTranslatorTests.cs:271` без `TestContext`-токена/таймаута (xUnit1051-паттерн:
+    зависший тест стопорит весь прогон); `TranslateServiceHelper.TryGetLanguage` (`ITranslateService.cs:190`) — чистая
+    бизнес-логика (throw на Unknown, запрет same-language кроме китайских регионов, маппинг) без единого теста.
+  - Решение: прокинуть `TestContext.Current.CancellationToken`/`WaitAsync(10s)`; добавить `TranslateServiceHelperTests`.
+  - Зачем: защита от deadlock-регрессий и рефакторинга языковой логики.
+- **HC-35 — Buffer null-терминатор в `WindowsClipboard.SetText` 🟢 ⓢ · `LLPlayer/Extensions/WindowsClipboard.cs:34`** (security/корректность)
+  - Проблема: `AllocHGlobal((len+1)*2)` не зануляет память, а `Marshal.Copy(..., len)` копирует только `len` символов —
+    null-терминатор `CF_UNICODETEXT` не пишется → возможен мусорный хвост во вставленном тексте.
+  - Решение: копировать `len+1` символов из массива с явным `\0` в конце (или занулять последние 2 байта).
+  - Зачем: копирование субтитра/слова может дать мусор в буфере обмена.
+
+### 8b. Ⓜ Средние (тир 2) — требуют рефакторинга/нового API/тестового каркаса
+
+- **HC-36 — OCR: один общий `_ocrService` на оба сабтрека 🟠 Ⓜ · `FlyleafLib/MediaPlayer/SubtitlesOCR.cs:65/91`**
+  - Проблема: класс параметризован `subIndex` и создан для 2 треков с раздельными `_lockers/_ctss`, но движок хранится
+    в единственном поле: повторный `TryInitialize` перезаписывает без Dispose (утечка нативного Tesseract-движка +
+    модели); `Do` диспозит через `using`, но поле не обнуляет (use-after-dispose); dual-OCR primary+secondary → оба
+    `Do` захватывают ОДИН движок → неверный язык/двойной Dispose.
+  - Решение: `IOCRService?[] _ocrServices` per-subIndex; в `TryInitialize` менять только слот с Dispose старого; в `Do`
+    забирать атомарно (`Interlocked.Exchange`).
+  - Зачем: утечка native-движка и порча результатов при двух OCR-дорожках.
+- **HC-37 — Гонки/TOCTOU на локах `_cts`/`SubIndexSet`/`_lockerSubs` в ASR/OCR/Translate (бандл) 🟡 Ⓜ**
+  - Проблема: несколько связанных дефектов синхронизации: `SubtitlesASR.Execute:215` бэкапит `Subs` под чужим
+    `_lockerSubs` вместо `SnapshotSubs` (гонка с `Refresh→Clear`); `SubIndexSet` (`SubtitlesASR.cs`) мутируется под ДВУМЯ
+    локами и энумерируется без лока (`:328` — лок внутри цикла) → `InvalidOperationException` при dual-ASR + Reset;
+    `SubtitlesTranslator.cs:63` `_translationStartCancellation` мутируется из UI+screamer без лока (double-dispose);
+    `SubtitlesTranslator.cs:262` CTS создаётся ВНУТРИ задачи после снапшота → `Cancel()` не отменяет только-что
+    запланированный проход (полный проход с LLM-таймаутом); `SubtitlesTranslator.cs:280` читает `Subs[i]` без лока;
+    TOCTOU на `_cts` в `SubtitlesManager.TryCancelWait:603` и `_ctss[subIndex]` в `SubtitlesOCR.TryCancelWait:153`
+    (NRE/ObjectDisposedException на воркере загрузки).
+  - Решение: единый лок на `SubIndexSet` + снапшот под локом для энумерации; `SnapshotSubs()` для бэкапа/чтения окна;
+    CTS создавать в момент планирования задачи (в том же lock) и передавать токеном; `Interlocked.Exchange` +
+    локальная копия в `TryCancelWait` (оба класса).
+  - Зачем: набор гонок, каждая роняет ASR/OCR/перевод с error-диалогом при быстром переключении дорожек/seek —
+    прямое продолжение уже закрытого класса «Subs без `_subsLocker`».
+- **HC-38 — Неатомарная запись всех трёх конфигов 🟡 Ⓜ · `LLPlayer/Services/AppConfig.cs:78` (+`Config.cs:140/1753`)**
+  - Проблема: `Save` пишет прямым `File.WriteAllText`; записи идут и без действий пользователя (PersistBatchDefaults на
+    каждый тумблер, AsrOnboardingShown, version-stamp). Power-loss/креш посреди записи → усечённый JSON → следующий
+    старт: `JsonException` → MessageBox + `Environment.Exit(1)` (кирпич).
+  - Решение: единый atomic-хелпер (temp рядом + `File.Replace/Move(overwrite)`, как companion-json); при `JsonException`
+    на загрузке — переименовать битый в `.bak` и стартовать с дефолтами вместо Exit(1).
+  - Зачем: обрыв записи не должен блокировать запуск приложения.
+- **HC-39 — Reflection completeness-guard покрывает не все nested-конфиги снапшота 🟡 Ⓜ · `FlyleafLibTests/MediaPlayer/Batch/BatchSubtitleTranslatorTests.cs:148`**
+  - Проблема: полноценный guard есть только для `DubbingConfig`; `WhisperCppConfig` (15 полей), `FasterWhisperConfig` (9),
+    `TranslateChatConfig` (11), `WhisperConfig` (3) — лишь точечные тесты. Новое свойство с UI-биндингом, забытое в
+    `BatchSubtitleConfigSnapshot`, батч молча проигнорирует (тот же класс, что F-05-gap).
+  - Решение: обобщить `DubbingConfig`-guard в параметризованный helper и добавить guard-тест на каждый nested-конфиг.
+  - Зачем: fail-closed на будущие «забытые поля» батч-снапшота.
+- **HC-40 — `Config.Clone()` теряет `Data`/`Plugins`/`Version`; `KeysConfig.Clone` → `Keys=null`; `SubtitlesConfig.Clone` делит вложенные объекты 🟢 Ⓜ · `FlyleafLib/Engine/Config.cs:54`**
+  - Проблема: публичный снапшот-API библиотеки неполон: `Config.Clone` копирует не всё (опции плагинов YoutubeDL
+    теряются, `Version=null` → повтор всех миграций у клона), `PlayerConfig.Clone→KeysConfig.Clone` ставит `Keys=null`
+    (NRE у потребителя), `SubtitlesConfig.Clone` через `MemberwiseClone` делит массив `SubConfigs` и вложенные объекты
+    с оригиналом.
+  - Решение: либо довести `Config.Clone` до полноты (deep-copy Data/Plugins/nested, перенос Version), либо пометить
+    как неподдерживаемый и направить потребителей на `BatchSubtitleConfigSnapshot`; закрепить reflection-guard.
+  - Зачем: скрытая мина для любого будущего потребителя `Config.Clone`.
+- **HC-41 — Три download-диалога (~90% copy-paste, уже с дрейфом) 🟢 Ⓜ · `LLPlayer/ViewModels/TesseractDownloadDialogVM.cs` (+Whisper model/engine)**
+  - Проблема: `WhisperModelDownloadDialogVM`/`TesseractDownloadDialogVM`/`WhisperEngineDownloadDialogVM` — один VM
+    скопирован трижды (одинаковый `DownloadModelWithProgressAsync`); копии разъехались: Whisper диспозит `_cts`,
+    Tesseract/Engine — только `=null` (утечка CTS); `CmdOpenFolder` с try/catch только у Whisper.
+  - Решение: `ModelDownloadServiceBase` (download+progress+temp-move+единый finally+единый OpenFolder+класс. OCE-таймаута);
+    три VM оставляют только источник моделей и UI.
+  - Зачем: дрейф между копиями = баги чинятся в одной, живут в двух.
+- **HC-42 — Батч-переводчик вручную зеркалит интерактивный (паритет только на комментариях) 🟢 Ⓜ · `FlyleafLib/MediaPlayer/Batch/BatchSubtitleTranslator.cs:146`**
+  - Проблема: продублированы 3 куска логики `SubtitlesTranslator`: построение ContextWindow (`:146` vs `:416`),
+    empty-reply guard (`:117` vs `:372`), WrapLines-гейтинг по `ResegmentSubtitles` (`:53/:122` vs `:380`). Синхронность
+    держится только комментариями «Parity with interactive» — при правке одного пути второй молча разойдётся.
+  - Решение: вынести чистые куски в `TranslationCueRules` (ShouldAcceptReply/PostProcess/BuildWindow) + паритетный тест.
+  - Зачем: контекст/качество перевода в батче должны совпадать с интерактивом гарантированно, не «на честном слове».
+- **HC-43 — Отмена рендера дубляжа гоняется с in-flight `assemble` сайдкара 🟢 Ⓜ · `FlyleafLib/MediaPlayer/Dubbing/DubbingRenderer.cs:103`**
+  - Проблема: отмена HTTP-POST `/assemble` не останавливает python-поток — он дописывает `os.replace(output)` позже
+    (~5с окно). C# в catch делает `TryDeleteOutput` (файла ещё нет) → «нежеланный» дубляж материализуется ПОСЛЕ →
+    следующий запуск пропускает рендер (`DubExistsAnyFormat`), auto-loader цепляет его.
+  - Решение: удалять output не сразу, а после гарантированной остановки сборки (cancel-endpoint/поколение запроса в
+    сайдкаре, либо повторная зачистка в `DisposeAsync` и в начале следующего рендера того же файла).
+  - Зачем: отменённый дубляж «оживает» и ломает последующие прогоны.
+
+### 8c. Ⓛ Крупные (тир 3) — архитектурный рефакторинг
+
+- **HC-44 — Тройная копия offline-читателя (`WaveformReader`/`AudioReader`/`SubtitleReader`) 🟡 Ⓛ · `FlyleafLib/MediaPlayer/WaveformReader.cs:194`**
+  - Проблема: три класса «изолированный второй `avformat_open_input`» дублируют почти дословно: `Open()` (Demuxer +
+    `token.Register(ForceInterrupt)` + Log.Prefix + обработка ошибок, ~35 стр. ×3) и swr-блок ресемплинга в S16 mono 16k
+    (reinit-guard + `swr_alloc_set_opts2` + расчёт nOut+delay + `swr_convert`) скопирован из `SubtitlesASR.ResampleTo`
+    в `WaveformReader.ResampleFrame`.
+  - Решение: `OfflineMediaReaderBase`/`OpenIsolated(...)` для Open/Dispose + переиспользуемый `S16MonoResampler`
+    (с опциональным denoise-хуком для F-02), которым пользуются `AudioReader` и `WaveformReader`.
+  - Зачем: native/FFmpeg-код в трёх копиях — правка (напр. фикс ресемпла или denoise) должна делаться единожды;
+    высокий риск рассинхрона в самом хрупком (interop) слое. Пересекается с F-02-full.
+
+### 8d. Опровергнутые находки (11) — НЕ баги, зафиксировано для истории
+> Верификаторы отсеяли (цитаты часто верны, но сценарий нереализуем / уже известно / стилевой нит):
+> dual-ASR блокировка на `_locker` (`SubtitlesASR.cs:167`, вход не существует); per-frame конкуренция за `_subsLocker`
+> (`SubtitlesManager.cs:140`, WPF ведёт себя иначе); `DeleteAfter` binary-search по EndTime (`:441`, путь под гейтом
+> `LanguageSource==null`, ASR не поверх загруженных); `SubtitleData.Clone()` не копирует `SubStyles` (`:1144`, факт
+> верен, но сценарий сегодня нереализуем); atomic temp+move в `DubbingVoiceAssignmentStore` (стилевой нит);
+> GoogleV1/DeepLX/MS повторное оборачивание `TranslationException` (Kind не теряется на этих путях); CosyVoice
+> preset→voice маппинг (`server.py:125`, = уже известный открытый F-16-остаток); README «about this fork» (= закрытый
+> T-06); `MaxConcurrent` в тесте (теоретический hardening); `OneShotHttpServer` RST-гонка (для .NET нереализуемо);
+> `-warnaserror` без NuGetAudit-политики (намеренная замороженная политика).
+
+### 8e. 🔎 Кандидаты раунда №2 (НЕ верифицированы адверсариально — из критика полноты)
+> Требуют отдельной проверки в следующей health-сессии; ранжирование появится после верификации:
+> - **Supply-chain:** сетевые загрузки (Whisper-движок 7z, модели, tesseract traineddata) без проверки хэшей/подписей
+>   + возможный zip-slip в `SevenZipExtractor.ExtractArchiveAsync` (`WhisperEngineDownloadDialogVM.cs:166`).
+> - **Секреты:** API-ключи (DeepL/Azure/OpenAI-like/LiteLLM) плоским текстом в `Config.json`; проверить утечку в
+>   логи/error-диалоги (`ex.Message` с URL) и в экспорт конфига.
+> - **Prompt injection:** недоверенный текст субтитров (скачанные/ASR) без экранирования уходит в LLM-промпты
+>   (AI Insights, LiteLLM/OpenAILike-перевод) — проверить устойчивость парсинга ответов.
+> - **Не покрытые зоны:** `WpfColorFontDialog/` (12 файлов), `LLPlayer/Services/AppActions.cs` (1075 стр., рестарт-путь
+>   `Process.Start`), `LLPlayer/Controls/SelectableSubtitleText.xaml.cs` (662 стр., word-интеракции),
+>   `LLPlayer/Extensions/*` (кроме HC-35).
+> - **YoutubeDL lifecycle:** `Directory.Delete(workingDir, true)` без try/catch в Dispose + `taskkill`-процесс без
+>   Dispose (`YoutubeDL.cs:234/217`); толерантность `YoutubeDLJson.cs` к битому JSON.
