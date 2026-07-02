@@ -97,19 +97,10 @@ public static partial class Utils
         public static extern IntPtr CreateRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect);
 
         [DllImport("User32.dll")]
-        public static extern int GetWindowRgn(IntPtr hWnd, IntPtr hRgn);
-
-        [DllImport("User32.dll")]
         public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool bRedraw);
 
         [DllImport("user32.dll")]
         public static extern bool GetWindowRect(IntPtr hwnd, ref RECT rectangle);
-
-        [DllImport("user32.dll")]
-        public static extern bool GetClientRect(IntPtr hwnd, ref RECT rectangle);
-
-        [DllImport("user32.dll")]
-        public static extern bool GetWindowInfo(IntPtr hwnd, ref WINDOWINFO pwi);
 
         [DllImport("user32.dll")]
         public static extern void SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
@@ -118,32 +109,8 @@ public static partial class Utils
         public static extern IntPtr GetParent(IntPtr hWnd);
 
         [DllImport("user32.dll")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool SetForegroundWindow(IntPtr hWnd);
-
-        [DllImport("user32.dll")]
         public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct WINDOWINFO
-        {
-            public uint cbSize;
-            public RECT rcWindow;
-            public RECT rcClient;
-            public uint dwStyle;
-            public uint dwExStyle;
-            public uint dwWindowStatus;
-            public uint cxWindowBorders;
-            public uint cyWindowBorders;
-            public ushort atomWindowType;
-            public ushort wCreatorVersion;
-
-            // Allows automatic initialization of "cbSize" with "new WINDOWINFO(null/true/false)".
-            public WINDOWINFO(Boolean? filler) : this()
-                => cbSize = (UInt32)Marshal.SizeOf(typeof(WINDOWINFO));
-
-        }
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {

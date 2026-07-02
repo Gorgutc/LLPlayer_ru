@@ -1,13 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
-using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
 using CliWrap;
-using Microsoft.Win32;
 using Vortice.Direct3D11;
 
 namespace FlyleafLib;
@@ -162,70 +160,6 @@ public static partial class Utils
     {
         double nearest = Math.Round(value);
         return Math.Abs(value - nearest) < epsilon ? nearest : value;
-    }
-
-    /// <summary>
-    /// Adds a windows firewall rule if not already exists for the specified program path
-    /// </summary>
-    /// <param name="ruleName">Default value is Flyleaf</param>
-    /// <param name="path">Default value is current executable path</param>
-    public static void AddFirewallRule(string ruleName = null, string path = null)
-    {
-        Task.Run(() =>
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(ruleName))
-                    ruleName = "Flyleaf";
-
-                if (string.IsNullOrEmpty(path))
-                    path = Process.GetCurrentProcess().MainModule.FileName;
-
-                path = $"\"{path}\"";
-
-                // Check if rule already exists
-                Process proc = new()
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "cmd",
-                        Arguments = $"/C netsh advfirewall firewall show rule name={ruleName} verbose | findstr /L {path}",
-                        CreateNoWindow = true,
-                        UseShellExecute = false,
-                        RedirectStandardOutput
-                                        = true,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    }
-                };
-
-                proc.Start();
-                proc.WaitForExit();
-
-                if (proc.StandardOutput.Read() > 0)
-                    return;
-
-                // Add rule with admin rights
-                proc = new Process
-                {
-                    StartInfo = new ProcessStartInfo
-                    {
-                        FileName = "cmd",
-                        Arguments = $"/C netsh advfirewall firewall add rule name={ruleName} dir=in  action=allow enable=yes program={path} profile=any &" +
-                                             $"netsh advfirewall firewall add rule name={ruleName} dir=out action=allow enable=yes program={path} profile=any",
-                        Verb = "runas",
-                        CreateNoWindow = true,
-                        UseShellExecute = true,
-                        WindowStyle = ProcessWindowStyle.Hidden
-                    }
-                };
-
-                proc.Start();
-                proc.WaitForExit();
-
-                Log($"Firewall rule \"{ruleName}\" added for {path}");
-            }
-            catch { }
-        });
     }
 
     // We can't trust those
@@ -409,20 +343,6 @@ public static partial class Utils
     }
     public static string GetValidFileName(string name) => string.Join("_", name.Split(Path.GetInvalidFileNameChars()));
 
-    public static string FindFileBelow(string filename)
-    {
-        string current = AppDomain.CurrentDomain.BaseDirectory;
-
-        while (current != null)
-        {
-            if (File.Exists(Path.Combine(current, filename)))
-                return Path.Combine(current, filename);
-
-            current = Directory.GetParent(current)?.FullName;
-        }
-
-        return null;
-    }
     public static string GetFolderPath(string folder)
     {
         if (folder.StartsWith(":"))
@@ -448,7 +368,6 @@ public static partial class Utils
 
         return null;
     }
-    public static string GetUserDownloadPath() { try { return Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders\").GetValue("{374DE290-123F-4565-9164-39C4925E467B}").ToString(); } catch (Exception) { return null; } }
     public static string DownloadToString(string url, int timeoutMs = 30000)
     {
         try
@@ -464,40 +383,6 @@ public static partial class Utils
         return null;
     }
 
-    public static MemoryStream DownloadFile(string url, int timeoutMs = 30000)
-    {
-        MemoryStream ms = new();
-
-        try
-        {
-            using HttpClient client = new() { Timeout = TimeSpan.FromMilliseconds(timeoutMs) };
-            client.GetAsync(url).Result.Content.CopyToAsync(ms).Wait();
-        }
-        catch (Exception e)
-        {
-            Log($"Download failed {e.Message} [Url: {url ?? "Null"}]");
-        }
-
-        return ms;
-    }
-
-    public static bool DownloadFile(string url, string filename, int timeoutMs = 30000, bool overwrite = true)
-    {
-        try
-        {
-            using HttpClient client = new() { Timeout = TimeSpan.FromMilliseconds(timeoutMs) };
-            using FileStream fs = new(filename, overwrite ? FileMode.Create : FileMode.CreateNew);
-            client.GetAsync(url).Result.Content.CopyToAsync(fs).Wait();
-
-            return true;
-        }
-        catch (Exception e)
-        {
-            Log($"Download failed {e.Message} [Url: {url ?? "Null"}, Path: {filename ?? "Null"}]");
-        }
-
-        return false;
-    }
     public static string FixFileUrl(string url)
     {
         try
@@ -592,53 +477,6 @@ public static partial class Utils
         // Return formatted number with suffix (InvariantCulture so the decimal separator
         // is always '.', regardless of the current culture, e.g. "1.5 KB" not "1,5 KB" on ru-RU)
         return readable.ToString("0.## ", CultureInfo.InvariantCulture) + suffix;
-    }
-    static List<PerformanceCounter> gpuCounters;
-    public static void GetGPUCounters()
-    {
-        PerformanceCounterCategory category = new("GPU Engine");
-        string[] counterNames = category.GetInstanceNames();
-        gpuCounters = new List<PerformanceCounter>();
-
-        foreach (string counterName in counterNames)
-            if (counterName.EndsWith("engtype_3D"))
-                foreach (var counter in category.GetCounters(counterName))
-                    if (counter.CounterName == "Utilization Percentage")
-                        gpuCounters.Add(counter);
-    }
-    public static float GetGPUUsage()
-    {
-        float result = 0f;
-
-        try
-        {
-            if (gpuCounters == null) GetGPUCounters();
-
-            gpuCounters.ForEach(x => { _ = x.NextValue(); });
-            Thread.Sleep(1000);
-            gpuCounters.ForEach(x => { result += x.NextValue(); });
-
-        }
-        catch (Exception e) { Log($"[GPUUsage] Error {e.Message}"); result = -1f; GetGPUCounters(); }
-
-        return result;
-    }
-    public static string GZipDecompress(string filename)
-    {
-        string newFileName = "";
-
-        FileInfo fileToDecompress = new(filename);
-        using (var originalFileStream = fileToDecompress.OpenRead())
-        {
-            string currentFileName = fileToDecompress.FullName;
-            newFileName = currentFileName.Remove(currentFileName.Length - fileToDecompress.Extension.Length);
-
-            using var decompressedFileStream = File.Create(newFileName);
-            using GZipStream decompressionStream = new(originalFileStream, CompressionMode.Decompress);
-            decompressionStream.CopyTo(decompressedFileStream);
-        }
-
-        return newFileName;
     }
 
     public static Dictionary<string, string> ParseQueryString(ReadOnlySpan<char> query)
@@ -877,6 +715,73 @@ public static partial class Utils
         string ret = BytePtrToStringUTF8(t1)!;
         av_free(t1);
         return ret;
+    }
+    #nullable disable
+    #endregion
+
+    #region Security helpers (HC-01 / HC-05 / HC-35)
+    #nullable enable
+    /// <summary>
+    /// True only for a well-formed absolute http/https URL that is safe to interpolate into a
+    /// quoted Windows process argument. Rejects '"' and '\' (which break out of the surrounding
+    /// quotes when parsed by CommandLineToArgvW) and any control characters. A legitimate URL
+    /// percent-encodes all of these, so no valid input is lost.
+    /// </summary>
+    public static bool IsSafeProcessUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        foreach (char c in url)
+            if (c == '"' || c == '\\' || char.IsControl(c))
+                return false;
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+            return false;
+
+        return uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Resolves <paramref name="untrustedName"/> to a path directly inside <paramref name="baseDir"/>,
+    /// stripping any directory components (path traversal, absolute paths) it may carry. Returns null
+    /// when the name is empty, is "."/".." or would resolve outside <paramref name="baseDir"/>.
+    /// </summary>
+    public static string? GetSafeFileNameChildPath(string baseDir, string? untrustedName)
+    {
+        if (string.IsNullOrEmpty(baseDir) || string.IsNullOrEmpty(untrustedName))
+            return null;
+
+        string fileName = Path.GetFileName(untrustedName);
+        if (string.IsNullOrEmpty(fileName) || fileName == "." || fileName == "..")
+            return null;
+
+        string baseFull = Path.GetFullPath(baseDir);
+        string full     = Path.GetFullPath(Path.Combine(baseFull, fileName));
+
+        string baseWithSep = baseFull.EndsWith(Path.DirectorySeparatorChar)
+            ? baseFull
+            : baseFull + Path.DirectorySeparatorChar;
+
+        if (!full.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return full;
+    }
+
+    /// <summary>
+    /// Copies <paramref name="text"/> into a char[] with an explicit trailing '\0'. Native consumers of
+    /// CF_UNICODETEXT require the null terminator; a raw ToCharArray() omits it and leaves a garbage tail.
+    /// </summary>
+    public static char[] ToNullTerminatedUtf16(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        char[] buffer = new char[text.Length + 1];
+        text.CopyTo(0, buffer, 0, text.Length);
+        buffer[text.Length] = '\0';
+        return buffer;
     }
     #nullable disable
     #endregion

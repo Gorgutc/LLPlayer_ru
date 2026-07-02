@@ -268,7 +268,7 @@ public class BatchSubtitleTranslatorTests
             CreateSub("three")
         ];
 
-        await translator.TranslateAsync(subtitles, Language.English, CancellationToken.None);
+        await translator.TranslateAsync(subtitles, Language.English, TestContext.Current.CancellationToken);
 
         service.MaxConcurrent.Should().Be(1);
         subtitles.Select(s => s.TranslatedText).Should().Equal("ru:one", "ru:two", "ru:three");
@@ -292,7 +292,7 @@ public class BatchSubtitleTranslatorTests
 
         List<SubtitleData> subtitles = [CreateSub("one"), CreateSub("two"), CreateSub("three")];
 
-        await translator.TranslateAsync(subtitles, Language.English, CancellationToken.None);
+        await translator.TranslateAsync(subtitles, Language.English, TestContext.Current.CancellationToken);
 
         service.MaxConcurrent.Should().Be(1);
     }
@@ -313,7 +313,7 @@ public class BatchSubtitleTranslatorTests
 
         List<SubtitleData> subtitles = [CreateSub("l0"), CreateSub("l1"), CreateSub("l2"), CreateSub("l3")];
 
-        await translator.TranslateAsync(subtitles, Language.English, CancellationToken.None);
+        await translator.TranslateAsync(subtitles, Language.English, TestContext.Current.CancellationToken);
 
         // Focal "l2" (index 2): before window 2 → [l0, l1]; after window 1 → [l3].
         SubtitleTranslationContext ctx = service.Captured.Single(c => c.Text == "l2");
@@ -361,7 +361,7 @@ public class BatchSubtitleTranslatorTests
 
         List<SubtitleData> subtitles = [CreateSub("one"), CreateSub("bad"), CreateSub("three")];
 
-        await translator.TranslateAsync(subtitles, Language.English, CancellationToken.None);
+        await translator.TranslateAsync(subtitles, Language.English, TestContext.Current.CancellationToken);
 
         // The bad line keeps no translation (source text is shown by the writer); the others translate fine and
         // the file is NOT failed.
@@ -443,7 +443,7 @@ public class BatchSubtitleTranslatorTests
 
         List<SubtitleData> subtitles = [CreateSub("ok"), CreateSub("blank")];
 
-        await translator.TranslateAsync(subtitles, Language.English, CancellationToken.None);
+        await translator.TranslateAsync(subtitles, Language.English, TestContext.Current.CancellationToken);
 
         subtitles[0].TranslatedText.Should().Be("ru:ok");
         subtitles[1].TranslatedText.Should().BeNull();

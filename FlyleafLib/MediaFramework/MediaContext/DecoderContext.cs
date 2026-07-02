@@ -306,58 +306,6 @@ public unsafe partial class DecoderContext : PluginHandler
         return ret;
     }
 
-    //public int SeekSubtitles(int subIndex = -1, long ms = -1, bool forward = false)
-    //{
-    //    int ret = -1;
-
-    //    if (!Config.Subtitles.Enabled)
-    //        return ret;
-
-    //    // all sub streams
-    //    int startIndex = 0;
-    //    int endIndex = subNum - 1;
-    //    if (subIndex != -1)
-    //    {
-    //        // specific sub stream
-    //        startIndex = subIndex;
-    //        endIndex = subIndex;
-    //    }
-
-    //    for (int i = startIndex; i <= endIndex; i++)
-    //    {
-    //        // Perform seek only for external subtitles
-    //        if (SubtitlesDemuxers[i].Disposed || SubtitlesDecoders[i].OnVideoDemuxer)
-    //        {
-    //            continue;
-    //        }
-
-    //        long localMs = ms;
-    //        if (localMs == -1)
-    //        {
-    //            localMs = GetCurTimeMs();
-    //        }
-
-    //        long seekTimestamp = CalcSeekTimestamp(SubtitlesDemuxers[i], localMs, ref forward);
-
-    //        lock (SubtitlesDecoders[i].lockActions)
-    //            lock (SubtitlesDecoders[i].lockCodecCtx)
-    //            {
-    //                // Currently disabled as it will fail to seek within the queue the most of the times
-    //                //lock (SubtitlesDemuxer.lockActions)
-    //                //if (SubtitlesDemuxer.SeekInQueue(seekTimestamp, forward) != 0)
-    //                ret = SubtitlesDemuxers[i].Seek(seekTimestamp, forward);
-
-    //                SubtitlesDecoders[i].Flush();
-    //                if (VideoDecoder.IsRunning)
-    //                {
-    //                    SubtitlesDemuxers[i].Start();
-    //                    SubtitlesDecoders[i].Start();
-    //                }
-    //            }
-    //    }
-    //    return ret;
-    //}
-
     public int SeekData(long ms = -1, bool forward = false)
     {
         int ret = 0;

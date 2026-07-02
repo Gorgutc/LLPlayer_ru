@@ -8,9 +8,8 @@ namespace FlyleafLib.MediaFramework.MediaFrame;
 // styled ranges (SubStyle from/len). For an SSA "Dialogue" line it also extracts the displayed text after the
 // last ",," (converting \N -> newline and trimming), and finally applies a fixed Greek-apostrophe substitution.
 // Pure string parser, no I/O / no culture sensitivity (colors are fixed BGR hex). Expectations are traced from
-// the implementation. Note: malformed input (a lone '{' immediately followed by EOF, an unterminated '{\..'
-// with no '}', or a leading backslash) can throw in production; those bug-shaped paths are intentionally not
-// asserted here.
+// the implementation. Malformed input (an unterminated '{\..' with no '}', a lone '{\}' or '{\b}', or a leading
+// backslash) used to throw in production; those paths are now guarded (HC-03) and asserted at the bottom.
 public class ParseSubtitlesTests
 {
     [Fact]
@@ -234,5 +233,52 @@ public class ParseSubtitlesTests
     {
         // The parser ends with sout.Replace("ʼ", "Ά").
         ParseSubtitles.SSAtoSubStyles("aʼb", out _).Should().Be("aΆb");
+    }
+
+    // --- HC-03: malformed/boundary ASS must not throw (these inputs crashed before the guards) ---
+
+    [Fact]
+    public void UnterminatedOverrideBlock_DoesNotThrow()
+    {
+        // "{\i1 Hello" has no closing '}': previously s.Substring(i, negativeLen) threw ArgumentOutOfRange.
+        FluentActions.Invoking(() => ParseSubtitles.SSAtoSubStyles("{\\i1 Hello", out _))
+            .Should().NotThrow();
+    }
+
+    [Fact]
+    public void LoneBackslashBrace_DoesNotThrow()
+    {
+        // "{\}" yields code "\" (length 1): previously switch(code[1]) threw IndexOutOfRange.
+        FluentActions.Invoking(() => ParseSubtitles.SSAtoSubStyles("{\\}", out _))
+            .Should().NotThrow();
+    }
+
+    [Theory]
+    [InlineData("{\\b}")]
+    [InlineData("{\\u}")]
+    [InlineData("{\\s}")]
+    public void ToggleTagWithoutDigit_DoesNotThrow(string input)
+    {
+        // "{\b}" yields code "\b" (length 2): previously code[2] threw IndexOutOfRange for b/u/s (i was already guarded).
+        FluentActions.Invoking(() => ParseSubtitles.SSAtoSubStyles(input, out _))
+            .Should().NotThrow();
+    }
+
+    [Fact]
+    public void LeadingBackslash_IsLiteral_DoesNotThrow()
+    {
+        // A backslash at index 0 previously evaluated s[i-1] == s[-1] -> IndexOutOfRange.
+        ParseSubtitles.SSAtoSubStyles("\\x", out var styles).Should().Be("\\x");
+        styles.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("{\\c&HZZ&}x")]
+    [InlineData("{\\c&HG1&}x")]
+    public void ColorTagWithNonHexPayload_DoesNotThrow(string input)
+    {
+        // A color override with a non-hex payload previously threw FormatException in int.Parse(HexNumber).
+        FluentActions.Invoking(() => ParseSubtitles.SSAtoSubStyles(input, out _))
+            .Should().NotThrow();
     }
 }

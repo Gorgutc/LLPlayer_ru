@@ -89,4 +89,27 @@ public class DubbingOutputPathBuilderTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void ResolveExistingRussianDubPath_SkipsCrashOrphanedTempFragment()
+    {
+        // HC-04: a killed sidecar leaves a truncated "<out>.part" that the "movie.ru.dub.*" glob still matches.
+        // It must NOT be mistaken for a finished dub (which would block re-render / auto-attach a stub).
+        string dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            string media = Path.Combine(dir, "movie.mkv");
+            string orphan = Path.Combine(dir, "movie.ru.dub.flac.part");
+            File.WriteAllText(media, "video");
+            File.WriteAllText(orphan, "truncated");
+
+            DubbingOutputPathBuilder.ResolveExistingRussianDubPath(media).Should().BeNull();
+            DubbingOutputPathBuilder.DubExistsAnyFormat(media).Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }

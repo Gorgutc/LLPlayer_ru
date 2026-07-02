@@ -838,11 +838,13 @@ public unsafe class SubtitleReader : IDisposable
                     _manager.Height = _decoder.CodecCtx->height;
             }
 
-            // Bitmap PGS has a special format.
-            if (_stream.IsBitmap && prevSub != null
-                /*&& _stream->codecpar->codec_id == AVCodecID.AV_CODEC_ID_HDMV_PGS_SUBTITLE*/)
+            // General guard: num_rects < 1 means an empty/clear segment (sub.rects is NULL). This MUST run before
+            // switch(sub.rects[0]->type) below — otherwise the first packet of a bitmap stream (prevSub == null),
+            // or a text stream emitting an empty cue, dereferences NULL and crashes the process with an
+            // AccessViolationException. Mirrors SubtitlesDecoder's num_rects guard.
+            if (sub.num_rects < 1)
             {
-                if (sub.num_rects < 1)
+                if (_stream.IsBitmap && prevSub != null)
                 {
                     // Support for special format bitmap subtitles.
                     // In the case of bitmap subtitles, num_rects = 0 and 1 may alternate.
@@ -856,11 +858,16 @@ public unsafe class SubtitleReader : IDisposable
                     prevSub.EndTime = new TimeSpan(pts - _demuxer.StartTime);
                     addSub(prevSub);
                     prevSub = null;
-
-                    avsubtitle_free(&sub);
-                    continue;
                 }
 
+                avsubtitle_free(&sub);
+                continue;
+            }
+
+            // Bitmap PGS has a special format.
+            if (_stream.IsBitmap && prevSub != null
+                /*&& _stream->codecpar->codec_id == AVCodecID.AV_CODEC_ID_HDMV_PGS_SUBTITLE*/)
+            {
                 // There are cases where num_rects = 1 is consecutive.
                 // In this case, the previous subtitle end time is corrected by pts, and a new subtitle is started with the same pts.
                 if (prevSub.Bitmap?.Sub.end_display_time == uint.MaxValue) // 4294967295
@@ -1240,19 +1247,6 @@ internal static class WrapperHelper
 
 public static class ObservableCollectionExtensions
 {
-    public static int FindIndex<T>(this ObservableCollection<T> collection, Predicate<T> match)
-    {
-        ArgumentNullException.ThrowIfNull(collection);
-        ArgumentNullException.ThrowIfNull(match);
-
-        for (int i = 0; i < collection.Count; i++)
-        {
-            if (match(collection[i]))
-                return i;
-        }
-        return -1;
-    }
-
     public static int BinarySearch<T>(this ObservableCollection<T> collection, T item, IComparer<T> comparer)
     {
         ArgumentNullException.ThrowIfNull(collection);

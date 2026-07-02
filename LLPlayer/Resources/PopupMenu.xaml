@@ -14,7 +14,7 @@
                     xmlns:services="clr-namespace:LLPlayer.Services">
 
     <!--Popup Menu-->
-    <collections:ArrayList x:Key="MenuAudioStreams">
+    <collections:ArrayList x:Key="MenuAudioStreams" x:Shared="False">
         <MenuItem Header="Embedded" ItemsSource="{Binding FL.Player.Audio.Streams}">
             <MenuItem.ItemContainerStyle>
                 <Style TargetType="{x:Type MenuItem}" BasedOn="{StaticResource MaterialDesignMenuItem}">

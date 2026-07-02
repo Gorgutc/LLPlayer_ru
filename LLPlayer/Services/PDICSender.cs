@@ -70,11 +70,6 @@ public class PDICSender : IDisposable
         _pipeClient.Dispose();
     }
 
-    public async Task Connect()
-    {
-        await _pipeClient.SendMessage("p:Dictionary,Open,");
-    }
-
     // Send the same way as Firepop
     // webextension native extensions
     // ref: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Native_messaging

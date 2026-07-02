@@ -31,7 +31,10 @@ public static class WindowsClipboard
 
             try
             {
-                Marshal.Copy(text.ToCharArray(), 0, target, text.Length);
+                // Include the trailing '\0': CF_UNICODETEXT must be null-terminated, and the buffer above is
+                // sized for text.Length + 1 chars. Copying only text.Length left the terminator uninitialized.
+                char[] chars = FlyleafLib.Utils.ToNullTerminatedUtf16(text);
+                Marshal.Copy(chars, 0, target, chars.Length);
             }
             finally
             {
