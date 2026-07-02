@@ -43,6 +43,9 @@ issues: [#12 export SRT (done)](https://github.com/umlx5h/LLPlayer/issues/12),
 `C:\Users\Maxim\Desktop\Second_brain\1-Projects\LLPlayer_ru\` — `_INDEX.md`, `Improvements.md`,
 `Conventions.md` 🔒, `Sessions/`. **Авто-память:**
 `C:\Users\Maxim\.claude\projects\C--Users-Maxim-Documents-GitHub-LLPlayer-ru\memory\MEMORY.md`.
+> **Две машины:** проект ведётся на двух ПК — имя пользователя в путях зависит от машины:
+> `C:\Users\Maxim\…` (ПК №2) и `C:\Users\Junior\…` (ПК №1). Оба варианта путей валидны — не «чинить»
+> один в другой (у каждой машины свой второй мозг и своя авто-память Claude).
 
 **Статусы:** `TODO` (не начато) · `IN-PROGRESS` · `BLOCKED` · `DEFERRED` (отложено владельцем) · `DONE`.
 **Важность:** 🔴 высокая · 🟠 средне-высокая · 🟡 средняя · 🟢 низкая/стратегическая.
@@ -131,7 +134,7 @@ flash-frame, без потери текста/краша → понижено hi
 > (+2 гейта), 4-линзовое adversarial `/code-review` (0 Critical/Important), `.exe` launch-тест 0.3.9 зелёный. **Принят
 > «быстрый win» (raise+migration); принципиальное решение (streaming + скользящий read-timeout) — отдельная будущая
 > задача.** Follow-up из ревью: `LiteLLM`/`OpenAILike` остались на базовом `15000` (endpoint может быть облачным) —
-> при нужде поднять headroom и для локально-направленных endpoint'ов. Детали: второй мозг `Sessions/2026-06-26-handoff-b04-llm-timeout.md`.
+> при нужде поднять headroom и для локально-направленных endpoint'ов (**вынесено в отдельную задачу T-12**). Детали: второй мозг `Sessions/2026-06-26-handoff-b04-llm-timeout.md`.
 **Симптом (скриншот):** «Cannot request to LMStudio: The request was canceled due to the configured
 HttpClient.Timeout of 60 [seconds]». Владелец гоняет перевод через **reasoning-режим** LLM → модель «думает»
 дольше 60s до выдачи перевода.
@@ -231,6 +234,11 @@ HttpClient.Timeout of 60 [seconds]». Владелец гоняет перево
 > (жив 13с, без crash.log, FFmpeg+e_sqlite3). **Разблокирует F-16 per-line/per-speaker дубляж.** **Остаток F-03:**
 > сама диаризация (pyannote-audio сайдкар по образцу `dub_sidecar/` → заполнение `SpeakerId`) + потребление дисплеем/
 > экспортом/дубляжом — GPU + multi-session. Детали: второй мозг `Sessions/2026-06-29-session-LIVE-tracker-11.md`.
+> **⚠️ Совместимость движка (из ресёрча `References/speaker-diarization-research-2026-06.md`, перенесено сверкой #17):**
+> faster-whisper-XXL `--diarize pyannote_v3.1` авто-включает `--sentence`, что меняет формат вывода и **ломает наши
+> парсеры `SubShortReg`/`SubLongReg`**. Значит выбор архитектуры не нейтрален: (а) XXL `--diarize` (без HF-токена, но
+> с обходом `--sentence`-формата) vs (б) отдельный pyannote-сайдкар по образцу `dub_sidecar/` (полный контроль формата).
+> Решение — за владельцем; при XXL-пути обязательно учесть форматный конфликт до кода.
 **Идея от Buzz.** Метки говорящих → лучше форматирование диалогов и понимание. **Решение:** сайдкар
 pyannote-audio или возможности faster-whisper-XXL; метки в `SubtitleData`. **Рассуждение:** mission-fit
 средний-высокий, крупно; фазами; согласуется с двойными субтитрами/диалогами.
@@ -620,7 +628,10 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 1175/1175** (на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —
+**Тесты: 1192/1192** (на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
+`TranslateServiceHelperTests` (8: `TryGetLanguage` throw-ветки + success), `BatchSubtitleConfigSnapshotTests`
+(+5: обобщённые nested-config completeness-guards HC-39), `ConfigCloneTests` (4: характеризация `Clone` HC-40).
+Прод-код не менялся (версия остаётся v0.3.40). Ранее на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —
 `ParseSubtitlesTests` (+8: битый/пограничный ASS — незакрытый `{\`, `{\}`, `{\b}`/`{\u}`/`{\s}`, лидирующий `\`,
 не-hex цвет `{\c&HZZ&}` через `int.TryParse` — находка ревью), `WhisperConfigNotificationTests` (+3:
 `LanguageName`-уведомление сеттеров), `DubbingOutputPathBuilderTests` (+1: `.part`-огрызок не считается готовым
@@ -829,6 +840,16 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 > (зеркалит `AGENTS.md` Verification Gates); + локальные грабли (PowerShell-не-Bash, `git commit -F`, `dotnet publish`
 > не копирует `FFmpeg/` → `Copy-Item`, `py -3`). Frozen build-target и пин CI-SDK в `dependency-baseline.md` не тронуты.
 > verify-fast green.
+
+### T-12 — Timeout-headroom для `LiteLLM`/`OpenAILike` (follow-up B-04) 🟡 ⓢ-Ⓜ · TODO (нужен sign-off владельца)
+> Вынесено из заметки внутри закрытого B-04 (сверка #17 дала свой ID против «потери следа»).
+**Проблема:** дефолт локальных LLM подняли до `180000` (B-04, PR #51), но `LiteLLM`/`OpenAILike` остались на базовом
+`15000` — их endpoint может быть облачным, поэтому не поднимали автоматически.
+**Файлы:** [`ITranslateSettings.cs`](../../FlyleafLib/MediaPlayer/Translation/Services/ITranslateSettings.cs) (дефолты
+`TimeoutMs` по сервисам), `GetHttpClient`.
+**Решение:** поднять headroom и для локально-направленных `LiteLLM`/`OpenAILike` (или эвристика localhost-vs-облако),
+**но только с явным sign-off владельца** — эвристика «локальный ли endpoint» рискованна (ложно-облачные хосты). Идеально
+совмещать с принципиальным решением B-04 (streaming + скользящий read-timeout). Пока не трогать без запроса.
 
 ---
 
@@ -1069,6 +1090,9 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     на true пройдёт гейт → тихая потеря byte-identical.
   - Решение: два `Require-Text` по образцу `ASRFoldBack` (+ юнит-тест на оба дефолта).
   - Зачем: заявленный инвариант без автопроверки.
+  - ℹ️ **Обновление (сверка #17, 2026-07-02):** PR #112 добавил в `verify-frozen.ps1` *упоминания*
+    `ASRPerSegmentLanguage`/`PersistPerLineVoices`, но **дефолты `false` по-прежнему не запиннены** (`Require-Text`
+    как у `ASRFoldBack` нет) → задача остаётся валидной; при фиксе учесть уже добавленные строки, не дублировать.
 - **HC-17 — O(n)-цикл + полный `Refresh` ListCollectionView на тоггл `EnabledTranslated` 🟡 ⓢ · `FlyleafLib/Engine/Config.cs:1084`** (perf)
   - Проблема: сеттер (частая горячая клавиша показа перевода) на UI-потоке идёт `foreach` по ВСЕМ cue (public-поле
     без INPC → строки не обновятся) и зовёт `SubManager.Refresh()` → полная перестройка view (O(n)-копия под sync-локом,
@@ -1187,7 +1211,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     многогигабайтный `dub_sidecar/.venv` при `git add -A`).
   - Решение: точечные правки гейтов/доков (не трогая frozen-контракты без запроса владельца) одним PR.
   - Зачем: гейты «зелёные» при реальном дрейфе → ложная уверенность.
-- **HC-34 — Bundle «пробелы тестов» 🟢 ⓢ (в рамках T-03)**
+- **HC-34 — Bundle «пробелы тестов» 🟢 ⓢ (в рамках T-03)** · ✅ **DONE (T-03 срез №6, 2026-07-02, сессия #20)** — `TranslateServiceHelperTests` (8: 4 throw-ветки `TryGetLanguage` + 4 return, вкл. 2 китайских региона, min-stub `ITranslateService`); `CancellationToken.None` → `TestContext.Current.CancellationToken` во всех await-вызовах `BatchSubtitleTranslatorTests` (xUnit1051).
   - Проблема: await-тесты `BatchSubtitleTranslatorTests.cs:271` без `TestContext`-токена/таймаута (xUnit1051-паттерн:
     зависший тест стопорит весь прогон); `TranslateServiceHelper.TryGetLanguage` (`ITranslateService.cs:190`) — чистая
     бизнес-логика (throw на Unknown, запрет same-language кроме китайских регионов, маппинг) без единого теста.
@@ -1233,13 +1257,13 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: единый atomic-хелпер (temp рядом + `File.Replace/Move(overwrite)`, как companion-json); при `JsonException`
     на загрузке — переименовать битый в `.bak` и стартовать с дефолтами вместо Exit(1).
   - Зачем: обрыв записи не должен блокировать запуск приложения.
-- **HC-39 — Reflection completeness-guard покрывает не все nested-конфиги снапшота 🟡 Ⓜ · `FlyleafLibTests/MediaPlayer/Batch/BatchSubtitleTranslatorTests.cs:148`**
+- **HC-39 — Reflection completeness-guard покрывает не все nested-конфиги снапшота 🟡 Ⓜ · `FlyleafLibTests/MediaPlayer/Batch/BatchSubtitleTranslatorTests.cs:148`** · ✅ **DONE (T-03 срез №6, 2026-07-02, сессия #20)** — обобщённый helper `AssertSnapshotCopiesEveryWritableProperty<T>` + 5 guard-тестов (`WhisperConfig`/`WhisperCppConfig`/`FasterWhisperConfig`/`TranslateChatConfig`/`WhisperCppModel`) с исключениями трансформируемых полей (`Translate` force-false, `ExtraArguments` strip). Все зелёные (поля уже копируются) — fail-closed на будущие «забытые поля».
   - Проблема: полноценный guard есть только для `DubbingConfig`; `WhisperCppConfig` (15 полей), `FasterWhisperConfig` (9),
     `TranslateChatConfig` (11), `WhisperConfig` (3) — лишь точечные тесты. Новое свойство с UI-биндингом, забытое в
     `BatchSubtitleConfigSnapshot`, батч молча проигнорирует (тот же класс, что F-05-gap).
   - Решение: обобщить `DubbingConfig`-guard в параметризованный helper и добавить guard-тест на каждый nested-конфиг.
   - Зачем: fail-closed на будущие «забытые поля» батч-снапшота.
-- **HC-40 — `Config.Clone()` теряет `Data`/`Plugins`/`Version`; `KeysConfig.Clone` → `Keys=null`; `SubtitlesConfig.Clone` делит вложенные объекты 🟢 Ⓜ · `FlyleafLib/Engine/Config.cs:54`**
+- **HC-40 — `Config.Clone()` теряет `Data`/`Plugins`/`Version`; `KeysConfig.Clone` → `Keys=null`; `SubtitlesConfig.Clone` делит вложенные объекты 🟢 Ⓜ · `FlyleafLib/Engine/Config.cs:54`** · ⚙️ **ЧАСТИЧНО (T-03 срез №6, 2026-07-02, сессия #20)** — характеризация: `ConfigCloneTests` (4, Engine-free) зафиксировали текущее поведение — `SubtitlesConfig.Clone` **шарит** массив `SubConfigs` и его элементы (мутация клона протекает в источник — подтверждено), `Languages` — отдельный список, `KeysConfig.Clone` → `Keys=null` (by-design). **ОСТАЁТСЯ (owner-decision fix-vs-deprecate):** `Config.Clone` теряет `Version`/`Data`/`Plugins` (тесты Engine-зависимы: `Clone` внутри зовёт `new Config()` → плагины) и deep-copy `SubConfigs` (риск для батча). Безопасный минимум под sign-off — перенос `Version` (`config.Version = Version;`).
   - Проблема: публичный снапшот-API библиотеки неполон: `Config.Clone` копирует не всё (опции плагинов YoutubeDL
     теряются, `Version=null` → повтор всех миграций у клона), `PlayerConfig.Clone→KeysConfig.Clone` ставит `Keys=null`
     (NRE у потребителя), `SubtitlesConfig.Clone` через `MemberwiseClone` делит массив `SubConfigs` и вложенные объекты

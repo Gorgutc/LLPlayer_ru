@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using AwesomeAssertions;
 using FlyleafLib.MediaPlayer.Dubbing;
 using FlyleafLib.MediaPlayer.Translation;
+using Whisper.net.LibraryLoader;
 
 namespace FlyleafLib.MediaPlayer.Batch;
 
@@ -268,6 +269,105 @@ public class BatchSubtitleConfigSnapshotTests
             else
                 actual.Should().Be(expected, $"the batch snapshot must copy DubbingConfig.{prop.Name}");
         }
+    }
+
+    // HC-39: generalize the DubbingConfig completeness-guard to every nested config the snapshot deep-copies.
+    // The SubtitlesConfig scalar guard (BatchSubtitleTranslatorTests) deliberately skips nested objects, so a
+    // forgotten field on any of these would silently fall back to a default in the snapshot (the #42/#43/F-05-gap
+    // bug class). These are future-proofing guards — every field is copied today; deleting a line from the
+    // matching Clone* method in BatchSubtitleConfigSnapshot turns the corresponding guard RED.
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldCopyEveryWritableWhisperConfigSetting()
+    {
+        Config config = NewTestConfig();
+        // Translate is intentionally forced false for batch (pinned by CreateSubtitlesConfig_ForcesRussianTarget_*).
+        AssertSnapshotCopiesEveryWritableProperty(
+            config, config.Subtitles.WhisperConfig, s => s.WhisperConfig, nameof(WhisperConfig.Translate));
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldCopyEveryWritableWhisperCppConfigSetting()
+    {
+        Config config = NewTestConfig();
+        // Model is a nested WhisperCppModel — covered by the dedicated model guard below.
+        AssertSnapshotCopiesEveryWritableProperty(
+            config, config.Subtitles.WhisperCppConfig, s => s.WhisperCppConfig, nameof(WhisperCppConfig.Model));
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldCopyEveryWritableFasterWhisperConfigSetting()
+    {
+        Config config = NewTestConfig();
+        // ExtraArguments is rewritten by RemoveFasterWhisperTaskArgument (pinned by CreateSubtitlesConfig_Strips*).
+        AssertSnapshotCopiesEveryWritableProperty(
+            config, config.Subtitles.FasterWhisperConfig, s => s.FasterWhisperConfig,
+            nameof(FasterWhisperConfig.ExtraArguments));
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldCopyEveryWritableTranslateChatConfigSetting()
+    {
+        Config config = NewTestConfig();
+        AssertSnapshotCopiesEveryWritableProperty(
+            config, config.Subtitles.TranslateChatConfig, s => s.TranslateChatConfig);
+    }
+
+    [Fact]
+    public void CreateSubtitlesConfig_ShouldCopyEveryWritableWhisperCppModelSetting()
+    {
+        Config config = NewTestConfig();
+        config.Subtitles.WhisperCppConfig.Model = new WhisperCppModel(); // default Model is null
+        AssertSnapshotCopiesEveryWritableProperty(
+            config, config.Subtitles.WhisperCppConfig.Model, s => s.WhisperCppConfig.Model!);
+    }
+
+    private static void AssertSnapshotCopiesEveryWritableProperty<TConfig>(
+        Config config, TConfig source, Func<Config.SubtitlesConfig, TConfig> snapshotSelector,
+        params string[] exclude)
+    {
+        Type type = typeof(TConfig);
+        List<PropertyInfo> props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(p => p.DeclaringType == type)
+            .Where(p => p is { CanRead: true, CanWrite: true } && p.SetMethod!.IsPublic)
+            .Where(p => p.GetCustomAttribute<JsonIgnoreAttribute>() == null)
+            .Where(p => !exclude.Contains(p.Name))
+            .ToList();
+
+        props.Should().NotBeEmpty($"the guard must actually enumerate {type.Name} settings");
+
+        foreach (PropertyInfo prop in props)
+            prop.SetValue(source, MutatedProbeValue(prop, prop.GetValue(source)));
+
+        Config.SubtitlesConfig snapshot = BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config.Subtitles);
+        TConfig target = snapshotSelector(snapshot);
+
+        foreach (PropertyInfo prop in props)
+        {
+            object? expected = prop.GetValue(source);
+            object? actual = prop.GetValue(target);
+            string because = $"the batch snapshot must copy {type.Name}.{prop.Name}";
+
+            if (prop.PropertyType == typeof(List<string>))
+                ((List<string>)actual!).Should().Equal((List<string>)expected!, because);
+            else if (prop.PropertyType == typeof(List<RuntimeLibrary>))
+                ((List<RuntimeLibrary>)actual!).Should().Equal((List<RuntimeLibrary>)expected!, because);
+            else
+                actual.Should().Be(expected, because);
+        }
+    }
+
+    private static object? MutatedProbeValue(PropertyInfo prop, object? current)
+    {
+        Type t = prop.PropertyType;
+        if (t == typeof(List<string>))
+            return new List<string> { "probe-a", "probe-b" };
+        if (t == typeof(List<RuntimeLibrary>))
+            return new List<RuntimeLibrary> { RuntimeLibrary.Cpu };
+
+        IsScalarSettingType(t).Should().BeTrue(
+            $"the nested-config guard must know how to probe {prop.DeclaringType!.Name}.{prop.Name} (type {t}) — extend it");
+        return NextDistinctValue(t, current);
     }
 
     private static bool IsScalarSettingType(Type t)
