@@ -53,6 +53,14 @@ public static class DubbingOutputPathBuilder
 
             foreach (string path in paths)
             {
+                // The sidecar writes atomically via a temp file; a crash can leave a truncated "…ru.dub.flac.part"
+                // (legacy name) which the glob above still matches. Skip .part/.tmp fragments so a temp never
+                // masquerades as a finished dub.
+                string ext = Path.GetExtension(path);
+                if (ext.Equals(".part", System.StringComparison.OrdinalIgnoreCase) ||
+                    ext.Equals(".tmp", System.StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 if (OutputExists(path))
                     return path;
             }

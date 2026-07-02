@@ -61,6 +61,13 @@ def _safe_unlink(path):
         pass
 
 
+def _atomic_tmp_path(out):
+    # Temp name for the atomic write. It must NOT match the C# resolver glob "{name}.ru.dub.*", or a
+    # crash-orphaned temp would look like a finished dub (blocking re-render / auto-attaching a stub).
+    # A leading dot keeps it out of that glob; the pid makes it unique per process.
+    return os.path.join(os.path.dirname(out) or ".", ".{}.{}.tmp".format(os.path.basename(out), os.getpid()))
+
+
 def _write_wav_mono16(path, samples, rate):
     """Write a list/iterable of float [-1,1] samples as 16-bit mono PCM WAV (stdlib only)."""
     with wave.open(path, "wb") as w:
@@ -188,7 +195,7 @@ def assemble_mock(req):
     out = req["output_path"]
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     # Atomic write: a truncated final file would pass the C# OutputExists (length>0) check and auto-attach.
-    tmp = out + ".part"
+    tmp = _atomic_tmp_path(out)
     try:
         _write_wav_mono16(tmp, bed, rate)
         os.replace(tmp, out)
@@ -260,7 +267,7 @@ def assemble_real(req):
     subtype = "PCM_16" if fmt in ("wav", "flac") else None
     container = fmt.upper() if fmt in ("flac", "wav") else "FLAC"
     # Atomic write to avoid a truncated final file on kill/disk-full/exception (same dir => os.replace atomic).
-    tmp = out + ".part"
+    tmp = _atomic_tmp_path(out)
     try:
         sf.write(tmp, mixed, rate, format=container, subtype=subtype)
         os.replace(tmp, out)

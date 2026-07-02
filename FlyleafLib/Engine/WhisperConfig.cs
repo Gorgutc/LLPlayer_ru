@@ -45,7 +45,7 @@ public class WhisperConfig : NotifyPropertyChanged
         {
             if (Set(ref field, value))
             {
-                Raise(LanguageName);
+                Raise(nameof(LanguageName));
             }
         }
     } = "en";
@@ -57,7 +57,7 @@ public class WhisperConfig : NotifyPropertyChanged
         {
             if (Set(ref field, value))
             {
-                Raise(LanguageName);
+                Raise(nameof(LanguageName));
             }
         }
     } = true;
@@ -69,7 +69,7 @@ public class WhisperConfig : NotifyPropertyChanged
         {
             if (Set(ref field, value))
             {
-                Raise(LanguageName);
+                Raise(nameof(LanguageName));
             }
         }
     }

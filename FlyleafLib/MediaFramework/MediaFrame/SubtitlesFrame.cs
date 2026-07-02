@@ -91,12 +91,16 @@ public static class ParseSubtitles
         {
             if (s[i] == '{') continue;
 
-            if (s[i] == '\\' && s[i - 1] == '{')
+            if (i > 0 && s[i] == '\\' && s[i - 1] == '{')
             {
-                int codeLen = s.IndexOf('}', i) - i;
-                if (codeLen == -1) continue;
+                int closeIdx = s.IndexOf('}', i);
+                if (closeIdx == -1) break; // unterminated override block ("{\i1 Hello"): stop parsing tags
+
+                int codeLen = closeIdx - i;
 
                 string code = s.Substring(i, codeLen).Trim();
+
+                if (code.Length < 2) { i += codeLen; continue; } // e.g. "{\}" -> code "\" — nothing to parse
 
                 switch (code[1])
                 {
@@ -122,7 +126,10 @@ public static class ParseSubtitles
 
                             string hexColor = code[4..colorEnd];
 
-                            int red = int.Parse(hexColor.Substring(hexColor.Length - 2, 2), NumberStyles.HexNumber);
+                            // A non-hex payload ("{\c&HZZ&}") must not crash the parser: bail out (leaving
+                            // color.value == Transparent so the flush skips it) instead of throwing FormatException.
+                            if (!int.TryParse(hexColor.Substring(hexColor.Length - 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int red))
+                                break;
                             int green = 0;
                             int blue = 0;
 
@@ -132,7 +139,8 @@ public static class ParseSubtitles
                                 if (hexColor.Length == 1)
                                     hexColor = "0" + hexColor;
 
-                                green = int.Parse(hexColor.Substring(hexColor.Length - 2, 2), NumberStyles.HexNumber);
+                                if (!int.TryParse(hexColor.Substring(hexColor.Length - 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out green))
+                                    break;
                             }
 
                             if (hexColor.Length - 2 > 0)
@@ -141,7 +149,8 @@ public static class ParseSubtitles
                                 if (hexColor.Length == 1)
                                     hexColor = "0" + hexColor;
 
-                                blue = int.Parse(hexColor.Substring(hexColor.Length - 2, 2), NumberStyles.HexNumber);
+                                if (!int.TryParse(hexColor.Substring(hexColor.Length - 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out blue))
+                                    break;
                             }
 
                             color.value = Color.FromArgb(255, red, green, blue);
@@ -149,7 +158,7 @@ public static class ParseSubtitles
                         break;
 
                     case 'b':
-                        if (code[2] == '0')
+                        if (code.Length > 2 && code[2] == '0')
                         {
                             if (bold.from == -1) break;
 
@@ -166,7 +175,7 @@ public static class ParseSubtitles
                         break;
 
                     case 'u':
-                        if (code[2] == '0')
+                        if (code.Length > 2 && code[2] == '0')
                         {
                             if (underline.from == -1) break;
 
@@ -182,7 +191,7 @@ public static class ParseSubtitles
                         break;
 
                     case 's':
-                        if (code[2] == '0')
+                        if (code.Length > 2 && code[2] == '0')
                         {
                             if (strikeout.from == -1) break;
 
