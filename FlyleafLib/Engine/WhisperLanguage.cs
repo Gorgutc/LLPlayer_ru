@@ -144,7 +144,7 @@ public class WhisperLanguage : IEquatable<WhisperLanguage>
             }
             else if (isNewWord)
             {
-                result.Append(char.ToUpper(c));
+                result.Append(char.ToUpperInvariant(c));
                 isNewWord = false;
             }
             else

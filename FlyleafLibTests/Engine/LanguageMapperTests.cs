@@ -166,6 +166,28 @@ public class LanguageMapperTests
         }
     }
 
+    [Fact]
+    public void GetWhisperLanguages_TitleCaseIsCultureInvariant_UnderTurkishCulture()
+    {
+        // Turkish title-casing turns ASCII 'i' into U+0130 when code uses the ambient culture.
+        CultureInfo original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
+
+            var names = WhisperLanguage.GetWhisperLanguages().Select(l => l.EnglishName).ToList();
+
+            names.Should().Contain("Italian");
+            names.Should().Contain("Indonesian");
+            names.Should().NotContain("\u0130talian");
+            names.Should().NotContain("\u0130ndonesian");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
     [Theory]
     [InlineData("en", "English")]
     [InlineData("ru", "Russian")]
