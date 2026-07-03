@@ -1103,7 +1103,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 
 **🟢 низкая важность (ⓢ):**
 
-- **HC-18 — Гонки перечисления `Subs` без `SnapshotSubs()` (бандл) 🟡/🟢 ⓢ · несколько сайтов**
+- **HC-18 — Гонки перечисления `Subs` без `SnapshotSubs()` (бандл) 🟡/🟢 ⓢ · несколько сайтов** · ✅ **DONE (v0.3.44, 2026-07-03, сессия #22, бандл B3)** — `SnapshotSubs()` на всех 4 сайтах: AiInsightsDialogVM (`cues` + `_hasText`), SubtitlesExportDialogVM, `Subtitles.cs` OCR-`Do`; CmdSubPlay/CmdSubSync (SubtitlesSidebarVM) — snapshot + bounds-check индекса (защита от ArgumentOutOfRange при усадке `Subs` между UI-командой и хендлером). Adversarial-ревью (3 линзы) — 0 находок; нормальный случай byte-identical. Manual-smoke.
   - Проблема: контракт `SnapshotSubs()` (`SubtitlesManager.cs:208-213`) требует читать `Subs` только под `_subsLocker`
     (`EnableCollectionSynchronization` защищает лишь WPF-биндинг, не app-`foreach`). Прямое перечисление во время
     фонового ASR/OCR-`Add`/`Clear` → `InvalidOperationException`/`ArgumentOutOfRange` на UI. Сайты:
@@ -1118,7 +1118,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: `using CancellationTokenSource forceCts` + `using CancellationTokenRegistration reg = token.Register(...)`;
     обернуть linked cts в try/finally с Dispose.
   - Зачем: монотонный рост памяти на длинном/батч-ASR.
-- **HC-20 — Языкодетект faster-whisper: гейт глотает сегменты + lookup индексером роняет прогон 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1788`**
+- **HC-20 — Языкодетект faster-whisper: гейт глотает сегменты + lookup индексером роняет прогон 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1788`** · ✅ **DONE (v0.3.44, 2026-07-03, сессия #22, бандл B3)** — индексер `LanguageToCode[name]` → `TryGetValue` с фолбэком в `_manualLanguage` (не роняет на неизвестном языке); `continue` сужен ДО строки детекта (внутрь `if(match.Success)`) → реальные cue больше не съедаются при `LanguageDetection=true` + `--language` в ExtraArguments; yield `(_detectedLanguage ?? _manualLanguage)` (cue не несёт null-язык). Adversarial-ревью — чисто; нормальный путь детекта byte-identical. Manual-smoke.
   - Проблема: при `_isLanguageDetect && _detectedLanguage==null` каждая stdout-строка уходит в `continue` до строки
     «Detected language …». Если `LanguageDetection=true`, но пользователь передал `--language xx` в `ExtraArguments`,
     строки детекта не будет → все cue съедаются, прогон «успешно» пуст; плюс lookup языка индексером бросает на
