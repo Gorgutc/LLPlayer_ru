@@ -54,7 +54,10 @@ public class Config : NotifyPropertyChanged
     /// <summary>
     /// Creates a snapshot of the media configuration (Audio/Video/Subtitles/Demuxer/Decoder/Player).
     /// NOTE (HC-40): this is NOT a full deep clone. <see cref="Data"/> and <see cref="Plugins"/> are reset by the
-    /// <see cref="Config()"/> constructor and are NOT carried over; for a batch-safe subtitle snapshot use
+    /// <see cref="Config()"/> constructor and are NOT carried over, and the per-config Clone methods are shallow
+    /// (MemberwiseClone) apart from a few explicitly deep-copied members — e.g. SubtitlesConfig only deep-copies its
+    /// Languages list and SubConfigs array, while its nested config objects (Whisper*/Dubbing/TranslateChat) and the
+    /// OCR-region dictionaries stay shared with the source. For a fully isolated, batch-safe subtitle snapshot use
     /// <c>BatchSubtitleConfigSnapshot</c> instead. <see cref="Version"/> IS preserved so the clone is not treated
     /// as un-migrated.
     /// </summary>
@@ -1181,7 +1184,9 @@ public class Config : NotifyPropertyChanged
             if (Languages != null) foreach(var lang in Languages) subs.Languages.Add(lang);
 
             // HC-40: MemberwiseClone shares the SubConfigs array (and its elements) with the source, so per-track
-            // mutations on the clone bleed into the original. Deep-copy the array and each SubConfig instead.
+            // mutations on the clone bled into the original — deep-copy the array and each SubConfig to close that.
+            // NOTE: this Clone is still a PARTIAL snapshot — the nested config objects (Whisper*/Dubbing/TranslateChat)
+            // and OCR-region dictionaries remain shared; use BatchSubtitleConfigSnapshot when full isolation is needed.
             if (SubConfigs != null)
             {
                 subs.SubConfigs = new SubConfig[SubConfigs.Length];
