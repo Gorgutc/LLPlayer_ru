@@ -296,6 +296,10 @@ paket-files/
 __pycache__/
 *.pyc
 
+# Python virtual environments (e.g. dub_sidecar/.venv created by `uv sync` without UV_PROJECT_ENVIRONMENT) — never tracked (HC-33).
+.venv/
+venv/
+
 # Cake - Uncomment if you are using it
 # tools/**
 # !tools/packages.config

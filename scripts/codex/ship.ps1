@@ -123,6 +123,7 @@ try {
         "yt-dlp placeholder" = "yt-dlp.exe_here"
         "release required content check" = "Release package is missing required file"
         "release recursive dub runtime rejection" = "Get-ChildItem `$pub -Directory -Recurse"
+        "release FFmpeg avcodec check" = "FFmpeg\avcodec-62.dll"
         "release FFmpeg avdevice check" = "FFmpeg\avdevice-62.dll"
         "release FFmpeg avfilter check" = "FFmpeg\avfilter-11.dll"
         "release FFmpeg avformat check" = "FFmpeg\avformat-62.dll"

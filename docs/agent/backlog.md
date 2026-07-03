@@ -628,7 +628,7 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 1192/1192** (на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
+**Тесты: 1193/1193** (на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
 `TranslateServiceHelperTests` (8: `TryGetLanguage` throw-ветки + success), `BatchSubtitleConfigSnapshotTests`
 (+5: обобщённые nested-config completeness-guards HC-39), `ConfigCloneTests` (4: характеризация `Clone` HC-40).
 Прод-код не менялся (версия остаётся v0.3.40). Ранее на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —
@@ -1190,7 +1190,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: пересоздавать Pen только при смене входов (кэш-ключ), `pen.Freeze()`, не звать `InvalidateVisual` из
     Measure/Arrange без изменений.
   - Зачем: субтитр-оверлей с многими словами перерисовывается на пустом месте.
-- **HC-32 — Bundle «мёртвый код» 🟢 ⓢ · один PR-чистка** · ✅ **DONE (v0.3.40, 2026-07-02, сессия #19)** — удалено ~440 строк: `FindIndex`, кластер `Utils.cs` (`AddFirewallRule`/`FindFileBelow`/`GetUserDownloadPath`/`DownloadFile`×2/`GetGPUCounters`+`GetGPUUsage`/`GZipDecompress`), мёртвые P/Invoke `NativeMethods.cs` (`GetWindowRgn`/`GetClientRect`/`GetWindowInfo`+`WINDOWINFO`/`SetForegroundWindow`), закомм. `SeekSubtitles`, `PDICSender.Connect()`, зомби `SavedSession`, файл `ZOrderHandler.cs`. build `-warnaserror` = верификация. **⚠️ `VideoConfig.SwsForce` НЕ удалён** — сериализуемое public-свойство `VideoConfig` (frozen config-data-contract); требует миграции конфига + sign-off владельца (перенесено в HC-32-остаток).
+- **HC-32 — Bundle «мёртвый код» 🟢 ⓢ · один PR-чистка** · ✅ **DONE (v0.3.40, 2026-07-02, сессия #19)** — удалено ~440 строк: `FindIndex`, кластер `Utils.cs` (`AddFirewallRule`/`FindFileBelow`/`GetUserDownloadPath`/`DownloadFile`×2/`GetGPUCounters`+`GetGPUUsage`/`GZipDecompress`), мёртвые P/Invoke `NativeMethods.cs` (`GetWindowRgn`/`GetClientRect`/`GetWindowInfo`+`WINDOWINFO`/`SetForegroundWindow`), закомм. `SeekSubtitles`, `PDICSender.Connect()`, зомби `SavedSession`, файл `ZOrderHandler.cs`. build `-warnaserror` = верификация. **✅ Остаток `VideoConfig.SwsForce` УДАЛЁН (v0.3.41, 2026-07-03, сессия #21, owner-decision вариант A):** мёртвое сериализуемое public-свойство `VideoConfig` (`Config.cs`, не читалось) удалено; STJ самомигрирует (`JsonUnmappedMemberHandling=Skip` по умолчанию → лишнее поле в старом `Config.json` игнорируется при загрузке и исчезает при следующем `Save`); `config-data-contract.md` свойство не упоминал → правки frozen-контракта не потребовалось.
   - Проблема: подтверждено grep'ом по всему репо (вкл. XAML/DryIoc/JSON-сериализацию/reflection-guard) — не используется:
     `ObservableCollectionExtensions.FindIndex` (`SubtitlesManager.cs:1243`; все `FindIndex` идут на `List<T>`);
     `VideoConfig.SwsForce` (`Config.cs:846`, сериализуется, не читается — форс через `VideoProcessor=SwsScale`);
@@ -1202,7 +1202,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     свойство). ⚠️ Каждое удаление подтвердить своим grep'ом непосредственно перед правкой (репо живёт).
   - Решение: точечные удаления одним cleanup-PR (build `-warnaserror` = верификация).
   - Зачем: ~500 строк мёртвого кода вводят в заблуждение и раздувают поверхность сопровождения.
-- **HC-33 — Bundle «дрейф контрактов/доков/гейтов» 🟢 ⓢ · docs/tooling-PR** (⚠️ frozen-контракты — только с одобрения владельца)
+- **HC-33 — Bundle «дрейф контрактов/доков/гейтов» 🟢 ⓢ · docs/tooling-PR** · ✅ **DONE (v0.3.41, 2026-07-03, сессия #21, инфра-коммит)** — (1) `audit-frozen.ps1`: добавлено правило маршрутизации `^docs/agent/(dubbing-contract\.md|dubbing/)` → `media_runtime_mapper`/`native_dependency_auditor`/`packaging_release_reviewer`/`verification_reviewer` (по матрице :25); (2) `.gitignore`: добавлены `.venv/`+`venv/` (риск `dub_sidecar/.venv`); (3) `ship.ps1`: `$releaseTailChecks` дополнен `avcodec-62.dll` (7/7 FFmpeg-маркеров; `action.yml:101` его содержит → check green); (4) `manual-smoke-matrix.md`: добавлена строка opt-in M3-оверлея (`Theme.ShowM3Theme`, T-05). Счётчик тестов «1132» (было в §8-снапшоте) уже неактуален — глобальный давно 1193; `PR #112` в хронике отражён (`backlog.md:641`). Гейт `verify-fast.ps1` green.
   - Проблема: `audit-frozen.ps1:32` не маршрутизирует правки `dubbing-contract.md`/`docs/agent/dubbing/**` на доменных
     ревьюеров из `subagent-review-matrix.md` (падают в общий бакет); `manual-smoke-matrix.md:82` не покрывает opt-in
     M3-оверлей (`Theme.ShowM3Theme`, T-05 v0.3.29), в отличие от прочих opt-in UI-фич; `backlog.md:621` счётчик тестов
@@ -1211,6 +1211,18 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     многогигабайтный `dub_sidecar/.venv` при `git add -A`).
   - Решение: точечные правки гейтов/доков (не трогая frozen-контракты без запроса владельца) одним PR.
   - Зачем: гейты «зелёные» при реальном дрейфе → ложная уверенность.
+  - 📌 **Независимое подтверждение (сторонний ревьювер, верифицировано сессия #21, 2026-07-03):** три из пяти подпунктов
+    переоткрыты внешним ревью и подтверждены по коду main v0.3.40 — (а) `audit-frozen.ps1` dubbing-routing (пути
+    `dubbing-contract.md`/`docs/agent/dubbing/**` попадают не в «общий бакет», а в infra-бакет `audit-frozen.ps1:90`;
+    из требуемых матрицей `media_runtime_mapper`/`native_dependency_auditor`/`packaging_release_reviewer`/`verification_reviewer`
+    скрипт назначает лишь последний — рецепт фикса: правило `^docs/agent/(dubbing-contract\.md|dubbing/)` по образцу `dub_sidecar/`
+    строки 137-146); (б) `.venv/` не в `.gitignore` (подтверждено `git check-ignore` → не игнорируется; побочно захламляет
+    вывод `audit-frozen.ps1:14`); (в) `ship.ps1:126` releaseTailChecks без `avcodec-62.dll` (это grep-стража по тексту
+    `action.yml`, физический недокомплект DLL ловит publish-smoke `ship.ps1:89-101` — реальный пробел лишь в анти-дрейфе CI).
+    ⚠️ severity сторонним ревьювером у пункта (а) заявлена «Important» — при исполнении учесть, что `audit-frozen.ps1` —
+    advisory read-only хелпер (`verification.md:19-23`), а не обязательный гейт; нормативный источник назначения ревьюеров —
+    сама `subagent-review-matrix.md`, и она dubbing-пути покрывает корректно (реальная важность — medium). Приоритет HC-33
+    стоит поднять: два независимых процесса сошлись на этих дефектах.
 - **HC-34 — Bundle «пробелы тестов» 🟢 ⓢ (в рамках T-03)** · ✅ **DONE (T-03 срез №6, 2026-07-02, сессия #20)** — `TranslateServiceHelperTests` (8: 4 throw-ветки `TryGetLanguage` + 4 return, вкл. 2 китайских региона, min-stub `ITranslateService`); `CancellationToken.None` → `TestContext.Current.CancellationToken` во всех await-вызовах `BatchSubtitleTranslatorTests` (xUnit1051).
   - Проблема: await-тесты `BatchSubtitleTranslatorTests.cs:271` без `TestContext`-токена/таймаута (xUnit1051-паттерн:
     зависший тест стопорит весь прогон); `TranslateServiceHelper.TryGetLanguage` (`ITranslateService.cs:190`) — чистая
@@ -1226,7 +1238,65 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     0, target, chars.Length)` в `SetText`. Тесты `FlyleafLibTests/Utils/NullTerminatedUtf16Tests.cs` (4). (Native
     P/Invoke-путь `SetText` сам по себе вне юнит-охвата — LLPlayer без тест-проекта — покрыт корректностью хелпера + ручным smoke.)
 
+**🟢 Находки стороннего ревьювера (сессия #21, 2026-07-03) — верифицированы адверсариально по коду main v0.3.40:**
+
+> Внешний ревьювер прислал 7 находок; workflow `wf_3ae2db0b-ab1` перепроверил каждую по коду. Итог: 3 новые (ниже,
+> HC-45/46/47), 3 — дубли открытого **HC-33** (см. отметку там), 1 — дубль **HC-40** (owner-decision, нового нет).
+> Опровергнутых нет. Нумерация продолжает таксономию §8 (единый счётчик открытых HC).
+
+- **HC-45 — `DubbingConfig.OutputFormat` не валидируется: рукописный `part`/`tmp` в Config.json → вечный ре-рендер дубляжа + невидимый для auto-loader выход 🟢 ⓢ · `FlyleafLib/Engine/DubbingConfig.cs:59`** (источник: ревьювер R-04, вердикт **CONFIRMED**)
+  - Проблема: сеттер `OutputFormat` (`DubbingConfig.cs:59`) — единственное поле класса без нормализации (`DefaultVoiceId:36` /
+    `DuckingPercent:47` / `CustomVoiceIds:43` защищены от hand-edit). Сырое значение из Config.json течёт в имя файла
+    (`BatchSubtitlesDialogVM.cs:761` → `BatchSubtitleProcessor.cs:284` → `movie.ru.dub.part`); сайдкар (`dub_sidecar/server.py:266-268`)
+    молча пишет туда FLAC-битстрим, а резолвер после HC-04 отфильтровывает `.part`/`.tmp` (`DubbingOutputPathBuilder.cs:59-62`)
+    → `DubExistsAnyFormat=false` навсегда → батч ре-рендерит дубль при каждом прогоне (гейты `BatchSubtitleProcessor.cs:260/:285`,
+    включая `OverwriteExisting=false`), auto-loader (`DubbedAudioAutoLoader.cs:69`) готовый файл никогда не подцепляет. UI
+    (`SettingsSubtitlesDubbing.xaml:139`) предлагает только `flac` — сценарий требует ручной правки конфига (низкая вероятность).
+  - Решение: нормализовать в сеттере по образцу `DefaultVoiceId` — trim/`TrimStart('.')`/lower + whitelist реально кодируемых
+    контейнеров (`flac`, опц. `wav`), всё прочее → `DubbingOutputPathBuilder.DefaultExtension`; юнит-тесты
+    `part`/`tmp`/`.FLAC `/`mp3` → `flac`.
+  - Зачем: рукописный конфиг не должен уметь загонять систему в тихий вечный ре-рендер (жжёт GPU-часы) с выходом, который никто
+    не подцепит; фикс однострочный, в уже принятом в этом классе стиле «нормализация на set».
+- **HC-46 — Ошибки пост-Download в `SubtitlesDownloaderDialogVM` уходят в глобальный обработчик вместо контекстного попапа 🟢 ⓢ · `LLPlayer/ViewModels/SubtitlesDownloaderDialogVM.cs:113-134,211`** (UX/диагностика; источник: ревьювер R-02, вердикт **PARTIAL** — severity понижена Medium→low, 2 скептика подтвердили)
+  - Проблема: локальный try/catch в `CmdLoad` (`:100-108`) покрывает только `_subProvider.Download` (`:102`). Вне catch остаются:
+    safe-path валидация с `throw` (`:116`, осознанное решение HC-05), `Directory.CreateDirectory` (`:120`), проверка расширения
+    с `throw` (`:131`, upstream-код — был вне catch ещё до HC-05), запись temp-файла (`:134`); в `CmdDownload` — запись выбранного
+    файла (`:211`). Prism 9 `AsyncDelegateCommand` без `.Catch(...)` перебрасывает исключение из `async void` в
+    `App_OnDispatcherUnhandledException` (`LLPlayer/App.xaml.cs:163`): пользователь видит генерик «Unhandled Exception: …» вместо
+    контекстного «Cannot load the subtitle from opensubtitles.org: …», а некраш пишется в `crash.log` (`:180`) как краш. НЕ краш
+    и НЕ silent-fail — приложение/диалог продолжают работать. Реалистичный триггер — `IOException` при записи (диск полон, ACL,
+    антивирус), не только hostile API-ответ.
+  - Решение: расширить локальный try/catch на весь пост-Download блок (валидация + `CreateDirectory` + запись temp) с контекстным
+    `ErrorDialogHelper.ShowUnknownErrorPopup(...)`; аналогично обернуть запись в `CmdDownload:211`. Умышленные
+    `InvalidOperationException` (`:116/:131`) поймает тот же локальный catch.
+  - Зачем: контекстное сообщение об ошибке вместо генерик «Unhandled Exception» и чистый `crash.log` — не засорять краш-диагностику
+    обычными файловыми ошибками. (Тестируемого чистого куска нет — правка в LLPlayer-VM, проверяется ручным smoke.)
+- **HC-47 — Док-дрейф: `*.ru.voices.json` отсутствует в 3 инструкционных перечнях dub-артефактов 🟢 ⓢ · docs/skills-only** (источник: ревьювер R-05, вердикт **PARTIAL** — «roadmap» уже актуален, реально отстают 3 поверхности)
+  - Проблема: после F-16 фазы 2a (v0.3.37, PR #106/#110) companion-файл per-line голосов `*.ru.voices.json` описан в контрактах
+    (`dubbing-contract.md:143`, `dubbing-roadmap.md:68`, `dependency-baseline.md:77+97`, `DO_NOT_PUSH.md:7`, `.gitignore:373-374`)
+    и enforce'ится в `ship.ps1:59-61` / `build-package/action.yml:133-136`, но три поверхности с перечнями dub-артефактов отстают:
+    `Plugins/llplayer-codex/skills/llplayer-runtime-assets/SKILL.md:19` (список «Do Not Commit» перечисляет `*.ru.dub.*`, но не
+    `*.ru.voices.json`), `Plugins/llplayer-codex/skills/llplayer-packaging-release/SKILL.md:24-25` (список reject'ов пакета уже
+    фактически проверяемого в `action.yml`/`ship.ps1`), `docs/agent/dubbing/dubbing-spec.md:220` («Never committed» без voices.json;
+    спека Phase-0). Опционально: `dub_sidecar/README.md:15`. Оба SKILL.md — drift-surfaces (`llplayer-instruction-drift/SKILL.md:15,22`).
+  - Решение: docs-only — добавить `*.ru.voices.json` в три перечня (в `dubbing-spec.md` — с пометкой «Phase 2a»); прод-код, скрипты
+    и CI не трогать (уже актуальны).
+  - Зачем: оба SKILL.md — рабочие инструкции Codex-агентов; неполный «Do Not Commit»/reject-список провоцирует пропуск voices.json
+    при проверках пакета и порождает ложные находки drift-ревью.
+
 ### 8b. Ⓜ Средние (тир 2) — требуют рефакторинга/нового API/тестового каркаса
+
+> 🔁 **Перепроверка кандидата №1 (сессия #21, 2026-07-03, workflow `wf_3ae2db0b-ab1`):** HC-36, HC-37, HC-38 — все **STILL_VALID**
+> на main v0.3.40 (находки датированы v0.3.38; коммиты PR #114 `ff3a743`/`a4aa871`/`4d7c9e5` эти места не трогали, строки совпадают).
+> HC-36: единственный смягчённый нюанс — «двойной Dispose» сам безвреден (idempotent-guard `_disposed` в обоих OCR-сервисах), но
+> конкурентный use-after-dispose при dual-OCR стоит. HC-37: все 6 под-претензий актуальны (одна смежная гонка «Cancel на disposed CTS»
+> уже закрыта в `SubtitlesTranslator`, но заявленные — в силе). HC-38: все актуальны + образец atomic-write уже есть в репо
+> (`DubbingVoiceAssignmentStore.SaveAtomic`, `SrtSubtitleWriter`), общего хелпера в `FlyleafLib/Utils` нет. Рекомендованный путь тестов
+> по конвенции проекта — выносить lifecycle/CTS-логику в `FlyleafLib/Utils` (`DisposableSlots<T>` для HC-36, `CtsGuard`/atomic-exchange
+> для HC-37/38, `AtomicFile.WriteAllText` для HC-38) и покрывать фейками; сами движки/VM — ручным smoke.
+> ⚠️ **Кандидат №1 в летописи ошибочно записан как «HC-36/14/15»** — HC-14 (`dub_sidecar/server.py` `assemble_real` игнорирует
+> `total_ms`) и HC-15 (`SrtSubtitleWriter` без `NormalizeCueText`) — это ⓢ-находки тира 8a, НЕ про OCR. Верный бандл кандидата №1 =
+> **HC-36 + HC-37 + HC-38** (исправлено в летописи сессией #21).
 
 - **HC-36 — OCR: один общий `_ocrService` на оба сабтрека 🟠 Ⓜ · `FlyleafLib/MediaPlayer/SubtitlesOCR.cs:65/91`**
   - Проблема: класс параметризован `subIndex` и создан для 2 треков с раздельными `_lockers/_ctss`, но движок хранится
@@ -1263,7 +1333,8 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     `BatchSubtitleConfigSnapshot`, батч молча проигнорирует (тот же класс, что F-05-gap).
   - Решение: обобщить `DubbingConfig`-guard в параметризованный helper и добавить guard-тест на каждый nested-конфиг.
   - Зачем: fail-closed на будущие «забытые поля» батч-снапшота.
-- **HC-40 — `Config.Clone()` теряет `Data`/`Plugins`/`Version`; `KeysConfig.Clone` → `Keys=null`; `SubtitlesConfig.Clone` делит вложенные объекты 🟢 Ⓜ · `FlyleafLib/Engine/Config.cs:54`** · ⚙️ **ЧАСТИЧНО (T-03 срез №6, 2026-07-02, сессия #20)** — характеризация: `ConfigCloneTests` (4, Engine-free) зафиксировали текущее поведение — `SubtitlesConfig.Clone` **шарит** массив `SubConfigs` и его элементы (мутация клона протекает в источник — подтверждено), `Languages` — отдельный список, `KeysConfig.Clone` → `Keys=null` (by-design). **ОСТАЁТСЯ (owner-decision fix-vs-deprecate):** `Config.Clone` теряет `Version`/`Data`/`Plugins` (тесты Engine-зависимы: `Clone` внутри зовёт `new Config()` → плагины) и deep-copy `SubConfigs` (риск для батча). Безопасный минимум под sign-off — перенос `Version` (`config.Version = Version;`).
+- **HC-40 — `Config.Clone()` теряет `Data`/`Plugins`/`Version`; `KeysConfig.Clone` → `Keys=null`; `SubtitlesConfig.Clone` делит вложенные объекты 🟢 Ⓜ · `FlyleafLib/Engine/Config.cs:54`** · ✅ **DONE (v0.3.41, 2026-07-03, сессия #21, owner-decision вариант A)** — deprecate + точечный фикс: (1) `SubtitlesConfig.Clone` теперь deep-copy массива `SubConfigs` и его элементов (добавлен `SubConfig.Clone` = `MemberwiseClone`+`player=null`) — реальная утечка закрыта; (2) `Config.Clone` переносит `Version` (`config.Version = Version;`) + XML-doc помечает Clone неполным (`Data`/`Plugins` не копируются → для батча использовать `BatchSubtitleConfigSnapshot`); (3) `ConfigCloneTests`: 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy (RED-without-fix) + element-distinctness тест (+1 → 1193). **Вариант B (deep-copy `Data`/`Plugins`) НЕ делали** — `Config.Clone` без вызывающих (grep пуст); `SubtitlesConfig.Clone` вызывается только из него → фикс без риска для живых путей. `KeysConfig.Clone`→`Keys=null` — by-design, оставлено.
+  - Прежняя характеризация (сессия #20): `ConfigCloneTests` (4, Engine-free) зафиксировали баг — `SubtitlesConfig.Clone` шарил `SubConfigs`; теперь исправлено.
   - Проблема: публичный снапшот-API библиотеки неполон: `Config.Clone` копирует не всё (опции плагинов YoutubeDL
     теряются, `Version=null` → повтор всех миграций у клона), `PlayerConfig.Clone→KeysConfig.Clone` ставит `Keys=null`
     (NRE у потребителя), `SubtitlesConfig.Clone` через `MemberwiseClone` делит массив `SubConfigs` и вложенные объекты

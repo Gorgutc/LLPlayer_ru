@@ -51,6 +51,16 @@ public class Config : NotifyPropertyChanged
 
     public Config(bool test) { }
 
+    /// <summary>
+    /// Creates a snapshot of the media configuration (Audio/Video/Subtitles/Demuxer/Decoder/Player).
+    /// NOTE (HC-40): this is NOT a full deep clone. <see cref="Data"/> and <see cref="Plugins"/> are reset by the
+    /// <see cref="Config()"/> constructor and are NOT carried over, and the per-config Clone methods are shallow
+    /// (MemberwiseClone) apart from a few explicitly deep-copied members — e.g. SubtitlesConfig only deep-copies its
+    /// Languages list and SubConfigs array, while its nested config objects (Whisper*/Dubbing/TranslateChat) and the
+    /// OCR-region dictionaries stay shared with the source. For a fully isolated, batch-safe subtitle snapshot use
+    /// <c>BatchSubtitleConfigSnapshot</c> instead. <see cref="Version"/> IS preserved so the clone is not treated
+    /// as un-migrated.
+    /// </summary>
     public Config Clone()
     {
         Config config = new()
@@ -63,6 +73,7 @@ public class Config : NotifyPropertyChanged
             Player      = Player.Clone()
         };
 
+        config.Version = Version; // HC-40: carry migration version so the clone is not re-migrated from scratch
         config.Player.config = config;
         config.Demuxer.config = config;
 
@@ -841,11 +852,6 @@ public class Config : NotifyPropertyChanged
         internal bool _SuperResolution;
 
         /// <summary>
-        /// Forces SwsScale instead of FlyleafVP for non HW decoded frames
-        /// </summary>
-        public bool             SwsForce                    { get; set; } = false;
-
-        /// <summary>
         /// Activates Direct3D video acceleration (decoding)
         /// </summary>
         public bool             VideoAcceleration           { get; set => Set(ref field, value); } = true;
@@ -1136,6 +1142,14 @@ public class Config : NotifyPropertyChanged
         /// OCR Engine Type
         /// </summary>
         public SubOCREngineType OCREngine { get; set => Set(ref field, value); } = SubOCREngineType.Tesseract;
+
+        // HC-40: per-track deep copy used by SubtitlesConfig.Clone (player is not carried to the clone).
+        internal SubConfig Clone()
+        {
+            SubConfig sub = (SubConfig) MemberwiseClone();
+            sub.player = null;
+            return sub;
+        }
     }
 
     public class SubtitlesConfig : NotifyPropertyChanged
@@ -1168,6 +1182,17 @@ public class Config : NotifyPropertyChanged
 
             subs.Languages = [];
             if (Languages != null) foreach(var lang in Languages) subs.Languages.Add(lang);
+
+            // HC-40: MemberwiseClone shares the SubConfigs array (and its elements) with the source, so per-track
+            // mutations on the clone bled into the original — deep-copy the array and each SubConfig to close that.
+            // NOTE: this Clone is still a PARTIAL snapshot — the nested config objects (Whisper*/Dubbing/TranslateChat)
+            // and OCR-region dictionaries remain shared; use BatchSubtitleConfigSnapshot when full isolation is needed.
+            if (SubConfigs != null)
+            {
+                subs.SubConfigs = new SubConfig[SubConfigs.Length];
+                for (int i = 0; i < SubConfigs.Length; i++)
+                    subs.SubConfigs[i] = SubConfigs[i]?.Clone();
+            }
 
             subs.player = null;
 

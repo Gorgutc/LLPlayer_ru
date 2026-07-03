@@ -3,36 +3,48 @@ using FlyleafLib.MediaPlayer;
 
 namespace FlyleafLib;
 
-// Characterization of the config Clone surface (HC-40). These pin the CURRENT behavior of the hand-written
-// Clone methods so any later change — a real fix or an accidental regression — is caught. Two document a known
-// shared-state issue (SubtitlesConfig.Clone MemberwiseClone's the SubConfigs array, so cloned and source
-// SubConfig instances alias); HC-40 tracks the fix-vs-deprecate decision (owner). One documents the intentional
-// KeysConfig.Clone Keys=null (repopulated later in Player.SetPlayer/LoadDefault). All are Engine-free: they call
-// the nested Clone directly, never Config.Clone (which rebuilds plugin options via the full Config ctor).
+// Config Clone surface tests (HC-40, variant A applied session #21). Two assert the SubtitlesConfig.Clone deep-copy
+// fix: the SubConfigs array and its elements are now cloned, so per-track mutations on the clone no longer alias the
+// source. One confirms Languages is a separate list; one documents the intentional KeysConfig.Clone Keys=null
+// (repopulated later in Player.SetPlayer/LoadDefault). All are Engine-free: they call the nested Clone directly, never
+// Config.Clone (which rebuilds plugin options via the full Config ctor; its Version-carry + deprecation note live in
+// code, not unit-tested here to avoid Engine init).
 public class ConfigCloneTests
 {
     [Fact]
-    public void SubtitlesConfig_Clone_SharesSubConfigsArray()
+    public void SubtitlesConfig_Clone_DeepCopiesSubConfigsArray()
     {
-        // CURRENT (HC-40, shared-state): Clone MemberwiseClone's + only deep-copies Languages, so the SubConfigs
-        // array reference is shared with the source. (Seed Languages so Clone's lazy getter doesn't hit
-        // GetSystemLanguages(), which NREs in headless runs.)
+        // HC-40 (fixed): Clone deep-copies the SubConfigs array, so the clone owns a distinct array instance.
+        // (Seed Languages so Clone's lazy getter doesn't hit GetSystemLanguages(), which NREs in headless runs.)
         Config.SubtitlesConfig src = new() { Languages = [Language.English] };
         Config.SubtitlesConfig clone = src.Clone();
 
-        ReferenceEquals(clone.SubConfigs, src.SubConfigs).Should().BeTrue();
+        ReferenceEquals(clone.SubConfigs, src.SubConfigs).Should().BeFalse();
     }
 
     [Fact]
-    public void SubtitlesConfig_Clone_SubConfigMutationLeaksToSource()
+    public void SubtitlesConfig_Clone_SubConfigMutationDoesNotLeakToSource()
     {
-        // CURRENT (HC-40, shared-state): the SubConfigs array (and its elements) being shared means mutating the
-        // clone's per-track SubConfig bleeds into the source.
+        // HC-40 (fixed): the SubConfigs array and its elements are deep-copied, so mutating the clone's per-track
+        // SubConfig no longer bleeds into the source.
         Config.SubtitlesConfig src = new() { Languages = [Language.English] };
         Config.SubtitlesConfig clone = src.Clone();
 
         clone.SubConfigs[0].Visible = false; // default true
-        src.SubConfigs[0].Visible.Should().BeFalse();
+        src.SubConfigs[0].Visible.Should().BeTrue();
+        clone.SubConfigs[0].Visible.Should().BeFalse();
+    }
+
+    [Fact]
+    public void SubtitlesConfig_Clone_SubConfigElementsAreDistinctInstances()
+    {
+        // HC-40 (fixed): each SubConfig element is cloned, not just the array — clone[i] and src[i] are distinct
+        // references, which is what stops per-track mutations from aliasing (guards element-level deep copy).
+        Config.SubtitlesConfig src = new() { Languages = [Language.English] };
+        Config.SubtitlesConfig clone = src.Clone();
+
+        for (int i = 0; i < src.SubConfigs.Length; i++)
+            ReferenceEquals(clone.SubConfigs[i], src.SubConfigs[i]).Should().BeFalse();
     }
 
     [Fact]

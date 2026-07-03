@@ -80,6 +80,7 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - In Settings Keys, add/clone/delete a row, capture a key, commit with Enter, create and clear a duplicate, confirm Apply is blocked only while duplicates exist.
 - Open CheatSheet with F1, switch Keyboard/Mouse tabs, search by shortcut/description, and execute an action button.
 - On a fresh config (no `LLPlayer.Config.json`), confirm the Win11 Mica backdrop is on by default (Settings ▸ Themes shows it checked); toggle it off, `Save & Close`, restart, and confirm it stays off (the migration does not re-enable a saved-off value). On Windows 10 confirm the app still launches normally (Mica no-ops).
+- With `Theme.ShowM3Theme` off (default, opt-in from T-05 v0.3.29), confirm the app shows the stock MaterialDesign2 look; enable Settings ▸ Themes ▸ the M3 theme toggle, `Save & Close`, restart, and confirm the M3 overlay is applied and persists. Toggle it back off and confirm the look returns to byte-identical stock (no residual M3 primary-container accent, including under the light theme).
 
 ## Dubbing
 
