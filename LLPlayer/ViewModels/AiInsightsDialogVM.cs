@@ -115,7 +115,9 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
             return;
         }
 
-        List<string?> cues = SubManager.Subs
+        // HC-18: snapshot under _subsLocker before enumerating — Subs may be mutated by a background ASR/OCR
+        // Add/Clear, which would throw InvalidOperationException on a raw enumeration here.
+        List<string?> cues = SubManager.SnapshotSubs()
             .Where(s => s.IsText)
             .Select(s => UseTranslated ? s.DisplayText : s.Text)
             .ToList();
@@ -308,7 +310,8 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
 
     private void RefreshHasText()
     {
-        _hasText = FL.Player.SubtitlesManager[SelectedSubIndex].Subs.Any(s => s.IsText);
+        // HC-18: snapshot under _subsLocker (Subs may be mutated by a background ASR/OCR run while the dialog is open).
+        _hasText = FL.Player.SubtitlesManager[SelectedSubIndex].SnapshotSubs().Any(s => s.IsText);
     }
 
     private void RefreshLlm()

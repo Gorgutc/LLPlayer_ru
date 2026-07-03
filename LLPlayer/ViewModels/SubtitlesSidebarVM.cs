@@ -151,7 +151,15 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
             return;
         }
 
-        var sub = SubManager.Subs[index.Value];
+        // HC-18: snapshot + bounds-check. Subs can shrink (Clear/Refresh from a background ASR/OCR run) between the
+        // UI raising the command and this handler, so indexing Subs directly risks ArgumentOutOfRangeException.
+        List<SubtitleData> subs = SubManager.SnapshotSubs();
+        if (index.Value < 0 || index.Value >= subs.Count)
+        {
+            return;
+        }
+
+        var sub = subs[index.Value];
         FL.Player.SeekAccurate(sub.StartTime, SubIndex);
     });
 
@@ -162,7 +170,14 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
             return;
         }
 
-        var sub = SubManager.Subs[index.Value];
+        // HC-18: snapshot + bounds-check (Subs may shrink between the UI command and this handler).
+        List<SubtitleData> subs = SubManager.SnapshotSubs();
+        if (index.Value < 0 || index.Value >= subs.Count)
+        {
+            return;
+        }
+
+        var sub = subs[index.Value];
         var newDelay = FL.Player.CurTime - sub.StartTime.Ticks;
 
         // Delay's OSD is not displayed, temporarily set to Active

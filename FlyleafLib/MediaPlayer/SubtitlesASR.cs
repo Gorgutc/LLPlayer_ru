@@ -1798,11 +1798,20 @@ public partial class FasterWhisperASRService : IASRService
                     var match = LanguageReg.Match(line);
                     if (match.Success)
                     {
+                        // HC-20: an unknown detected language name must not crash the run (the indexer threw
+                        // KeyNotFoundException) — fall back to the manual/config language.
                         string languageName = match.Groups[1].Value;
-                        _detectedLanguage = WhisperLanguage.LanguageToCode[languageName];
+                        _detectedLanguage = WhisperLanguage.LanguageToCode.TryGetValue(languageName, out var code)
+                            ? code
+                            : _manualLanguage;
+                        continue;
                     }
 
-                    continue;
+                    // HC-20: only the detection line is consumed above. Previously EVERY line was swallowed until a
+                    // detection line appeared — so with LanguageDetection=true AND --language pinned via
+                    // ExtraArguments (faster-whisper then prints no "Detected language" line) all cues were dropped and
+                    // the run "succeeded" empty. Fall through to parse subtitle lines; the yield below uses
+                    // _manualLanguage while _detectedLanguage is still null.
                 }
 
                 bool isLong = false;
@@ -1841,7 +1850,8 @@ public partial class FasterWhisperASRService : IASRService
                     continue;
                 }
 
-                yield return (text, start, end, _isLanguageDetect ? _detectedLanguage! : _manualLanguage);
+                // HC-20: fall back to _manualLanguage when detection produced nothing (null) so a cue never carries a null language.
+                yield return (text, start, end, _isLanguageDetect ? (_detectedLanguage ?? _manualLanguage) : _manualLanguage);
 
                 if (!oneSuccess)
                 {
