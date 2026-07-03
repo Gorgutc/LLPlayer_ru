@@ -1035,7 +1035,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     уведомление о `LanguageName` не поднимается → заголовки меню «ASR ({0})» не обновляются при смене языка.
   - Решение: заменить три вызова на `Raise(nameof(LanguageName))`.
   - Зачем: пункты меню ASR показывают устаревший язык до перезахода.
-- **HC-08 — `TranslateLanguage` остаётся null при дефолте `EnglishAmerican` 🟡 ⓢ · `FlyleafLib/Engine/Config.cs:1526`**
+- **HC-08 — `TranslateLanguage` остаётся null при дефолте `EnglishAmerican` 🟡 ⓢ · `FlyleafLib/Engine/Config.cs:1526`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — seed-инициализатор `TranslateLanguage = Language.Get(TargetLanguage.EnglishAmerican.ToISO6391())` (сеттер по-прежнему обновляет при смене цели); +2 unit-теста (`SubtitlesConfigTranslateLanguageTests`, RED-without-fix на дефолте).
   - Проблема: `[JsonIgnore] TranslateLanguage` инициализируется только в сеттере `TranslateTargetLanguage`, а тот
     не срабатывает при равенстве дефолту → у конфига/культуры с `EnglishAmerican` поле остаётся null всю сессию
     (потенциальный NRE в потребителях, напр. `WordPopup.xaml.cs:516`).
@@ -1047,13 +1047,13 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     `SettingsKeys` блокирует Apply всей вкладки (`DuplicationCount==0`), первый матч затеняет палитру.
   - Решение: добавлять биндинг только если аккорд Ctrl+K свободен, и сделать бэкфилл one-shot через version-гейт.
   - Зачем: приложение само создаёт конфликт хоткеев, который блокирует настройку клавиш.
-- **HC-10 — Сбой Save version-штампа внутри try загрузки → ложное «Cannot load» + `Environment.Exit(1)` 🟡 ⓢ · `LLPlayer/Services/FlyleafManager.cs:58`** (см. также `FlyleafLoader.cs:25/65`)
+- **HC-10 — Сбой Save version-штампа внутри try загрузки → ложное «Cannot load» + `Environment.Exit(1)` 🟡 ⓢ · `LLPlayer/Services/FlyleafManager.cs:58`** (см. также `FlyleafLoader.cs:25/65`) · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — миграционный version-stamp Save вынесен в собственный try/catch на всех 3 сайтах (FlyleafManager + FlyleafLoader StartEngine/CreateFlyleafPlayer); сбой ЗАГРУЗКИ остаётся фатальным, транзиентный сбой ЗАПИСИ — нет (миграции идемпотентны). LLPlayer без тест-проекта → manual-smoke.
   - Проблема: миграционный `Save` version-stamp выполняется внутри того же try, что и загрузка. Конфиг валиден, но
     запись временно невозможна (файл залочен AV/OneDrive, каталог RO) → «Cannot load…, review/delete config» + Exit(1).
     Приложение не стартует, хотя конфиг цел.
   - Решение: вынести миграционный Save в отдельный try/catch (при сбое — лог + продолжить; миграции идемпотентны).
   - Зачем: транзиентная блокировка файла не должна мешать запуску с валидным конфигом.
-- **HC-11 — `SevenZipBase.SetLibraryPath("lib/7z.dll")` по CWD-относительному пути 🟡 ⓢ · `LLPlayer/ViewModels/WhisperEngineDownloadDialogVM.cs:164`**
+- **HC-11 — `SevenZipBase.SetLibraryPath("lib/7z.dll")` по CWD-относительному пути 🟡 ⓢ · `LLPlayer/ViewModels/WhisperEngineDownloadDialogVM.cs:164`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — `Path.Combine(AppContext.BaseDirectory, "lib", "7z.dll")`. LLPlayer без тест-проекта → manual-smoke.
   - Проблема: относительный путь резолвится от CWD процесса; приложение нигде не делает `SetCurrentDirectory(BaseDirectory)`.
     Запуск через ассоциацию файлов/ярлык с чужим «Start in» → CWD ≠ папка установки → `SevenZipLibraryException`,
     распаковка Whisper-движка ломается.
@@ -1125,7 +1125,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     неизвестном коде.
   - Решение: `continue` только для реальной строки детекта/нематча; lookup через `TryGetValue` с фолбэком в `_manualLanguage`.
   - Зачем: легальная power-user-ручка приводит к молча пустому ASR.
-- **HC-21 — PGS: коррекция `EndTime` зависит от наличия `Bitmap` → cue длиной +49.7 дней 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesManager.cs:866`**
+- **HC-21 — PGS: коррекция `EndTime` зависит от наличия `Bitmap` → cue длиной +49.7 дней 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesManager.cs:866`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — raw `end_display_time` трекается в локали `prevEndDisplayTime` → коррекция «до следующего пакета» работает и при `useBitmap=false` (где `prevSub.Bitmap==null`); последний cue с sentinel `uint.MaxValue` клампится (StartTime+5s). Текст-субтитры byte-identical. Native decode-loop → manual-smoke + adversarial-ревью.
   - Проблема: при `end_display_time==uint.MaxValue` EndTime исправляется по следующему пакету только если
     `prevSub.Bitmap?...==uint.MaxValue`; при `useBitmap=false` (режим только таймстемпов) `Bitmap==null` → конец
     остаётся ~49.7 дней → перекрытие cue, вечное `Showing`, битый prev/next-интервал.
@@ -1144,7 +1144,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: зарегистрировать `PDICSender` синглтоном (dispose при выходе) или диспозить в `Unloaded`; переписать
     `Dispose` синхронно (try close с таймаутом / finally dispose pipe).
   - Зачем: утечка внешних процессов при использовании словаря.
-- **HC-24 — `TakeSnapshotToFile`: GDI+ Bitmap не диспозится на успехе 🟢 ⓢ · `FlyleafLib/MediaPlayer/Player.Extra.cs:362`**
+- **HC-24 — `TakeSnapshotToFile`: GDI+ Bitmap не диспозится на успехе 🟢 ⓢ · `FlyleafLib/MediaPlayer/Player.Extra.cs:362`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — `using var snapshotBitmap` (диспоз на успехе И на исключении, rethrow сохранён). Manual-smoke.
   - Проблема: снапшот-битмап диспозится только в `catch`; на успешном пути (после Save) — до финализатора. Серия
     снапшотов (зажатый хоткей) → быстрый рост нативной памяти/GDI-хендлов, риск исчерпания GDI-лимита (10k).
   - Решение: `using var snapshotBitmap = …` (или try/finally).
@@ -1166,7 +1166,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     + `PersistPerLineVoices=on` → фриз на каждый выбор голоса.
   - Решение: быстрый снимок только override-cue на UI, а `File.Exists`/сериализацию/запись — в `Task.Run` с debounce.
   - Зачем: назначение голоса замораживает UI на больших/сетевых файлах.
-- **HC-28 — Bing/Microsoft: отменённая задача access-токена залипает в кэше 🟢 ⓢ · `FlyleafLib/MediaPlayer/Translation/Services/MicrosoftTranslateServiceBase.cs:177`**
+- **HC-28 — Bing/Microsoft: отменённая задача access-токена залипает в кэше 🟢 ⓢ · `FlyleafLib/MediaPlayer/Translation/Services/MicrosoftTranslateServiceBase.cs:177`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — **постоянный баг уже был закрыт ранее** (eviction-гарды: 401 compare-and-clear + faulted-task eviction в `catch`); остаточное упрочнение — общий fetch токена с `CancellationToken.None` (был токен вызывающего) снимает и разовый сбой + thrash после отмены. Каждый вызывающий бейлит через `WaitAsync(token)`. Network/abstract path → покрыт корректностью + ревью.
   - Проблема: `GetAccessTokenTask` кэширует Task с токеном первого вызывающего; если Cancel пришёл во время первого
     fetch, canceled-task остаётся в `_accessToken` → следующий перевод детерминированно фейлится «A task was canceled».
   - Решение: в OCE-ветке compare-and-clear кэша перед throw (или fetch с `CancellationToken.None` + `WaitAsync(token)`).

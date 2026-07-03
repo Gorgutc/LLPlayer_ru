@@ -161,7 +161,9 @@ public class WhisperEngineDownloadDialogVM : Bindable, IDialogAware
     {
         WhisperConfig.EnsureEnginesDirectory();
 
-        SevenZipBase.SetLibraryPath("lib/7z.dll");
+        // HC-11: resolve 7z.dll from the app install directory, not the process CWD. Launching via a file
+        // association/shortcut with a different "Start in" makes a CWD-relative path throw SevenZipLibraryException.
+        SevenZipBase.SetLibraryPath(Path.Combine(AppContext.BaseDirectory, "lib", "7z.dll"));
 
         using (SevenZipExtractor extractor = new(zipPath))
         {
