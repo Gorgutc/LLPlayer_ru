@@ -1041,7 +1041,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     (потенциальный NRE в потребителях, напр. `WordPopup.xaml.cs:516`).
   - Решение: сделать `TranslateLanguage` вычисляемым (`=> Language.Get(TranslateTargetLanguage.ToISO6391())`) + null-guard; регресс-тест round-trip с `EnglishAmerican`.
   - Зачем: дефолтная конфигурация оставляет производное поле неинициализированным.
-- **HC-09 — Бэкфилл `Ctrl+K` (OpenCommandPalette) создаёт дубликат хоткея 🟡 ⓢ · `LLPlayer/Services/FlyleafLoader.cs:104`**
+- **HC-09 — Бэкфилл `Ctrl+K` (OpenCommandPalette) создаёт дубликат хоткея 🟡 ⓢ · `LLPlayer/Services/FlyleafLoader.cs:104`** · ✅ **DONE (v0.3.46, 2026-07-03, сессия #22, бандл B5)** — решение вынесено в чистый `KeyBindingBackfill.ShouldBackfill` (FlyleafLib): one-shot version-gate (`< 0.3.45`; `loadedConfigVersion` захвачен ДО version-stamp) + chord-free guard `(Key,Ctrl,Alt,Shift)` + already-present. Убирает дубликат Ctrl+K (блокировал Settings▸Keys Apply) и повторное добавление на каждый старт удалённого пользователем биндинга. +12 RED-without-fix тестов (граница версии 0.3.44/0.3.45/0.3.46, unparseable/null, chord-taken/free, Key-дискриминация K↔J). `config-data-contract.md` обновлён (бэкфилл one-shot + chord-safe). Adversarial-ревью (5 линз) — 0 находок по HC-09. Manual-smoke старта на до-0.3.45 конфиге.
   - Проблема: бэкфилл проверяет только отсутствие `ActionName==OpenCommandPalette`, не занятость аккорда, и не
     version-gated (каждый запуск). Удалил палитру и назначил Ctrl+K другому → на старте добавляется второй Ctrl+K →
     `SettingsKeys` блокирует Apply всей вкладки (`DuplicationCount==0`), первый матч затеняет палитру.
@@ -1149,13 +1149,13 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     снапшотов (зажатый хоткей) → быстрый рост нативной памяти/GDI-хендлов, риск исчерпания GDI-лимита (10k).
   - Решение: `using var snapshotBitmap = …` (или try/finally).
   - Зачем: интенсивные снапшоты копят GDI-ресурсы.
-- **HC-25 — AI Insights: кнопка Generate не активируется, если транскрипт появился после открытия 🟢 ⓢ · `LLPlayer/ViewModels/AiInsightsDialogVM.cs:309`**
+- **HC-25 — AI Insights: кнопка Generate не активируется, если транскрипт появился после открытия 🟢 ⓢ · `LLPlayer/ViewModels/AiInsightsDialogVM.cs:309`** · ✅ **DONE (v0.3.46, 2026-07-03, сессия #22, бандл B5)** — подписка на `Subs.CollectionChanged` выбранного трека, пока диалог открыт (re-wire на смене слота, отписка на закрытии); при появлении текста — re-eval `_hasText` + raise `CanGenerate`. ⚠️ **Adversarial-ревью поймало Critical** первого прохода: `CollectionChanged` от фонового ASR-потока → INPC `CanGenerate` на фоновом потоке → Prism `ObservesCanExecute`→`RaiseCanExecuteChanged` синхронно → кнопка Generate трогает `IsEnabled` не на UI-потоке → `InvalidOperationException` (краш в ЦЕЛЕВОМ сценарии). Исправлено: маршалинг реакции через `Utils.UI` (BeginInvoke) + early-out `if (_hasText) return` (без флуда диспетчера) + `_hasText` volatile. Manual-smoke.
   - Проблема: `_hasText` пересчитывается только в `OnDialogOpened`/сеттере `SelectedSubIndex`. Запуск ASR + сразу
     открыть диалог → Generate остаётся серой, пока не переключить слот ①/② или переоткрыть.
   - Решение: подписаться на `PropertyChanged` выбранного SubManager (Count/IsLoading) на время жизни диалога,
     вызывать `RefreshHasText`; отписка в `OnDialogClosed`.
   - Зачем: «мёртвая» основная кнопка диалога в типичном сценарии.
-- **HC-26 — `SidebarFontWeight` сохраняется/показывается, но сайдбар его не применяет 🟢 ⓢ · `LLPlayer/Views/SubtitlesSidebar.xaml:531`**
+- **HC-26 — `SidebarFontWeight` сохраняется/показывается, но сайдбар его не применяет 🟢 ⓢ · `LLPlayer/Views/SubtitlesSidebar.xaml:531`** · ✅ **DONE (v0.3.46, 2026-07-03, сессия #22, бандл B5)** — `FontWeight="{Binding FL.Config.SidebarFontWeight}"` на `SubtitleListBox` (string→FontWeight через неявный конвертер, как существующий FontFamily-биндинг строки). Дефолт `Normal` → byte-identical. Manual-smoke.
   - Проблема: диалог шрифта сайдбара пишет `AppConfig.SidebarFontWeight`, Settings показывает его, но список сайдбара
     биндит только FontSize/FontFamily — FontWeight нигде не привязан.
   - Решение: `FontWeight="{Binding FL.Config.SidebarFontWeight}"` на `SubtitleListBox` (либо убрать выбор веса из диалога).
