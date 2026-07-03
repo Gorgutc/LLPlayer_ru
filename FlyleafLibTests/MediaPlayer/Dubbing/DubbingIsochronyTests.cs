@@ -41,6 +41,22 @@ public class DubbingIsochronyTests
     }
 
     [Fact]
+    public void ComputeAtempo_OverflowWithMaxBelowOne_IsFlooredToOne_NotSlowed()
+    {
+        // HC-29: a mis-set max < 1 (e.g. a 0.15 typo for 1.15) must never SLOW an overflowing clip — that would
+        // GROW drift instead of recovering it. The overflow factor is floored at 1.0.
+        DubbingIsochrony.ComputeAtempo(clipMs: 2000, slotMs: 1000, min: 0.9, max: 0.15).Should().Be(1.0);
+    }
+
+    [Fact]
+    public void ComputeAtempo_OverflowWithinDefaultRange_FloorIsNoOp()
+    {
+        // Byte-identical guard: with the default [0.9, 1.15] range the 1.0 floor never binds (an overflow factor
+        // is already > 1), so the computed factor is unchanged.
+        DubbingIsochrony.ComputeAtempo(1100, 1000, 0.9, 1.15).Should().BeApproximately(1.1, 1e-9);
+    }
+
+    [Fact]
     public void Place_NonOverlappingLines_KeepsSourceStarts()
     {
         DubbingLine[] lines =

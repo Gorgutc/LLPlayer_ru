@@ -46,9 +46,14 @@ public class DubbingConfig : NotifyPropertyChanged
     /// Clamped to its valid range on set so a hand-edited config or UI echo cannot push it out of bounds.</summary>
     public int DuckingPercent { get; set => Set(ref field, Math.Clamp(value, 0, 100)); } = 15;
 
-    /// <summary>Isochrony: capped pitch-preserving time-stretch (ffmpeg atempo) range.</summary>
-    public double AtempoMin { get; set => Set(ref field, value); } = 0.9;
-    public double AtempoMax { get; set => Set(ref field, value); } = 1.15;
+    /// <summary>Isochrony: capped pitch-preserving time-stretch (ffmpeg atempo) range. Both bounds are
+    /// clamped to [0.5, 2.0] on set so a hand-edited config or UI typo (e.g. <c>0.15</c> for <c>1.15</c>, or
+    /// <c>0</c>) cannot reach the sidecar's <c>librosa.time_stretch</c>, which throws on <c>rate &lt;= 0</c> and
+    /// would fail the whole file's dub. Overflow clips are additionally floored at <c>1.0x</c> in
+    /// <see cref="Dubbing.DubbingIsochrony.ComputeAtempo"/> so a mis-set max never slows them. With the default
+    /// range both guards are no-ops → byte-identical.</summary>
+    public double AtempoMin { get; set => Set(ref field, ClampAtempo(value)); } = 0.9;
+    public double AtempoMax { get; set => Set(ref field, ClampAtempo(value)); } = 1.15;
 
     /// <summary>Mandatory Russian stress/homograph normalization before synthesis; graceful-degrades.</summary>
     public bool StressNormalization { get; set => Set(ref field, value); } = true;
@@ -66,6 +71,14 @@ public class DubbingConfig : NotifyPropertyChanged
 
         return VoiceBankResolver.Resolve(trimmed)?.Id ?? trimmed;
     }
+
+    // Keep the time-stretch bounds inside a sane range so a hand-edited config or UI typo cannot push the
+    // effective atempo to a non-positive/degenerate value the sidecar's librosa.time_stretch would reject
+    // (rate <= 0 throws → the whole file's dub fails). The order (min vs max) is tolerated downstream by
+    // DubbingIsochrony.ComputeAtempo, which sorts the two before clamping.
+    private const double AtempoFloor = 0.5;
+    private const double AtempoCeil = 2.0;
+    private static double ClampAtempo(double value) => Math.Clamp(value, AtempoFloor, AtempoCeil);
 
     private static List<string> NormalizeCustomVoiceIds(IEnumerable<string?>? value)
     {
