@@ -8,6 +8,10 @@ namespace LLPlayer.Services;
 
 public static class FlyleafLoader
 {
+    // HC-09: the command-palette (Ctrl+K) backfill is applied one-shot to configs predating this version; the version
+    // stamp written on load then makes it never re-run, so a later intentional removal of the binding is respected.
+    private static readonly Version PaletteBackfillVersion = new(0, 3, 45);
+
     public static void StartEngine()
     {
         EngineConfig engineConfig = DefaultEngineConfig();
@@ -59,6 +63,9 @@ public static class FlyleafLoader
     {
         Config? config = null;
         bool useConfig = false;
+        // HC-09: the config version as loaded, captured before the version-stamp below overwrites it, so the one-shot
+        // command-palette backfill can tell whether this config predates the fix.
+        string? loadedConfigVersion = null;
 
         // Load Player's Config
         if (File.Exists(App.PlayerConfigPath))
@@ -67,6 +74,7 @@ public static class FlyleafLoader
             {
                 var opts = AppConfig.GetJsonSerializerOptions();
                 config = Config.Load(App.PlayerConfigPath, opts);
+                loadedConfigVersion = config.Version;
 
                 if (config.Version != App.Version)
                 {
@@ -115,20 +123,20 @@ public static class FlyleafLoader
         }
         else
         {
-            // Backfill ONLY the newly-added command-palette default (Ctrl+K) for returning users with an
-            // existing config, so the shortcut works without resetting their config. Scoped to this one new
-            // action (reusing its exact default definition) to avoid re-adding bindings a user may have
-            // intentionally removed for pre-existing actions.
-            bool hasPalette = config.Player.KeyBindings.Keys.Any(k =>
-                k.ActionName == nameof(CustomKeyBindingAction.OpenCommandPalette));
-            if (!hasPalette)
+            // Backfill ONLY the newly-added command-palette default (Ctrl+K) for returning users with an existing
+            // config, so the shortcut works without resetting their config. HC-09 hardening:
+            //  (1) One-shot version gate: the palette shipped inside 0.3.0 without a config version bump, so an
+            //      un-gated backfill re-ran every launch and re-added the binding for users who intentionally removed
+            //      it. Run only for configs predating this fix; the version stamp above then makes it never run again.
+            //  (2) Chord-free guard: only add when the Ctrl+K chord is actually free. Otherwise, if the user reassigned
+            //      Ctrl+K to another action, the backfill created a DUPLICATE chord that blocks Settings > Keys Apply.
+            KeyBinding? paletteDefault = AppActions.DefaultCustomActionsMap()
+                .FirstOrDefault(b => b.ActionName == nameof(CustomKeyBindingAction.OpenCommandPalette));
+            if (paletteDefault != null &&
+                KeyBindingBackfill.ShouldBackfill(
+                    loadedConfigVersion, PaletteBackfillVersion, config.Player.KeyBindings.Keys, paletteDefault))
             {
-                KeyBinding? paletteDefault = AppActions.DefaultCustomActionsMap()
-                    .FirstOrDefault(b => b.ActionName == nameof(CustomKeyBindingAction.OpenCommandPalette));
-                if (paletteDefault != null)
-                {
-                    config.Player.KeyBindings.Keys.Add(paletteDefault);
-                }
+                config.Player.KeyBindings.Keys.Add(paletteDefault);
             }
         }
 

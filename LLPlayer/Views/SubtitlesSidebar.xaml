@@ -530,6 +530,7 @@
             FlowDirection="{Binding FL.Config.SidebarFlowDirection}"
             FontSize="{Binding FL.Config.SidebarFontSize}"
             FontFamily="{Binding FL.Config.SidebarFontFamily}"
+            FontWeight="{Binding FL.Config.SidebarFontWeight}"
             BorderThickness="0"
             Foreground="{DynamicResource MaterialDesignBody}"
             VirtualizingStackPanel.ScrollUnit="Pixel"

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -49,6 +50,7 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
             if (Set(ref field, value))
             {
                 RefreshHasText();
+                SubscribeHasText(); // HC-25: re-wire the live cue watch to the newly selected track
                 OnPropertyChanged(nameof(SubManager));
                 OnPropertyChanged(nameof(CanGenerate));
             }
@@ -96,7 +98,7 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
 
     public bool CanGenerate => !IsBusy && _hasText && _llmAvailable;
 
-    private bool _hasText;
+    private volatile bool _hasText; // HC-25: also read on the background ASR/OCR thread (CollectionChanged early-out)
     private bool _llmAvailable;
     private CancellationTokenSource? _cts;
 
@@ -314,6 +316,50 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
         _hasText = FL.Player.SubtitlesManager[SelectedSubIndex].SnapshotSubs().Any(s => s.IsText);
     }
 
+    // HC-25: keep CanGenerate live while the dialog is open. _hasText was only recomputed on open / slot switch, so an
+    // ASR/OCR run started just before the dialog opened would leave the primary Generate button disabled until the user
+    // toggled slots or reopened. Watch the selected track's cue collection and re-evaluate as cues arrive; re-wire on
+    // slot switch (SelectedSubIndex setter) and unsubscribe on close.
+    private INotifyCollectionChanged? _hasTextSubs;
+
+    private void SubscribeHasText()
+    {
+        UnsubscribeHasText();
+        _hasTextSubs = FL.Player.SubtitlesManager[SelectedSubIndex].Subs;
+        _hasTextSubs.CollectionChanged += OnSubsChangedRefreshHasText;
+    }
+
+    private void UnsubscribeHasText()
+    {
+        if (_hasTextSubs != null)
+        {
+            _hasTextSubs.CollectionChanged -= OnSubsChangedRefreshHasText;
+            _hasTextSubs = null;
+        }
+    }
+
+    private void OnSubsChangedRefreshHasText(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        // CollectionChanged fires on the background ASR/OCR thread (Subs is Add()ed there under _subsLocker). Cheap
+        // early-out once text has appeared: CanGenerate no longer depends on further cues, so stop marshaling. Then
+        // marshal to the UI thread BEFORE touching any bound/command state — raising CanGenerate drives Prism's
+        // ObservesCanExecute -> RaiseCanExecuteChanged synchronously (no dispatcher), and the Generate button then
+        // updates IsEnabled, which is a WPF DispatcherObject mutation that must run on the UI thread. Emitting it off
+        // the UI thread throws InvalidOperationException.
+        if (_hasText)
+            return;
+
+        Utils.UI(() =>
+        {
+            bool prev = _hasText;
+            RefreshHasText();
+            if (prev != _hasText)
+            {
+                OnPropertyChanged(nameof(CanGenerate));
+            }
+        });
+    }
+
     private void RefreshLlm()
     {
         OpenAIBaseTranslateSettings? settings = AiInsightLlmResolver.Resolve(FL.PlayerConfig.Subtitles);
@@ -340,11 +386,13 @@ public class AiInsightsDialogVM : Bindable, IDialogAware
     {
         // Cancel any in-flight generation so closing the dialog does not leak the request.
         _cts?.Cancel();
+        UnsubscribeHasText(); // HC-25: stop watching the cue collection once the dialog is gone
     }
 
     public void OnDialogOpened(IDialogParameters parameters)
     {
         RefreshHasText();
+        SubscribeHasText(); // HC-25: keep CanGenerate live if the transcript fills in after the dialog opens
         RefreshLlm();
         OnPropertyChanged(nameof(CanGenerate));
     }
