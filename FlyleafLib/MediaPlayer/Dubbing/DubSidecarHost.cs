@@ -151,10 +151,18 @@ public sealed class DubSidecarHost : ITtsService
             Task completed = await Task.WhenAny(portReady.Task, exited).ConfigureAwait(false);
             if (completed == exited && !portReady.Task.IsCompleted)
             {
+                // WaitForExitAsync completing does NOT prove the child died: a caller-cancel or the 120s
+                // timeout cancels portCts, which completes `exited` while the process is still alive. Classify +
+                // map so a cancel surfaces as OperationCanceled (job Canceled, not Failed), a timeout gets its
+                // own message, and only a genuine early exit reports "exited before reporting a port".
+                SidecarStartFault fault = ClassifyPortWaitFailure(token.IsCancellationRequested, _process.HasExited);
+                if (fault == SidecarStartFault.Canceled)
+                    token.ThrowIfCancellationRequested(); // the real, token-bound cancellation
+
                 string detail;
                 lock (stderr)
                     detail = stderr.ToString();
-                throw new InvalidOperationException($"Dubbing sidecar exited before reporting a port.\n{detail}");
+                throw BuildPortWaitException(fault, detail);
             }
 
             Port = await portReady.Task.ConfigureAwait(false);
@@ -168,6 +176,42 @@ public sealed class DubSidecarHost : ITtsService
 
         return await ProbeReadyAsync(token).ConfigureAwait(false);
     }
+
+    /// <summary>Why the port wait ended without the sidecar reporting a port.</summary>
+    internal enum SidecarStartFault
+    {
+        /// <summary>The caller's token was cancelled — surface as OperationCanceled (job Canceled).</summary>
+        Canceled,
+        /// <summary>The 120s port-report budget elapsed while the process was still alive.</summary>
+        Timeout,
+        /// <summary>The process genuinely exited before reporting a port.</summary>
+        ExitedEarly
+    }
+
+    // Pure decision for the port-wait error branch (unit-tested). Precondition: portReady did NOT complete and
+    // the exit-wait task completed — which happens on a real exit OR because a caller-cancel / the 120s timeout
+    // cancelled the linked token. Caller-cancel wins (the user asked to stop); otherwise a still-alive process
+    // means the 120s budget elapsed (timeout); only a dead process is a genuine early exit.
+    internal static SidecarStartFault ClassifyPortWaitFailure(bool callerCanceled, bool processHasExited)
+    {
+        if (callerCanceled)
+            return SidecarStartFault.Canceled;
+        if (!processHasExited)
+            return SidecarStartFault.Timeout;
+        return SidecarStartFault.ExitedEarly;
+    }
+
+    // Map a classified fault to the exception the caller sees (unit-tested). This is the behavioural payload of
+    // HC-30: a cancel must surface as an OperationCanceledException (job Canceled) and a timeout as a
+    // TimeoutException, never as the InvalidOperationException("exited before…") the fix set out to eliminate.
+    // Canceled maps to a plain OperationCanceledException as a fallback — the hot path throws the token-bound one
+    // via ThrowIfCancellationRequested first, and this only runs if the token raced back to not-cancelled.
+    internal static Exception BuildPortWaitException(SidecarStartFault fault, string stderrDetail) => fault switch
+    {
+        SidecarStartFault.Canceled => new OperationCanceledException(),
+        SidecarStartFault.Timeout => new TimeoutException("Dubbing sidecar did not report a port within 120 seconds."),
+        _ => new InvalidOperationException($"Dubbing sidecar exited before reporting a port.\n{stderrDetail}")
+    };
 
     private async Task<bool> ProbeReadyAsync(CancellationToken token)
     {

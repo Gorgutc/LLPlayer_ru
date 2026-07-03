@@ -115,4 +115,59 @@ public class DubbingConfigTests
         config.Should().NotBeNull();
         config!.DefaultVoiceId.Should().Be("ru-preset-1");
     }
+
+    // HC-29: the atempo bounds are free TextBoxes. A typo (0.15 for 1.15) or a 0/negative must not reach the
+    // sidecar, where a sub-1 max slows overflowing clips and a <= 0 rate makes librosa.time_stretch throw and
+    // fails the whole file's dub. The setter clamps to [0.5, 2.0]; in-range values (incl. the 0.9 default) pass.
+    [Theory]
+    [InlineData(0.15, 0.5)]
+    [InlineData(0.0, 0.5)]
+    [InlineData(-1.0, 0.5)]
+    [InlineData(3.0, 2.0)]
+    [InlineData(1.15, 1.15)]
+    [InlineData(0.9, 0.9)]
+    public void AtempoMax_SetOutOfRange_IsClampedToSaneRange(double input, double expected)
+    {
+        DubbingConfig config = new();
+
+        config.AtempoMax = input;
+
+        config.AtempoMax.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(0.0, 0.5)]
+    [InlineData(-2.0, 0.5)]
+    [InlineData(5.0, 2.0)]
+    [InlineData(0.9, 0.9)]
+    public void AtempoMin_SetOutOfRange_IsClampedToSaneRange(double input, double expected)
+    {
+        DubbingConfig config = new();
+
+        config.AtempoMin = input;
+
+        config.AtempoMin.Should().Be(expected);
+    }
+
+    [Fact]
+    public void AtempoMax_JsonTypo_IsClampedOnDeserialize()
+    {
+        // The classic 0.15-for-1.15 typo in a hand-edited config must be neutralized on load, not survive to
+        // the sidecar. STJ uses the property setter, so the clamp applies to deserialization too.
+        DubbingConfig? config = JsonSerializer.Deserialize<DubbingConfig>("""{"AtempoMax":0.15}""");
+
+        config.Should().NotBeNull();
+        config!.AtempoMax.Should().Be(0.5);
+    }
+
+    [Fact]
+    public void AtempoDefaults_AreUnchanged()
+    {
+        // Byte-identical guard: the field initializers do not run through the clamping setter, and 0.9/1.15 are
+        // in range anyway, so the default dub is unaffected by HC-29.
+        DubbingConfig config = new();
+
+        config.AtempoMin.Should().Be(0.9);
+        config.AtempoMax.Should().Be(1.15);
+    }
 }

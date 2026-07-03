@@ -31,7 +31,11 @@ public static class DubbingIsochrony
             return 1.0;
 
         double factor = clipMs / slotMs;
-        return Clamp(factor, min, max);
+        // Floor overflow clips at 1.0: shortening (atempo >= 1) is the only sane response to an overflow, but a
+        // mis-set max < 1 (e.g. a 0.15 typo for 1.15) would otherwise Clamp the factor BELOW 1 and SLOW the clip,
+        // growing drift instead of recovering it. With the default [0.9, 1.15] range this is a no-op (an overflow
+        // factor is > 1, so the clamp already keeps it >= 1).
+        return System.Math.Max(1.0, Clamp(factor, min, max));
     }
 
     public static double Clamp(double value, double min, double max)
