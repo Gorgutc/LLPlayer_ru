@@ -1077,7 +1077,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     дубляжа обрывается/отсутствует молча. Мок-путь `total_ms` использует честно.
   - Решение: размер тайм-линии `max(len(original), ceil(rate*total_ms/1000))`, оригинал допаддить нулями.
   - Зачем: конец фильма систематически теряет дубляж.
-- **HC-15 — Второй рукописный SRT-сериализатор в батче без защит `SubtitleExporter` 🟡 ⓢ · `FlyleafLib/MediaPlayer/Batch/SrtSubtitleWriter.cs:42`**
+- **HC-15 — Второй рукописный SRT-сериализатор в батче без защит `SubtitleExporter` 🟡 ⓢ · `FlyleafLib/MediaPlayer/Batch/SrtSubtitleWriter.cs:42`** · ✅ **DONE (v0.3.47, 2026-07-03, сессия #22, бандл B6)** — `SrtSubtitleWriter` теперь маппит `SubtitleData`→`SubtitleExportLine(Start,End,DisplayText??Text??"",Styles:null)` и сериализует общим `SubtitleExporter.Build(…,Srt)` (несёт `NormalizeCueText` — дроп in-cue blank-line, ломавшего SRT-парсер на выводе LLM при `ResegmentSubtitles=Off` — и `InvariantCulture`-тайминги), сохраняя atomic temp+move + per-run GUID-temp. Well-formed однострочные cue на Windows byte-identical (`WriteLineAsync` уже давал CRLF). +5 тестов (`BuildSrtContent` map + I/O RED-without-fix на blank-line + overwrite/atomic). Adversarial-ревью (5 линз): 1 REFUTED-концерн о RED (I/O-тест подтверждён настоящим RED).
   - Проблема: `SrtSubtitleWriter` заново пишет SRT без `NormalizeCueText` (blank-line guard) и `InvariantCulture`,
     хотя есть чистый `SubtitleExporter.BuildSrt`. LLM вернул текст с пустой строкой, `ResegmentSubtitles=Off` →
     пустая строка внутри cue терминирует cue в SRT → рассинхрон парсера у переведённого файла.
@@ -1171,13 +1171,13 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     fetch, canceled-task остаётся в `_accessToken` → следующий перевод детерминированно фейлится «A task was canceled».
   - Решение: в OCE-ветке compare-and-clear кэша перед throw (или fetch с `CancellationToken.None` + `WaitAsync(token)`).
   - Зачем: один отменённый seek ломает переводчик до перезахода.
-- **HC-29 — `AtempoMin/AtempoMax` не валидируются 🟢 ⓢ · `FlyleafLib/Engine/DubbingConfig.cs:51`**
+- **HC-29 — `AtempoMin/AtempoMax` не валидируются 🟢 ⓢ · `FlyleafLib/Engine/DubbingConfig.cs:51`** · ✅ **DONE (v0.3.47, 2026-07-03, сессия #22, бандл B6)** — сеттеры `AtempoMin/Max` клампят в [0.5, 2.0] (`ClampAtempo`, действует и на STJ-десериализацию) так, что typo `0.15`/`0`/negative не доходит до `librosa.time_stretch` (rate≤0 бросает → весь дубляж файла Failed); `DubbingIsochrony.ComputeAtempo` для overflow-реплики возвращает `Math.Max(1.0, Clamp(factor,min,max))` — mis-set max<1 больше не ЗАМЕДЛЯЕТ переполняющую реплику (не растит drift). Дефолты 0.9/1.15 в диапазоне → клампы/пол no-op, byte-identical (пиннится тестом). +14 тестов. `config-data-contract.md` уже упоминал «atempo range» обобщённо → правки frozen-контракта не потребовалось.
   - Проблема: свободные TextBox без клампа. `AtempoMax<1` → переполняющие реплики ЗАМЕДЛЯЮТСЯ (drift растёт); `≤0` →
     `librosa.time_stretch(rate<=0)` бросает → 500 → весь дубляж файла Failed. Опечатка `0.15` вместо `1.15`.
   - Решение: в `ComputeAtempo` для `clipMs>slotMs` возвращать `Math.Max(1.0, Clamp(...))`; клампить `AtempoMin/Max` в
     сеттерах (напр. 0.5..2.0, min≤max).
   - Зачем: опечатка в настройке ломает весь дубляж.
-- **HC-30 — Отмена/таймаут ожидания порта сайдкара маскируется под `InvalidOperationException` 🟢 ⓢ · `FlyleafLib/MediaPlayer/Dubbing/DubSidecarHost.cs:152`**
+- **HC-30 — Отмена/таймаут ожидания порта сайдкара маскируется под `InvalidOperationException` 🟢 ⓢ · `FlyleafLib/MediaPlayer/Dubbing/DubSidecarHost.cs:152`** · ✅ **DONE (v0.3.47, 2026-07-03, сессия #22, бандл B6)** — извлечены два чистых хелпера: `ClassifyPortWaitFailure(callerCanceled, processHasExited)` → `{Canceled, Timeout, ExitedEarly}` и `BuildPortWaitException(fault, stderr)` → `{OperationCanceledException, TimeoutException("…within 120 seconds."), InvalidOperationException("exited before…")}`. Отмена батча теперь = Canceled (не Failed), 120с-таймаут = отдельное сообщение, «exited before…» только при `_process.HasExited`. Ветка переписана без `goto` (ревью-Minor: маппинг был непокрыт → вынесен и запиннен). +7 тестов (классификатор + маппинг fault→exception). Хост-обвязка (реальный процесс/гонка токена) — manual-smoke.
   - Проблема: `WaitForExitAsync(portCts.Token)` при отмене/120с-таймауте становится Canceled → бросается
     «sidecar exited before reporting a port» при живом процессе → джоб `Failed` вместо `Canceled`.
   - Решение: перед ошибкой `token.ThrowIfCancellationRequested()` + отдельное сообщение на таймаут; «exited before…»
