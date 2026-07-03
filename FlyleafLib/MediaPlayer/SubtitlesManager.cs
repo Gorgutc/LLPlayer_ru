@@ -164,6 +164,31 @@ public class SubManager : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// HC-17: called after the translation-display toggle (SubConfig.EnabledTranslated) flips DisplayText on every cue.
+    /// Per-cue INPC (SubtitleData.DisplayText/UseTranslated) already refreshes the bound, visible sidebar rows, so the
+    /// full ListCollectionView rebuild that Refresh() does is avoided in the common case. Two things INPC does not
+    /// cover are handled here: (1) an ACTIVE sidebar search filter matches against DisplayText (SubtitlesSidebarVM.
+    /// SubFilter), so its membership must follow the flipped text — re-run it, but only when a filter is set (skipped
+    /// when there is no search, which is the whole perf win); (2) the CurrentIndex nudge Refresh() used to raise
+    /// (re-translates the current sub).
+    /// </summary>
+    internal void RefreshAfterTranslationToggle()
+    {
+        // Same main-thread requirement as Refresh (the CollectionView notifications must marshal to the UI thread).
+        UI(() =>
+        {
+            var view = CollectionViewSource.GetDefaultView(Subs);
+            if (view.Filter != null)
+            {
+                // A search is active; re-run it so rows follow the new DisplayText (the same call Refresh() made).
+                view.Refresh();
+            }
+
+            OnPropertyChanged(nameof(CurrentIndex)); // required for translating current sub
+        });
+    }
+
+    /// <summary>
     /// This must be called when doing heavy operation
     /// </summary>
     /// <returns></returns>
@@ -1105,7 +1130,25 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
     public bool IsTranslated => !string.IsNullOrEmpty(TranslatedText);
     public bool UseTranslated => EnabledTranslated && IsTranslated;
 
-    public bool EnabledTranslated = true;
+    public bool EnabledTranslated
+    {
+        get;
+        set
+        {
+            // HC-17: notify like TranslatedText so toggling the translation display updates only the bound (visible)
+            // sidebar rows via INPC, instead of the SubConfig setter forcing a full ListCollectionView.Refresh().
+            // DisplayText depends on this through UseTranslated.
+            var prevUseTranslated = UseTranslated;
+            if (Set(ref field, value))
+            {
+                if (prevUseTranslated != UseTranslated)
+                {
+                    OnPropertyChanged(nameof(UseTranslated));
+                }
+                OnPropertyChanged(nameof(DisplayText));
+            }
+        }
+    } = true;
 
     public string? DisplayText => UseTranslated ? TranslatedText : Text;
 

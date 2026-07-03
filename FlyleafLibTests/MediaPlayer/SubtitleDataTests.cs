@@ -101,6 +101,67 @@ public class SubtitleDataTests
     }
 
     [Fact]
+    public void EnabledTranslated_Toggle_NotifiesDisplayTextAndUseTranslated()
+    {
+        // HC-17: EnabledTranslated became an INPC property (was a plain field). Toggling the translation display now
+        // notifies the derived properties the sidebar binds to (DisplayText/UseTranslated), so the bound rows update
+        // without the SubConfig setter forcing a full ListCollectionView.Refresh().
+        var sub = new SubtitleData
+        {
+            Text = "hello",
+            TranslatedText = "привет", // "привет" → IsTranslated == true
+        };
+        sub.EnabledTranslated.Should().BeTrue();
+        sub.UseTranslated.Should().BeTrue();
+        sub.DisplayText.Should().Be("привет");
+
+        var changed = new List<string?>();
+        sub.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        sub.EnabledTranslated = false;
+
+        // Falls back to the source text and notifies the properties bound by the sidebar rows.
+        sub.UseTranslated.Should().BeFalse();
+        sub.DisplayText.Should().Be("hello");
+        changed.Should().Contain(nameof(SubtitleData.EnabledTranslated));
+        changed.Should().Contain(nameof(SubtitleData.UseTranslated));
+        changed.Should().Contain(nameof(SubtitleData.DisplayText));
+    }
+
+    [Fact]
+    public void EnabledTranslated_Toggle_WithoutTranslation_DoesNotNotifyUseTranslated()
+    {
+        // No translation available: DisplayText is always the source text and UseTranslated stays false regardless of
+        // the toggle, so UseTranslated must not be notified (mirrors the TranslatedText setter's guard).
+        var sub = new SubtitleData { Text = "hello" }; // TranslatedText null → IsTranslated false
+        sub.UseTranslated.Should().BeFalse();
+
+        var changed = new List<string?>();
+        sub.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        sub.EnabledTranslated = false;
+
+        sub.UseTranslated.Should().BeFalse();
+        sub.DisplayText.Should().Be("hello");
+        changed.Should().NotContain(nameof(SubtitleData.UseTranslated));
+    }
+
+    [Fact]
+    public void EnabledTranslated_SetSameValue_DoesNotNotify()
+    {
+        // Idempotent set (Set() returns false) must raise nothing, so a redundant toggle does no per-cue UI work.
+        var sub = new SubtitleData { Text = "hello", TranslatedText = "x" };
+        sub.EnabledTranslated.Should().BeTrue();
+
+        var changed = new List<string?>();
+        sub.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+        sub.EnabledTranslated = true; // unchanged
+
+        changed.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Clone_CopiesAllPerCueMetadataTogether()
     {
         // Guard against a future Clone refactor dropping one of the independent per-cue metadata fields.

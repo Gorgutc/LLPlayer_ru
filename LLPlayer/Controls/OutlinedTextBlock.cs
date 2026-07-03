@@ -114,6 +114,7 @@ public class OutlinedTextBlock : FrameworkElement
     private Pen? _Pen;
     private PathGeometry? _clipGeometry;
     private (double Width, double Height, double StrokeThickness, StrokePosition StrokePosition, string? Text) _geometryKey;
+    private (Brush Stroke, double StrokeThickness, StrokePosition StrokePosition) _penKey;
 
     public Brush Fill
     {
@@ -229,7 +230,18 @@ public class OutlinedTextBlock : FrameworkElement
 
     private void UpdatePen()
     {
-        _Pen = new Pen(Stroke, StrokeThickness)
+        // HC-31 perf: rebuild the Pen only when an input that actually shapes it changed. MeasureOverride/
+        // ArrangeOverride run on every pooled subtitle-word re-layout; recreating an unfrozen Pen and calling
+        // InvalidateVisual() on every pass defeated the _geometryKey gate and forced the render thread to clone the
+        // Pen each frame. Gate on (Stroke, StrokeThickness, StrokePosition) — the only inputs UpdatePen reads — and
+        // Freeze the Pen so it is shared with the render thread without a clone. (Stroke/StrokeThickness carry
+        // FrameworkPropertyMetadataOptions.AffectsRender, so their own changes already invalidate render.)
+        var penKey = (Stroke, StrokeThickness, StrokePosition);
+        if (_Pen != null && _penKey == penKey)
+            return;
+        _penKey = penKey;
+
+        var pen = new Pen(Stroke, StrokeThickness)
         {
             DashCap = PenLineCap.Round,
             EndLineCap = PenLineCap.Round,
@@ -238,7 +250,14 @@ public class OutlinedTextBlock : FrameworkElement
         };
 
         if (StrokePosition == StrokePosition.Outside || StrokePosition == StrokePosition.Inside)
-            _Pen.Thickness = StrokeThickness * 2;
+            pen.Thickness = StrokeThickness * 2;
+
+        // A frozen Pen (with a freezable Stroke brush) needs no per-render clone. Fall back to the unfrozen Pen when
+        // the brush can't be frozen (e.g. a bound/animated brush) — behaviour then matches the previous code.
+        if (pen.CanFreeze)
+            pen.Freeze();
+
+        _Pen = pen;
 
         InvalidateVisual();
     }
@@ -318,6 +337,11 @@ public class OutlinedTextBlock : FrameworkElement
             // need to re-generate the geometry now that the dimensions have changed
             _TextGeometry = null;
             _clipGeometry = null;
+
+            // HC-31: repaint when a geometry input changed. Previously UpdatePen()'s unconditional InvalidateVisual()
+            // covered this; now that UpdatePen() only invalidates on a real Pen change, keep the geometry-change
+            // repaint here so a size-only change (Pen unchanged) still re-renders the rebuilt geometry.
+            InvalidateVisual();
         }
 
         UpdatePen();
