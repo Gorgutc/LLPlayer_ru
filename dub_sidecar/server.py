@@ -157,6 +157,23 @@ def synthesize(req):
 # --------------------------------------------------------------------------------------------------
 # Assembly: place + time-stretch clips on a silence bed, duck the original under the dub, encode.
 # --------------------------------------------------------------------------------------------------
+def _resolve_ducking(raw):
+    """Ducking level as a 0..1 gain from the request's `ducking_percent`. An ABSENT value (None) defaults to
+    15%, but an EXPLICIT 0 means "fully mute the original under the dub" — the C# DubbingConfig allows 0, so
+    Python must honour it too (HC-13: `int(raw or 15)` turned 0 into 15, and `max(1, ...)` forbade 0, silently
+    leaving the original at 15%). Clamped to 0..100 to mirror the C# clamp."""
+    dp = 15 if raw is None else int(raw)
+    return max(0, min(100, dp)) / 100.0
+
+
+def _timeline_len(original_n, total_ms, rate):
+    """Length (samples) of the dub timeline: the LONGER of the decoded original and the C# placement end
+    (`total_ms`). Russian runs longer than most source languages and isochrony drift can push the last clip
+    PAST the original, so sizing the bed to the original alone truncates or drops the tail dub (HC-14). `ceil`
+    so a fractional final millisecond is not lost; the caller pads the original with silence to match."""
+    return max(int(original_n), math.ceil(rate * float(total_ms or 0) / 1000.0))
+
+
 def assemble(req):
     if ARGS.mock:
         return assemble_mock(req)
@@ -213,7 +230,7 @@ def assemble_real(req):
 
     media_path = req["media_path"]
     out = req["output_path"]
-    ducking = max(1, min(100, int(req.get("ducking_percent") or 15))) / 100.0
+    ducking = _resolve_ducking(req.get("ducking_percent"))  # HC-13: honour an explicit 0 (full mute)
     clips = req.get("clips") or []
 
     # Decode the original audio to float32 [-1,1], keep its sample rate + channel count.
@@ -230,10 +247,18 @@ def assemble_real(req):
             chunks.append(rf.to_ndarray())
     container.close()
     original = np.concatenate(chunks, axis=1).T if chunks else np.zeros((rate, chans), dtype="float32")
-    total_n = original.shape[0]
+
+    # Size the dub timeline to the LONGER of the decoded original and the C# placement end (total_ms), then
+    # pad the original with silence to match: a Russian tail line that runs past the original (isochrony drift)
+    # must not be truncated or dropped (HC-14). Previously the bed was sized to the original alone, so a clip
+    # whose offset landed at/after the original's end was silently discarded.
+    timeline_n = _timeline_len(original.shape[0], req.get("total_ms"), rate)
+    if timeline_n > original.shape[0]:
+        pad = np.zeros((timeline_n - original.shape[0], original.shape[1]), dtype="float32")
+        original = np.concatenate([original, pad], axis=0)
 
     # Build the dub bed at the source rate (mono), placing each (optionally stretched) clip.
-    bed = np.zeros(total_n, dtype="float32")
+    bed = np.zeros(timeline_n, dtype="float32")
     for c in clips:
         clip, sr = sf.read(c["wav_path"], dtype="float32", always_2d=False)
         if clip.ndim > 1:
@@ -246,8 +271,8 @@ def assemble_real(req):
             import librosa  # type: ignore
             clip = librosa.resample(clip, orig_sr=sr, target_sr=rate)
         off = int(rate * float(c.get("start_ms") or 0) / 1000.0)
-        end = min(total_n, off + clip.shape[0])
-        if 0 <= off < total_n and end > off:
+        end = min(timeline_n, off + clip.shape[0])
+        if 0 <= off < timeline_n and end > off:
             bed[off:end] += clip[: end - off]
 
     # Duck the original where the dub is present, then sum. Smooth the gate to avoid clicks.

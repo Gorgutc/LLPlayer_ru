@@ -1066,12 +1066,12 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: вернуть шаг получения latest yt-dlp (с фиксацией версии в логе) либо регламент бампа default перед
     релизом (+ проверка «не старше N месяцев» в `ship.ps1`).
   - Зачем: онлайн-видео (ключевая фича плагина) ломается «из коробки» в свежих релизах.
-- **HC-13 — `DuckingPercent=0` молча превращается в 15 на стороне сайдкара 🟡 ⓢ · `dub_sidecar/server.py:209`**
+- **HC-13 — `DuckingPercent=0` молча превращается в 15 на стороне сайдкара 🟡 ⓢ · `dub_sidecar/server.py:209`** · ✅ **DONE (v0.3.48, 2026-07-03, сессия #22, бандл B7)** — вынесен чистый `_resolve_ducking(raw)` (None→15% дефолт, explicit 0→полный mute оригинала, clamp [0,100]) вместо `max(1, min(100, int(req.get("ducking_percent") or 15)))`, где `or 15` глотал 0, а `max(1,…)` запрещал 0. Lockstep с C# `DubbingConfig.DuckingPercent` (допускает 0) восстановлен. Дефолт (None/15) byte-identical. Проверено 12 stdlib-assertions чистой логики; DSP-микс — owner manual-smoke. Adversarial-ревью (3 линзы): 0 находок.
   - Проблема: C# допускает 0 («заглушить оригинал»), Python `int(req.get("ducking_percent") or 15)` — 0 falsy →
     подставляет 15; и `max(1, …)` запрещает 0. Ducking 0% → оригинал звучит на 15% без ошибки.
   - Решение: `dp = req.get("ducking_percent"); dp = 15 if dp is None else int(dp); ducking = max(0, min(100, dp))/100.0`.
   - Зачем: настройка молча не соблюдается (lockstep C# ↔ Python нарушен).
-- **HC-14 — `assemble_real` игнорирует `total_ms`: хвостовые реплики обрезаются/выпадают 🟡 ⓢ · `dub_sidecar/server.py:229`**
+- **HC-14 — `assemble_real` игнорирует `total_ms`: хвостовые реплики обрезаются/выпадают 🟡 ⓢ · `dub_sidecar/server.py:229`** · ✅ **DONE (v0.3.48, 2026-07-03, сессия #22, бандл B7)** — вынесен `_timeline_len(original_n, total_ms, rate) = max(original_n, ceil(rate*total_ms/1000))`; оригинал zero-паддится до `timeline_n`, а `bed`-размер/`end`-кламп/гейт `0≤off<…` переведены с `total_n` на `timeline_n` → хвостовой клип с `off≥original_n` больше не выбрасывается, перекрывающий конец не обрезается. `total_ms=None`/≤длины оригинала → byte-identical. Проверено stdlib-assertions; DSP — owner manual-smoke (sync near-end по `manual-smoke-matrix`). Adversarial-ревью (3 линзы): 0 находок.
   - Проблема: `bed = np.zeros(total_n)` по длине декодированного оригинала; клип с `off >= total_n` выбрасывается,
     перекрывающий конец — обрезается. Субтитр у конца файла + русская реплика длиннее слота → последняя фраза
     дубляжа обрывается/отсутствует молча. Мок-путь `total_ms` использует честно.
