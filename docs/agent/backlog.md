@@ -1093,7 +1093,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - ℹ️ **Обновление (сверка #17, 2026-07-02):** PR #112 добавил в `verify-frozen.ps1` *упоминания*
     `ASRPerSegmentLanguage`/`PersistPerLineVoices`, но **дефолты `false` по-прежнему не запиннены** (`Require-Text`
     как у `ASRFoldBack` нет) → задача остаётся валидной; при фиксе учесть уже добавленные строки, не дублировать.
-- **HC-17 — O(n)-цикл + полный `Refresh` ListCollectionView на тоггл `EnabledTranslated` 🟡 ⓢ · `FlyleafLib/Engine/Config.cs:1084`** (perf)
+- **HC-17 — O(n)-цикл + полный `Refresh` ListCollectionView на тоггл `EnabledTranslated` 🟡 ⓢ · `FlyleafLib/Engine/Config.cs:1084`** (perf) · ✅ **DONE (v0.3.45, 2026-07-03, сессия #22, бандл B4)** — `SubtitleData.EnabledTranslated` поле→INPC-свойство (зеркало `TranslatedText`: raise `UseTranslated` при флипе + `DisplayText`); сеттер `SubConfig` идёт по `SnapshotSubs()` (thread-safe, был прямой `foreach` по `Subs`) и вместо полного `SubManager.Refresh()` зовёт новый `RefreshAfterTranslationToggle()` — перезапуск фильтра ТОЛЬКО при активном поиске (`view.Filter != null`; ⚠️ handoff-предположение «фильтр от тоггла не зависит» **неверно** — `SubtitlesSidebarVM.SubFilter` матчит `DisplayText`) + сохранён `OnPropertyChanged(CurrentIndex)`. +3 RED-without-fix теста (INPC-контракт), 1195→1198. Adversarial-ревью (5 линз) — 0 находок по HC-17. Рендер/UI-путь — manual-smoke.
   - Проблема: сеттер (частая горячая клавиша показа перевода) на UI-потоке идёт `foreach` по ВСЕМ cue (public-поле
     без INPC → строки не обновятся) и зовёт `SubManager.Refresh()` → полная перестройка view (O(n)-копия под sync-локом,
     пере-прогон фильтра, регенерация контейнеров). На длинном файле — заметный фриз на каждое нажатие.
@@ -1160,7 +1160,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     биндит только FontSize/FontFamily — FontWeight нигде не привязан.
   - Решение: `FontWeight="{Binding FL.Config.SidebarFontWeight}"` на `SubtitleListBox` (либо убрать выбор веса из диалога).
   - Зачем: настройка не имеет эффекта — вводит в заблуждение.
-- **HC-27 — `PersistVoiceAssignments`: синхронный I/O + двойной O(n)-снимок на UI-потоке 🟢 ⓢ · `LLPlayer/ViewModels/SubtitlesSidebarVM.cs:210`** (perf)
+- **HC-27 — `PersistVoiceAssignments`: синхронный I/O + двойной O(n)-снимок на UI-потоке 🟢 ⓢ · `LLPlayer/ViewModels/SubtitlesSidebarVM.cs:210`** (perf) · ✅ **DONE (v0.3.45, 2026-07-03, сессия #22, бандл B4)** — вся блокирующая работа (до 3×`File.Exists` SMB + 2×O(n) `SnapshotSubs` + JSON-запись) ушла с UI-потока в debounce-`Task.Run` (400мс, коалесинг по generation через `Interlocked`); flush на `Dispose` (`_voicesDirty`) чтобы не терять правку при teardown. ⚠️ **Adversarial-ревью поймало Important-регрессию durability** первого прохода: debounce гейтил только планирование, не выполнение — на медленном SMB старая generation-запись могла завершиться ПОСЛЕ новой, затерев последнюю правку (GUID-temp защищает от порчи, не от порядка). Исправлено: общий `_voicesSaveLock` сериализует записи + повторная проверка generation под локом (записи не регрессируют, last-edit-wins). Manual-smoke.
   - Проблема: `CmdSubSetVoice` на UI-потоке синхронно: до 3× `File.Exists` (для SMB — блокирующие сетевые), `SnapshotSubs`
     копирует ОБА трека (2×O(n) под локом, блокируя per-frame скример), `SaveAtomic` пишет JSON. Сетевой файл + 5000+ cue
     + `PersistPerLineVoices=on` → фриз на каждый выбор голоса.
@@ -1183,7 +1183,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: перед ошибкой `token.ThrowIfCancellationRequested()` + отдельное сообщение на таймаут; «exited before…»
     только при `_process.HasExited`.
   - Зачем: отмена батча выглядит как ошибка сайдкара.
-- **HC-31 — `OutlinedTextBlock`: безусловный `UpdatePen()` в Measure/Arrange 🟢 ⓢ · `LLPlayer/Controls/OutlinedTextBlock.cs:323`** (perf)
+- **HC-31 — `OutlinedTextBlock`: безусловный `UpdatePen()` в Measure/Arrange 🟢 ⓢ · `LLPlayer/Controls/OutlinedTextBlock.cs:323`** (perf) · ✅ **DONE (v0.3.45, 2026-07-03, сессия #22, бандл B4)** — `UpdatePen()` пересоздаёт `Pen` только по cache-key `(Stroke, StrokeThickness, StrokePosition)` + `Freeze()` (фолбэк `CanFreeze` для незамораживаемых кистей) и зовёт `InvalidateVisual()` лишь при реальной смене; repaint-на-смену-геометрии перенесён в `_geometryKey`-блок `ArrangeOverride`. Обесценивание `_geometryKey`-гейта устранено, замороженный Pen не клонируется в рендер-поток. WPF-рендер — manual-smoke (визуально идентично).
   - Проблема: `ArrangeOverride` безусловно, `MeasureOverride` при `StrokeThicknessInitial>0` (дефолт 3) зовут
     `UpdatePen()` → новый незамороженный `Pen` + `InvalidateVisual()` на каждый layout-проход каждого слова,
     обесценивая `_geometryKey`-гейт; незамороженный Pen требует клона в render-поток.
