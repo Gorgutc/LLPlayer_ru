@@ -77,6 +77,14 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("manual smoke by changed behavior")
         }
+        if ($normalized -match '^docs/agent/(dubbing-contract\.md|dubbing/)') {
+            $contracts.Add("dubbing-contract.md")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("native_dependency_auditor")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("dubbing manual smoke")
+        }
         if ($normalized -match '^(\.gitignore|DO_NOT_PUSH\.md)$') {
             $contracts.Add("dependency-baseline.md")
             $contracts.Add("config-data-contract.md")
