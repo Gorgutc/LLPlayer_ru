@@ -1086,14 +1086,19 @@ public class Config : NotifyPropertyChanged
                     player.sFramesPrev[SubIndex] = null;
                     player.SubtitleClear(SubIndex);
 
-                    // Switching the display while leaving the translated text itself
-                    foreach (SubtitleData sub in player.SubtitlesManager[SubIndex].Subs)
+                    // HC-17 perf: iterate a thread-safe snapshot (Subs is mutated on background ASR/OCR threads under
+                    // _subsLocker) and let per-cue INPC (SubtitleData.DisplayText/UseTranslated) refresh only the bound,
+                    // visible sidebar rows. This replaces the full ListCollectionView.Refresh() (O(n) view rebuild +
+                    // container regen) that ran on every press of this toggle hotkey.
+                    foreach (SubtitleData sub in player.SubtitlesManager[SubIndex].SnapshotSubs())
                     {
                         sub.EnabledTranslated = field;
                     }
 
-                    // Update text in sidebar
-                    player.SubtitlesManager[SubIndex].Refresh();
+                    // Re-run an ACTIVE sidebar search filter (it matches DisplayText, which just flipped) and raise the
+                    // CurrentIndex nudge — the parts of Refresh() that per-cue INPC does not cover. No-op view rebuild
+                    // when no search is active.
+                    player.SubtitlesManager[SubIndex].RefreshAfterTranslationToggle();
                 }
             }
         } = false;
