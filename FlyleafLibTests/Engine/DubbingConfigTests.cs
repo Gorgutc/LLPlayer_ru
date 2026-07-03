@@ -170,4 +170,47 @@ public class DubbingConfigTests
         config.AtempoMin.Should().Be(0.9);
         config.AtempoMax.Should().Be(1.15);
     }
+
+    // HC-45: OutputFormat was the only DubbingConfig field a hand-edited config could set to an un-encodable
+    // value. A stray "part"/"tmp" reaches the output filename and, because ResolveExistingRussianDubPath skips
+    // .part/.tmp fragments, leaves DubExistsAnyFormat=false forever (permanent re-render + the auto-loader
+    // never attaches the output). The setter now whitelists FLAC (the only container the sidecar encodes);
+    // anything outside the set — including blank/null — coerces to "flac".
+    [Theory]
+    [InlineData("part", "flac")]
+    [InlineData("tmp", "flac")]
+    [InlineData("mp3", "flac")]
+    [InlineData(".FLAC ", "flac")]
+    [InlineData("", "flac")]
+    [InlineData(null, "flac")]
+    [InlineData("flac", "flac")]
+    public void OutputFormat_SetUnsupportedOrBlank_CoercesToFlac(string? input, string expected)
+    {
+        DubbingConfig config = new();
+
+        config.OutputFormat = input!;
+
+        config.OutputFormat.Should().Be(expected);
+    }
+
+    [Fact]
+    public void OutputFormat_JsonUnsupported_CoercesOnDeserialize()
+    {
+        // A hand-edited "part"/"tmp"/mislabelled container must be neutralized on load, not survive to the
+        // filename. STJ uses the property setter, so the whitelist applies to deserialization too.
+        DubbingConfig? config = JsonSerializer.Deserialize<DubbingConfig>("""{"OutputFormat":"part"}""");
+
+        config.Should().NotBeNull();
+        config!.OutputFormat.Should().Be("flac");
+    }
+
+    [Fact]
+    public void OutputFormat_DefaultIsFlac_Unchanged()
+    {
+        // Byte-identical guard: the field initializer (DefaultExtension = "flac") is in-whitelist, so the
+        // default dub container is unaffected by HC-45.
+        DubbingConfig config = new();
+
+        config.OutputFormat.Should().Be("flac");
+    }
 }

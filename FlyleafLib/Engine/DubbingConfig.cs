@@ -60,8 +60,13 @@ public class DubbingConfig : NotifyPropertyChanged
 
     /// <summary>Dub container. FLAC avoids AAC encoder priming (A/V sync) and is the only format the
     /// sidecar currently encodes — a non-FLAC value degrades to a FLAC bitstream, so the picker UI
-    /// offers FLAC only until a real AAC/m4a path exists.</summary>
-    public string OutputFormat { get; set => Set(ref field, value); } = DubbingOutputPathBuilder.DefaultExtension;
+    /// offers FLAC only until a real AAC/m4a path exists. Normalized on set (trim, strip leading dot,
+    /// lower-case, whitelist) so a hand-edited config value outside the encodable set — including a stray
+    /// <c>part</c>/<c>tmp</c> — cannot reach the output filename and turn a crash-orphaned fragment into a
+    /// permanent re-render loop (<see cref="Dubbing.DubbingOutputPathBuilder.ResolveExistingRussianDubPath"/>
+    /// skips <c>.part</c>/<c>.tmp</c>, so <c>DubExistsAnyFormat</c> would otherwise stay false forever and the
+    /// auto-loader never attach the output). The default <c>flac</c> passes unchanged → byte-identical.</summary>
+    public string OutputFormat { get; set => Set(ref field, NormalizeOutputFormat(value)); } = DubbingOutputPathBuilder.DefaultExtension;
 
     private static string NormalizeDefaultVoiceId(string? value)
     {
@@ -79,6 +84,19 @@ public class DubbingConfig : NotifyPropertyChanged
     private const double AtempoFloor = 0.5;
     private const double AtempoCeil = 2.0;
     private static double ClampAtempo(double value) => Math.Clamp(value, AtempoFloor, AtempoCeil);
+
+    // The dub container must be one the sidecar can actually encode. Anything else — a hand-edited config
+    // typo, a stray "part"/"tmp"/"mp3", blank/null — is coerced to the default FLAC so it can never reach the
+    // output filename; a raw "part"/"tmp" there would be skipped by ResolveExistingRussianDubPath, leaving
+    // DubExistsAnyFormat=false forever (permanent re-render + the auto-loader never picks the output up). The
+    // whitelist stays FLAC-only to match the documented FLAC-only encode path (dubbing-spec §4.1); the default
+    // "flac" passes unchanged → byte-identical.
+    private static readonly string[] SupportedOutputFormats = ["flac"];
+    private static string NormalizeOutputFormat(string? value)
+    {
+        string ext = (value ?? string.Empty).Trim().TrimStart('.').Trim().ToLowerInvariant();
+        return Array.IndexOf(SupportedOutputFormats, ext) >= 0 ? ext : DubbingOutputPathBuilder.DefaultExtension;
+    }
 
     private static List<string> NormalizeCustomVoiceIds(IEnumerable<string?>? value)
     {
