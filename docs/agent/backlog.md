@@ -1103,7 +1103,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 
 **🟢 низкая важность (ⓢ):**
 
-- **HC-18 — Гонки перечисления `Subs` без `SnapshotSubs()` (бандл) 🟡/🟢 ⓢ · несколько сайтов**
+- **HC-18 — Гонки перечисления `Subs` без `SnapshotSubs()` (бандл) 🟡/🟢 ⓢ · несколько сайтов** · ✅ **DONE (v0.3.44, 2026-07-03, сессия #22, бандл B3)** — `SnapshotSubs()` на всех 4 сайтах: AiInsightsDialogVM (`cues` + `_hasText`), SubtitlesExportDialogVM, `Subtitles.cs` OCR-`Do`; CmdSubPlay/CmdSubSync (SubtitlesSidebarVM) — snapshot + bounds-check индекса (защита от ArgumentOutOfRange при усадке `Subs` между UI-командой и хендлером). Adversarial-ревью (3 линзы) — 0 находок; нормальный случай byte-identical. Manual-smoke.
   - Проблема: контракт `SnapshotSubs()` (`SubtitlesManager.cs:208-213`) требует читать `Subs` только под `_subsLocker`
     (`EnableCollectionSynchronization` защищает лишь WPF-биндинг, не app-`foreach`). Прямое перечисление во время
     фонового ASR/OCR-`Add`/`Clear` → `InvalidOperationException`/`ArgumentOutOfRange` на UI. Сайты:
@@ -1111,14 +1111,14 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     `SubtitlesSidebarVM.cs:154/165` CmdSubPlay/Sync по индексу (HC-18c), `Subtitles.cs:655` OCR-`ToList()` (HC-18d).
   - Решение: во всех — `SnapshotSubs()` (или per-row `{Binding .}` вместо Index для Play/Sync).
   - Зачем: повтор уже известного класса багов; частичный экспорт/AI-инсайты во время ASR роняют UI.
-- **HC-19 — Утечка per-chunk CTS и `token.Register` в FasterWhisper 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1707`**
+- **HC-19 — Утечка per-chunk CTS и `token.Register` в FasterWhisper 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1707`** · ✅ **DONE (v0.3.43, 2026-07-03, сессия #22, бандл B2)** — site 1 (per-chunk `forceCts`+`token.Register` в FasterWhisper `Do`) → `using`-декларации (диспоз при завершении чанка); site 2 (linked CTS в `AudioReader.ReadAll`) → dispose в `finally` ПОСЛЕ `Task.WaitAll` fault-continuations (race-free vs `cts.Cancel()`). Adversarial-ревью (concurrency+build линзы) — чисто. Native/process path → manual-smoke.
   - Проблема: на каждый аудио-чанк `new CancellationTokenSource` + `token.Register(...)` не диспозятся (finally чистит
     только temp-файлы); `token` — на весь прогон → на 2-3ч фильме сотни живых регистраций/CTS; при отмене все
     накопленные колбэки армят таймер в мёртвом CTS. Смежно: linked CTS в `AudioReader.ReadAll:504` без Dispose.
   - Решение: `using CancellationTokenSource forceCts` + `using CancellationTokenRegistration reg = token.Register(...)`;
     обернуть linked cts в try/finally с Dispose.
   - Зачем: монотонный рост памяти на длинном/батч-ASR.
-- **HC-20 — Языкодетект faster-whisper: гейт глотает сегменты + lookup индексером роняет прогон 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1788`**
+- **HC-20 — Языкодетект faster-whisper: гейт глотает сегменты + lookup индексером роняет прогон 🟢 ⓢ · `FlyleafLib/MediaPlayer/SubtitlesASR.cs:1788`** · ✅ **DONE (v0.3.44, 2026-07-03, сессия #22, бандл B3)** — индексер `LanguageToCode[name]` → `TryGetValue` с фолбэком в `_manualLanguage` (не роняет на неизвестном языке); `continue` сужен ДО строки детекта (внутрь `if(match.Success)`) → реальные cue больше не съедаются при `LanguageDetection=true` + `--language` в ExtraArguments; yield `(_detectedLanguage ?? _manualLanguage)` (cue не несёт null-язык). Adversarial-ревью — чисто; нормальный путь детекта byte-identical. Manual-smoke.
   - Проблема: при `_isLanguageDetect && _detectedLanguage==null` каждая stdout-строка уходит в `continue` до строки
     «Detected language …». Если `LanguageDetection=true`, но пользователь передал `--language xx` в `ExtraArguments`,
     строки детекта не будет → все cue съедаются, прогон «успешно» пуст; плюс lookup языка индексером бросает на
@@ -1131,13 +1131,13 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     остаётся ~49.7 дней → перекрытие cue, вечное `Showing`, битый prev/next-интервал.
   - Решение: хранить `end_display_time` независимо от `useBitmap` и корректировать по нему; последний cue клампить.
   - Зачем: некорректные тайминги субтитров в bitmap-режиме без кэша.
-- **HC-22 — `WordPopup`: сервисы/`_cts` не освобождаются при уничтожении контрола 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:137`**
+- **HC-22 — `WordPopup`: сервисы/`_cts` не освобождаются при уничтожении контрола 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:137`** · ⏸️ **DEFERRED (сессия #22, бандл B2)** — при попытке фикса adversarial-ревью выявил: `WordPopup` живёт внутри `NonTopmostPopup`, а WPF Popup поднимает `Unloaded` на КАЖДОЕ закрытие (video resume / Esc / Close), не только при уничтожении → teardown в `Unloaded` затирал бы translate/definition-кэши на каждом закрытии (регрессия cache-miss). Weak-event подписки (ctor) уже НЕ рутят контрол → сервисы/`_cts` GC-собираемы; детерминированной точки teardown нет (overlay-хост живёт всю сессию; sidebar-хост уже диспозится через `SubtitlesSidebar.Unloaded→VM.Dispose`). Оставлено как GC-ограниченная мягкая утечка; правка отклонена как net-negative. Переоткрыть только с настоящей точкой уничтожения.
   - Проблема: `_translateService`/`_wordDefinitionService` (каждый владеет HttpClient, для LLM — со своим handler вне
     общего пула) диспозятся только в `Clear()` при смене настроек; при уничтожении WordPopup (сайдбар пересоздаётся
     из DataTemplate на каждый toggle) — нет teardown → утечка соединений до GC.
   - Решение: `Unloaded`-хендлер (или `Teardown`) с `Clear()` + `_cts?.Cancel()/Dispose()` + dispose `_pdicSender`.
   - Зачем: повторные toggle сайдбара при LLM-переводе слов копят соединения.
-- **HC-23 — PDIC: pipe-процесс спавнится на каждый WordPopup и не убивается 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:349`**
+- **HC-23 — PDIC: pipe-процесс спавнится на каждый WordPopup и не убивается 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:349`** · ✅ **DONE (v0.3.43, 2026-07-03, сессия #22, бандл B2)** — `PDICSender` → DI-синглтон (один общий pipe-процесс вместо N per-WordPopup); диспоз ЯВНО в `App.OnExit` через `PDICSender.Current` (Prism/DryIoc НЕ диспозит контейнер на выходе — подтверждено декомпиляцией Prism 9.0.537 в adversarial-ревью), без bare-`Resolve` (не плодит pipe на выходе, если PDIC не использовался); `Dispose` синхронный+bounded, `PipeClient.SendMessage` +`ConfigureAwait(false)` (нет sync-over-async дедлока UI-треда на выходе). Ревью 2 раунда (5/5 проверок OK). **Известное ограничение (Minor):** синглтон кэширует первый exe-путь на сессию (смена `PDICPipeExecutablePath` в рантайме требует рестарта); hard-crash всё ещё может осиротить процесс — job-object hardening опциональный follow-up.
   - Проблема: `_pdicSender ??= Container.Resolve<PDICSender>()` (transient) в конструкторе запускает внешний exe
     PDIC-пайпа; `Dispose` не вызывается нигде, у `PipeClient` нет финализатора → процессы копятся; сам `Dispose` —
     `async void`.

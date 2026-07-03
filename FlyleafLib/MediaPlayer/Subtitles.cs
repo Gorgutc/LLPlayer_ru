@@ -652,7 +652,8 @@ public class Subtitle : NotifyPropertyChanged
         {
             using (_player.SubtitlesManager[_subIndex].StartLoading())
             {
-                _player.SubtitlesOCR.Do(_subIndex, _player.SubtitlesManager[_subIndex].Subs.ToList(), curTime);
+                // HC-18: SnapshotSubs() reads Subs under _subsLocker; the raw .Subs.ToList() enumerated without it.
+                _player.SubtitlesOCR.Do(_subIndex, _player.SubtitlesManager[_subIndex].SnapshotSubs(), curTime);
             }
         }
 

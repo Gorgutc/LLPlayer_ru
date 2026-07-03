@@ -54,7 +54,8 @@ public class SubtitlesExportDialogVM : Bindable, IDialogAware
 
         bool exportOriginal = SelectedTranslateOpts == TranslateExportOptions.Original;
 
-        List<SubtitleExportLine> lines = FL.Player.SubtitlesManager[SelectedSubIndex].Subs
+        // HC-18: snapshot under _subsLocker — exporting during a live ASR/OCR run must not enumerate a mutating list.
+        List<SubtitleExportLine> lines = FL.Player.SubtitlesManager[SelectedSubIndex].SnapshotSubs()
             .Where(s =>
             {
                 if (!s.IsText)

@@ -33,9 +33,11 @@ public class PipeClient : IDisposable
         byte[] bytes = Encoding.UTF8.GetBytes('"' + message + '"');
 
         var length = BitConverter.GetBytes(bytes.Length);
-        await _proc.StandardInput.BaseStream.WriteAsync(length, 0, length.Length);
-        await _proc.StandardInput.BaseStream.WriteAsync(bytes, 0, bytes.Length);
-        await _proc.StandardInput.BaseStream.FlushAsync();
+        // ConfigureAwait(false): PDICSender.Dispose() blocks on this via .Wait() from App.OnExit (UI thread);
+        // keep the write continuations off the captured dispatcher context so .Wait() cannot deadlock.
+        await _proc.StandardInput.BaseStream.WriteAsync(length, 0, length.Length).ConfigureAwait(false);
+        await _proc.StandardInput.BaseStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+        await _proc.StandardInput.BaseStream.FlushAsync().ConfigureAwait(false);
     }
 
     public void Dispose()
@@ -50,6 +52,11 @@ public class PDICSender : IDisposable
     private readonly PipeClient _pipeClient;
     public FlyleafManager FL { get; }
 
+    // HC-23: the live singleton instance if it was ever resolved (else null). App.OnExit disposes THIS directly,
+    // because Prism/DryIoc does not dispose the DI container at shutdown; tracking the instance lets exit close the
+    // pipe exactly once WITHOUT a bare Container.Resolve that would spawn a pipe just to kill it when PDIC was unused.
+    public static PDICSender? Current { get; private set; }
+
     public PDICSender(FlyleafManager fl)
     {
         FL = fl;
@@ -62,12 +69,28 @@ public class PDICSender : IDisposable
         }
 
         _pipeClient = new PipeClient(exePath);
+        Current = this;
     }
 
-    public async void Dispose()
+    public void Dispose()
     {
-        await _pipeClient.SendMessage("p:Dictionary,Close,");
-        _pipeClient.Dispose();
+        // HC-23: synchronous, bounded, robust disposal (was async void — could crash the process on a faulted
+        // send and might not complete before shutdown). Invoked once from App.OnExit. Best-effort tell PDIC to
+        // close its popup window, then always kill the pipe process. PipeClient.SendMessage uses
+        // ConfigureAwait(false) so the bounded .Wait() below cannot deadlock the UI thread at exit.
+        Current = null;
+        try
+        {
+            _pipeClient.SendMessage("p:Dictionary,Close,").Wait(TimeSpan.FromSeconds(2));
+        }
+        catch
+        {
+            // ignore: the pipe may already be gone; the process is killed below regardless
+        }
+        finally
+        {
+            try { _pipeClient.Dispose(); } catch { /* process may have already exited */ }
+        }
     }
 
     // Send the same way as Firepop
