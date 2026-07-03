@@ -5,9 +5,9 @@ inputs:
     description: 'archive name including extension'
     required: true
   yt-dlp-version:
-    description: 'yt-dlp version to download'
+    description: 'Explicit yt-dlp version to bundle (pin). Leave empty to resolve the latest release at build time.'
     required: false
-    default: '2025.08.20'
+    default: ''
 runs:
   using: "composite"
   steps:
@@ -73,19 +73,41 @@ runs:
         New-Item -ItemType Directory -Path "$pub\Plugins\YoutubeDL"
         Copy-Item "$pubY\YoutubeDL.dll","$pubY\YoutubeDL.pdb" -Destination "$pub\Plugins\YoutubeDL"
 
-    # - name: Get latest yt-dlp release
-    #   id: fetch-yt
-    #   uses: pozetroninc/github-action-get-latest-release@master
-    #   with:
-    #     repository: yt-dlp/yt-dlp
-    #     excludes: prerelease,draft
+    - name: Resolve yt-dlp version
+      id: fetch-yt
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+        YTDLP_VERSION: ${{ inputs.yt-dlp-version }}
+      run: |
+        # HC-12: a hard-coded default pin ships a ~year-old yt-dlp that almost certainly fails on current
+        # YouTube (nsig/player). Resolve the latest release at build time (logged for traceability). An explicit
+        # yt-dlp-version input still pins a specific version for a reproducible build. The input is read from an
+        # env var (NOT ${{ }}-interpolated into the script) to avoid GitHub Actions script injection.
+        $pinned = "$env:YTDLP_VERSION".Trim()
+        if ($pinned) {
+          $ver = $pinned
+          Write-Host "Using pinned yt-dlp version: $ver"
+        } else {
+          $headers = @{ "User-Agent" = "LLPlayer-build"; "Accept" = "application/vnd.github+json" }
+          if ($env:GH_TOKEN) { $headers["Authorization"] = "Bearer $env:GH_TOKEN" }
+          $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest" -Headers $headers
+          $ver = "$($rel.tag_name)".Trim()
+          Write-Host "Resolved latest yt-dlp release: $ver"
+        }
+        if (-not $ver) { throw "Could not resolve a yt-dlp version to bundle." }
+        # Fail closed on anything that is not a plain version token (defense in depth for the URL + output).
+        if ($ver -notmatch '^[0-9A-Za-z._-]+$') { throw "Unexpected yt-dlp version format: '$ver'." }
+        "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     - name: Download yt-dlp.exe
       shell: pwsh
+      env:
+        YTDLP_VERSION: ${{ steps.fetch-yt.outputs.version }}
       run: |
         $pub = "${{ runner.temp }}\publish"
-        # $ver = "${{ steps.fetch-yt.outputs.release }}"
-        $ver = "${{ inputs.yt-dlp-version }}"
+        # Read the resolved version from an env var (not ${{ }}-interpolated) — same injection-safe pattern.
+        $ver = "$env:YTDLP_VERSION"
         $url = "https://github.com/yt-dlp/yt-dlp/releases/download/$ver/yt-dlp.exe"
         $outDir = "$pub\Plugins\YoutubeDL"
         New-Item -Path "$outDir\yt-dlp.exe_here" -ItemType File

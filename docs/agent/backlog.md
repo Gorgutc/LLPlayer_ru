@@ -1059,7 +1059,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     распаковка Whisper-движка ломается.
   - Решение: `SevenZipBase.SetLibraryPath(Path.Combine(AppContext.BaseDirectory, "lib", "7z.dll"))`.
   - Зачем: native-либа должна грузиться от каталога приложения, а не от CWD.
-- **HC-12 — Дефолтный пин yt-dlp `2025.08.20` протух 🟡 ⓢ · `.github/actions/build-package/action.yml:10`**
+- **HC-12 — Дефолтный пин yt-dlp `2025.08.20` протух 🟡 ⓢ · `.github/actions/build-package/action.yml:10`** · ✅ **DONE (v0.3.48, 2026-07-03, сессия #22, бандл B8)** — `build-package/action.yml`: input `yt-dlp-version` default → `''`; новый шаг `Resolve yt-dlp version` тянет latest через GitHub API (`releases/latest` + `github.token`, логирует версию), пишет в `GITHUB_OUTPUT`, Download использует `steps.fetch-yt.outputs.version`; явный input по-прежнему пиннит (reproducible-build). Заменил закомментированный `@master`-экшен (supply-chain-плюс). **Ревью-Minor (GitHub Actions script-injection) исправлен:** input/output читаются из env-переменных (НЕ `${{ }}`-интерполяция в pwsh-строку) + fail-closed валидация формата версии. Проверяется в CI.
   - Проблема: экшен качает `yt-dlp.exe` версии из input с default `2025.08.20`, но ни один release-workflow input не
     передаёт → все релизы пакуют ~годовой давности бинарь, который почти гарантированно не работает на актуальном
     YouTube (nsig/player). Самообновления (`-U`) в коде нет.
@@ -1084,7 +1084,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: переиспользовать `SubtitleExporter` (маппинг `SubtitleData`→`SubtitleExportLine`) через atomic temp+move;
     минимум — звать общий `NormalizeCueText`/`FormatTime`.
   - Зачем: батч-путь беднее интерактивного и портит SRT на реальном выводе LLM.
-- **HC-16 — `verify-frozen.ps1` не пиннит frozen-дефолты `ASRPerSegmentLanguage=false`/`PersistPerLineVoices=false` 🟡 ⓢ · `scripts/codex/verify-frozen.ps1:136`**
+- **HC-16 — `verify-frozen.ps1` не пиннит frozen-дефолты `ASRPerSegmentLanguage=false`/`PersistPerLineVoices=false` 🟡 ⓢ · `scripts/codex/verify-frozen.ps1:136`** · ✅ **DONE (v0.3.48, 2026-07-03, сессия #22, бандл B8)** — `verify-frozen.ps1` +2 `Require-Text` по образцу `ASRFoldBack` (строки 137/138) пиннят `ASRPerSegmentLanguage`/`PersistPerLineVoices` `\{…\} = false;` в `Config.cs` — НЕ дублируя PR #112-строки (XAML-bind `SubtitlesSidebar.xaml` + doc-упоминание `dubbing-contract.md` — иной концерн). + C#-тест `FrozenConfigDefaultsTests` (оба рантайм-дефолта false, belt-and-suspenders к source-grep гейта). `verify-frozen.ps1` exit 0, тесты 1236→1238.
   - Проблема: контракты объявляют «default false → byte-identical» frozen-границей (T-10 v0.3.32, F-16 v0.3.37), но
     гейт пиннит соседние дефолты (`FixAllCaps`, `ASRFoldBack`…), а два новых тумблера — нет. Случайная смена дефолта
     на true пройдёт гейт → тихая потеря byte-identical.
