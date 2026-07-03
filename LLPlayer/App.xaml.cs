@@ -51,6 +51,10 @@ public partial class App : PrismApplication
             // window is closed during a batch run (see AppTrayService / BatchActivityService).
             .RegisterSingleton<BatchActivityService>()
             .RegisterSingleton<AppTrayService>()
+            // HC-23: PDICSender owns an external pipe process (the PDIC dictionary bridge). Register it as a
+            // singleton so all WordPopup instances share ONE pipe process instead of each spawning its own; the
+            // instance is disposed explicitly in OnExit (Prism does not dispose the DI container at shutdown).
+            .RegisterSingleton<PDICSender>()
             .RegisterSingleton<IDialogService, ExtendedDialogService>();
 
         // Single app-wide snackbar queue (notifications + actionable config errors), hosted in FlyleafOverlay.
@@ -155,6 +159,18 @@ public partial class App : PrismApplication
         catch
         {
             // best-effort tray cleanup
+        }
+
+        // HC-23: close the shared PDIC pipe (external process + dictionary window) exactly once. Dispose the live
+        // instance directly rather than resolving it — a bare Resolve would construct one just to kill it if PDIC
+        // was never used this session. Current is null when PDIC was never opened.
+        try
+        {
+            PDICSender.Current?.Dispose();
+        }
+        catch
+        {
+            // best-effort pipe cleanup
         }
 
         base.OnExit(e);

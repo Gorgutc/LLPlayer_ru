@@ -501,6 +501,9 @@ public class AudioReader : IDisposable
         Channel<AudioChunk> channel = Channel.CreateBounded<AudioChunk>(channelOptions);
 
         // own cancellation for producer/consumer
+        // HC-19: this linked CTS registers a callback on the parent token; dispose it in the finally below,
+        // AFTER the OnlyOnFaulted continuations that call cts.Cancel() have reached a terminal state, so a
+        // Cancel() can never race the Dispose().
         var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         CancellationToken token = cts.Token;
 
@@ -517,9 +520,9 @@ public class AudioReader : IDisposable
             channel.Writer.Complete(), token);
 
         // When an exception occurs in both consumer and producer, the other is canceled.
-        consumerTask.ContinueWith(t =>
+        Task faultCancelConsumer = consumerTask.ContinueWith(t =>
             cts.Cancel(), TaskContinuationOptions.OnlyOnFaulted);
-        producerTask.ContinueWith(t =>
+        Task faultCancelProducer = producerTask.ContinueWith(t =>
             cts.Cancel(), TaskContinuationOptions.OnlyOnFaulted);
 
         try
@@ -537,6 +540,13 @@ public class AudioReader : IDisposable
 
             // canceled because of exceptions
             throw;
+        }
+        finally
+        {
+            // Let the fault-cancel continuations settle (each either ran cts.Cancel() or was Canceled because its
+            // task did not fault) before disposing, so no Cancel() runs against a disposed CTS.
+            try { Task.WaitAll(faultCancelConsumer, faultCancelProducer); } catch { /* not-run => Canceled; ignore */ }
+            cts.Dispose();
         }
 
         return;
@@ -1704,8 +1714,12 @@ public partial class FasterWhisperASRService : IASRService
             waveStream.WriteTo(fileStream);
         }
 
-        CancellationTokenSource forceCts = new();
-        token.Register(() =>
+        // HC-19: dispose the per-chunk force-kill CTS and its token registration. Do() runs once PER audio chunk,
+        // and `token` lives for the whole ASR run, so a leaked registration + CTS per chunk accumulated into
+        // hundreds of live objects on a multi-hour file. 'using' declarations dispose both when this async
+        // iterator is disposed (i.e. when the consumer's await-foreach over Do() finishes this chunk).
+        using CancellationTokenSource forceCts = new();
+        using CancellationTokenRegistration forceReg = token.Register(() =>
         {
             // force kill if not exited when sending interrupt
             forceCts.CancelAfter(5000);
