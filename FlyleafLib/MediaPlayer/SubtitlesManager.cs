@@ -740,6 +740,11 @@ public unsafe class SubtitleReader : IDisposable
             throw new InvalidOperationException("Open() is not called");
 
         SubtitleData? prevSub = null;
+        // HC-21: track prevSub's raw end_display_time in a local. The PGS "display until next packet" correction
+        // below used prevSub.Bitmap?.Sub.end_display_time, which is null when useBitmap == false (timestamp-only
+        // mode), so the correction was skipped and bitmap cues kept a ~49.7-day end. Tracking it here makes the
+        // correction (and the final-cue clamp) work regardless of whether the decoded bitmap is retained.
+        uint prevEndDisplayTime = 0;
 
         _packet = av_packet_alloc();
 
@@ -858,6 +863,7 @@ public unsafe class SubtitleReader : IDisposable
                     prevSub.EndTime = new TimeSpan(pts - _demuxer.StartTime);
                     addSub(prevSub);
                     prevSub = null;
+                    prevEndDisplayTime = 0;
                 }
 
                 avsubtitle_free(&sub);
@@ -870,16 +876,19 @@ public unsafe class SubtitleReader : IDisposable
             {
                 // There are cases where num_rects = 1 is consecutive.
                 // In this case, the previous subtitle end time is corrected by pts, and a new subtitle is started with the same pts.
-                if (prevSub.Bitmap?.Sub.end_display_time == uint.MaxValue) // 4294967295
+                // HC-21: gate on the tracked end_display_time, not prevSub.Bitmap (null in timestamp-only mode).
+                if (prevEndDisplayTime == uint.MaxValue) // 4294967295
                 {
                     prevSub.EndTime = new TimeSpan(pts - _demuxer.StartTime);
                     addSub(prevSub);
                     prevSub = null;
+                    prevEndDisplayTime = 0;
                 }
             }
 
+            uint endDisplayTime = sub.end_display_time;
             subData.StartTime = new TimeSpan(pts - _demuxer.StartTime);
-            subData.EndTime = subData.StartTime.Add(TimeSpan.FromMilliseconds(sub.end_display_time));
+            subData.EndTime = subData.StartTime.Add(TimeSpan.FromMilliseconds(endDisplayTime));
 
             switch (sub.rects[0]->type)
             {
@@ -930,6 +939,7 @@ public unsafe class SubtitleReader : IDisposable
             }
 
             prevSub = subData;
+            prevEndDisplayTime = endDisplayTime;
         }
 
         if (token.IsCancellationRequested)
@@ -941,6 +951,14 @@ public unsafe class SubtitleReader : IDisposable
         // Process last
         if (prevSub != null)
         {
+            // HC-21: the final bitmap cue has no following packet to correct its end. If it carried the PGS
+            // "until next" sentinel (end_display_time == uint.MaxValue) its end is otherwise ~49.7 days; clamp
+            // it to a bounded default so it does not swallow the whole timeline / break prev/next intervals.
+            if (_stream.IsBitmap && prevEndDisplayTime == uint.MaxValue)
+            {
+                prevSub.EndTime = prevSub.StartTime.Add(TimeSpan.FromSeconds(5));
+            }
+
             addSub(prevSub);
         }
     }

@@ -359,24 +359,19 @@ unsafe partial class Player
             _ => throw new($"Invalid snapshot extention '{ext}' (valid .bmp, .png, .jpeg, .jpg"),
         };
 
-        var snapshotBitmap = Renderer.TakeSnapshot(width, height);
+        // HC-24: dispose the GDI+ bitmap on ALL paths. Previously it was disposed only in the catch, so the
+        // success path leaked native GDI handles until finalization — a held snapshot hotkey could exhaust the
+        // ~10k per-process GDI limit. 'using' disposes on both success and exception (preserving the rethrow).
+        using var snapshotBitmap = Renderer.TakeSnapshot(width, height);
         if (snapshotBitmap == null)
             return;
 
-        try
-        {
-            snapshotBitmap.Save(filename, imageFormat);
+        snapshotBitmap.Save(filename, imageFormat);
 
-            UI(() =>
-            {
-                OSDMessage = $"Save snapshot to {Path.GetFileName(filename)}";
-            });
-        }
-        catch (Exception)
+        UI(() =>
         {
-            snapshotBitmap.Dispose();
-            throw;
-        }
+            OSDMessage = $"Save snapshot to {Path.GetFileName(filename)}";
+        });
     }
 
     /// <summary>

@@ -115,7 +115,7 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
 
         try
         {
-            accessTokenTask = GetAccessTokenTask(token);
+            accessTokenTask = GetAccessTokenTask();
             string accessToken = await accessTokenTask.WaitAsync(token).ConfigureAwait(false);
 
             MicrosoftTranslateRequest[] body = [new() { Text = text }];
@@ -267,7 +267,7 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
         };
     }
 
-    private Task<string> GetAccessTokenTask(CancellationToken token)
+    private Task<string> GetAccessTokenTask()
     {
         Task<string>? accessTokenTask = _accessToken;
         if (accessTokenTask != null)
@@ -277,7 +277,11 @@ public abstract class MicrosoftTranslateServiceBase : ITranslateService
 
         lock (_accessTokenLock)
         {
-            _accessToken ??= GetAccessTokenAsync(_httpClient, token);
+            // HC-28: fetch the SHARED token with CancellationToken.None so a single caller cancelling (seek /
+            // track switch) cannot cancel the cached fetch and leave a canceled Task in _accessToken that then
+            // fails the next translate with "A task was canceled". Each caller still bails via WaitAsync(token)
+            // at the call site; the faulted-task eviction guards above remain as a backstop.
+            _accessToken ??= GetAccessTokenAsync(_httpClient, CancellationToken.None);
             return _accessToken;
         }
     }

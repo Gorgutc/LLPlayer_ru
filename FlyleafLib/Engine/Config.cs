@@ -1547,8 +1547,13 @@ public class Config : NotifyPropertyChanged
             }
         } = TargetLanguage.EnglishAmerican;
 
+        // HC-08: seed with the language of the default TranslateTargetLanguage. TranslateTargetLanguage's field
+        // initializer assigns its backing field directly (not through the setter), so the setter side-effect that
+        // assigns TranslateLanguage never runs for a config left at the default (EnglishAmerican) — leaving this
+        // null for the whole session and NRE-ing consumers (WordPopup / SubtitleConverters / Player.Playback).
+        // Seeding here keeps it non-null at the default; the setter still updates it whenever the target changes.
         [JsonIgnore]
-        public Language TranslateLanguage { get; private set; }
+        public Language TranslateLanguage { get; private set; } = Language.Get(TargetLanguage.EnglishAmerican.ToISO6391());
 
         /// <summary>
         /// Translation Service Type

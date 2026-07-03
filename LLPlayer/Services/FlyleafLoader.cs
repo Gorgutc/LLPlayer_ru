@@ -21,8 +21,17 @@ public static class FlyleafLoader
                 engineConfig = EngineConfig.Load(App.EngineConfigPath, opts);
                 if (engineConfig.Version != App.Version)
                 {
+                    // HC-10: non-fatal version-stamp save (own try/catch). A transient write failure must not
+                    // brick startup with a false "Cannot load ..." + Environment.Exit(1); the config is valid.
                     engineConfig.Version = App.Version;
-                    engineConfig.Save(App.EngineConfigPath, opts);
+                    try
+                    {
+                        engineConfig.Save(App.EngineConfigPath, opts);
+                    }
+                    catch
+                    {
+                        // ignored: non-fatal — retry persist next launch
+                    }
                 }
             }
             catch (Exception ex)
@@ -61,8 +70,17 @@ public static class FlyleafLoader
 
                 if (config.Version != App.Version)
                 {
+                    // HC-10: non-fatal version-stamp save (own try/catch). A transient write failure must not
+                    // brick startup with a false "Cannot load ..." + Environment.Exit(1); the config is valid.
                     config.Version = App.Version;
-                    config.Save(App.PlayerConfigPath, opts);
+                    try
+                    {
+                        config.Save(App.PlayerConfigPath, opts);
+                    }
+                    catch
+                    {
+                        // ignored: non-fatal — retry persist next launch
+                    }
                 }
                 useConfig = true;
             }

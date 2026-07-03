@@ -54,8 +54,20 @@ public class FlyleafManager
                         config.MicaBackdrop = true;
                     }
 
-                    config.Version = App.Version;
-                    config.Save(App.AppConfigPath);
+                    // HC-10: persist the migration/version-stamp in its OWN try/catch. A transient write failure
+                    // (config file locked by AV/OneDrive, read-only directory) must not be treated as a fatal
+                    // load error — the loaded config is valid and the migrations are idempotent (re-run next launch).
+                    // Previously this Save shared the load try/catch below, so a locked file produced a false
+                    // "Cannot load ..." + Environment.Exit(1) that bricked startup with an otherwise-valid config.
+                    try
+                    {
+                        config.Version = App.Version;
+                        config.Save(App.AppConfigPath);
+                    }
+                    catch
+                    {
+                        // ignored: non-fatal — run this session on the valid in-memory config; retry persist next launch
+                    }
                 }
             }
             catch (Exception ex)
