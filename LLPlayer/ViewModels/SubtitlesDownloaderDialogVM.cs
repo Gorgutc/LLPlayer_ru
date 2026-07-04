@@ -107,31 +107,47 @@ public class SubtitlesDownloaderDialogVM : Bindable, IDialogAware
             return;
         }
 
-        string subDir = Path.Combine(Path.GetTempPath(), App.Name, "Subs");
-        // sub.SubFileName comes from the OpenSubtitles API; a "..\..\x.srt" or absolute path would otherwise
-        // let a hostile/spoofed response write outside subDir. Resolve to a name-only path inside subDir.
-        string? subPath = Utils.GetSafeFileNameChildPath(subDir, sub.SubFileName);
-        if (subPath == null)
+        // The post-download work below (safe-path validation, extension check, temp write) previously ran
+        // outside any try/catch, so a bad SubFileName, an unsupported extension, or an IOException escaped to
+        // the global dispatcher handler as a generic "Unhandled Exception" (logged to crash.log as a crash).
+        // Contain it here and surface a contextual subtitle-load error instead; the decoder is wired up only
+        // after a successful write, so a failed load never leaves the completion handler subscribed. HC-46.
+        string subPath;
+        try
         {
-            throw new InvalidOperationException($"Invalid subtitle file name: '{sub.SubFileName}'");
-        }
-        if (!Directory.Exists(subDir))
-        {
-            Directory.CreateDirectory(subDir);
-        }
+            string subDir = Path.Combine(Path.GetTempPath(), App.Name, "Subs");
+            // sub.SubFileName comes from the OpenSubtitles API; a "..\..\x.srt" or absolute path would otherwise
+            // let a hostile/spoofed response write outside subDir. Resolve to a name-only path inside subDir.
+            string? resolved = Utils.GetSafeFileNameChildPath(subDir, sub.SubFileName);
+            if (resolved == null)
+            {
+                throw new InvalidOperationException($"Invalid subtitle file name: '{sub.SubFileName}'");
+            }
+            subPath = resolved;
 
-        var ext = Path.GetExtension(subPath).ToLower();
-        if (ext.StartsWith("."))
-        {
-            ext = ext.Substring(1);
-        }
+            if (!Directory.Exists(subDir))
+            {
+                Directory.CreateDirectory(subDir);
+            }
 
-        if (!Utils.ExtensionsSubtitles.Contains(ext))
-        {
-            throw new InvalidOperationException($"'{ext}' extension is not supported");
-        }
+            var ext = Path.GetExtension(subPath).ToLower();
+            if (ext.StartsWith("."))
+            {
+                ext = ext.Substring(1);
+            }
 
-        await File.WriteAllBytesAsync(subPath, subData);
+            if (!Utils.ExtensionsSubtitles.Contains(ext))
+            {
+                throw new InvalidOperationException($"'{ext}' extension is not supported");
+            }
+
+            await File.WriteAllBytesAsync(subPath, subData);
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogHelper.ShowUnknownErrorPopup($"Cannot load the subtitle: {ex.Message}", UnknownErrorType.Subtitles, ex);
+            return;
+        }
 
         // TODO: L: Refactor to pass language directly at Open
         // TODO: L: Allow to load as a secondary subtitle
@@ -208,7 +224,16 @@ public class SubtitlesDownloaderDialogVM : Bindable, IDialogAware
                 return;
             }
 
-            await File.WriteAllBytesAsync(dialog.FileName, subData);
+            try
+            {
+                await File.WriteAllBytesAsync(dialog.FileName, subData);
+            }
+            catch (Exception ex)
+            {
+                // The chosen save path may be unwritable (read-only, ACL, disk full); surface it as a
+                // contextual save error rather than letting it escape to the global "Unhandled Exception". HC-46.
+                ErrorDialogHelper.ShowUnknownErrorPopup($"Cannot save the subtitle to file: {ex.Message}", UnknownErrorType.Subtitles, ex);
+            }
         }
     }).ObservesCanExecute(() => CanAction);
 

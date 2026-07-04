@@ -217,7 +217,8 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
 - Output: **`video.ru.dub.flac`** beside the source video (sibling of `video.ru.srt`; FLAC avoids
   AAC priming — §4.1). An existing non-empty `.ru.dub.*` is detected/excluded unless overwrite is on.
 - **Committed source:** `dub_sidecar/` (`server.py`, `pyproject.toml`, `uv.lock`).
-- **Never committed:** `DubEngine/` (venv), `dubmodels/` (weights), `video.ru.dub.*` (user output).
+- **Never committed:** `DubEngine/` (venv), `dubmodels/` (weights), `video.ru.dub.*` (user output),
+  `video.ru.voices.json` (per-line dub voice map, Phase 2a).
   Update `DO_NOT_PUSH.md` / `.gitignore` / `ship.ps1` strict-cleanup in the same change.
 
 ## 9. Licensing (GPLv3) — rules that must hold every phase

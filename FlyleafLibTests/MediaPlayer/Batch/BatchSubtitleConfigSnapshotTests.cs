@@ -197,8 +197,10 @@ public class BatchSubtitleConfigSnapshotTests
         live.DuckingPercent = 40;
         live.AtempoMin = 0.8;
         live.AtempoMax = 1.3;
-        // Deliberately NON-default (default is "flac") so this assertion actually guards the OutputFormat copy —
-        // the config setter stores the string verbatim (the FLAC-only constraint is a picker/renderer concern).
+        // HC-45: OutputFormat is normalized to the FLAC-only whitelist on set, so a hand-edited non-flac request
+        // collapses to "flac" before the snapshot ever copies it. The 8 non-default fields above already guard the
+        // deep copy; here we assert the snapshot carries the NORMALIZED value (no leaked "wav"). The normalization
+        // itself is unit-tested in DubbingConfigTests.OutputFormat_*.
         live.OutputFormat = "wav";
         live.StressNormalization = false;
         live.Model = "cosyvoice2-custom";
@@ -212,7 +214,7 @@ public class BatchSubtitleConfigSnapshotTests
         snapshot.DubbingConfig.DuckingPercent.Should().Be(40);
         snapshot.DubbingConfig.AtempoMin.Should().Be(0.8);
         snapshot.DubbingConfig.AtempoMax.Should().Be(1.3);
-        snapshot.DubbingConfig.OutputFormat.Should().Be("wav");
+        snapshot.DubbingConfig.OutputFormat.Should().Be("flac");
         snapshot.DubbingConfig.StressNormalization.Should().BeFalse();
         snapshot.DubbingConfig.Model.Should().Be("cosyvoice2-custom");
 
@@ -240,6 +242,15 @@ public class BatchSubtitleConfigSnapshotTests
             .Where(p => p.DeclaringType == type)
             .Where(p => p is { CanRead: true, CanWrite: true } && p.SetMethod!.IsPublic)
             .Where(p => p.GetCustomAttribute<JsonIgnoreAttribute>() == null)
+            // HC-45: OutputFormat's setter normalizes every value to the FLAC-only whitelist, so the
+            // value-distinctness probe below collapses to "flac" — which also equals the snapshot's default.
+            // A copy check is therefore unprovable here (source == snapshot == "flac" whether or not
+            // CloneDubbingConfig copies it), so this gate cannot stay fail-closed for it. Exclude it — as the
+            // transformed Translate/ExtraArguments fields are excluded in the sibling AssertSnapshotCopies*
+            // gates — so the "delete a Clone* line → RED" invariant stays literally true for every field this
+            // guard still enumerates. OutputFormat copy correctness is instead covered by
+            // DubbingConfigTests.OutputFormat_* and CloneDubbingConfig directly.
+            .Where(p => p.Name != nameof(DubbingConfig.OutputFormat))
             .ToList();
 
         props.Should().NotBeEmpty("the guard must actually enumerate DubbingConfig settings");
