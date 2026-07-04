@@ -1443,6 +1443,19 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 > = manual-smoke владельца). Секреты/prompt-injection → accepted-risk-заметки (не work). **HC-43/HC-44/T-12 остаются
 > owner-decisions** (HC-43 меняет HTTP-контракт сайдкара; HC-44-full = interop-риск; T-12 = persisted-default).
 >
+> ✅ **ОТГРУЖЕНО (v0.3.54, сессия #30, 2026-07-04):** защитный хардненинг-бандл реализован.
+> - **YoutubeDL-lifecycle:** `taskkill` `Process.Start` → try/catch + `?.WaitForExit`; `Directory.Delete` → новый чистый
+>   `FlyleafLib/Utils/SafeDirectory.TryDelete` (best-effort, не бросает `IOException`/`UnauthorizedAccessException`);
+>   `workingDir=null` безусловно (не ретраится). Больше не роняет фоновый `PlayThread`.
+> - **Supply-chain (zip-slip):** новый чистый `FlyleafLib/Utils/ArchivePathGuard` (`IsWithinDirectory`/`ValidateEntries`);
+>   `WhisperEngineDownloadDialogVM.UnzipEngine` валидирует все `ArchiveFileData`-entry ДО `ExtractArchiveAsync` и отклоняет
+>   весь архив при выходе за `EnginesDirectory`. Опц. пиновка SHA-256 НЕ делалась (defense-in-depth достаточно).
+> - **AppActions.CmdOpenCurrentPath:** `Process.Start` → try/catch → `ErrorDialogHelper.ShowKnownErrorPopup` (как line 163).
+> - **Гейты:** build `-warnaserror` **0/0 ×2** + xUnit **1283→1304 (+21)** (`SafeDirectoryTests`+`ArchivePathGuardTests`,
+>   RED-without-fix) + `verify.ps1` + `ship.ps1` publish-smoke + launch **0.3.54** чист + **5-линз adversarial-ревью 0 находок**.
+>   VM/AppActions/YoutubeDL = manual-smoke владельца (нет тест-проекта LLPlayer/Plugins). Секреты/prompt-injection остаются
+>   accepted-risk (не work). PR за владельцем.
+>
 > **Исходные кандидаты (для истории, до верификации):**
 > - **Supply-chain:** сетевые загрузки (Whisper-движок 7z, модели, tesseract traineddata) без проверки хэшей/подписей
 >   + возможный zip-slip в `SevenZipExtractor.ExtractArchiveAsync` (`WhisperEngineDownloadDialogVM.cs:166`).

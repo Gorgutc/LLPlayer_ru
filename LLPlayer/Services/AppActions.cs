@@ -190,12 +190,21 @@ public class AppActions
         // Open folder or URL
         string? fileName = isFile ? Path.GetDirectoryName(url) : url;
 
-        Process.Start(new ProcessStartInfo
+        try
         {
-            FileName = fileName,
-            UseShellExecute = true,
-            Verb = "open"
-        });
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = fileName,
+                UseShellExecute = true,
+                Verb = "open"
+            });
+        }
+        catch (Exception ex)
+        {
+            // A missing folder / no shell handler / null path throws a Win32Exception here; without a guard it
+            // reaches the global dispatcher handler as a generic "Unhandled Exception" popup + crash.log entry.
+            ErrorDialogHelper.ShowKnownErrorPopup($"Failed to open path: {ex.Message}", "Open path");
+        }
     });
 
     public DelegateCommand CmdSubsPositionUp => field ??= new(() =>

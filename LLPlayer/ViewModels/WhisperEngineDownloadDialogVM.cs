@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using FlyleafLib;
 using LLPlayer.Extensions;
@@ -119,6 +120,12 @@ public class WhisperEngineDownloadDialogVM : ModelDownloadDialogVMBase
 
         using (SevenZipExtractor extractor = new(zipPath))
         {
+            // Zip-slip guard: SevenZipSharp does not sanitize entry names, so refuse the whole archive if any entry
+            // would resolve outside the engines directory before extracting anything.
+            ArchivePathGuard.ValidateEntries(
+                extractor.ArchiveFileData.Select(f => f.FileName),
+                WhisperConfig.EnginesDirectory);
+
             await extractor.ExtractArchiveAsync(WhisperConfig.EnginesDirectory);
         }
 
