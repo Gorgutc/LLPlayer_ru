@@ -264,6 +264,16 @@ public class Config : NotifyPropertyChanged
             // 0.3.9 bump that makes the migration one-shot), after which a deliberate 60000 is respected.
             MigrateLocalLlmTimeoutDefault(Subtitles.TranslateServiceSettings);
         }
+
+        if (!parsed || loadedVer <= System.Version.Parse("0.3.54"))
+        {
+            // T-12: raise the OpenAI-like / LiteLLM request timeout from the prior 15s default to 180s so a slow local
+            // reasoning model behind those endpoints is not cancelled mid-thought. Only a service still on the prior
+            // 15000 default is migrated; an explicit user value is preserved. New configs already default to 180000 via
+            // the settings constructors. Re-applies on load until the config is saved with the new app version, after
+            // which a deliberate 15000 is respected.
+            MigrateOpenAiLikeTimeoutDefault(Subtitles.TranslateServiceSettings);
+        }
     }
 
     // Bump local LLM (Ollama / LM Studio / KoboldCpp) request timeouts still on the prior 60s default to 180s
@@ -275,6 +285,21 @@ public class Config : NotifyPropertyChanged
         {
             if (services.TryGetValue(type, out var settings) &&
                 settings is OpenAIBaseTranslateSettings openAi && openAi.TimeoutMs == 60000)
+            {
+                openAi.TimeoutMs = 180000;
+            }
+        }
+    }
+
+    // Bump OpenAI-like / LiteLLM request timeouts still on the prior 15s default to 180s so a slow local reasoning
+    // model behind those endpoints is not cancelled mid-thought; an explicit user value is left untouched. See T-12.
+    internal static void MigrateOpenAiLikeTimeoutDefault(Dictionary<TranslateServiceType, ITranslateSettings> services)
+    {
+        foreach (TranslateServiceType type in new[]
+                 { TranslateServiceType.OpenAILike, TranslateServiceType.LiteLLM })
+        {
+            if (services.TryGetValue(type, out var settings) &&
+                settings is OpenAIBaseTranslateSettings openAi && openAi.TimeoutMs == 15000)
             {
                 openAi.TimeoutMs = 180000;
             }
