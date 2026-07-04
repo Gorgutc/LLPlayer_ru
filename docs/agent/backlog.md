@@ -1298,7 +1298,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 > `total_ms`) и HC-15 (`SrtSubtitleWriter` без `NormalizeCueText`) — это ⓢ-находки тира 8a, НЕ про OCR. Верный бандл кандидата №1 =
 > **HC-36 + HC-37 + HC-38** (исправлено в летописи сессией #21).
 
-- **HC-36 — OCR: один общий `_ocrService` на оба сабтрека 🟠 Ⓜ · `FlyleafLib/MediaPlayer/SubtitlesOCR.cs:65/91`**
+- **HC-36 — OCR: один общий `_ocrService` на оба сабтрека 🟠 Ⓜ · `FlyleafLib/MediaPlayer/SubtitlesOCR.cs:65/91`** · ✅ **DONE (v0.3.52, PR #127 `c0cd0c8`, сессия #26)**
   - Проблема: класс параметризован `subIndex` и создан для 2 треков с раздельными `_lockers/_ctss`, но движок хранится
     в единственном поле: повторный `TryInitialize` перезаписывает без Dispose (утечка нативного Tesseract-движка +
     модели); `Do` диспозит через `using`, но поле не обнуляет (use-after-dispose); dual-OCR primary+secondary → оба
@@ -1306,7 +1306,10 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: `IOCRService?[] _ocrServices` per-subIndex; в `TryInitialize` менять только слот с Dispose старого; в `Do`
     забирать атомарно (`Interlocked.Exchange`).
   - Зачем: утечка native-движка и порча результатов при двух OCR-дорожках.
-- **HC-37 — Гонки/TOCTOU на локах `_cts`/`SubIndexSet`/`_lockerSubs` в ASR/OCR/Translate (бандл) 🟡 Ⓜ**
+  - ✅ **Сделано (v0.3.52, сессия #26):** `IOCRService?[]` per-subIndex через `OcrEngineSlots` (atomic `Interlocked.Exchange`,
+    Dispose старого слота при reinit) + `SubtitlesOCR : IDisposable`; закрыл утечку native-Tesseract + use-after-dispose при
+    dual-OCR. Concurrency-ревью в стеке. +тесты.
+- **HC-37 — Гонки/TOCTOU на локах `_cts`/`SubIndexSet`/`_lockerSubs` в ASR/OCR/Translate (бандл) 🟡 Ⓜ** · ✅ **DONE (v0.3.51, PR #128 `ea65a67`, сессия #26)**
   - Проблема: несколько связанных дефектов синхронизации: `SubtitlesASR.Execute:215` бэкапит `Subs` под чужим
     `_lockerSubs` вместо `SnapshotSubs` (гонка с `Refresh→Clear`); `SubIndexSet` (`SubtitlesASR.cs`) мутируется под ДВУМЯ
     локами и энумерируется без лока (`:328` — лок внутри цикла) → `InvalidOperationException` при dual-ASR + Reset;
@@ -1320,13 +1323,19 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     локальная копия в `TryCancelWait` (оба класса).
   - Зачем: набор гонок, каждая роняет ASR/OCR/перевод с error-диалогом при быстром переключении дорожек/seek —
     прямое продолжение уже закрытого класса «Subs без `_subsLocker`».
-- **HC-38 — Неатомарная запись всех трёх конфигов 🟡 Ⓜ · `LLPlayer/Services/AppConfig.cs:78` (+`Config.cs:140/1753`)**
+  - ✅ **Сделано (v0.3.51, сессия #26):** `CtsGuard` для обоих `TryCancelWait` (TOCTOU), `SubIndexSet` → private +
+    `SnapshotSubIndexes()` под локом для энумерации, `SnapshotSubs()` для бэкапа/чтения окна, CTS создаётся в момент
+    планирования задачи. Concurrency-ревью поймало смежный `Player.Screamers.cs:185`. +тесты.
+- **HC-38 — Неатомарная запись всех трёх конфигов 🟡 Ⓜ · `LLPlayer/Services/AppConfig.cs:78` (+`Config.cs:140/1753`)** · ✅ **DONE (v0.3.50, PR #125 `95fa6dd`, сессия #26)**
   - Проблема: `Save` пишет прямым `File.WriteAllText`; записи идут и без действий пользователя (PersistBatchDefaults на
     каждый тумблер, AsrOnboardingShown, version-stamp). Power-loss/креш посреди записи → усечённый JSON → следующий
     старт: `JsonException` → MessageBox + `Environment.Exit(1)` (кирпич).
   - Решение: единый atomic-хелпер (temp рядом + `File.Replace/Move(overwrite)`, как companion-json); при `JsonException`
     на загрузке — переименовать битый в `.bak` и стартовать с дефолтами вместо Exit(1).
   - Зачем: обрыв записи не должен блокировать запуск приложения.
+  - ✅ **Сделано (v0.3.50, сессия #26):** единый `AtomicFile.WriteAllText` (temp рядом + `File.Replace`/`Move(overwrite)`)
+    для всех 3 конфигов. **Atomic-only** — graceful-degrade битого JSON на загрузке (`.bak` вместо `Exit(1)`) сознательно
+    отложен как отдельный шаг. +тесты.
 - **HC-39 — Reflection completeness-guard покрывает не все nested-конфиги снапшота 🟡 Ⓜ · `FlyleafLibTests/MediaPlayer/Batch/BatchSubtitleTranslatorTests.cs:148`** · ✅ **DONE (T-03 срез №6, 2026-07-02, сессия #20)** — обобщённый helper `AssertSnapshotCopiesEveryWritableProperty<T>` + 5 guard-тестов (`WhisperConfig`/`WhisperCppConfig`/`FasterWhisperConfig`/`TranslateChatConfig`/`WhisperCppModel`) с исключениями трансформируемых полей (`Translate` force-false, `ExtraArguments` strip). Все зелёные (поля уже копируются) — fail-closed на будущие «забытые поля».
   - Проблема: полноценный guard есть только для `DubbingConfig`; `WhisperCppConfig` (15 полей), `FasterWhisperConfig` (9),
     `TranslateChatConfig` (11), `WhisperConfig` (3) — лишь точечные тесты. Новое свойство с UI-биндингом, забытое в
@@ -1400,8 +1409,41 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 > T-06); `MaxConcurrent` в тесте (теоретический hardening); `OneShotHttpServer` RST-гонка (для .NET нереализуемо);
 > `-warnaserror` без NuGetAudit-политики (намеренная замороженная политика).
 
-### 8e. 🔎 Кандидаты раунда №2 (НЕ верифицированы адверсариально — из критика полноты)
-> Требуют отдельной проверки в следующей health-сессии; ранжирование появится после верификации:
+### 8e. 🔎 Кандидаты раунда №2 — ✅ ВЕРИФИЦИРОВАНЫ адверсариально (сессия #29, 2026-07-04, workflow `wf_9ca415bf-d53`, 22 агента)
+
+> **Итог верификации против live-кода `bced48f` v0.3.53 (каждая находка адверсариально перепроверена 2 линзами):**
+> - **YoutubeDL lifecycle → ✅ CONFIRMED (ⓢ, sev-low):** незащищённые `Process.Start("taskkill")`
+>   (`Plugins/YoutubeDL/YoutubeDL.cs:210-217`) и `Directory.Delete(workingDir,true)` (`:234`) в `DisposeInternal` →
+>   **реальный краш фонового потока** на пути stop/switch-after-YouTube (через `PlayThread` finally, `IsBackground=true`).
+>   Фикс: guarded-swallow + `workingDir=null` в `finally` + вынос `SafeDeleteDirectory` в `FlyleafLib/Utils` (юнит-тест).
+> - **Supply-chain (zip-slip) → ✅ CONFIRMED (ⓢ, sev-low, defense-in-depth):** `ExtractArchiveAsync`
+>   (`WhisperEngineDownloadDialogVM.cs:120-122`, дрейф с `:166` после HC-41) без per-entry containment;
+>   `Squid-Box.SevenZipSharp.Lite 1.6.2.24` сам НЕ защищает (`..` не чистит). Достижимо только через компромат
+>   upstream-релиза / TLS-MITM (URL хардкожены https на доверенные хосты). Фикс: чистый `ArchivePathGuard.IsWithin`
+>   в `FlyleafLib/Utils` + per-entry `ExtractFile` (юнит-тест на zip-slip escapes). Опц. пиновка SHA-256.
+> - **Секреты → ⚠️ OVERSTATED, downgrade до accepted-risk:** выжил ТОЛЬКО plaintext-ключ в локальном `Config.json`
+>   (файл владельца; 5 свойств `ApiKey` DeepL/Azure/Bing/Microsoft). Severity-претензии ОПРОВЕРГНУТЫ: эхо на 401/403 =
+>   **тело ответа провайдера** (`ex.Data["response"]`, `OpenAIBaseTranslateService.cs:460/471`), **НЕ ключ** (ключ только в
+>   заголовках запроса `:595/:671`); лог-утечки нет; «LiteLLM-ключа» НЕ существует (нет свойства `ApiKey`); экспорта
+>   конфига нет. ⚠️ **НЕ добавлять `[JsonIgnore]`** к 5 свойствам — тихая потеря сохранённых ключей при следующем `Save`.
+>   DPAPI-at-rest меняет frozen `config-data-contract` + портируемость → sign-off. Опц. чистый `Redact`-хелпер безвреден.
+> - **Prompt injection → ❌ REFUTED (accepted-risk, НЕ work):** для однопользовательского офлайн-плеера потолок вреда =
+>   кривой перевод/саммари самому себе, загрузившему контент. Ролевые границы (system=инструкции, user=текст субтитров)
+>   есть, tool/function-calling модели не выставлен, парсинг ответа толерантный (`ParseChatResponse` читает только
+>   HTTP-конверт). Нет escalation/exfiltration/persistence. Пометить бокс «не верифицировано» закрытым.
+> - **Не покрытые зоны → ⚠️ OVERSTATED:** ровно **1** реальный дефект — незащищённый `Process.Start` в
+>   `AppActions.cs:193-198` (`CmdOpenCurrentPath`); «краш» ОПРОВЕРГНУТ (глобальный `App_OnDispatcherUnhandledException`
+>   `App.xaml.cs:179-217` ставит `e.Handled=true` → generic-попап + запись в crash.log вместо контекстного сообщения,
+>   класс HC-46). ~4 строки try/catch. Остальное (`WpfColorFontDialog` NRE, MeCab BPos, `ScrollParentWhenAtMax`) —
+>   false-positive/мёртвый код.
+>
+> ✅ **Решение владельца (сессия #29, AskUserQuestion):** **сессия #30 = защитный хардненинг-бандл** =
+> YoutubeDL-lifecycle + Supply-chain (zip-slip guard) + fold-in `AppActions.cs:193` guard. Все ⓢ, без sign-off, без
+> frozen-контракта, каждый даёт новое покрытие в `FlyleafLibTests` (`SafeDeleteDirectory` + `ArchivePathGuard`; VM/AppActions
+> = manual-smoke владельца). Секреты/prompt-injection → accepted-risk-заметки (не work). **HC-43/HC-44/T-12 остаются
+> owner-decisions** (HC-43 меняет HTTP-контракт сайдкара; HC-44-full = interop-риск; T-12 = persisted-default).
+>
+> **Исходные кандидаты (для истории, до верификации):**
 > - **Supply-chain:** сетевые загрузки (Whisper-движок 7z, модели, tesseract traineddata) без проверки хэшей/подписей
 >   + возможный zip-slip в `SevenZipExtractor.ExtractArchiveAsync` (`WhisperEngineDownloadDialogVM.cs:166`).
 > - **Секреты:** API-ключи (DeepL/Azure/OpenAI-like/LiteLLM) плоским текстом в `Config.json`; проверить утечку в
