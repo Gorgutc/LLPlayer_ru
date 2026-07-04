@@ -368,23 +368,19 @@ public class SubTranslator
             SubtitleTranslationContext context = BuildTranslationContext(sub, translateText);
             string translated = await _translateService!.TranslateAsync(context, token);
 
-            // Do not cache an empty/whitespace result as a successful translation. Leaving
-            // TranslatedText null keeps IsTranslated false, so DisplayText falls back to the source
-            // text (instead of showing a blank line) and the subtitle is retried on a later pass.
-            if (string.IsNullOrWhiteSpace(translated))
+            // Do not cache an empty/whitespace result as a successful translation (shared rule): leaving
+            // TranslatedText null keeps IsTranslated false, so DisplayText falls back to the source text
+            // (instead of showing a blank line) and the subtitle is retried on a later pass.
+            if (!TranslationCueRules.ShouldAcceptReply(translated))
             {
                 if (CanDebug) Log.Debug($"Translation Empty {sub.Index} - keeping original, will retry");
                 return;
             }
 
             // Keep the translation within the same at-most-SubtitleMaxLinesPerCue-line shape as the
-            // (re-segmented) source cue.
-            if (_config.ResegmentSubtitles)
-            {
-                translated = SubtitleSegmenter.WrapLines(translated, _config.SubtitleSegmentOptions);
-            }
-
-            sub.TranslatedText = translated;
+            // (re-segmented) source cue (shared rule with the batch path).
+            sub.TranslatedText = TranslationCueRules.PostProcess(
+                translated, _config.ResegmentSubtitles, _config.SubtitleSegmentOptions);
 
             if (CanDebug)
             {
@@ -424,16 +420,10 @@ public class SubTranslator
             return new SubtitleTranslationContext { Text = focalText };
         }
 
-        int before = Math.Max(0, chat.ContextWindowBefore);
-        int after = Math.Max(0, chat.ContextWindowAfter);
+        (int before, int after) = TranslationCueRules.ClampWindow(chat.ContextWindowBefore, chat.ContextWindowAfter);
 
         (List<string> rawBefore, List<string> rawAfter) = _subManager.GetContextWindow(sub, before, after);
 
-        return new SubtitleTranslationContext
-        {
-            Text = focalText,
-            Before = rawBefore.Select(SubtitleTextUtil.FlattenText).ToList(),
-            After = rawAfter.Select(SubtitleTextUtil.FlattenText).ToList(),
-        };
+        return TranslationCueRules.BuildContext(focalText, rawBefore, rawAfter);
     }
 }

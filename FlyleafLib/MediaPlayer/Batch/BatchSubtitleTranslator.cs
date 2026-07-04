@@ -48,10 +48,6 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             }
         }
 
-        // When re-segmentation is on, keep the translated text within the same at-most-SubtitleMaxLinesPerCue-line
-        // shape as the (already re-segmented) source cue. Null = leave the translation as the model returned it.
-        SubtitleSegmentOptions? wrapOpt = _config.ResegmentSubtitles ? _config.SubtitleSegmentOptions : null;
-
         bool useWindow = service.ServiceType.IsLLM() &&
                          _config.TranslateChatConfig.TranslateMethod == ChatTranslateMethod.ContextWindow;
 
@@ -72,7 +68,7 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             foreach (int i in targetIndices)
             {
                 token.ThrowIfCancellationRequested();
-                await TranslateSubAsync(service, subtitles, i, _config, useWindow, wrapOpt, token);
+                await TranslateSubAsync(service, subtitles, i, _config, useWindow, token);
             }
 
             return;
@@ -87,7 +83,7 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         await Parallel.ForEachAsync(
             targetIndices,
             parallelOptions,
-            async (i, ct) => await TranslateSubAsync(service, subtitles, i, _config, useWindow, wrapOpt, ct));
+            async (i, ct) => await TranslateSubAsync(service, subtitles, i, _config, useWindow, ct));
     }
 
     private static async Task TranslateSubAsync(
@@ -96,7 +92,6 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         int index,
         Config.SubtitlesConfig config,
         bool useWindow,
-        SubtitleSegmentOptions? wrapOpt,
         CancellationToken token)
     {
         SubtitleData sub = subtitles[index];
@@ -111,17 +106,16 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         {
             string translated = await service.TranslateAsync(context, token);
 
-            // Parity with interactive SubTranslator: never cache an empty/whitespace reply as a successful
+            // Shared rule with interactive SubTranslator: never cache an empty/whitespace reply as a successful
             // translation. Leaving TranslatedText unset keeps IsTranslated false, so the writer falls back to
             // the source line instead of emitting a blank line.
-            if (string.IsNullOrWhiteSpace(translated))
+            if (!TranslationCueRules.ShouldAcceptReply(translated))
             {
                 return;
             }
 
-            sub.TranslatedText = wrapOpt != null
-                ? SubtitleSegmenter.WrapLines(translated, wrapOpt)
-                : translated;
+            sub.TranslatedText = TranslationCueRules.PostProcess(
+                translated, config.ResegmentSubtitles, config.SubtitleSegmentOptions);
         }
         // A per-line CONTENT failure (a degenerate/looping reply, a truncated reply, or an empty/null reply
         // from a server that DID respond) must not fail the whole file: leave the source text for this single
@@ -146,15 +140,15 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
     private static SubtitleTranslationContext BuildContext(
         IList<SubtitleData> subtitles, int index, string focalText, TranslateChatConfig chat)
     {
-        int before = Math.Max(0, chat.ContextWindowBefore);
-        int after = Math.Max(0, chat.ContextWindowAfter);
+        (int before, int after) = TranslationCueRules.ClampWindow(chat.ContextWindowBefore, chat.ContextWindowAfter);
 
-        return new SubtitleTranslationContext
-        {
-            Text = focalText,
-            Before = Collect(subtitles, index - before, index - 1),
-            After = Collect(subtitles, index + 1, index + after),
-        };
+        // Collect the raw (un-flattened) source text of surrounding non-empty cues, nearest-first in playback
+        // order — mirrors SubManager.GetContextWindow used by the interactive path. Flattening is applied by
+        // TranslationCueRules.BuildContext so both paths shape the window identically.
+        return TranslationCueRules.BuildContext(
+            focalText,
+            Collect(subtitles, index - before, index - 1),
+            Collect(subtitles, index + 1, index + after));
 
         static List<string> Collect(IList<SubtitleData> subs, int from, int to)
         {
@@ -166,7 +160,7 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
                 string? t = subs[i].Text;
                 if (string.IsNullOrWhiteSpace(t))
                     continue;
-                list.Add(SubtitleTextUtil.FlattenText(t));
+                list.Add(t);
             }
             return list;
         }
