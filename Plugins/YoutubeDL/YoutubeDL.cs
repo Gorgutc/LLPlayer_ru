@@ -207,14 +207,24 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
 
             if (procId != -1)
             {
-                Process.Start(new ProcessStartInfo
+                try
                 {
-                    FileName        = "taskkill",
-                    Arguments       = $"/pid {procId} /f /t",
-                    CreateNoWindow  = true,
-                    UseShellExecute = false,
-                    WindowStyle     = ProcessWindowStyle.Hidden,
-                }).WaitForExit();
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName        = "taskkill",
+                        Arguments       = $"/pid {procId} /f /t",
+                        CreateNoWindow  = true,
+                        UseShellExecute = false,
+                        WindowStyle     = ProcessWindowStyle.Hidden,
+                    })?.WaitForExit();
+                }
+                catch (Exception e)
+                {
+                    // taskkill can be missing/blocked, or the pid already gone. Dispose runs from a background
+                    // PlayThread's finally on the stop/switch-after-YouTube path — an escaping exception there would
+                    // crash the app. Best-effort: log and keep tearing down.
+                    Log.Warn($"taskkill failed ({procId}): {e.Message}");
+                }
             }
 
             retries         =  0;
@@ -231,7 +241,9 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
             if (workingDir != null)
             {
                 Log.Debug($"Folder deleted ({workingDir})");
-                Directory.Delete(workingDir, true);
+                // Best-effort: a locked temp file must not throw out of Dispose (see taskkill note above). Clearing
+                // workingDir unconditionally also stops a failed delete from being retried forever.
+                SafeDirectory.TryDelete(workingDir);
                 workingDir = null;
             }
 

@@ -16,7 +16,7 @@
     <ApplicationIcon>LLPlayer.ico</ApplicationIcon>
     <Description>The media player for language learning.</Description>
     <PackageProjectUrl>https://llplayer.com</PackageProjectUrl>
-    <Version>0.3.53</Version>
+    <Version>0.3.54</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
