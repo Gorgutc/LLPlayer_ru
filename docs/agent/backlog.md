@@ -1342,19 +1342,33 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
   - Решение: либо довести `Config.Clone` до полноты (deep-copy Data/Plugins/nested, перенос Version), либо пометить
     как неподдерживаемый и направить потребителей на `BatchSubtitleConfigSnapshot`; закрепить reflection-guard.
   - Зачем: скрытая мина для любого будущего потребителя `Config.Clone`.
-- **HC-41 — Три download-диалога (~90% copy-paste, уже с дрейфом) 🟢 Ⓜ · `LLPlayer/ViewModels/TesseractDownloadDialogVM.cs` (+Whisper model/engine)**
+- **HC-41 — Три download-диалога (~90% copy-paste, уже с дрейфом) 🟢 Ⓜ · `LLPlayer/ViewModels/TesseractDownloadDialogVM.cs` (+Whisper model/engine)** · ✅ **DONE (v0.3.53, 2026-07-04, сессия #28)**
   - Проблема: `WhisperModelDownloadDialogVM`/`TesseractDownloadDialogVM`/`WhisperEngineDownloadDialogVM` — один VM
     скопирован трижды (одинаковый `DownloadModelWithProgressAsync`); копии разъехались: Whisper диспозит `_cts`,
     Tesseract/Engine — только `=null` (утечка CTS); `CmdOpenFolder` с try/catch только у Whisper.
   - Решение: `ModelDownloadServiceBase` (download+progress+temp-move+единый finally+единый OpenFolder+класс. OCE-таймаута);
     три VM оставляют только источник моделей и UI.
   - Зачем: дрейф между копиями = баги чинятся в одной, живут в двух.
-- **HC-42 — Батч-переводчик вручную зеркалит интерактивный (паритет только на комментариях) 🟢 Ⓜ · `FlyleafLib/MediaPlayer/Batch/BatchSubtitleTranslator.cs:146`**
+  - ✅ **Сделано (v0.3.53, сессия #28):** извлечён общий тестируемый `FlyleafLib/Utils/StreamDownloadPump.cs` (copy-loop,
+    +5 тестов) + база `LLPlayer/ViewModels/ModelDownloadDialogVMBase.cs` — единый `finally` с `_cts.Dispose()` (закрыл утечку
+    CTS у Tesseract/Engine), guarded `OpenFolderSafe` (закрыл незащищённый `Process.Start` у Tesseract/Engine), унифицир.
+    cancel-vs-timeout через `token.IsCancellationRequested` (HTTP/provider-таймаут → «Failed to download», не мнимое
+    «Download canceled» — заодно закрыл латентный дрейф Engine). 3 VM оставили источник+finalize+UI. Гейты build
+    `-warnaserror` **0/0 ×2** + тесты **1283/1283** + verify.ps1; 5-линзовое adversarial-ревью — **0 находок**. LLPlayer без
+    тест-проекта → чистая логика (pump) юнит-покрыта, VM-правки = manual-smoke владельца (download/cancel/open-folder/delete).
+- **HC-42 — Батч-переводчик вручную зеркалит интерактивный (паритет только на комментариях) 🟢 Ⓜ · `FlyleafLib/MediaPlayer/Batch/BatchSubtitleTranslator.cs:146`** · ✅ **DONE (v0.3.53, 2026-07-04, сессия #28)**
   - Проблема: продублированы 3 куска логики `SubtitlesTranslator`: построение ContextWindow (`:146` vs `:416`),
     empty-reply guard (`:117` vs `:372`), WrapLines-гейтинг по `ResegmentSubtitles` (`:53/:122` vs `:380`). Синхронность
     держится только комментариями «Parity with interactive» — при правке одного пути второй молча разойдётся.
   - Решение: вынести чистые куски в `TranslationCueRules` (ShouldAcceptReply/PostProcess/BuildWindow) + паритетный тест.
   - Зачем: контекст/качество перевода в батче должны совпадать с интерактивом гарантированно, не «на честном слове».
+  - ✅ **Сделано (v0.3.53, сессия #28):** 3 куска вынесены в чистый `FlyleafLib/MediaPlayer/Translation/TranslationCueRules.cs`
+    (`ShouldAcceptReply`/`PostProcess`/`ClampWindow`/`BuildContext`) и зовутся ОБОИМИ путями → паритет теперь структурный,
+    не на комментариях. Чистый рефактор, поведение **byte-identical** (проверено: `SubManager.GetContextWindow` тоже
+    пропускает whitespace-соседей = эквивалентно батч-`Collect`; клампы/flatten/ordering совпадают). +14 тестов
+    (`TranslationCueRulesTests`). Гейты **0/0 ×2** + **1283/1283** + verify.ps1; adversarial-ревью — **0 находок**.
+    ⚠️ **уточнение путей (верифиц. сессией #27):** интерактив = `FlyleafLib/MediaPlayer/Translation/SubtitlesTranslator.cs`
+    (класс `SubTranslator`), строки `:418/:371/:382` (сдвиг +2 после мёржа HC-37 vs исходные `:416/:372/:380`).
 - **HC-43 — Отмена рендера дубляжа гоняется с in-flight `assemble` сайдкара 🟢 Ⓜ · `FlyleafLib/MediaPlayer/Dubbing/DubbingRenderer.cs:103`**
   - Проблема: отмена HTTP-POST `/assemble` не останавливает python-поток — он дописывает `os.replace(output)` позже
     (~5с окно). C# в catch делает `TryDeleteOutput` (файла ещё нет) → «нежеланный» дубляж материализуется ПОСЛЕ →

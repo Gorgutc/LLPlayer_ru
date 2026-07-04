@@ -1,9 +1,7 @@
-﻿using System.Collections.ObjectModel;
-using System.Diagnostics;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Net;
 using System.Net.Http;
-using System.Windows;
 using FlyleafLib;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
@@ -11,13 +9,12 @@ using Whisper.net.Ggml;
 
 namespace LLPlayer.ViewModels;
 
-public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
+public class WhisperModelDownloadDialogVM : ModelDownloadDialogVMBase
 {
-    public FlyleafManager FL { get; }
-
-    public WhisperModelDownloadDialogVM(FlyleafManager fl)
+    public WhisperModelDownloadDialogVM(FlyleafManager fl) : base(fl)
     {
-        FL = fl;
+        Title = $"Whisper Downloader - {App.Name}";
+        StatusText = "Select a model to download.";
 
         List<WhisperCppModel> models = WhisperCppModelLoader.LoadAllModels();
         foreach (var model in models)
@@ -54,103 +51,56 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
         }
     }
 
-    public string StatusText { get; set => Set(ref field, value); } = "Select a model to download.";
-
-    public long DownloadedSize { get; set => Set(ref field, value); }
-
     public bool CanDownload =>
         SelectedModel is { Downloaded: false } && !CmdDownloadModel.IsExecuting;
 
     public bool CanDelete =>
         SelectedModel is { Downloaded: true } && !CmdDownloadModel.IsExecuting;
 
-    private CancellationTokenSource? _cts;
-
     public AsyncDelegateCommand CmdDownloadModel => field ??= new AsyncDelegateCommand(async () =>
     {
-        _cts = new CancellationTokenSource();
-        CancellationToken token = _cts.Token;
-
         WhisperCppModel downloadModel = SelectedModel;
         string tempModelPath = downloadModel.ModelFilePath + TempExtension;
 
-        try
-        {
-            if (downloadModel.Downloaded)
+        await RunDownloadAsync(
+            async token =>
             {
-                StatusText = $"Model '{SelectedModel}' is already downloaded";
-                return;
-            }
-
-            // Delete temporary files if they exist (forces re-download)
-            if (!DeleteTempModel())
-            {
-                StatusText = $"Failed to remove temp model";
-                return;
-            }
-
-            StatusText = $"Model '{downloadModel}' downloading..";
-
-            long modelSize = await DownloadModelWithProgressAsync(downloadModel, tempModelPath, token);
-
-            // After successful download, rename temporary file to final file
-            File.Move(tempModelPath, downloadModel.ModelFilePath);
-
-            // Update downloaded status
-            downloadModel.Size = modelSize;
-            OnDownloadStatusChanged();
-
-            StatusText = $"Model '{SelectedModel}' is downloaded successfully";
-        }
-        catch (OperationCanceledException)
-        {
-            StatusText = "Download canceled";
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            // Not every (model, quantization) pair is published on the download mirror — surface a clear message
-            // instead of a raw HTTP error. The partial .tmp is removed by the finally below, so nothing is left
-            // half-written and the model stays "not downloaded".
-            StatusText = $"'{downloadModel}' is not available on the server. Try a different model or quantization.";
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Failed to download: {ex.Message}";
-        }
-        finally
-        {
-            _cts?.Dispose();
-            _cts = null;
-            DeleteTempModel();
-        }
-
-        return;
-
-        bool DeleteTempModel()
-        {
-            // Delete temporary files if they exist
-            if (File.Exists(tempModelPath))
-            {
-                try
+                if (downloadModel.Downloaded)
                 {
-                    File.Delete(tempModelPath);
+                    StatusText = $"Model '{SelectedModel}' is already downloaded";
+                    return;
                 }
-                catch (Exception)
+
+                // Delete any leftover temp file first (forces a clean re-download).
+                if (!TryDeleteFile(tempModelPath))
                 {
-                    // ignore
-
-                    return false;
+                    StatusText = "Failed to remove temp model";
+                    return;
                 }
-            }
 
-            return true;
-        }
+                StatusText = $"Model '{downloadModel}' downloading..";
+
+                await using Stream modelStream =
+                    await WhisperGgmlDownloader.Default.GetGgmlModelAsync(downloadModel.Model, downloadModel.Quantization, token);
+                long modelSize = await DownloadToFileAsync(modelStream, tempModelPath, token);
+
+                // After a successful download, rename the temp file to the final file.
+                File.Move(tempModelPath, downloadModel.ModelFilePath);
+
+                downloadModel.Size = modelSize;
+                OnDownloadStatusChanged();
+
+                StatusText = $"Model '{SelectedModel}' is downloaded successfully";
+            },
+            cleanup: () => TryDeleteFile(tempModelPath),
+            // Not every (model, quantization) pair is published on the mirror — surface a clear message instead of
+            // a raw 404. The partial temp is removed by the cleanup above, so the model stays "not downloaded".
+            mapError: ex => ex is HttpRequestException { StatusCode: HttpStatusCode.NotFound }
+                ? $"'{downloadModel}' is not available on the server. Try a different model or quantization."
+                : null);
     }).ObservesCanExecute(() => CanDownload);
 
-    public DelegateCommand CmdCancelDownloadModel => field ??= new(() =>
-    {
-        _cts?.Cancel();
-    });
+    public DelegateCommand CmdCancelDownloadModel => field ??= new(CancelActiveDownload);
 
     public DelegateCommand CmdDeleteModel => field ??= new DelegateCommand(() =>
     {
@@ -166,7 +116,6 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
                 File.Delete(deleteModel.ModelFilePath);
             }
 
-            // Update downloaded status
             deleteModel.Size = 0;
             OnDownloadStatusChanged();
 
@@ -178,25 +127,7 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
         }
     }).ObservesCanExecute(() => CanDelete);
 
-    public DelegateCommand CmdOpenFolder => field ??= new(() =>
-    {
-        if (!Directory.Exists(WhisperConfig.ModelsDirectory))
-            return;
-
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = WhisperConfig.ModelsDirectory,
-                UseShellExecute = true,
-                CreateNoWindow = true
-            });
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Failed to open folder: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    });
+    public DelegateCommand CmdOpenFolder => field ??= new(() => OpenFolderSafe(WhisperConfig.ModelsDirectory));
 
     private void OnDownloadStatusChanged()
     {
@@ -204,45 +135,5 @@ public class WhisperModelDownloadDialogVM : Bindable, IDialogAware
         OnPropertyChanged(nameof(CanDelete));
     }
 
-    private async Task<long> DownloadModelWithProgressAsync(WhisperCppModel model, string destinationPath, CancellationToken token)
-    {
-        DownloadedSize = 0;
-
-        await using Stream modelStream = await WhisperGgmlDownloader.Default.GetGgmlModelAsync(model.Model, model.Quantization, token);
-        await using FileStream fileWriter = File.OpenWrite(destinationPath);
-
-        byte[] buffer = new byte[1024 * 128];
-        int bytesRead;
-        long totalBytesRead = 0;
-
-        Stopwatch sw = new();
-        sw.Start();
-
-        while ((bytesRead = await modelStream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
-        {
-            await fileWriter.WriteAsync(buffer, 0, bytesRead, token);
-            totalBytesRead += bytesRead;
-
-            if (sw.Elapsed > TimeSpan.FromMilliseconds(50))
-            {
-                DownloadedSize = totalBytesRead;
-                sw.Restart();
-            }
-
-            token.ThrowIfCancellationRequested();
-        }
-
-        return totalBytesRead;
-    }
-
-    #region IDialogAware
-    public string Title { get; set => Set(ref field, value); } = $"Whisper Downloader - {App.Name}";
-    public double WindowWidth { get; set => Set(ref field, value); } = 400;
-    public double WindowHeight { get; set => Set(ref field, value); } = 200;
-
-    public bool CanCloseDialog() => !CmdDownloadModel.IsExecuting;
-    public void OnDialogClosed() { }
-    public void OnDialogOpened(IDialogParameters parameters) { }
-    public DialogCloseListener RequestClose { get; }
-    #endregion IDialogAware
+    public override bool CanCloseDialog() => !CmdDownloadModel.IsExecuting;
 }
