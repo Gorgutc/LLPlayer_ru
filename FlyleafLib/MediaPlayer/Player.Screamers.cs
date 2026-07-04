@@ -181,8 +181,9 @@ unsafe partial class Player
                 continue;
             }
 
-            // Support only ASR subtitle for audio
-            foreach (int i in SubtitlesASR.SubIndexSet)
+            // Support only ASR subtitle for audio. HC-37: enumerate a locked snapshot — SubIndexSet is mutated on
+            // the ASR worker under _lockerSubs, so a raw foreach here raced it (InvalidOperationException).
+            foreach (int i in SubtitlesASR.SnapshotSubIndexes())
             {
                 SubtitlesManager[i].SetCurrentTime(new TimeSpan(curTime));
 

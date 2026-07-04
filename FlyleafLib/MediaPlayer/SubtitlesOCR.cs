@@ -152,17 +152,17 @@ public unsafe class SubtitlesOCR
 
     public void TryCancelWait(int subIndex)
     {
-        if (_ctss[subIndex] != null)
-        {
-            // Cancel if preceding OCR is running
-            _ctss[subIndex]!.Cancel();
+        // Cancel the running OCR (if any) outside the lock, then wait for it to drain by taking the lock and
+        // compare-and-clear the slot (HC-37: capture the CTS locally so a concurrent teardown can't NRE it between
+        // the null-check and the deref, and a CTS freshly installed by Do() is not clobbered).
+        CancellationTokenSource? cts = CtsGuard.CancelCaptured(ref _ctss[subIndex]);
+        if (cts == null)
+            return;
 
-            // Wait until it is canceled by taking a lock
-            lock (_lockers[subIndex])
-            {
-                _ctss[subIndex]?.Dispose();
-                _ctss[subIndex] = null;
-            }
+        // Wait until it is canceled by taking a lock
+        lock (_lockers[subIndex])
+        {
+            CtsGuard.TryDisposeAndClear(ref _ctss[subIndex], cts);
         }
     }
 

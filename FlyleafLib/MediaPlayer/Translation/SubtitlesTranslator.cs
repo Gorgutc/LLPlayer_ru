@@ -266,18 +266,20 @@ public class SubTranslator
             // Anchor the window to the playhead: translate up to countForward subtitles ahead and
             // countBackward behind. Previously `end` was anchored to `start`, so countBackward ate into
             // the forward budget (and could even push end before the current subtitle).
+            // HC-37: snapshot the cues under the subs-lock once. Reading _subManager.Subs.Count / Subs[i] live off
+            // this background task races the ASR consumer's Add/Clear (torn read / IndexOutOfRange). SnapshotSubs
+            // shares the references, so the translation write-back below still targets the live cue.
+            List<SubtitleData> subs = _subManager.SnapshotSubs();
             int start = Math.Max(0, currentIndex - countBackward);
-            int end = Math.Min(currentIndex + countForward, _subManager.Subs.Count - 1);
+            int end = Math.Min(currentIndex + countForward, subs.Count - 1);
 
             List<SubtitleData> translateSubs = new();
             for (int i = start; i <= end; i++)
             {
                 if (token.IsCancellationRequested)
                     break;
-                if (i >= _subManager.Subs.Count)
-                    break;
 
-                var sub = _subManager.Subs[i];
+                var sub = subs[i];
                 if (!sub.IsTranslated && !string.IsNullOrEmpty(sub.Text))
                 {
                     translateSubs.Add(sub);
