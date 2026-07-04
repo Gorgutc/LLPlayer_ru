@@ -20,6 +20,10 @@ public sealed class DubbingRenderer : IDubbingRenderer
     private readonly bool _mock;
     private readonly DubSidecarHost.DubbingSnapshot _sidecarSnapshot;
     private readonly SemaphoreSlim _hostGate = new(1, 1);
+    // HC-43: outputs whose assemble was canceled/failed may still materialize after the fact (the sidecar's
+    // os.replace lands after the HTTP request is cancelled). Re-cleaned at the next render of the same target and in
+    // DisposeAsync (once the sidecar is reaped).
+    private readonly DubOrphanCleanup _orphans = new();
     private DubSidecarHost? _host;
     private bool _disposed;
 
@@ -50,6 +54,10 @@ public sealed class DubbingRenderer : IDubbingRenderer
         ArgumentNullException.ThrowIfNull(translatedSubtitles);
         ArgumentException.ThrowIfNullOrWhiteSpace(mediaPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+
+        // HC-43: if a prior render of this same target was canceled, an orphaned dub may have landed after the fact —
+        // delete it before we (re)render, and forget the record so a fresh success is not re-cleaned on dispose.
+        _orphans.ClearAndClean(outputPath, TryDeleteOutput);
 
         List<DubbingLine> lines = BuildLines(translatedSubtitles);
         if (lines.Count == 0)
@@ -98,9 +106,12 @@ public sealed class DubbingRenderer : IDubbingRenderer
         catch
         {
             // The sidecar writes the final atomically (no truncated file), but a cancel can still leave a
-            // complete-but-unwanted dub. Don't leave anything that a later run / the auto-loader would treat
-            // as a valid track. Best-effort delete, then rethrow so the caller marks the job Canceled/Failed.
+            // complete-but-unwanted dub. Best-effort delete now; but the sidecar's os.replace can land AFTER this
+            // (the HTTP cancel doesn't stop the worker), so also record the target (HC-43) for a reliable re-clean at
+            // the next render of this file and in DisposeAsync, once the sidecar is reaped. Rethrow so the caller
+            // marks the job Canceled/Failed.
             TryDeleteOutput(outputPath);
+            _orphans.MarkCanceled(outputPath);
             throw;
         }
     }
@@ -122,6 +133,11 @@ public sealed class DubbingRenderer : IDubbingRenderer
                 await _host.DisposeAsync().ConfigureAwait(false);
                 _host = null;
             }
+
+            // HC-43: the sidecar process is now reaped (DubSidecarHost.DisposeAsync waits for exit / kills the tree),
+            // so any orphaned dub from a canceled render has finished landing. Re-delete the recorded targets — this
+            // is the reliable catch the immediate in-catch delete can miss.
+            _orphans.CleanAll(TryDeleteOutput);
         }
         finally
         {
