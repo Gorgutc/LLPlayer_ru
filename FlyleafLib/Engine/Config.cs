@@ -148,7 +148,7 @@ public class Config : NotifyPropertyChanged
         if (Video.player != null && Video.player.Renderer != null)
             Video.player.Renderer.SyncFilters();
 
-        File.WriteAllText(path, JsonSerializer.Serialize(this, jsonOptions));
+        AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, jsonOptions));
     }
 
     internal void UpdateDefault()
@@ -1785,7 +1785,7 @@ public class EngineConfig
 
         jsonOptions ??= Config.jsonOpts;
 
-        File.WriteAllText(path, JsonSerializer.Serialize(this, jsonOptions));
+        AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, jsonOptions));
     }
 }
 

@@ -75,7 +75,7 @@ public class AppConfig : Bindable
     public void Save(string path)
     {
         Version = App.Version;
-        File.WriteAllText(path, JsonSerializer.Serialize(this, GetJsonSerializerOptions()));
+        AtomicFile.WriteAllText(path, JsonSerializer.Serialize(this, GetJsonSerializerOptions()));
 
         Subs.SaveAfter();
     }
