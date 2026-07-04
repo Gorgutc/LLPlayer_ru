@@ -714,6 +714,7 @@ public unsafe partial class DecoderContext : PluginHandler
         Stop();
         Interrupt = true;
         VideoDecoder.Renderer?.Dispose();
+        SubtitlesOCR?.Dispose(); // HC-36: free the per-track native OCR engines held for reuse
         base.Dispose();
     }
 
