@@ -41,7 +41,18 @@ public class SubtitlesASR
     private readonly Lock _locker = new();
     private readonly Lock _lockerSubs = new();
     private CancellationTokenSource? _cts = null;
-    public HashSet<int> SubIndexSet { get; } = new();
+    // Guarded by _lockerSubs (HC-37). Private so no consumer can enumerate it without the lock; external readers
+    // (e.g. the audio screamer) use SnapshotSubIndexes().
+    private readonly HashSet<int> SubIndexSet = new();
+
+    /// <summary>A thread-safe snapshot of the currently-active ASR sub-indexes, taken under <c>_lockerSubs</c>.</summary>
+    public int[] SnapshotSubIndexes()
+    {
+        lock (_lockerSubs)
+        {
+            return SubIndexSet.ToArray();
+        }
+    }
 
     private readonly LogHandler Log;
 
@@ -163,21 +174,30 @@ public class SubtitlesASR
     /// <returns>true: process completed, false: run in progress</returns>
     public bool Execute(int subIndex, string url, int streamIndex, MediaType type, TimeSpan curTime)
     {
-        // When Dual ASR: Copy the other ASR result and return early
-        if (SubIndexSet.Count > 0 && !SubIndexSet.Contains(subIndex))
+        // When Dual ASR: Copy the other ASR result and return early. HC-37: read SubIndexSet under _lockerSubs
+        // (every mutation uses it) instead of racing the raw HashSet.
+        bool copyFromOtherAsr;
+        lock (_lockerSubs)
+        {
+            copyFromOtherAsr = SubIndexSet.Count > 0 && !SubIndexSet.Contains(subIndex);
+        }
+        if (copyFromOtherAsr)
         {
             lock (_lockerSubs)
             {
                 SubIndexSet.Add(subIndex);
                 int otherIndex = (subIndex + 1) % 2;
 
-                if (_subtitlesManager[otherIndex].Subs.Count > 0)
+                // HC-37: snapshot the other track's cues under its own _subsLocker (SnapshotSubs) rather than
+                // enumerating its live Subs while that track's ASR may still be appending.
+                List<SubtitleData> otherSubs = _subtitlesManager[otherIndex].SnapshotSubs();
+                if (otherSubs.Count > 0)
                 {
                     bool enableTranslated = _config.Subtitles[subIndex].EnabledTranslated;
 
                     // Copy other ASR result
                     _subtitlesManager[subIndex]
-                        .Load(_subtitlesManager[otherIndex].Subs.Select(s =>
+                        .Load(otherSubs.Select(s =>
                         {
                             SubtitleData clone = s.Clone();
 
@@ -203,16 +223,24 @@ public class SubtitlesASR
         }
 
         // If it has already been executed, cancel it to start over from the current playback position.
-        if (SubIndexSet.Contains(subIndex))
+        bool alreadyRunning;
+        lock (_lockerSubs)
+        {
+            alreadyRunning = SubIndexSet.Contains(subIndex);
+        }
+        if (alreadyRunning)
         {
             Dictionary<int, List<SubtitleData>> prevSubs = new();
-            HashSet<int> prevSubIndexSet = [.. SubIndexSet];
+            HashSet<int> prevSubIndexSet;
             lock (_lockerSubs)
             {
-                // backup current result
+                // HC-37: snapshot the active set and back up each track's cues under the lock. The raw
+                // `[.. SubIndexSet]` copy raced concurrent mutation, and `.Subs.ToList()` read each SubManager's
+                // Subs off its own _subsLocker; SnapshotSubs takes that lock (HC-18 contract).
+                prevSubIndexSet = [.. SubIndexSet];
                 foreach (int i in SubIndexSet)
                 {
-                    prevSubs[i] = _subtitlesManager[i].Subs.ToList();
+                    prevSubs[i] = _subtitlesManager[i].SnapshotSubs();
                 }
             }
             // Cancel preceding execution and wait
@@ -234,7 +262,12 @@ public class SubtitlesASR
 
         lock (_locker)
         {
-            SubIndexSet.Add(subIndex);
+            // HC-37: SubIndexSet is guarded by _lockerSubs everywhere else; add under it here too (was _locker),
+            // keeping the established _locker -> _lockerSubs nesting order.
+            lock (_lockerSubs)
+            {
+                SubIndexSet.Add(subIndex);
+            }
 
             // UI status flag (e.g. the ASR chip): true only while actively transcribing. Reset in the
             // finally below so it always clears on completion, cancellation, or error.
@@ -325,9 +358,11 @@ public class SubtitlesASR
                 _config.Subtitles.player.RaiseASRCompleted();
             }
 
-            foreach (int i in SubIndexSet)
+            // HC-37: hold _lockerSubs across the whole enumeration instead of an unlocked foreach with a
+            // per-iteration lock inside (which raced concurrent SubIndexSet mutation -> InvalidOperationException).
+            lock (_lockerSubs)
             {
-                lock (_lockerSubs)
+                foreach (int i in SubIndexSet)
                 {
                     // Stop spinner (required when dual ASR)
                     _subtitlesManager[i].StartLoading().Dispose();
@@ -388,19 +423,19 @@ public class SubtitlesASR
 
     public void Reset(int subIndex)
     {
-        if (!SubIndexSet.Contains(subIndex))
-            return;
-
-        if (SubIndexSet.Count == 2)
+        // HC-37: read and mutate SubIndexSet under _lockerSubs (the Contains/Count checks were unlocked).
+        lock (_lockerSubs)
         {
-            lock (_lockerSubs)
+            if (!SubIndexSet.Contains(subIndex))
+                return;
+
+            if (SubIndexSet.Count == 2)
             {
                 // When Dual ASR: only the state is cleared without stopping ASR execution.
                 SubIndexSet.Remove(subIndex);
                 _subtitlesManager[subIndex].Clear();
+                return;
             }
-
-            return;
         }
 
         // cancel asynchronously as it takes time to cancel.

@@ -627,17 +627,17 @@ public class SubManager : INotifyPropertyChanged
 
     public void TryCancelWait()
     {
-        if (_cts != null)
+        // If it has already been executed, cancel it and wait until the preceding process is finished (it waits
+        // because it takes the lock). HC-37: capture+cancel the CTS locally outside the lock, then compare-and-clear
+        // under the lock so a concurrent teardown can't NRE/double-dispose and a freshly-installed CTS isn't clobbered.
+        CancellationTokenSource? cts = CtsGuard.CancelCaptured(ref _cts);
+        if (cts == null)
+            return;
+
+        lock (_locker)
         {
-            // If it has already been executed, cancel it and wait until the preceding process is finished.
-            // (It waits because it has a lock)
-            _cts.Cancel();
-            lock (_locker)
-            {
-                // dispose after it is no longer used.
-                _cts.Dispose();
-                _cts = null;
-            }
+            // dispose after it is no longer used.
+            CtsGuard.TryDisposeAndClear(ref _cts, cts);
         }
     }
 
