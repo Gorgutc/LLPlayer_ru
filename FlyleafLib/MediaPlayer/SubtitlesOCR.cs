@@ -18,13 +18,15 @@ namespace FlyleafLib.MediaPlayer;
 
 #nullable enable
 
-public unsafe class SubtitlesOCR
+public unsafe class SubtitlesOCR : IDisposable
 {
     private readonly Config.SubtitlesConfig _config;
 
     private readonly CancellationTokenSource?[] _ctss;
     private readonly object[] _lockers;
-    private IOCRService? _ocrService;
+    // HC-36: one engine PER sub-track (was a single shared field, which leaked the native Tesseract engine on
+    // re-init and let the secondary track clobber the primary's engine). Each slot is guarded by _lockers[subIndex].
+    private readonly OcrEngineSlots _engines;
 
     public SubtitlesOCR(Config.SubtitlesConfig config, int subNum)
     {
@@ -32,6 +34,7 @@ public unsafe class SubtitlesOCR
 
         _lockers = new object[subNum];
         _ctss = new CancellationTokenSource[subNum];
+        _engines = new OcrEngineSlots(subNum);
         for (int i = 0; i < subNum; i++)
         {
             _lockers[i] = new object();
@@ -49,7 +52,6 @@ public unsafe class SubtitlesOCR
     {
         lang = GetLanguageWithFallback(subIndex, lang);
 
-        // Retaining engines will increase memory usage, so they are created and discarded on the fly.
         IOCRService ocrService = _config[subIndex].OCREngine switch
         {
             SubOCREngineType.Tesseract => new TesseractOCRService(_config),
@@ -59,10 +61,19 @@ public unsafe class SubtitlesOCR
 
         if (!ocrService.TryInitialize(lang, out err))
         {
+            // Dispose the just-built engine that failed to initialize and keep the track's existing slot untouched.
+            ocrService.Dispose();
             return false;
         }
 
-        _ocrService = ocrService;
+        // HC-36: cancel any OCR still running on this track (bounds the wait), then install the new engine into this
+        // track's slot under its lock and dispose the previous one — instead of overwriting a shared field and
+        // leaking the old native engine. Do() reads/uses the engine under the same lock, so no use-after-dispose.
+        TryCancelWait(subIndex);
+        lock (_lockers[subIndex])
+        {
+            _engines.Install(subIndex, ocrService);
+        }
 
         err = "";
         return true;
@@ -76,9 +87,6 @@ public unsafe class SubtitlesOCR
     /// <param name="startTime">Timestamp to start OCR</param>
     public void Do(int subIndex, List<SubtitleData> subs, TimeSpan? startTime = null)
     {
-        if (_ocrService == null)
-            throw new InvalidOperationException("ocrService is not initialized. you must call TryInitialize() first");
-
         if (subs.Count == 0 || !subs[0].IsBitmap)
             return;
 
@@ -87,8 +95,12 @@ public unsafe class SubtitlesOCR
 
         lock (_lockers[subIndex])
         {
-            // NOTE: important to dispose inside lock
-            using IOCRService ocrService = _ocrService;
+            // HC-36: the engine is owned by its per-track slot and REUSED across Do() calls (a sub reload/refresh
+            // re-runs Do without a paired TryInitialize). Read it under the lock (serialized with TryInitialize's
+            // Install+dispose) and do NOT dispose it here — disposing the shared engine per Do was the use-after-dispose.
+            IOCRService? ocrService = _engines.Get(subIndex);
+            if (ocrService == null)
+                throw new InvalidOperationException("ocrService is not initialized. you must call TryInitialize() first");
 
             _ctss[subIndex] = new CancellationTokenSource();
 
@@ -239,6 +251,23 @@ public unsafe class SubtitlesOCR
     public void Reset(int subIndex)
     {
         TryCancelWait(subIndex);
+    }
+
+    /// <summary>
+    /// HC-36: frees the per-track OCR engines held for reuse across Do() calls. Called from
+    /// <c>DecoderContext.Dispose()</c> on teardown — otherwise a resident engine (with its native model, tens of MB
+    /// for CJK) would live until the next TryInitialize. Idempotent.
+    /// </summary>
+    public void Dispose()
+    {
+        for (int subIndex = 0; subIndex < _lockers.Length; subIndex++)
+        {
+            TryCancelWait(subIndex);
+            lock (_lockers[subIndex])
+            {
+                _engines.Clear(subIndex);
+            }
+        }
     }
 }
 
