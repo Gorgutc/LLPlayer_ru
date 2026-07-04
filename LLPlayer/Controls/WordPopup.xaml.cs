@@ -134,6 +134,20 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
     private void Clear()
     {
+        // Clear() disposes the translation/definition services and resets WPF UI (DefinitionText/DefinitionVisible),
+        // but it can be reached off the UI thread: SubManager raises PropertyChanged(Language) on the BACKGROUND
+        // subtitle-load thread — SubManager.Open sets LanguageSource on the first cue inside SubtitleReader.ReadAll,
+        // which runs on a ThreadPool worker (Subtitle.Load). A direct DependencyObject touch there throws
+        // "The calling thread cannot access this object because a different thread owns it" and aborts the whole
+        // subtitle load (so the subtitles never appear). Marshal to the Dispatcher; UI-thread callers (settings /
+        // chat-config changes, word-translate config-error) still run synchronously as before, while off-thread
+        // callers get an asynchronous reset (a future off-thread caller must not rely on Clear() finishing inline).
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(Clear));
+            return;
+        }
+
         _translateService?.Dispose();
         _translateService = null;
         // clear cache
