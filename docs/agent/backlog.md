@@ -150,6 +150,25 @@ HttpClient.Timeout of 60 [seconds]». Владелец гоняет перево
 **Рассуждение:** мелкий, но юзер уже упирается; перевод через reasoning будет всё популярнее → дефолт должен
 это учитывать. Сделать аккуратно (не сломать детект «cancel vs timeout», см. DeepLX/Microsoft `:101/:173`).
 
+### B-05 — Cross-thread краш загрузки субтитров: `WordPopup.Clear()` трогает WPF UI на worker-потоке 🔴 ⓢ · ✅ **DONE (v0.3.56, 2026-07-04, сессия #32)** · был NEW (скриншот владельца, P0)
+> ✅ **Закрыт.** Гард `Dispatcher.CheckAccess()` в начале `WordPopup.Clear()` ([`LLPlayer/Controls/WordPopup.xaml.cs:135`](../../LLPlayer/Controls/WordPopup.xaml.cs)):
+> при вызове не с UI-потока — `Dispatcher.BeginInvoke(new Action(Clear))` + return; UI-поточные вызовы (settings/chat-config/word-translate-config-error)
+> идут синхронно как раньше. Защищает ВСЕ вызовы `Clear()` (и будущие). App-слой, FlyleafLib (frozen) НЕ тронут — в духе frozen
+> `media-runtime-contract` §«WPF Dispatcher Boundaries» (не удалять маршалинг, держать UI-thread границы).
+**Симптом (скриншот владельца, v0.3.55):** диалог «Subtitles Unknown Error → Cannot load all subtitles on worker thread:
+The calling thread cannot access this object because a different thread owns it». Субтитры (в т.ч. свежесделанные ASR+переведённые)
+не подхватываются — загрузка падает.
+**Корневая причина:** `SubManager.Open` (`SubtitlesManager.cs:520`) на ПЕРВОЙ реплике внутри `SubtitleReader.ReadAll` выставляет
+`LanguageSource = lang`; `Subtitle.Load()` (`Subtitles.cs:625`) идёт на ThreadPool-воркере. Setter `LanguageSource` шлёт
+`OnPropertyChanged(nameof(Language))` (`:114/:674`) синхронно → `WeakEventManager` доставляет `WordPopup.SubManagerOnPropertyChanged`
+(`:116`) на ТОМ ЖЕ воркере → `Clear()` трогает `DefinitionText.Text` (`DependencyObject`, `:151`) не с UI-потока → `InvalidOperationException`,
+вся загрузка субтитров фейлится (`Subtitles.cs:620` `RaiseUnknownErrorOccurred`).
+**Регрессия (git blame):** подписка `SubManagerOnPropertyChanged → Clear()` и `LanguageSource = lang` — старые (upstream). Краш ВНЁС
+**F-11** (`35320b8`, PR #82, v0.3.25): добавил `DefinitionVisible=false; DefinitionText.Text=""` в `Clear()` — до этого `Clear()` на
+воркере трогал только не-UI кэши (безвредно). Латентный с v0.3.25.
+**Тест:** LLPlayer без тест-проекта; WPF cross-thread не юнит-тестируется без STA-UI-потока → гейты build 0/0 + полный набор 1316
+(без регрессий) + manual-smoke владельца (загрузить переведённый `.ru.srt` → без краша, субтитры появляются).
+
 ---
 
 ## 2. 🎯 ФИЧИ / ТРЕКИ (приоритизированный roadmap из конкурентного анализа + upstream)
