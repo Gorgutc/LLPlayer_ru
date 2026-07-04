@@ -841,8 +841,12 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 > не копирует `FFmpeg/` → `Copy-Item`, `py -3`). Frozen build-target и пин CI-SDK в `dependency-baseline.md` не тронуты.
 > verify-fast green.
 
-### T-12 — Timeout-headroom для `LiteLLM`/`OpenAILike` (follow-up B-04) 🟡 ⓢ-Ⓜ · TODO (нужен sign-off владельца)
+### T-12 — Timeout-headroom для `LiteLLM`/`OpenAILike` (follow-up B-04) 🟡 ⓢ-Ⓜ · ✅ DONE (v0.3.55, сессия #31, owner sign-off: Option A — фикс 180000)
 > Вынесено из заметки внутри закрытого B-04 (сверка #17 дала свой ID против «потери следа»).
+> ✅ **Сделано (v0.3.55, сессия #31):** `LiteLLMTranslateSettings`/`OpenAILikeTranslateSettings` ctors → `TimeoutMs = 180000`
+> (зеркало Ollama/LMStudio/KoboldCpp); version-gated миграция `Config.MigrateOpenAiLikeTimeoutDefault` (`<= 0.3.54`, one-shot)
+> бампит persisted `15000 → 180000` ТОЛЬКО для этих двух типов; явное значение пользователя сохраняется; облачный `OpenAI`/`Claude`
+> вне скоупа (остаются `15000`). Option A (фикс, БЕЗ localhost-эвристики). +5 тестов; `config-data-contract.md` обновлён. Gates 0/0×2 + 1316.
 **Проблема:** дефолт локальных LLM подняли до `180000` (B-04, PR #51), но `LiteLLM`/`OpenAILike` остались на базовом
 `15000` — их endpoint может быть облачным, поэтому не поднимали автоматически.
 **Файлы:** [`ITranslateSettings.cs`](../../FlyleafLib/MediaPlayer/Translation/Services/ITranslateSettings.cs) (дефолты
@@ -1378,13 +1382,19 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     (`TranslationCueRulesTests`). Гейты **0/0 ×2** + **1283/1283** + verify.ps1; adversarial-ревью — **0 находок**.
     ⚠️ **уточнение путей (верифиц. сессией #27):** интерактив = `FlyleafLib/MediaPlayer/Translation/SubtitlesTranslator.cs`
     (класс `SubTranslator`), строки `:418/:371/:382` (сдвиг +2 после мёржа HC-37 vs исходные `:416/:372/:380`).
-- **HC-43 — Отмена рендера дубляжа гоняется с in-flight `assemble` сайдкара 🟢 Ⓜ · `FlyleafLib/MediaPlayer/Dubbing/DubbingRenderer.cs:103`**
+- **HC-43 — Отмена рендера дубляжа гоняется с in-flight `assemble` сайдкара 🟢 Ⓜ · `FlyleafLib/MediaPlayer/Dubbing/DubbingRenderer.cs:103`** · ✅ **DONE (v0.3.55, 2026-07-04, сессия #31, owner-decision: C#-митигейшн)**
   - Проблема: отмена HTTP-POST `/assemble` не останавливает python-поток — он дописывает `os.replace(output)` позже
     (~5с окно). C# в catch делает `TryDeleteOutput` (файла ещё нет) → «нежеланный» дубляж материализуется ПОСЛЕ →
     следующий запуск пропускает рендер (`DubExistsAnyFormat`), auto-loader цепляет его.
   - Решение: удалять output не сразу, а после гарантированной остановки сборки (cancel-endpoint/поколение запроса в
     сайдкаре, либо повторная зачистка в `DisposeAsync` и в начале следующего рендера того же файла).
   - Зачем: отменённый дубляж «оживает» и ломает последующие прогоны.
+  - ✅ **Сделано (v0.3.55, сессия #31, C#-only — HTTP-контракт сайдкара НЕ тронут):** новый чистый
+    `FlyleafLib/MediaPlayer/Dubbing/DubOrphanCleanup.cs` (`MarkCanceled`/`ClearAndClean`/`CleanAll`) в `DubbingRenderer`:
+    на cancel — записать target (после немедленного `TryDeleteOutput`); повторная зачистка в начале след. рендера того же
+    файла (forget-before-success, чтобы не снести свежий хороший дубляж) + в `DisposeAsync` ПОСЛЕ `host.DisposeAsync()`
+    (сайдкар-процесс реапнут → осиротевший файл гарантированно долетел). Сужает окно без cancel-endpoint (полный фикс с
+    HTTP-контрактом отложен). +7 тестов (`DubOrphanCleanupTests`, RED-without-fix). Wiring рендерера = manual-smoke владельца.
 
 ### 8c. Ⓛ Крупные (тир 3) — архитектурный рефакторинг
 

@@ -600,6 +600,15 @@ public class OpenAITranslateSettings : OpenAIBaseTranslateSettings
 
 public class OpenAILikeTranslateSettings : OpenAIBaseTranslateSettings
 {
+    public OpenAILikeTranslateSettings()
+    {
+        // T-12: an OpenAI-compatible endpoint commonly fronts a slow local reasoning model; the inherited 15s
+        // default cancels the request mid-thought ("The request was canceled due to the configured HttpClient.Timeout
+        // of 15 seconds"). 180s matches the local backends' headroom. Editable in Settings ▸ Translate; existing
+        // configs are migrated once.
+        TimeoutMs = 180000;
+    }
+
     [JsonIgnore]
     public override TranslateServiceType ServiceType => TranslateServiceType.OpenAILike;
     [JsonIgnore]
@@ -677,6 +686,14 @@ public class ClaudeTranslateSettings : OpenAIBaseTranslateSettings
 
 public class LiteLLMTranslateSettings : OpenAIBaseTranslateSettings
 {
+    public LiteLLMTranslateSettings()
+    {
+        // T-12: the LiteLLM proxy defaults to localhost and routes to models that can "think" past 15s; the inherited
+        // 15s default cancels the request mid-thought. 180s matches the local backends' headroom. Editable in
+        // Settings ▸ Translate; existing configs are migrated once.
+        TimeoutMs = 180000;
+    }
+
     [JsonIgnore]
     public override TranslateServiceType ServiceType => TranslateServiceType.LiteLLM;
     [JsonIgnore]
