@@ -310,6 +310,61 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Рассуждение:** (3) — самый надёжный, не зависит от поведения движка; (1) проверить первым (может, мы сами
 включили XXL-флаг). F-17+F-18 имеют общий рычаг (initial_prompt) → разумно делать вместе.
 
+### F-19 — Speech-aware ре-сегментация (тайминг субтитров под речь) 🟠 Ⓜ · TODO (владелец выбрал СРЕЗ 1 + СРЕЗ 2, сессия #34, 2026-07-05)
+> **Заявка владельца (2026-07-05):** после перевода локальной моделью субтитры местами «очень быстро переключаются и не
+> совпадают с речью», потом снова нормально. Идея владельца — сопоставить исходные+переведённые субтитры со звуковой
+> дорожкой и подгонять переведённые точно под речь говорящего (forced alignment).
+> **Диагноз (многоагентная верификация, сессия #34 — тройно подтверждён grep+Летописец+diag+verify-агенты):** корень НЕ
+> перевод, а РЕ-СЕГМЕНТАЦИЯ. `SubtitleSegmenter.Resegment` при разбиении длинной cue делит время СТРОГО ПО ДОЛЕ СИМВОЛОВ
+> ([`SubtitleSegmenter.cs:114-116`](../../FlyleafLib/Utils/SubtitleSegmenter.cs): `cueEnd = start + spanTicks*consumed/totalChars`,
+> комментарий «Redistribute time by character proportion»), неявно предполагая постоянный темп речи. Настоящих word-level
+> таймингов в конвейере НЕТ ни на одном пути: whisper.cpp выбрасывает `result.Tokens` (наружу только сегментные Start/End),
+> faster-whisper парсится по СЕГМЕНТНЫМ srt-таймкодам stdout БЕЗ `--word_timestamps`. Перевод тайминг наследует 1:1
+> ([`SubtitlesTranslator.cs:382-383`](../../FlyleafLib/MediaPlayer/Translation/SubtitlesTranslator.cs) пишет только
+> `TranslatedText`; `TranslationCueRules.PostProcess` только переносит строки). «Местами быстро, местами нормально» =
+> fast-path (cue влезает `FitsAsIs`+≤7с → тайминг=речь) vs split (внутренние границы синтетические; внешние `first.Start==start`,
+> `last.End==end` уже корректны). **Дубля НЕТ:** F-08 = ручной глобальный сдвиг (DONE v0.3.17), F-12-waveform = только визуализация.
+> **Решение владельца (AskUserQuestion, сессия #34):** СРЕЗ 1 + СРЕЗ 2; мелькание на **ASR-сгенерированных** субтитрах; движок =
+> **faster-whisper (внешний XXL)**.
+> **Файлы:** [`SubtitlesASR.cs`](../../FlyleafLib/MediaPlayer/SubtitlesASR.cs) (BuildCommand `:1460-1531`; Do-цикл/stdout-парсер
+> `:1632-1815`; модель `SubtitleASRData` `:1818-1835`; регексы `SubShortReg`/`SubLongReg` `:1445-1450`), `SubtitleSegmenter.cs`
+> (Resegment `:68-130`, распределение времени `:102-122`, `MergeTooShort` `:486-518`), 3 сайта вызова Resegment
+> (`SubtitlesASR.cs:308`, `Batch/BatchAsrTranscriber.cs:136`, `SubtitlesManager.cs:597`).
+>
+> **СРЕЗ 1 — word-timestamp-driven Resegment (faster-whisper JSON). Ⓜ, CPU, 0 новых зависимостей/лицензий.**
+> Верифицировано по первоисточникам (Purfview changelog + faster-whisper dataclass'ы): `--word_timestamps True` +
+> `--output_format srt json` пишут ОБА файла за прогон (r194.1); JSON = ФАЙЛ `<basename>.json` в `--output_dir` (НЕ stdout),
+> схема `segments[].words[]={start,end,word,probability}` стабильна; **`--sentence` НЕ затрагивает json (r194.2)** → format-риск
+> снят. План: (1) BuildCommand: `--word_timestamps True` + расширить `--output_format` до `srt json` (под гейтом-тумблером; дефолт
+> можно byte-identical/opt-in); (2) в `Do()` ПОСЛЕ прогона читать `<basename>.json` (сейчас srt-файл удаляется неиспользованным
+> `:1810-1812` — json читать так же, чистить в finally), парсить words[]; **stdout-SRT-парсер НЕ трогать** → byte-identical,
+> регексы не сломать по построению; (3) добавить `Words` в модель (`SubtitleASRData`/yield-tuple; word-тайминги +`chunk.Start`
+> как у cue); (4) прокинуть words в `Resegment` (ИЗМЕНЕНИЕ СИГНАТУРЫ) — при split границы под-cue по РЕАЛЬНЫМ словам вместо
+> формулы `:116`; char-proportional = fallback (нет words → byte-identical для батч/loaded); учесть взаимодействие с
+> `MergeTooShort` (порог `MinCueDurationSec=1.0` всё ещё держит сливеры → «устраняет артефакт символьной пропорции», НЕ
+> «гарантирует отсутствие мелькания»). Логику резки-по-словам — в internal seam FlyleafLib под RED-тесты (whisper native — на
+> owner-smoke). Точность DTW ~100-400мс, хуже на музыке → отсюда ценность среза 2. whisper.cpp (токены уже в Whisper.net
+> `SegmentData.Tokens[].Start/End`, единицы = сантисекунды ×10мс, `WithTokenTimestamps()`) — опц. под-срез позже.
+>
+> **СРЕЗ 2 — Silero VAD-snapping границ (CPU/ONNX). Ⓜ, движко-независимый; страховка там, где DTW дрейфует (музыка).**
+> Верифицировано: официальный C#-пример `snakers4/silero-vad/examples/csharp` (MIT — вендорить легально), модель ~1.23-2.2МБ
+> ONNX, CPU через `Microsoft.ML.OnnxRuntime` (MIT, +10-15МБ нативных бинарников). ⚠️ вход = float32 (÷32768) кадрами РОВНО по
+> **512 сэмплов** @16k → `S16MonoResampler` даёт верные rate/каналы, но нужен адаптер S16→float32+framing. План: вендорить 3-4
+> `.cs` (выкинуть NAudio, подключить наш `OfflineDemuxer`/`S16MonoResampler`), snap Start/End cue к ближайшей границе речь/тишина
+> + не показывать текст в паузах — единый seam в Resegment покрывает все 3 ASR-сайта. GPU-lease не трогает → не конкурирует с
+> F-03/F-16/F-02. Effort **M** (пример, не NuGet → сопровождать форк вручную; правка publish-скрипта под native ORT DLL).
+>
+> **ТИР 3 (ОТЛОЖЕН) — полный forced-alignment сайдкар (WhisperX/CTC) для ВНЕШНИХ загруженных .srt.** XL; ⚠️ GPU-конкуренция
+> (НЕТ GPU-lease примитива — только 2 dub-scoped семафора); ⚠️ дефолтные веса ctc-forced-aligner/MMS = **CC-BY-NC 4.0 →
+> НЕСОВМЕСТИМО с GPL-3.0**, обязательна замена на Apache-2.0 `jonatasgrosman/wav2vec2-large-xlsr-53-<lang>` (подтверждено);
+> aeneas/whisper-timestamped = AGPL → только изолированным сайдкаром + явное owner OK. Семантика: align к языку АУДИО (не RU) →
+> тайминг проецируется на перевод. Брать только если владелец грузит внешние .srt ИЛИ появится GPU-lease (тогда синергия с F-03).
+>
+> **⚠️ Frozen-гейт (Conventions 🔒 + Летописец сессии #34):** тайминг субтитров = зона `media-runtime-contract.md` +
+> `product-behavior-contract.md`; замена char-proportional поведения — с owner sign-off (получен через AskUserQuestion) +
+> синхронизацией ОБОИХ контрактов в PR среза. `*.cs` = utf-8-BOM (гейт Conventions). Детали: второй мозг
+> `Sessions/2026-07-05-session-34-*`, авто-память `llplayer-v0358-session34-f19-subtitle-sync-research.md`.
+
 ### F-04 — ASR pause/resume 🟠 Ⓜ · ✅ **DONE (PR #65, merge `f6c7625`, v0.3.17, 2026-06-27)** · (upstream Roadmap «Now»)
 > ✅ **Закрыт по плану ниже.** Новый чистый тестируемый `FlyleafLib/Utils/PauseTokenSource.cs` (`PauseTokenSource`+`PauseToken`
 > struct) — async-гейт, не блокирует тред, cancellation-aware (не мутирует shared TCS на отмене), thread-safe (Interlocked CAS);
