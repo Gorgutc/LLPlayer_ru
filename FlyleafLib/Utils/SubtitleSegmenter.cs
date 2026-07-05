@@ -30,6 +30,14 @@ public sealed class SubtitleSegmentOptions
 }
 
 /// <summary>
+/// A single word's timing from the ASR engine (faster-whisper <c>--word_timestamps</c>, F-19). Used to place
+/// re-segmentation cue boundaries on real word/speech times instead of by character proportion, so the split
+/// cues follow the actual speaking pace. <see cref="Start"/>/<see cref="End"/> are in the same time frame as
+/// the cue's own start/end passed to <see cref="SubtitleSegmenter.Resegment"/> (absolute media time).
+/// </summary>
+public readonly record struct WordTiming(string Word, TimeSpan Start, TimeSpan End);
+
+/// <summary>
 /// Re-segments and line-wraps ASR/translation subtitle text so a cue is at most <c>MaxLinesPerCue</c> lines
 /// of about <c>MaxCharsPerLine</c> characters (the industry/Netflix norm: 2 lines, ~42 chars), splitting an
 /// over-long cue into several sequential cues and redistributing the time proportionally. Pure / static /
@@ -62,11 +70,14 @@ public static class SubtitleSegmenter
 
     /// <summary>
     /// Split <paramref name="text"/> spanning [<paramref name="start"/>, <paramref name="end"/>] into one or
-    /// more cues, each wrapped to at most <see cref="SubtitleSegmentOptions.MaxLinesPerCue"/> lines, with times
-    /// redistributed by character proportion. Returns at least one cue and never loses text.
+    /// more cues, each wrapped to at most <see cref="SubtitleSegmentOptions.MaxLinesPerCue"/> lines. When
+    /// <paramref name="words"/> is supplied (F-19), each internal cue boundary is placed on the end of the word
+    /// nearest that boundary so the cue times follow real speech pace; otherwise times are redistributed by
+    /// character proportion (unchanged). Returns at least one cue and never loses text.
     /// </summary>
     public static List<(string Text, TimeSpan Start, TimeSpan End)> Resegment(
-        string text, TimeSpan start, TimeSpan end, SubtitleSegmentOptions opt)
+        string text, TimeSpan start, TimeSpan end, SubtitleSegmentOptions opt,
+        IReadOnlyList<WordTiming>? words = null)
     {
         if (end < start)
             end = start;
@@ -99,11 +110,16 @@ public static class SubtitleSegmenter
         if (pieces.Count == 0)
             return [(Wrap(norm, perLine, maxLines), start, end)];
 
-        // Redistribute time by character proportion (no gaps/overlaps; first.Start==start, last.End==end).
+        // Redistribute time across the pieces (no gaps/overlaps; first.Start==start, last.End==end). With
+        // word-level timings (F-19), each internal boundary snaps to the end of the word nearest that boundary's
+        // character position, so cue times follow the real speaking pace; without words, split by character
+        // proportion (unchanged). Either way the boundary is clamped monotonic within [start, end].
         List<(string Text, TimeSpan Start, TimeSpan End)> result = new(pieces.Count);
         int totalChars = pieces.Sum(p => p.Length);
         if (totalChars <= 0)
             totalChars = 1;
+
+        WordClock? clock = WordClock.Build(words, start, end);
 
         long spanTicks = (end - start).Ticks;
         long consumed = 0;
@@ -111,11 +127,18 @@ public static class SubtitleSegmenter
         for (int i = 0; i < pieces.Count; i++)
         {
             consumed += pieces[i].Length;
-            TimeSpan cueEnd = i == pieces.Count - 1
-                ? end
-                : start + TimeSpan.FromTicks(spanTicks * consumed / totalChars);
+            TimeSpan cueEnd;
+            if (i == pieces.Count - 1)
+                cueEnd = end;
+            else if (clock is not null)
+                cueEnd = clock.EndAtFraction((double)consumed / totalChars);
+            else
+                cueEnd = start + TimeSpan.FromTicks(spanTicks * consumed / totalChars);
+
             if (cueEnd < acc)
                 cueEnd = acc;
+            if (cueEnd > end)
+                cueEnd = end;
 
             result.Add((Wrap(pieces[i], perLine, maxLines), acc, cueEnd));
             acc = cueEnd;
@@ -518,4 +541,61 @@ public static class SubtitleSegmenter
     }
 
     private static string StripBreaks(string text) => text.Replace('\n', ' ');
+
+    // Maps a character-fraction (0..1) of a cue's text to a real time, using the ASR word timings (F-19).
+    // Words are laid out by their trimmed character length; a boundary at fraction f resolves to the END time
+    // of the first word whose cumulative characters reach f of the total. Word end times are clamped into the
+    // cue's [start, end] so a drifting timestamp can never push a boundary outside the cue.
+    private sealed class WordClock
+    {
+        private readonly long[] _cumChar;
+        private readonly TimeSpan[] _end;
+        private readonly long _total;
+        private readonly TimeSpan _start;
+
+        private WordClock(long[] cumChar, TimeSpan[] end, long total, TimeSpan start)
+        {
+            _cumChar = cumChar;
+            _end = end;
+            _total = total;
+            _start = start;
+        }
+
+        public static WordClock? Build(IReadOnlyList<WordTiming>? words, TimeSpan start, TimeSpan end)
+        {
+            if (words is null || words.Count == 0)
+                return null;
+
+            long[] cum = new long[words.Count];
+            TimeSpan[] ends = new TimeSpan[words.Count];
+            long total = 0;
+            for (int k = 0; k < words.Count; k++)
+            {
+                int len = words[k].Word?.Trim().Length ?? 0;
+                if (len <= 0)
+                    len = 1;
+                total += len;
+                cum[k] = total;
+
+                TimeSpan e = words[k].End;
+                if (e < start) e = start;
+                if (e > end) e = end;
+                ends[k] = e;
+            }
+
+            return total <= 0 ? null : new WordClock(cum, ends, total, start);
+        }
+
+        public TimeSpan EndAtFraction(double frac)
+        {
+            if (frac <= 0)
+                return _start;
+
+            double target = frac * _total;
+            int k = 0;
+            while (k < _cumChar.Length - 1 && _cumChar[k] < target)
+                k++;
+            return _end[k];
+        }
+    }
 }

@@ -312,4 +312,92 @@ public class SubtitleSegmenterTests
 
         Normalize(string.Join(' ', cues.Select(c => c.Text))).Should().Be(Normalize(input));
     }
+
+    // ---- F-19: word-timestamp-driven cue boundaries -------------------------------------------------
+
+    // "one two three four five six seven eight": the first four words are spoken slowly (ending at 8.5s), the
+    // last four in a quick burst (8.5-10s). Character proportion assumes a constant rate; the word timings do not.
+    private static readonly (string Word, double Start, double End)[] EightWordsFrontSlow =
+    {
+        ("one",   0.0, 1.0),
+        ("two",   1.0, 3.0),
+        ("three", 3.0, 6.0),
+        ("four",  6.0, 8.5),
+        ("five",  8.5, 8.9),
+        ("six",   8.9, 9.3),
+        ("seven", 9.3, 9.7),
+        ("eight", 9.7, 10.0),
+    };
+
+    private static List<WordTiming> Words((string Word, double Start, double End)[] src) =>
+        src.Select(w => new WordTiming(w.Word, TimeSpan.FromSeconds(w.Start), TimeSpan.FromSeconds(w.End))).ToList();
+
+    [Fact]
+    public void Resegment_WithWordTimings_SnapsBoundaryToRealSpeechPace()
+    {
+        // The cue fits on one line but its 10s display time forces a split by MaxCueDurationSec. Character
+        // proportion would cut near the middle of the span (~4.7s); the word timings must instead snap the cut
+        // to the real speech boundary (the slow front half ends ~8.5s). RED without the WordClock: null words
+        // fall back to the char-proportion path and the first cue ends at ~4.7s.
+        const string input = "one two three four five six seven eight";
+        TimeSpan start = TimeSpan.Zero;
+        TimeSpan end = TimeSpan.FromSeconds(10);
+
+        var withWords = SubtitleSegmenter.Resegment(input, start, end, Opt, Words(EightWordsFrontSlow));
+        var charOnly = SubtitleSegmenter.Resegment(input, start, end, Opt);
+
+        withWords.Count.Should().BeGreaterThan(1);
+        charOnly[0].End.Should().BeLessThan(TimeSpan.FromSeconds(6));       // char proportion lands mid-span
+        withWords[0].End.Should().BeGreaterThan(TimeSpan.FromSeconds(7));   // word timing snaps to real speech
+        Normalize(string.Join(' ', withWords.Select(c => c.Text))).Should().Be(Normalize(input));
+    }
+
+    [Fact]
+    public void Resegment_WithWordTimings_TimesStayMonotonicContiguousAndBounded()
+    {
+        const string input = "one two three four five six seven eight";
+        TimeSpan start = TimeSpan.Zero;
+        TimeSpan end = TimeSpan.FromSeconds(10);
+
+        var cues = SubtitleSegmenter.Resegment(input, start, end, Opt, Words(EightWordsFrontSlow));
+
+        cues[0].Start.Should().Be(start);
+        cues[^1].End.Should().Be(end);
+        for (int i = 0; i < cues.Count; i++)
+        {
+            cues[i].End.Should().BeGreaterThanOrEqualTo(cues[i].Start);
+            cues[i].End.Should().BeLessThanOrEqualTo(end);
+            if (i > 0)
+                cues[i].Start.Should().Be(cues[i - 1].End); // no gaps / no overlaps
+        }
+    }
+
+    [Fact]
+    public void Resegment_NullWords_ByteIdenticalToCharProportion()
+    {
+        // The optional words parameter must not change any existing caller: passing null is exactly the old path.
+        string input =
+            "Hello there my friend, how are you doing today? I really hope that you are " +
+            "having a wonderful and pleasant afternoon out there in the bright sunshine.";
+        TimeSpan start = TimeSpan.FromSeconds(10);
+        TimeSpan end = TimeSpan.FromSeconds(20);
+
+        var noArg = SubtitleSegmenter.Resegment(input, start, end, Opt);
+        var nullWords = SubtitleSegmenter.Resegment(input, start, end, Opt, null);
+
+        nullWords.Should().Equal(noArg);
+    }
+
+    [Fact]
+    public void Resegment_WithWordTimings_FitsAsIs_PassesThroughUnchanged()
+    {
+        // A short cue that already fits takes the fast path; supplied words must not split or re-time it.
+        var words = Words(new[] { ("Yes", 2.0, 2.3) });
+        var cues = SubtitleSegmenter.Resegment("Yes.", TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2.4), Opt, words);
+
+        cues.Should().HaveCount(1);
+        cues[0].Text.Should().Be("Yes.");
+        cues[0].Start.Should().Be(TimeSpan.FromSeconds(2));
+        cues[0].End.Should().Be(TimeSpan.FromSeconds(2.4));
+    }
 }

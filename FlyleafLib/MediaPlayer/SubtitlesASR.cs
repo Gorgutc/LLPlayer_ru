@@ -305,7 +305,7 @@ public class SubtitlesASR
                     // a single subtitle does not fill the frame. Gated by the config toggle; cues that already
                     // fit pass through unchanged.
                     List<(string Text, TimeSpan Start, TimeSpan End)> cues = _config.Subtitles.ResegmentSubtitles
-                        ? SubtitleSegmenter.Resegment(asrText, data.StartTime, data.EndTime, _config.Subtitles.SubtitleSegmentOptions)
+                        ? SubtitleSegmenter.Resegment(asrText, data.StartTime, data.EndTime, _config.Subtitles.SubtitleSegmentOptions, data.Words)
                         : [(asrText, data.StartTime, data.EndTime)];
 
                     foreach (int i in SubIndexSet)
@@ -667,12 +667,24 @@ public class AudioReader : IDisposable
                         lastText = data.text;
                         lastEnd = end;
 
+                        // F-19: shift per-word timestamps into the same absolute frame as start/end (they arrive
+                        // chunk-relative like data.start/end). Re-segmentation clamps them into the final cue span.
+                        IReadOnlyList<WordTiming>? wordsAbs = null;
+                        if (data.words is { Count: > 0 })
+                        {
+                            List<WordTiming> abs = new(data.words.Count);
+                            foreach (WordTiming w in data.words)
+                                abs.Add(new WordTiming(w.Word, chunk.Start.Add(w.Start), chunk.Start.Add(w.End)));
+                            wordsAbs = abs;
+                        }
+
                         SubtitleASRData subData = new()
                         {
                             Text = data.text,
                             Language = data.language,
                             StartTime = start,
                             EndTime = end,
+                            Words = wordsAbs,
 #if DEBUG
                             ChunkNo = chunk.ChunkNumber,
                             StartTimeChunk = chunk.Start,
@@ -1293,7 +1305,9 @@ public class AudioReader : IDisposable
 
 public interface IASRService : IAsyncDisposable
 {
-    public IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language)> Do(MemoryStream waveStream, CancellationToken token);
+    // words (F-19): per-segment word timestamps for word-boundary re-segmentation, or null when the engine does
+    // not provide them (whisper.cpp) or the feature is off. Times are chunk-relative, like start/end.
+    public IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language, IReadOnlyList<WordTiming>? words)> Do(MemoryStream waveStream, CancellationToken token);
 }
 
 // https://github.com/sandrohanea/whisper.net
@@ -1360,7 +1374,7 @@ public class WhisperCppASRService : IASRService
         _logger.Dispose();
     }
 
-    public async IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language)> Do(MemoryStream waveStream, [EnumeratorCancellation] CancellationToken token)
+    public async IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language, IReadOnlyList<WordTiming>? words)> Do(MemoryStream waveStream, [EnumeratorCancellation] CancellationToken token)
     {
         // If language detection is on, pin the already-detected language onto this chunk (F-17 anti-drift), so a
         // later uncertain segment cannot drift to a foreign language. With per-segment detection on (T-10), the
@@ -1391,7 +1405,8 @@ public class WhisperCppASRService : IASRService
                 _detectedLanguage = result.Language;
             }
 
-            yield return (text, result.Start, result.End, result.Language);
+            // whisper.cpp path does not surface per-word timestamps here (F-19 targets faster-whisper); null words.
+            yield return (text, result.Start, result.End, result.Language, null);
         }
     }
 }
@@ -1408,11 +1423,12 @@ public partial class FasterWhisperASRService : IASRService
         _config = config;
         _preferCpu = preferCpu;
 
-        _cmdBase = BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig);
+        bool wordTimestamps = _config.Subtitles.WordTimestamps;
+        _cmdBase = BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig, wordTimestamps: wordTimestamps);
         // CPU variant for the per-chunk background fallback (batch only). Built once; selected per chunk in Do.
         _cmdBaseCpu = preferCpu == null
             ? _cmdBase
-            : BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig, forceCpu: true);
+            : BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig, forceCpu: true, wordTimestamps: wordTimestamps);
 
         if (_config.Subtitles.FasterWhisperConfig.IsEnglishModel)
         {
@@ -1457,14 +1473,28 @@ public partial class FasterWhisperASRService : IASRService
         return ValueTask.CompletedTask;
     }
 
-    public static Command BuildCommand(FasterWhisperConfig config, WhisperConfig commonConfig, bool forceCpu = false)
+    public static Command BuildCommand(FasterWhisperConfig config, WhisperConfig commonConfig, bool forceCpu = false, bool wordTimestamps = false)
     {
         string tempFolder = Path.GetTempPath();
         string enginePath = config.UseManualEngine ? config.ManualEnginePath! : FasterWhisperConfig.DefaultEnginePath;
 
         ArgumentsBuilder args = new();
         args.Add("--output_dir").Add(tempFolder);
-        args.Add("--output_format").Add("srt");
+        if (wordTimestamps)
+        {
+            // F-19: additionally emit a per-word-timestamp JSON side file (read after the run) so
+            // re-segmentation can place cue boundaries on real word times. Only the JSON output +
+            // --word_timestamps are added; the stdout SRT we parse is left untouched (Purfview r194.2:
+            // --sentence does not affect JSON), and a missing/mismatched JSON degrades to character-proportion
+            // timing (fail-soft). --word_timestamps alone does not enable SRT word-highlighting, so the stdout
+            // cue lines the SubShortReg/SubLongReg parsers read are unchanged.
+            args.Add("--output_format").Add("srt").Add("json");
+            args.Add("--word_timestamps").Add("True");
+        }
+        else
+        {
+            args.Add("--output_format").Add("srt");
+        }
         args.Add("--verbose").Add("True");
         args.Add("--beep_off");
         args.Add("--model").Add(config.Model);
@@ -1629,11 +1659,20 @@ public partial class FasterWhisperASRService : IASRService
         }
     }
 
-    public async IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language)> Do(MemoryStream waveStream, [EnumeratorCancellation] CancellationToken token)
+    public async IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language, IReadOnlyList<WordTiming>? words)> Do(MemoryStream waveStream, [EnumeratorCancellation] CancellationToken token)
     {
         string tempFilePath = Path.GetTempFileName();
         // because no output option
         string outputFilePath = Path.ChangeExtension(tempFilePath, "srt");
+        // F-19: faster-whisper also writes a per-word JSON here when --word_timestamps is on (see BuildCommand).
+        string outputJsonPath = Path.ChangeExtension(tempFilePath, "json");
+
+        // When word timing is on, buffer this chunk's cues (text/time still parsed from stdout exactly as before)
+        // and attach words read from the JSON after the process exits — the JSON only exists once the run
+        // completes. Cues then emit per chunk, which is invisible during playback because ASR runs ahead of the
+        // play position. When off, the loop streams cues as before (byte-identical, null words).
+        List<(string text, TimeSpan start, TimeSpan end, string language)>? buffered =
+            _config.Subtitles.WordTimestamps ? new() : null;
 
         // write WAV to tmp folder
         await using (FileStream fileStream = new(tempFilePath, FileMode.Create, FileAccess.Write))
@@ -1778,11 +1817,31 @@ public partial class FasterWhisperASRService : IASRService
                 }
 
                 // HC-20: fall back to _manualLanguage when detection produced nothing (null) so a cue never carries a null language.
-                yield return (text, start, end, _isLanguageDetect ? (_detectedLanguage ?? _manualLanguage) : _manualLanguage);
+                string cueLanguage = _isLanguageDetect ? (_detectedLanguage ?? _manualLanguage) : _manualLanguage;
+                if (buffered != null)
+                    buffered.Add((text, start, end, cueLanguage)); // F-19: words attached after the run (below)
+                else
+                    yield return (text, start, end, cueLanguage, null);
 
                 if (!oneSuccess)
                 {
                     oneSuccess = true;
+                }
+            }
+
+            // F-19: flush the buffered cues (with words) BEFORE the success-sentinel validation, so a chunk that
+            // produced cues but whose stdout tail failed the sentinel still commits them — matching the streaming
+            // (WordTimestamps-off) path, which yields each cue as it is parsed, before validating. The whisper
+            // process has already exited (the stdout loop ended), so the per-word JSON is present here regardless
+            // of whether the sentinel matched. TryReadWordTimings returns null (→ null words → character-proportion
+            // timing) on any missing file, parse error, or segment-count mismatch, so words are never mis-attached.
+            if (buffered != null)
+            {
+                IReadOnlyList<IReadOnlyList<WordTiming>>? segmentWords = TryReadWordTimings(outputJsonPath, buffered.Count);
+                for (int i = 0; i < buffered.Count; i++)
+                {
+                    (string text, TimeSpan start, TimeSpan end, string language) cue = buffered[i];
+                    yield return (cue.text, cue.start, cue.end, cue.language, segmentWords?[i]);
                 }
             }
 
@@ -1811,6 +1870,65 @@ public partial class FasterWhisperASRService : IASRService
             {
                 File.Delete(outputFilePath);
             }
+            // F-19: delete the per-word JSON side file (written only when --word_timestamps was on)
+            if (File.Exists(outputJsonPath))
+            {
+                File.Delete(outputJsonPath);
+            }
+        }
+    }
+
+    // F-19: read faster-whisper's per-word JSON (segments[].words[].{start,end,word}) into one word list per
+    // segment, in file order. Returns null (→ character-proportion timing, fail-soft) if the file is missing,
+    // unparseable, or its segment count does not match the cues parsed from stdout (so words are never
+    // mis-attached). Word start/end are chunk-relative seconds, matching the stdout cue times.
+    private static IReadOnlyList<IReadOnlyList<WordTiming>>? TryReadWordTimings(string jsonPath, int expectedSegments)
+    {
+        try
+        {
+            if (!File.Exists(jsonPath))
+                return null;
+
+            using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));
+            if (!doc.RootElement.TryGetProperty("segments", out System.Text.Json.JsonElement segments) ||
+                segments.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return null;
+
+            List<IReadOnlyList<WordTiming>> perSegment = new(segments.GetArrayLength());
+            foreach (System.Text.Json.JsonElement seg in segments.EnumerateArray())
+            {
+                List<WordTiming> words = [];
+                if (seg.TryGetProperty("words", out System.Text.Json.JsonElement wordsEl) &&
+                    wordsEl.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (System.Text.Json.JsonElement w in wordsEl.EnumerateArray())
+                    {
+                        if (!w.TryGetProperty("start", out System.Text.Json.JsonElement ws) ||
+                            !w.TryGetProperty("end", out System.Text.Json.JsonElement we) ||
+                            ws.ValueKind != System.Text.Json.JsonValueKind.Number ||
+                            we.ValueKind != System.Text.Json.JsonValueKind.Number)
+                            continue;
+
+                        string wordText = w.TryGetProperty("word", out System.Text.Json.JsonElement wt) &&
+                                          wt.ValueKind == System.Text.Json.JsonValueKind.String
+                            ? wt.GetString() ?? string.Empty
+                            : string.Empty;
+
+                        words.Add(new WordTiming(
+                            wordText,
+                            TimeSpan.FromSeconds(ws.GetDouble()),
+                            TimeSpan.FromSeconds(we.GetDouble())));
+                    }
+                }
+                perSegment.Add(words);
+            }
+
+            // Only trust words when the JSON segmentation lines up 1:1 with the stdout cues (same run).
+            return perSegment.Count == expectedSegments ? perSegment : null;
+        }
+        catch
+        {
+            return null; // fail-soft: any IO/parse error degrades to character-proportion timing
         }
     }
 }
@@ -1832,4 +1950,8 @@ public class SubtitleASRData
     // ISO6391
     // ref: https://github.com/openai/whisper/blob/main/whisper/tokenizer.py#L10
     public required string Language { get; init; }
+
+    // F-19: per-word timestamps for this cue (faster-whisper), in absolute media time, or null when unavailable.
+    // Consumed by re-segmentation to place cue boundaries on real word times instead of character proportion.
+    public IReadOnlyList<WordTiming>? Words { get; init; }
 }

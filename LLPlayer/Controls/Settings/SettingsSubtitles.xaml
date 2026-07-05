@@ -199,6 +199,27 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock
                             Width="180">
+                            Word-Level Cue Timing
+                            <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
+                                <ToolTipService.ToolTip>
+                                    <TextBlock
+                                        Text="Time re-segmented cues by the ASR engine's per-word timestamps instead of by character proportion, so cue boundaries follow the real speaking pace (F-19). Uses faster-whisper --word_timestamps (a side JSON file); when unavailable it falls back to proportional timing. Applies to the interactive faster-whisper ASR path; whisper.cpp and loaded subtitles are unaffected."
+                                        TextWrapping="Wrap"
+                                        MaxWidth="400" />
+                                </ToolTipService.ToolTip>
+                                <materialDesign:PackIcon
+                                    Kind="Information"
+                                    Width="16" Height="16"
+                                    Margin="4 0 0 0" />
+                            </InlineUIContainer>
+                        </TextBlock>
+                        <ToggleButton
+                            IsChecked="{Binding FL.PlayerConfig.Subtitles.WordTimestamps}" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock
+                            Width="180">
                             Fix ALL-CAPS Subtitles
                             <InlineUIContainer BaselineAlignment="Center" Cursor="Help">
                                 <ToolTipService.ToolTip>
