@@ -74,6 +74,10 @@ public static class BatchSubtitleConfigSnapshot
             ASRDenoise = source.ASRDenoise,
             // T-10 per-segment language detection applies to batch transcription too (same shared ASR services).
             ASRPerSegmentLanguage = source.ASRPerSegmentLanguage,
+            // F-19: a scalar on SubtitlesConfig, so the reflection-completeness guard requires it here. The batch
+            // faster-whisper run inherits the same word-timestamp command/JSON, though the batch consumer does not
+            // read the words (output-identical); copied for snapshot parity.
+            WordTimestamps = source.WordTimestamps,
             ResegmentSubtitles = source.ResegmentSubtitles,
             SubtitleMaxCharsPerLine = source.SubtitleMaxCharsPerLine,
             SubtitleMaxLinesPerCue = source.SubtitleMaxLinesPerCue,

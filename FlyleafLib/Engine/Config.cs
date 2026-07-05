@@ -1497,6 +1497,17 @@ public class Config : NotifyPropertyChanged
         public bool ASRPerSegmentLanguage { get; set => Set(ref field, value); } = false;
 
         /// <summary>
+        /// F-19: request per-word timestamps from faster-whisper (adds <c>--word_timestamps</c> plus a side JSON
+        /// output that is read after the run) and use them to place re-segmentation cue boundaries on real
+        /// word/speech times instead of by character proportion, so a split cue follows the actual speaking pace.
+        /// Additive/absent-defaulting (on by default); it targets the interactive faster-whisper ASR path.
+        /// Fail-soft: if the JSON is missing or does not line up with the transcribed cues, timing falls back to
+        /// character proportion (unchanged). whisper.cpp does not surface word timings and loaded subtitles are
+        /// unaffected; the batch faster-whisper run may write/read the JSON but ignores the words (output-identical).
+        /// </summary>
+        public bool WordTimestamps { get; set => Set(ref field, value); } = true;
+
+        /// <summary>
         /// Re-segment generated subtitles (ASR and translation) into short, at-most-<see cref="SubtitleMaxLinesPerCue"/>-line
         /// cues of about <see cref="SubtitleMaxCharsPerLine"/> characters per line, splitting an over-long Whisper
         /// segment into several sequential cues with proportional timings, so a single cue does not fill the frame.
