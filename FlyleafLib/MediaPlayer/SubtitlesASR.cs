@@ -455,7 +455,10 @@ public class AudioReader : IDisposable
 
     private unsafe AVPacket* _packet = null;
     private unsafe AVFrame* _frame = null;
-    private unsafe SwrContext* _swrContext = null;
+
+    // Shared swr → S16 mono resampler (HC-44 slice 1). Owns the SwrContext + reusable output buffer; the same
+    // helper backs WaveformReader. The F-02 denoise / T-09 silence / WAV write stay here in ResampleTo.
+    private readonly S16MonoResampler _resampler = new();
 
     private bool _isFile;
 
@@ -935,7 +938,7 @@ public class AudioReader : IDisposable
                         bool softCut = splitOnSilence
                             && resampledDataSize > 0
                             && AsrSilence.IsSoftReady(waveStream.Length, chunkSize, chunkSw.Elapsed, chunkElapsed, silenceSoftFraction)
-                            && AsrSilence.IsSilent(_sampledBuf, resampledDataSize, silenceRmsThreshold);
+                            && AsrSilence.IsSilent(_resampler.Buffer, resampledDataSize, silenceRmsThreshold);
 
                         if (hardCap || softCut || reachedStop)
                         {
@@ -1039,9 +1042,6 @@ public class AudioReader : IDisposable
         stream.Position = 0;
     }
 
-    private byte[] _sampledBuf = [];
-    private int _sampledBufSize;
-
     // F-02 opt-in ASR denoise: managed high-pass over the resampled S16 mono 16k PCM (the testable core), applied in
     // ResampleTo before the WAV write. _denoiseEnabled mirrors Config.Subtitles.ASRDenoise (read once). The optional
     // native afftdn stage lives in the _denoiseGraph* fields below.
@@ -1057,113 +1057,25 @@ public class AudioReader : IDisposable
     private unsafe AVFrame*         _denoiseOutFrame= null;
     private bool                    _denoiseAfftdnFailed;
 
-    // for codec change detection
-    private int _lastFormat;
-    private int _lastSampleRate;
-    private ulong _lastChannelLayout;
-
-    /// <summary>Resamples one decoded frame to S16 mono <paramref name="targetSampleRate"/> Hz, appends it to
-    /// <paramref name="toStream"/>, and returns the number of PCM bytes written (also left in <see cref="_sampledBuf"/>
-    /// for silence detection, T-09).</summary>
+    /// <summary>Resamples one decoded frame to S16 mono <paramref name="targetSampleRate"/> Hz via the shared
+    /// <see cref="S16MonoResampler"/>, appends it to <paramref name="toStream"/>, and returns the number of PCM bytes
+    /// written (also left in <c>_resampler.Buffer</c> for silence detection, T-09).</summary>
     private unsafe int ResampleTo(Stream toStream, AVFrame* frame, int targetSampleRate, int targetChannel)
     {
-        bool codecChanged = false;
-
-        if (_lastFormat != frame->format)
-        {
-            _lastFormat = frame->format;
-            codecChanged = true;
-        }
-        if (_lastSampleRate != frame->sample_rate)
-        {
-            _lastSampleRate = frame->sample_rate;
-            codecChanged = true;
-        }
-        if (_lastChannelLayout != frame->ch_layout.u.mask)
-        {
-            _lastChannelLayout = frame->ch_layout.u.mask;
-            codecChanged = true;
-        }
-
-        // Reinitialize SwrContext because codec changed
-        // Note that native error will occur if not reinitialized.
-        // Reference: AudioDecoder::RunInternal
-        if (_swrContext != null && codecChanged)
-        {
-            fixed (SwrContext** ptr = &_swrContext)
-            {
-                swr_free(ptr);
-            }
-            _swrContext = null;
-        }
-
-        if (_swrContext == null)
-        {
-            AVChannelLayout outLayout;
-            av_channel_layout_default(&outLayout, targetChannel);
-
-            // NOTE: important to reuse this context
-            fixed (SwrContext** ptr = &_swrContext)
-            {
-                swr_alloc_set_opts2(
-                    ptr,
-                    &outLayout,
-                    AVSampleFormat.S16,
-                    targetSampleRate,
-                    &frame->ch_layout,
-                    (AVSampleFormat)frame->format,
-                    frame->sample_rate,
-                    0, null)
-                    .ThrowExceptionIfError("swr_alloc_set_opts2");
-
-                swr_init(_swrContext)
-                    .ThrowExceptionIfError("swr_init");
-            }
-        }
-
-        // ffmpeg ref: https://github.com/FFmpeg/FFmpeg/blob/504df09c34607967e4109b7b114ee084cf15a3ae/libavfilter/af_aresample.c#L171-L227
-        double ratio = targetSampleRate * 1.0 / frame->sample_rate; // 16000:44100=0.36281179138321995
-        int nOut = (int)(frame->nb_samples * ratio) + 32;
-
-        long delay = swr_get_delay(_swrContext, targetSampleRate);
-        if (delay > 0)
-        {
-            nOut += (int)Math.Min(delay, Math.Max(4096, nOut));
-        }
-        int needed = nOut * targetChannel * sizeof(ushort);
-
-        if (_sampledBufSize < needed)
-        {
-            _sampledBuf = new byte[needed];
-            _sampledBufSize = needed;
-        }
-
-        int samplesPerChannel;
-
-        fixed (byte* dst = _sampledBuf)
-        {
-            samplesPerChannel = swr_convert(
-                 _swrContext,
-                 &dst,
-                 nOut,
-                 frame->extended_data,
-                 frame->nb_samples);
-        }
-        samplesPerChannel.ThrowExceptionIfError("swr_convert");
-
-        int resampledDataSize = samplesPerChannel * targetChannel * sizeof(ushort);
+        int resampledDataSize = _resampler.Resample(frame, targetSampleRate, targetChannel);
+        byte[] sampledBuf = _resampler.Buffer;
 
         // F-02: managed high-pass in place over the resampled S16 mono PCM (size-preserving, so the T-09 silence
-        // contract and resampledDataSize are unchanged). T-09 then reads the high-passed _sampledBuf.
+        // contract and resampledDataSize are unchanged). T-09 then reads the high-passed buffer.
         if (_denoiseEnabled && resampledDataSize > 0)
-            _highPass?.ProcessInPlace(_sampledBuf, resampledDataSize);
+            _highPass?.ProcessInPlace(sampledBuf, resampledDataSize);
 
         // The optional native afftdn stage (when available) writes its own output to toStream and returns; otherwise
         // (off, or afftdn unavailable) the high-passed/raw PCM is written here.
         if (DenoiseAfftdnWrite(toStream, resampledDataSize))
             return resampledDataSize;
 
-        toStream.Write(_sampledBuf, 0, resampledDataSize);
+        toStream.Write(sampledBuf, 0, resampledDataSize);
 
         return resampledDataSize;
     }
@@ -1197,7 +1109,7 @@ public class AudioReader : IDisposable
             _denoiseInFrame->nb_samples  = resampledDataSize / 2;
             av_frame_get_buffer(_denoiseInFrame, 0).ThrowExceptionIfError("denoise frame buffer");
 
-            _sampledBuf.AsSpan(0, resampledDataSize).CopyTo(new Span<byte>((void*)_denoiseInFrame->data[0], resampledDataSize));
+            _resampler.Buffer.AsSpan(0, resampledDataSize).CopyTo(new Span<byte>((void*)_denoiseInFrame->data[0], resampledDataSize));
 
             av_buffersrc_add_frame_flags(_denoiseSrcCtx, _denoiseInFrame, AVBuffersrcFlag.KeepRef)
                 .ThrowExceptionIfError("denoise buffersrc");
@@ -1377,14 +1289,7 @@ public class AudioReader : IDisposable
             }
         }
 
-        // swr_init
-        if (_swrContext != null)
-        {
-            fixed (SwrContext** ptr = &_swrContext)
-            {
-                swr_free(ptr);
-            }
-        }
+        _resampler.Dispose();
 
         DisposeDenoise();
 

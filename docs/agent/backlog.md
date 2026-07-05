@@ -1417,15 +1417,28 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 
 ### 8c. Ⓛ Крупные (тир 3) — архитектурный рефакторинг
 
-- **HC-44 — Тройная копия offline-читателя (`WaveformReader`/`AudioReader`/`SubtitleReader`) 🟡 Ⓛ · `FlyleafLib/MediaPlayer/WaveformReader.cs:194`**
-  - Проблема: три класса «изолированный второй `avformat_open_input`» дублируют почти дословно: `Open()` (Demuxer +
-    `token.Register(ForceInterrupt)` + Log.Prefix + обработка ошибок, ~35 стр. ×3) и swr-блок ресемплинга в S16 mono 16k
-    (reinit-guard + `swr_alloc_set_opts2` + расчёт nOut+delay + `swr_convert`) скопирован из `SubtitlesASR.ResampleTo`
-    в `WaveformReader.ResampleFrame`.
+- **HC-44 — Тройная копия offline-читателя (`WaveformReader`/`AudioReader`/`SubtitleReader`) 🟡 Ⓛ · `FlyleafLib/MediaPlayer/WaveformReader.cs:194`** · ⚙️ **СРЕЗ 1 DONE (v0.3.57, 2026-07-05, сессия #33); срез 2 (`OfflineMediaReaderBase`) остаётся TODO (sign-off / interop-риск)**
+  - Проблема: три класса «изолированный второй `avformat_open_input`» дублируют почти дословно: `Open()`/`Dispose()`
+    (Demuxer + `token.Register(ForceInterrupt)` + Log.Prefix + обработка ошибок, ~35 стр. ×3 + 4-я частичная копия
+    `MediaAudioProbe.cs`) и swr-блок ресемплинга в S16 mono 16k (reinit-guard + `swr_alloc_set_opts2` + расчёт
+    nOut+delay + `swr_convert`) скопирован в **2 копиях**: `SubtitlesASR.ResampleTo` + `WaveformReader.ResampleFrame`
+    (третий `swr_convert` в `AudioDecoder.cs` — stereo/playback-rate, НЕ S16-mono-16k, вне скоупа).
   - Решение: `OfflineMediaReaderBase`/`OpenIsolated(...)` для Open/Dispose + переиспользуемый `S16MonoResampler`
     (с опциональным denoise-хуком для F-02), которым пользуются `AudioReader` и `WaveformReader`.
-  - Зачем: native/FFmpeg-код в трёх копиях — правка (напр. фикс ресемпла или denoise) должна делаться единожды;
+  - Зачем: native/FFmpeg-код в копиях — правка (напр. фикс ресемпла или denoise) должна делаться единожды;
     высокий риск рассинхрона в самом хрупком (interop) слое. Пересекается с F-02-full.
+  - ✅ **Сделано (срез 1, v0.3.57, сессия #33):** новый чистый `FlyleafLib/MediaPlayer/S16MonoResampler.cs`
+    (`IDisposable`, владеет `SwrContext` + переиспользуемым выходным буфером; `Resample(frame, targetSampleRate,
+    targetChannel)` возвращает размер PCM, оставляет данные в `Buffer`). Оба swr-сайта (`AudioReader.ResampleTo` +
+    `WaveformReader.ResampleFrame`) делегируют в него — **поведение byte-identical** (порядок swr-вызовов сохранён;
+    единственная замена — seed кодек-гарда `_lastFormat` 0→-1, доказуемо нейтрально: первый кадр всегда аллоцирует
+    контекст, т.к. `_swrContext==null`). ASR-специфику (F-02 high-pass/afftdn, WAV-write, T-09 silence-read по
+    `_resampler.Buffer`) оставили в `ResampleTo`. Три чистых seam'а вынесены `internal` и юнит-покрыты RED-without-fix
+    (`ComputeOutputSampleCapacity` — nOut+pad+delay-clamp; `DetectCodecChange` — гард reinit; `EnsureCapacity` —
+    рост-без-усадки): +17 тестов (`S16MonoResamplerTests`, **1316→1333**). Дедуп: два вызова потеряли ~194 стр.
+    дублированного swr-кода → единый источник. Гейты 0/0 (LLPlayer+YoutubeDL) + verify.ps1 green. Native `swr_convert`
+    (как и раньше) вне юнит-охвата → owner manual-smoke (ASR-транскрипция + рендер waveform F-12). **Срез 2**
+    (`OfflineMediaReaderBase` для Open/Dispose-скелета тройки) сознательно отложен — interop-риск, нужен owner sign-off.
 
 ### 8d. Опровергнутые находки (11) — НЕ баги, зафиксировано для истории
 > Верификаторы отсеяли (цитаты часто верны, но сценарий нереализуем / уже известно / стилевой нит):
