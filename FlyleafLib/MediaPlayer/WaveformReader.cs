@@ -29,15 +29,10 @@ public sealed class WaveformReader : IDisposable
 
     private unsafe AVPacket* _packet = null;
     private unsafe AVFrame* _frame = null;
-    private unsafe SwrContext* _swrContext = null;
 
-    private byte[] _sampledBuf = [];
-    private int _sampledBufSize;
-
-    // swr reinit guards (a codec/format change mid-file rebuilds the context, like AudioReader.ResampleTo).
-    private int _lastFormat = -1;
-    private int _lastSampleRate = -1;
-    private ulong _lastChannelLayout;
+    // Shared swr → S16 mono 16k resampler (HC-44 slice 1). Owns the SwrContext + reusable output buffer and
+    // rebuilds on a mid-file codec change; the same helper backs AudioReader.ResampleTo.
+    private readonly S16MonoResampler _resampler = new();
 
     private const int TargetSampleRate = 16000;
     private const int TargetChannel = 1;
@@ -169,9 +164,9 @@ public sealed class WaveformReader : IDisposable
                 if (frameStartTicks < 0)
                     frameStartTicks = 0;
 
-                int resampledDataSize = ResampleFrame(_frame);
+                int resampledDataSize = _resampler.Resample(_frame, TargetSampleRate, TargetChannel);
                 if (resampledDataSize > 0)
-                    builder.Add(_sampledBuf, resampledDataSize, frameStartTicks);
+                    builder.Add(_resampler.Buffer, resampledDataSize, frameStartTicks);
 
                 // Report progress occasionally (every 64 frames) to avoid flooding the UI marshaller.
                 if (progress != null && totalDurationTicks > 0 && (++frameCounter & 0x3F) == 0)
@@ -187,75 +182,6 @@ public sealed class WaveformReader : IDisposable
 
         progress?.Report(1.0);
         return builder.Build();
-    }
-
-    // swr conversion to S16 mono 16k — a trimmed copy of AudioReader.ResampleTo's swr block (NO F-02 denoise,
-    // NO WAV write): fills _sampledBuf and returns the byte size. Reinitializes the context on a format change.
-    private unsafe int ResampleFrame(AVFrame* frame)
-    {
-        bool codecChanged = false;
-
-        if (_lastFormat != frame->format)        { _lastFormat = frame->format; codecChanged = true; }
-        if (_lastSampleRate != frame->sample_rate) { _lastSampleRate = frame->sample_rate; codecChanged = true; }
-        if (_lastChannelLayout != frame->ch_layout.u.mask) { _lastChannelLayout = frame->ch_layout.u.mask; codecChanged = true; }
-
-        if (_swrContext != null && codecChanged)
-        {
-            fixed (SwrContext** ptr = &_swrContext)
-                swr_free(ptr);
-            _swrContext = null;
-        }
-
-        if (_swrContext == null)
-        {
-            AVChannelLayout outLayout;
-            av_channel_layout_default(&outLayout, TargetChannel);
-
-            fixed (SwrContext** ptr = &_swrContext)
-            {
-                swr_alloc_set_opts2(
-                    ptr,
-                    &outLayout,
-                    AVSampleFormat.S16,
-                    TargetSampleRate,
-                    &frame->ch_layout,
-                    (AVSampleFormat)frame->format,
-                    frame->sample_rate,
-                    0, null)
-                    .ThrowExceptionIfError("swr_alloc_set_opts2");
-
-                swr_init(_swrContext)
-                    .ThrowExceptionIfError("swr_init");
-            }
-        }
-
-        double ratio = TargetSampleRate * 1.0 / frame->sample_rate;
-        int nOut = (int)(frame->nb_samples * ratio) + 32;
-
-        long delay = swr_get_delay(_swrContext, TargetSampleRate);
-        if (delay > 0)
-            nOut += (int)Math.Min(delay, Math.Max(4096, nOut));
-
-        int needed = nOut * TargetChannel * sizeof(ushort);
-        if (_sampledBufSize < needed)
-        {
-            _sampledBuf = new byte[needed];
-            _sampledBufSize = needed;
-        }
-
-        int samplesPerChannel;
-        fixed (byte* dst = _sampledBuf)
-        {
-            samplesPerChannel = swr_convert(
-                _swrContext,
-                &dst,
-                nOut,
-                frame->extended_data,
-                frame->nb_samples);
-        }
-        samplesPerChannel.ThrowExceptionIfError("swr_convert");
-
-        return samplesPerChannel * TargetChannel * sizeof(ushort);
     }
 
     public unsafe void Dispose()
@@ -275,11 +201,7 @@ public sealed class WaveformReader : IDisposable
                 av_packet_free(ptr);
         }
 
-        if (_swrContext != null)
-        {
-            fixed (SwrContext** ptr = &_swrContext)
-                swr_free(ptr);
-        }
+        _resampler.Dispose();
 
         _decoder?.Dispose();
         if (_demuxer != null)
