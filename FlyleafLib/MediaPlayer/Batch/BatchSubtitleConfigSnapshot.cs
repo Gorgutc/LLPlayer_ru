@@ -78,6 +78,10 @@ public static class BatchSubtitleConfigSnapshot
             // faster-whisper run inherits the same word-timestamp command/JSON, though the batch consumer does not
             // read the words (output-identical); copied for snapshot parity.
             WordTimestamps = source.WordTimestamps,
+            // F-19 slice 2: a scalar on SubtitlesConfig, so the reflection-completeness guard requires it here. The
+            // batch path re-segments post-hoc without per-chunk audio, so it never runs VAD (output-identical);
+            // copied only for snapshot/reflection-guard parity.
+            VadCueSnapping = source.VadCueSnapping,
             ResegmentSubtitles = source.ResegmentSubtitles,
             SubtitleMaxCharsPerLine = source.SubtitleMaxCharsPerLine,
             SubtitleMaxLinesPerCue = source.SubtitleMaxLinesPerCue,

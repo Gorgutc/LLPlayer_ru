@@ -120,6 +120,10 @@ runs:
         foreach ($requiredFile in @(
           "LLPlayer.exe"
           "lib\7z.dll"
+          # F-19 slice 2: bundled Silero VAD model + ONNX Runtime native lib must ship (else cue-timing VAD
+          # snapping silently no-ops on end-user machines). Fail closed if either is missing from the package.
+          "Assets\silero_vad.onnx"
+          "onnxruntime.dll"
           "FFmpeg\avcodec-62.dll"
           "FFmpeg\avdevice-62.dll"
           "FFmpeg\avfilter-11.dll"
