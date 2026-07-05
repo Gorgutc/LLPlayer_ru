@@ -709,16 +709,7 @@ public unsafe class SubtitleReader : IDisposable
 
     public void Open(string url, int streamIndex, MediaType type, CancellationToken token)
     {
-        _demuxer = new Demuxer(_config.Demuxer, type, _subIndex + 1, false);
-
-        token.Register(() =>
-        {
-            if (_demuxer != null)
-                _demuxer.Interrupter.ForceInterrupt = 1;
-        });
-
-        _demuxer.Log.Prefix = _demuxer.Log.Prefix.Replace("Demuxer: ", "DemuxerS:");
-        string? error = _demuxer.Open(url);
+        _demuxer = OfflineDemuxer.OpenIsolated(_config, type, _subIndex + 1, "DemuxerS:", url, token, out string? error);
 
         if (error != null)
         {
@@ -1004,11 +995,7 @@ public unsafe class SubtitleReader : IDisposable
         }
 
         _decoder?.Dispose();
-        if (_demuxer != null)
-        {
-            _demuxer.Interrupter.ForceInterrupt = 0;
-            _demuxer.Dispose();
-        }
+        OfflineDemuxer.DisposeIsolated(_demuxer);
 
         _isDisposed = true;
     }

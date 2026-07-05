@@ -1417,7 +1417,7 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
 
 ### 8c. Ⓛ Крупные (тир 3) — архитектурный рефакторинг
 
-- **HC-44 — Тройная копия offline-читателя (`WaveformReader`/`AudioReader`/`SubtitleReader`) 🟡 Ⓛ · `FlyleafLib/MediaPlayer/WaveformReader.cs:194`** · ⚙️ **СРЕЗ 1 DONE (v0.3.57, 2026-07-05, сессия #33); срез 2 (`OfflineMediaReaderBase`) остаётся TODO (sign-off / interop-риск)**
+- **HC-44 — Тройная копия offline-читателя (`WaveformReader`/`AudioReader`/`SubtitleReader`) 🟡 Ⓛ · `FlyleafLib/MediaPlayer/S16MonoResampler.cs` + `OfflineDemuxer.cs`** · ✅ **DONE (срез 1 v0.3.57 + срез 2 v0.3.58, 2026-07-05, сессия #33; owner sign-off на срез 2)**
   - Проблема: три класса «изолированный второй `avformat_open_input`» дублируют почти дословно: `Open()`/`Dispose()`
     (Demuxer + `token.Register(ForceInterrupt)` + Log.Prefix + обработка ошибок, ~35 стр. ×3 + 4-я частичная копия
     `MediaAudioProbe.cs`) и swr-блок ресемплинга в S16 mono 16k (reinit-guard + `swr_alloc_set_opts2` + расчёт
@@ -1437,8 +1437,17 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     (`ComputeOutputSampleCapacity` — nOut+pad+delay-clamp; `DetectCodecChange` — гард reinit; `EnsureCapacity` —
     рост-без-усадки): +17 тестов (`S16MonoResamplerTests`, **1316→1333**). Дедуп: два вызова потеряли ~194 стр.
     дублированного swr-кода → единый источник. Гейты 0/0 (LLPlayer+YoutubeDL) + verify.ps1 green. Native `swr_convert`
-    (как и раньше) вне юнит-охвата → owner manual-smoke (ASR-транскрипция + рендер waveform F-12). **Срез 2**
-    (`OfflineMediaReaderBase` для Open/Dispose-скелета тройки) сознательно отложен — interop-риск, нужен owner sign-off.
+    (как и раньше) вне юнит-охвата → owner manual-smoke (ASR-транскрипция + рендер waveform F-12).
+  - ✅ **Сделано (срез 2, v0.3.58, сессия #33, owner sign-off):** новый чистый `FlyleafLib/MediaPlayer/OfflineDemuxer.cs`
+    (`internal static` `OpenIsolated`/`DisposeIsolated`) — единый источник create+`token.Register(ForceInterrupt)`+
+    prefix-rename+`Open` и teardown (`ForceInterrupt=0`+`Dispose`). Три field-читателя (`AudioReader`/`WaveformReader`/
+    `SubtitleReader`) делегируют — **byte-identical** (каждый сохраняет СВОЮ политику отмены на open-error: `return` у
+    Audio/Waveform vs `ThrowIfCancellationRequested` у Subtitle — дрейф НЕ унифицирован, т.к. это отд. поведенческое
+    решение; capture лямбды local≡field, т.к. все три single-use `using`+один `Open`/инстанс). Декодер/каст/доп.
+    handles (frame/packet/resampler/ExternalStream/`_isFile`) остались в вызывающем. **`MediaAudioProbe` вне скоупа**
+    (свой lifecycle: локальный demuxer + `using`-registration + OCE, без prefix). Дедуп −39 стр. из вызывающих.
+    Тестируемого чистого seam'а нет (native demuxer-механика; читатели и раньше без юнит-тестов) → build 0/0 +
+    adversarial-ревью + owner manual-smoke (ASR + waveform + загрузка внешних субтитров). **HC-44 закрыт полностью.**
 
 ### 8d. Опровергнутые находки (11) — НЕ баги, зафиксировано для истории
 > Верификаторы отсеяли (цитаты часто верны, но сценарий нереализуем / уже известно / стилевой нит):
