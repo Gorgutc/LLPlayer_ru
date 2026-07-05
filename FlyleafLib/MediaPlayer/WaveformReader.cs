@@ -53,16 +53,7 @@ public sealed class WaveformReader : IDisposable
     /// </summary>
     public void Open(string url, int streamIndex, MediaType type, CancellationToken token)
     {
-        _demuxer = new Demuxer(_config.Demuxer, type, 1, false);
-
-        token.Register(() =>
-        {
-            if (_demuxer != null)
-                _demuxer.Interrupter.ForceInterrupt = 1;
-        });
-
-        _demuxer.Log.Prefix = _demuxer.Log.Prefix.Replace("Demuxer: ", "DemuxerW:");
-        string? error = _demuxer.Open(url);
+        _demuxer = OfflineDemuxer.OpenIsolated(_config, type, 1, "DemuxerW:", url, token, out string? error);
 
         if (error != null)
         {
@@ -204,11 +195,7 @@ public sealed class WaveformReader : IDisposable
         _resampler.Dispose();
 
         _decoder?.Dispose();
-        if (_demuxer != null)
-        {
-            _demuxer.Interrupter.ForceInterrupt = 0;
-            _demuxer.Dispose();
-        }
+        OfflineDemuxer.DisposeIsolated(_demuxer);
 
         _isDisposed = true;
     }
