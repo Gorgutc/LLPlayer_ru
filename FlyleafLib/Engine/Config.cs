@@ -1508,6 +1508,17 @@ public class Config : NotifyPropertyChanged
         public bool WordTimestamps { get; set => Set(ref field, value); } = true;
 
         /// <summary>
+        /// F-19 slice 2: snap re-segmentation cue boundaries onto nearby speech↔silence transitions detected by a
+        /// CPU VAD (bundled Silero ONNX model) so a split cue switches during a pause instead of mid-word — insurance
+        /// where the slice-1 word timings drift (worst on music/noise). Additive/absent-defaulting (on by default);
+        /// it targets the interactive ASR path (both engines) and is layered on top of the word/character timing.
+        /// Fail-soft: if the model is missing or ONNX Runtime cannot load, boundaries keep their word/character
+        /// timing (byte-identical). whisper.cpp benefits too (audio-based, engine-independent); batch and loaded
+        /// subtitles are unaffected (no per-chunk audio is analyzed there).
+        /// </summary>
+        public bool VadCueSnapping { get; set => Set(ref field, value); } = true;
+
+        /// <summary>
         /// Re-segment generated subtitles (ASR and translation) into short, at-most-<see cref="SubtitleMaxLinesPerCue"/>-line
         /// cues of about <see cref="SubtitleMaxCharsPerLine"/> characters per line, splitting an over-long Whisper
         /// segment into several sequential cues with proportional timings, so a single cue does not fill the frame.

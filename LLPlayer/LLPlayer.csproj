@@ -16,7 +16,7 @@
     <ApplicationIcon>LLPlayer.ico</ApplicationIcon>
     <Description>The media player for language learning.</Description>
     <PackageProjectUrl>https://llplayer.com</PackageProjectUrl>
-    <Version>0.3.59</Version>
+    <Version>0.3.60</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
@@ -59,6 +59,11 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="Assets\kennedy.wav">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <!-- F-19 slice 2: bundled Silero VAD model (MIT, ~2.2MB). Resolved at runtime via
+         AsrVadDetector.ModelPath = BaseDirectory\Assets\silero_vad.onnx. -->
+    <Content Include="Assets\silero_vad.onnx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="lib\7z.dll">

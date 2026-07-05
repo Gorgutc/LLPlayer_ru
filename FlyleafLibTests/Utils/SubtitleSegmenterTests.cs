@@ -400,4 +400,99 @@ public class SubtitleSegmenterTests
         cues[0].Start.Should().Be(TimeSpan.FromSeconds(2));
         cues[0].End.Should().Be(TimeSpan.FromSeconds(2.4));
     }
+
+    // ---- F-19 slice 2: VAD speech-aware cue-boundary snapping ---------------------------------------
+
+    private static List<SpeechSegment> Speech((double Start, double End)[] src) =>
+        src.Select(s => new SpeechSegment(TimeSpan.FromSeconds(s.Start), TimeSpan.FromSeconds(s.End))).ToList();
+
+    [Fact]
+    public void Resegment_WithSpeech_SnapsBoundaryToNearestSilence()
+    {
+        // A 10s cue split in two by the duration cap. Constant-rate character proportion puts the internal
+        // boundary at 5.0s; a VAD silence gap sits at [4.9, 5.5] (midpoint 5.2s, within the 0.5s tolerance), so
+        // the boundary snaps into that pause. RED without SilenceClock: speech is ignored and it stays at 5.0s.
+        const string input = "one two three four five six";
+        TimeSpan start = TimeSpan.Zero;
+        TimeSpan end = TimeSpan.FromSeconds(10);
+
+        var charOnly = SubtitleSegmenter.Resegment(input, start, end, Opt);
+        var withSpeech = SubtitleSegmenter.Resegment(input, start, end, Opt, null,
+            Speech(new[] { (0.0, 4.9), (5.5, 10.0) }));
+
+        charOnly.Should().HaveCount(2);
+        charOnly[0].End.Should().Be(TimeSpan.FromSeconds(5.0));       // constant-rate char proportion
+        withSpeech[0].End.Should().Be(TimeSpan.FromSeconds(5.2));     // snapped to the silence-gap midpoint
+        Normalize(string.Join(' ', withSpeech.Select(c => c.Text))).Should().Be(Normalize(input));
+    }
+
+    [Fact]
+    public void Resegment_WithSpeech_BeyondTolerance_DoesNotSnap()
+    {
+        // The only silence gap (midpoint 6.0s) is 1.0s from the 5.0s character boundary — beyond the 0.5s
+        // tolerance — so the boundary is left exactly where the character proportion put it.
+        const string input = "one two three four five six";
+        TimeSpan start = TimeSpan.Zero;
+        TimeSpan end = TimeSpan.FromSeconds(10);
+
+        var withSpeech = SubtitleSegmenter.Resegment(input, start, end, Opt, null,
+            Speech(new[] { (0.0, 5.7), (6.3, 10.0) }));
+
+        withSpeech[0].End.Should().Be(TimeSpan.FromSeconds(5.0));
+    }
+
+    [Fact]
+    public void Resegment_NullSpeech_ByteIdenticalToCharProportion()
+    {
+        // The optional speech parameter must not change any existing caller: passing null (or omitting it) is
+        // exactly the old character-proportion path.
+        const string input = "one two three four five six";
+        TimeSpan start = TimeSpan.Zero;
+        TimeSpan end = TimeSpan.FromSeconds(10);
+
+        var noArg = SubtitleSegmenter.Resegment(input, start, end, Opt);
+        var nullSpeech = SubtitleSegmenter.Resegment(input, start, end, Opt, null, null);
+
+        nullSpeech.Should().Equal(noArg);
+    }
+
+    [Fact]
+    public void Resegment_WithSpeech_TimesStayMonotonicContiguousAndBounded()
+    {
+        const string input = "one two three four five six seven eight nine ten eleven twelve";
+        TimeSpan start = TimeSpan.Zero;
+        TimeSpan end = TimeSpan.FromSeconds(18);
+        // Several silence gaps across the span; snapping must never break the sorted/contiguous/bounded invariant.
+        var speech = Speech(new[] { (0.0, 3.4), (3.7, 8.4), (8.7, 13.4), (13.7, 18.0) });
+
+        var cues = SubtitleSegmenter.Resegment(input, start, end, Opt, null, speech);
+
+        cues[0].Start.Should().Be(start);
+        cues[^1].End.Should().Be(end);
+        for (int i = 0; i < cues.Count; i++)
+        {
+            cues[i].End.Should().BeGreaterThanOrEqualTo(cues[i].Start);
+            cues[i].End.Should().BeLessThanOrEqualTo(end);
+            if (i > 0)
+                cues[i].Start.Should().Be(cues[i - 1].End); // no gaps / no overlaps
+        }
+        Normalize(string.Join(' ', cues.Select(c => c.Text))).Should().Be(Normalize(input));
+    }
+
+    [Fact]
+    public void Resegment_WordsThenSpeech_SnapsWordBoundaryIntoAdjacentPause()
+    {
+        // Compose slice 1 + slice 2: the word timings place the boundary at a real word end (8.9s); a VAD silence
+        // gap at [8.5, 8.9] (midpoint 8.7s) is within tolerance, so slice 2 nudges that boundary into the pause.
+        const string input = "one two three four five six seven eight";
+        TimeSpan start = TimeSpan.Zero;
+        TimeSpan end = TimeSpan.FromSeconds(10);
+
+        var wordsOnly = SubtitleSegmenter.Resegment(input, start, end, Opt, Words(EightWordsFrontSlow));
+        var wordsAndSpeech = SubtitleSegmenter.Resegment(input, start, end, Opt,
+            Words(EightWordsFrontSlow), Speech(new[] { (0.0, 8.5), (8.9, 10.0) }));
+
+        wordsOnly[0].End.Should().Be(TimeSpan.FromSeconds(8.9));          // word end (slice 1)
+        wordsAndSpeech[0].End.Should().Be(TimeSpan.FromSeconds(8.7));     // nudged into the pause (slice 2)
+    }
 }

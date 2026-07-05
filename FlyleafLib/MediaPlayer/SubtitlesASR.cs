@@ -15,6 +15,7 @@ using CliWrap.EventStream;
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaStream;
+using FlyleafLib.Vad;
 using Whisper.net;
 using Whisper.net.LibraryLoader;
 using Whisper.net.Logger;
@@ -278,7 +279,9 @@ public class SubtitlesASR
             // A fresh run must never start paused (e.g. left paused before a seek-triggered restart).
             _pauseSource.Resume();
             _config.Subtitles.player.IsASRPaused = false;
-            using AudioReader reader = new(_config, subIndex);
+            // F-19 slice 2: enable VAD cue-boundary snapping only on the interactive ASR path (batch re-segments
+            // post-hoc without per-chunk audio, so it does not run VAD). Gated by the config toggle; fail-soft.
+            using AudioReader reader = new(_config, subIndex, enableVadSnapping: _config.Subtitles.VadCueSnapping);
             reader.Open(url, streamIndex, type, _cts.Token);
 
             if (_cts.Token.IsCancellationRequested)
@@ -305,7 +308,7 @@ public class SubtitlesASR
                     // a single subtitle does not fill the frame. Gated by the config toggle; cues that already
                     // fit pass through unchanged.
                     List<(string Text, TimeSpan Start, TimeSpan End)> cues = _config.Subtitles.ResegmentSubtitles
-                        ? SubtitleSegmenter.Resegment(asrText, data.StartTime, data.EndTime, _config.Subtitles.SubtitleSegmentOptions, data.Words)
+                        ? SubtitleSegmenter.Resegment(asrText, data.StartTime, data.EndTime, _config.Subtitles.SubtitleSegmentOptions, data.Words, data.Speech)
                         : [(asrText, data.StartTime, data.EndTime)];
 
                     foreach (int i in SubIndexSet)
@@ -449,6 +452,11 @@ public class AudioReader : IDisposable
     private readonly int _subIndex;
     private readonly Func<bool>? _preferCpu;
 
+    // F-19 slice 2: when true, run Silero VAD over each chunk's PCM and attach the speech segments so
+    // re-segmentation can snap cue boundaries onto pauses. Only the interactive ASR path enables it (batch leaves
+    // it false). Fail-soft — a missing model / ONNX load failure just skips snapping.
+    private readonly bool _enableVadSnapping;
+
     private Demuxer? _demuxer;
     private AudioDecoder? _decoder;
     private AudioStream? _stream;
@@ -467,11 +475,12 @@ public class AudioReader : IDisposable
     /// <param name="preferCpu">Optional per-chunk device policy for the faster-whisper engine (batch only):
     /// when it returns true a chunk is transcribed on CPU instead of the configured GPU device. Null keeps
     /// the configured device (the interactive ASR path passes nothing, so its behaviour is unchanged).</param>
-    public AudioReader(Config config, int subIndex, Func<bool>? preferCpu = null)
+    public AudioReader(Config config, int subIndex, Func<bool>? preferCpu = null, bool enableVadSnapping = false)
     {
         _config = config;
         _subIndex = subIndex;
         _preferCpu = preferCpu;
+        _enableVadSnapping = enableVadSnapping;
         Log = new LogHandler(("[#1]").PadRight(8, ' ') + " [AudioReader   ] ");
     }
 
@@ -589,6 +598,11 @@ public class AudioReader : IDisposable
                 _ => throw new InvalidOperationException()
             };
 
+            // F-19 slice 2: one VAD detector per ASR run (interactive path only; enableVadSnapping). TryCreate
+            // returns null when the model is missing or ONNX Runtime cannot load, so snapping is simply skipped
+            // (timing falls back to slice-1 behaviour). Disposed with the consumer via the using declaration.
+            using AsrVadDetector? vad = _enableVadSnapping ? AsrVadDetector.TryCreate() : null;
+
             // Track the previous emitted segment to drop consecutive duplicate segments produced by
             // whisper repetition loops (see the dedup check below).
             string? lastText = null;
@@ -616,6 +630,23 @@ public class AudioReader : IDisposable
                     //    chunk.Stream.WriteTo(fs);
                     //    chunk.Stream.Position = 0;
                     //}
+
+                    // F-19 slice 2: detect speech segments once per chunk (VAD over the same S16 PCM the engine
+                    // transcribes; non-destructive read) and shift them into absolute media time. Attached to every
+                    // cue from this chunk so re-segmentation can snap boundaries onto pauses. Fail-soft: no detector
+                    // or an empty result leaves speechAbs null → no snapping (byte-identical to slice 1).
+                    IReadOnlyList<SpeechSegment>? speechAbs = null;
+                    if (vad is not null)
+                    {
+                        IReadOnlyList<SpeechSegment> local = vad.Detect(chunk.Stream);
+                        if (local.Count > 0)
+                        {
+                            List<SpeechSegment> abs = new(local.Count);
+                            foreach (SpeechSegment s in local)
+                                abs.Add(new SpeechSegment(chunk.Start.Add(s.Start), chunk.Start.Add(s.End)));
+                            speechAbs = abs;
+                        }
+                    }
 
                     await foreach (var data in asrService.Do(chunk.Stream, token))
                     {
@@ -685,6 +716,7 @@ public class AudioReader : IDisposable
                             StartTime = start,
                             EndTime = end,
                             Words = wordsAbs,
+                            Speech = speechAbs,
 #if DEBUG
                             ChunkNo = chunk.ChunkNumber,
                             StartTimeChunk = chunk.Start,
@@ -1954,4 +1986,9 @@ public class SubtitleASRData
     // F-19: per-word timestamps for this cue (faster-whisper), in absolute media time, or null when unavailable.
     // Consumed by re-segmentation to place cue boundaries on real word times instead of character proportion.
     public IReadOnlyList<WordTiming>? Words { get; init; }
+
+    // F-19 slice 2: VAD speech segments for this cue's chunk (absolute media time), or null when VAD is off /
+    // unavailable. Consumed by re-segmentation to snap cue boundaries onto pauses. Chunk-scoped (the whole chunk's
+    // segments are attached to every cue from that chunk; re-segmentation only uses the ones inside a cue's span).
+    public IReadOnlyList<SpeechSegment>? Speech { get; init; }
 }

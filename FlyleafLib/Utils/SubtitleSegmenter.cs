@@ -27,6 +27,14 @@ public sealed class SubtitleSegmentOptions
 
     /// <summary>Never emit a cue shorter than this (seconds); a too-short sliver is merged into its neighbour. 0 disables.</summary>
     public double MinCueDurationSec { get; init; } = 1.0;
+
+    /// <summary>
+    /// F-19 slice 2: max distance (seconds) a re-segmentation cue boundary may be moved to snap onto a nearby
+    /// speech↔silence transition detected by VAD, so a split cue switches during a pause instead of mid-word.
+    /// 0 disables snapping. Only has an effect when speech segments are supplied to
+    /// <see cref="SubtitleSegmenter.Resegment"/>; without them the timing is unchanged.
+    /// </summary>
+    public double SnapToSpeechToleranceSec { get; init; } = 0.5;
 }
 
 /// <summary>
@@ -36,6 +44,14 @@ public sealed class SubtitleSegmentOptions
 /// the cue's own start/end passed to <see cref="SubtitleSegmenter.Resegment"/> (absolute media time).
 /// </summary>
 public readonly record struct WordTiming(string Word, TimeSpan Start, TimeSpan End);
+
+/// <summary>
+/// A detected speech interval from VAD (F-19 slice 2), in the same absolute media-time frame as a cue's
+/// start/end. Re-segmentation snaps a split-cue boundary to the nearest silence gap between consecutive speech
+/// segments, so the cue switches during a pause rather than mid-word — insurance where the slice-1 word timings
+/// drift (worst on music/noise). Ignored (timing unchanged) when not supplied.
+/// </summary>
+public readonly record struct SpeechSegment(TimeSpan Start, TimeSpan End);
 
 /// <summary>
 /// Re-segments and line-wraps ASR/translation subtitle text so a cue is at most <c>MaxLinesPerCue</c> lines
@@ -71,13 +87,18 @@ public static class SubtitleSegmenter
     /// <summary>
     /// Split <paramref name="text"/> spanning [<paramref name="start"/>, <paramref name="end"/>] into one or
     /// more cues, each wrapped to at most <see cref="SubtitleSegmentOptions.MaxLinesPerCue"/> lines. When
-    /// <paramref name="words"/> is supplied (F-19), each internal cue boundary is placed on the end of the word
-    /// nearest that boundary so the cue times follow real speech pace; otherwise times are redistributed by
-    /// character proportion (unchanged). Returns at least one cue and never loses text.
+    /// <paramref name="words"/> is supplied (F-19 slice 1), each internal cue boundary is placed on the end of the
+    /// word nearest that boundary so the cue times follow real speech pace; otherwise times are redistributed by
+    /// character proportion (unchanged). When <paramref name="speech"/> is supplied (F-19 slice 2), each internal
+    /// boundary is then nudged onto the nearest speech/silence transition within
+    /// <see cref="SubtitleSegmentOptions.SnapToSpeechToleranceSec"/> so the cue switches during a pause. Both are
+    /// optional and additive: with neither, the behaviour is exactly the original character-proportion split.
+    /// Returns at least one cue and never loses text.
     /// </summary>
     public static List<(string Text, TimeSpan Start, TimeSpan End)> Resegment(
         string text, TimeSpan start, TimeSpan end, SubtitleSegmentOptions opt,
-        IReadOnlyList<WordTiming>? words = null)
+        IReadOnlyList<WordTiming>? words = null,
+        IReadOnlyList<SpeechSegment>? speech = null)
     {
         if (end < start)
             end = start;
@@ -120,6 +141,7 @@ public static class SubtitleSegmenter
             totalChars = 1;
 
         WordClock? clock = WordClock.Build(words, start, end);
+        SilenceClock? silence = SilenceClock.Build(speech, opt.SnapToSpeechToleranceSec);
 
         long spanTicks = (end - start).Ticks;
         long consumed = 0;
@@ -134,6 +156,12 @@ public static class SubtitleSegmenter
                 cueEnd = clock.EndAtFraction((double)consumed / totalChars);
             else
                 cueEnd = start + TimeSpan.FromTicks(spanTicks * consumed / totalChars);
+
+            // F-19 slice 2: nudge an internal boundary onto the nearest speech/silence transition (VAD) within
+            // tolerance, so the cue switches during a pause instead of mid-word. The final boundary stays exactly
+            // `end`; a boundary with no pause nearby is left where the word/char timing put it. No-op without speech.
+            if (i != pieces.Count - 1 && silence is not null)
+                cueEnd = silence.Snap(cueEnd, acc, end);
 
             if (cueEnd < acc)
                 cueEnd = acc;
@@ -596,6 +624,69 @@ public static class SubtitleSegmenter
             while (k < _cumChar.Length - 1 && _cumChar[k] < target)
                 k++;
             return _end[k];
+        }
+    }
+
+    // Snaps a re-segmentation cue boundary to the nearest speech↔silence transition (F-19 slice 2). The snap
+    // anchors are the midpoints of the silence gaps BETWEEN consecutive VAD speech segments, so a boundary within
+    // tolerance of a pause is moved into that pause (the cue switches during silence, not mid-word). A boundary
+    // with no pause within tolerance is left exactly where the word/char timing put it. Built only when there are
+    // at least two speech segments with a real gap and a positive tolerance; otherwise Build returns null (no-op).
+    private sealed class SilenceClock
+    {
+        private readonly TimeSpan[] _anchors; // sorted silence-gap midpoints (interior gaps only)
+        private readonly long _tolTicks;
+
+        private SilenceClock(TimeSpan[] anchors, long tolTicks)
+        {
+            _anchors = anchors;
+            _tolTicks = tolTicks;
+        }
+
+        public static SilenceClock? Build(IReadOnlyList<SpeechSegment>? speech, double toleranceSec)
+        {
+            if (speech is null || speech.Count < 2 || toleranceSec <= 0)
+                return null;
+
+            SpeechSegment[] sorted = speech.ToArray();
+            Array.Sort(sorted, static (a, b) => a.Start.CompareTo(b.Start));
+
+            List<TimeSpan> anchors = new(sorted.Length);
+            for (int i = 0; i + 1 < sorted.Length; i++)
+            {
+                TimeSpan gapStart = sorted[i].End;
+                TimeSpan gapEnd = sorted[i + 1].Start;
+                if (gapEnd > gapStart)
+                    anchors.Add(gapStart + ((gapEnd - gapStart) / 2)); // midpoint of the silence
+            }
+
+            if (anchors.Count == 0)
+                return null;
+
+            long tol = TimeSpan.FromSeconds(toleranceSec).Ticks;
+            return new SilenceClock(anchors.ToArray(), tol);
+        }
+
+        // Return the silence anchor nearest to `t` within tolerance and strictly inside (lo, hi); else `t` itself.
+        // Staying inside (lo, hi) keeps the emitted cues monotonic and within the original [start, end] span.
+        public TimeSpan Snap(TimeSpan t, TimeSpan lo, TimeSpan hi)
+        {
+            long best = long.MaxValue;
+            TimeSpan chosen = t;
+            foreach (TimeSpan a in _anchors)
+            {
+                if (a <= lo || a >= hi)
+                    continue;
+
+                long d = Math.Abs((a - t).Ticks);
+                if (d <= _tolTicks && d < best)
+                {
+                    best = d;
+                    chosen = a;
+                }
+            }
+
+            return chosen;
         }
     }
 }

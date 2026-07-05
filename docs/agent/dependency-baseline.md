@@ -19,6 +19,7 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `FlyleafLib` | `CliWrap` | `3.10.1` |
 | `FlyleafLib` | `DeepL.net` | `1.21.0` |
 | `FlyleafLib` | `Flyleaf.FFmpeg.Bindings` | `8.0.1` |
+| `FlyleafLib` | `Microsoft.ML.OnnxRuntime` | `1.20.1` |
 | `FlyleafLib` | `SearchPioneer.Lingua` | `1.0.5` |
 | `FlyleafLib` | `TesseractOCR` | `5.5.2` |
 | `FlyleafLib` | `UTF.Unknown` | `2.6.0` |
@@ -72,9 +73,18 @@ These tracked files are intentional release/runtime assets:
 - `FFmpeg/swscale-9.dll`
 - `LLPlayer/lib/7z.dll`
 - `LLPlayer/lib/license.7z.txt`
+- `LLPlayer/Assets/silero_vad.onnx` (Silero VAD model, MIT, F-19 slice 2)
 - `Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
 
 Do not add downloaded `yt-dlp.exe`, Whisper/faster-whisper engines or models, Tesseract data, dubbing runtime data (`DubEngine/`, `dubmodels/`, `*.ru.dub.*`, `*.ru.voices.json`), runtime JSON, crash logs, dumps, recordings, snapshots, publish output, `bin`, or `obj` as tracked files.
+
+## Silero VAD (speech-aware cue snapping, F-19 slice 2)
+
+`FlyleafLib` references `Microsoft.ML.OnnxRuntime` (`1.20.1`, MIT) to run the Silero VAD model on CPU for F-19 slice 2 (snapping ASR re-segmentation cue boundaries onto speech pauses). The native `onnxruntime.dll` it depends on is copied into the `LLPlayer` publish output by `dotnet publish` (win-x64), alongside the other bundled native assets; `.github/actions/build-package/action.yml` positively validates `onnxruntime.dll` is present so a missing native lib fails the release rather than silently shipping a no-op feature.
+
+The VAD C# code is **vendored** (not a NuGet) from `snakers4/silero-vad` (`examples/csharp`, **MIT**, Copyright (c) 2020-present Silero Team) into `FlyleafLib/Vad/` (`SileroVadOnnxModel.cs`, `SileroVadDetector.cs`, `SileroSpeechSegment.cs`), each carrying an attribution header. Local changes: namespace, the NAudio WAV reader replaced by a `float[]` entry point fed from the ASR resampler, and `Dispose()` now actually disposes the ONNX session. Upgrading the vendored files or ONNX Runtime is dependency work (re-verify against the bundled model), not incidental cleanup.
+
+The `silero_vad.onnx` model itself (**MIT**, ~2.2 MB) is a committed tracked asset at `LLPlayer/Assets/silero_vad.onnx`, bundled next to the exe (resolved at runtime as `BaseDirectory\Assets\silero_vad.onnx`). It is small and required at runtime, so unlike the large downloadable Whisper/Tesseract models it is committed and shipped (the same policy as the other `Assets/` files). Everything is fail-soft: a missing model or an ONNX Runtime load failure disables snapping and leaves subtitle timing byte-identical.
 
 ## Dubbing Sidecar Lock
 
@@ -94,5 +104,5 @@ Whisper/ASR diagnostics already ask users whether Microsoft Visual C++ Redistrib
 
 - `.github/actions/build-package/action.yml` is the source of truth for release-only cleanup, `yt-dlp.exe` download, and 7-Zip archive creation.
 - The runtime cleanup list is intentionally strict. Local `scripts/codex/ship.ps1` should fail if expected cleanup targets disappear instead of silently passing a layout that the GitHub Action would fail.
-- The release action must positively validate required publish contents (`LLPlayer.exe`, `lib/7z.dll`, all copied `FFmpeg/*.dll`, `Plugins/YoutubeDL/YoutubeDL.dll`, `YoutubeDL.pdb`, `yt-dlp.exe`, and committed `dub_sidecar` source) and recursively reject dubbing runtime/model/output artifacts (`DubEngine`, `dubmodels`, `*.ru.dub.*`, `*.ru.voices.json`).
+- The release action must positively validate required publish contents (`LLPlayer.exe`, `lib/7z.dll`, `Assets/silero_vad.onnx`, `onnxruntime.dll`, all copied `FFmpeg/*.dll`, `Plugins/YoutubeDL/YoutubeDL.dll`, `YoutubeDL.pdb`, `yt-dlp.exe`, and committed `dub_sidecar` source) and recursively reject dubbing runtime/model/output artifacts (`DubEngine`, `dubmodels`, `*.ru.dub.*`, `*.ru.voices.json`).
 - Local ship smoke creates the `Plugins/YoutubeDL/yt-dlp.exe_here` placeholder and verifies the release action markers for `yt-dlp.exe` download, positive content checks, recursive dubbing-artifact rejection, and 7-Zip archive command. It does not download `yt-dlp.exe` unless a future release task explicitly requests network packaging.
