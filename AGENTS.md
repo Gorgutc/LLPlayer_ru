@@ -20,7 +20,7 @@ LLPlayer is a Windows-only C#/.NET 10 WPF media player for language learning. Th
 - `Plugins/YoutubeDL/`: .NET plugin that integrates `yt-dlp.exe`.
 - `WpfColorFontDialog/`: WPF color/font dialog dependency.
 - `FlyleafLibTests/`: xUnit v3 tests.
-- `FFmpeg/` and `LLPlayer/lib/7z.dll`: tracked native runtime assets required by packaging.
+- `FFmpeg/`, `LLPlayer/lib/7z.dll`, and `LLPlayer/Assets/silero_vad.onnx`: tracked native/runtime assets required by packaging.
 
 The application targets `net10.0-windows10.0.18362.0`, `win-x64`, and publishes as a framework-dependent single-file Windows exe. Do not assume this is a web, Node, React, or Playwright project.
 
@@ -96,7 +96,7 @@ Do not copy PL_RU/codex web gates as-is. The following are not LLPlayer quality 
 
 - Keep `.github/actions/build-package/action.yml` as the source of truth for release packaging.
 - Preserve the separate app publish and `Plugins/YoutubeDL` publish flow.
-- Keep tracked native assets intentional: `FFmpeg/*.dll` and `LLPlayer/lib/7z.dll`.
+- Keep tracked native/runtime assets intentional: `FFmpeg/*.dll`, `LLPlayer/lib/7z.dll`, and `LLPlayer/Assets/silero_vad.onnx`.
 - Do not commit publish output, downloaded `yt-dlp.exe`, Whisper/Tesseract models, logs, dumps, local runtime config JSON, secrets, or Codex memories.
 
 ## GitHub Flow

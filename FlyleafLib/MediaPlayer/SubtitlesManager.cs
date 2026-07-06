@@ -692,7 +692,7 @@ public unsafe class SubtitleReader : IDisposable
     private readonly LogHandler Log;
     private readonly int _subIndex;
 
-    private Demuxer? _demuxer;
+    private OfflineDemuxer.IsolatedDemuxer? _demuxer;
     private SubtitlesDecoder? _decoder;
     private SubtitlesStream? _stream;
 
@@ -718,7 +718,7 @@ public unsafe class SubtitleReader : IDisposable
             throw new InvalidOperationException($"demuxer open error: {error}");
         }
 
-        _stream = (SubtitlesStream)_demuxer.AVStreamToStream[streamIndex];
+        _stream = (SubtitlesStream)_demuxer.Demuxer.AVStreamToStream[streamIndex];
 
         if (type == MediaType.Subs)
         {
@@ -755,6 +755,7 @@ public unsafe class SubtitleReader : IDisposable
         if (_demuxer == null || _decoder == null || _stream == null)
             throw new InvalidOperationException("Open() is not called");
 
+        Demuxer demuxer = _demuxer.Demuxer;
         SubtitleData? prevSub = null;
         // HC-21: track prevSub's raw end_display_time in a local. The PGS "display until next packet" correction
         // below used prevSub.Bitmap?.Sub.end_display_time, which is null when useBitmap == false (timestamp-only
@@ -769,14 +770,14 @@ public unsafe class SubtitleReader : IDisposable
 
         while (!token.IsCancellationRequested)
         {
-            _demuxer.Interrupter.ReadRequest();
-            int ret = av_read_frame(_demuxer.fmtCtx, _packet);
+            demuxer.Interrupter.ReadRequest();
+            int ret = av_read_frame(demuxer.fmtCtx, _packet);
 
             if (ret != 0)
             {
                 av_packet_unref(_packet);
 
-                if (_demuxer.Interrupter.Timedout)
+                if (demuxer.Interrupter.Timedout)
                 {
                     if (token.IsCancellationRequested)
                         break;
@@ -876,7 +877,7 @@ public unsafe class SubtitleReader : IDisposable
                     // Note that not all bitmap subtitles have this behavior.
 
                     // Assign pts as the end time of the previous subtitle
-                    prevSub.EndTime = new TimeSpan(pts - _demuxer.StartTime);
+                    prevSub.EndTime = new TimeSpan(pts - demuxer.StartTime);
                     addSub(prevSub);
                     prevSub = null;
                     prevEndDisplayTime = 0;
@@ -895,7 +896,7 @@ public unsafe class SubtitleReader : IDisposable
                 // HC-21: gate on the tracked end_display_time, not prevSub.Bitmap (null in timestamp-only mode).
                 if (prevEndDisplayTime == uint.MaxValue) // 4294967295
                 {
-                    prevSub.EndTime = new TimeSpan(pts - _demuxer.StartTime);
+                    prevSub.EndTime = new TimeSpan(pts - demuxer.StartTime);
                     addSub(prevSub);
                     prevSub = null;
                     prevEndDisplayTime = 0;
@@ -903,7 +904,7 @@ public unsafe class SubtitleReader : IDisposable
             }
 
             uint endDisplayTime = sub.end_display_time;
-            subData.StartTime = new TimeSpan(pts - _demuxer.StartTime);
+            subData.StartTime = new TimeSpan(pts - demuxer.StartTime);
             subData.EndTime = subData.StartTime.Add(TimeSpan.FromMilliseconds(endDisplayTime));
 
             switch (sub.rects[0]->type)

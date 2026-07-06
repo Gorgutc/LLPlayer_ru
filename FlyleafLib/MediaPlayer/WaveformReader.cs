@@ -23,7 +23,7 @@ public sealed class WaveformReader : IDisposable
 {
     private readonly Config _config;
 
-    private Demuxer? _demuxer;
+    private OfflineDemuxer.IsolatedDemuxer? _demuxer;
     private AudioDecoder? _decoder;
     private AudioStream? _stream;
 
@@ -63,7 +63,7 @@ public sealed class WaveformReader : IDisposable
             throw new InvalidOperationException($"demuxer open error: {error}");
         }
 
-        _stream = (AudioStream)_demuxer.AVStreamToStream[streamIndex];
+        _stream = (AudioStream)_demuxer.Demuxer.AVStreamToStream[streamIndex];
 
         _decoder = new AudioDecoder(_config, 1);
         _decoder.Log.Prefix = _decoder.Log.Prefix.Replace("Decoder: ", "DecoderW:");
@@ -88,6 +88,7 @@ public sealed class WaveformReader : IDisposable
         if (_demuxer == null || _decoder == null || _stream == null)
             throw new InvalidOperationException("Open() is not called");
 
+        Demuxer demuxer = _demuxer.Demuxer;
         _packet = av_packet_alloc();
         _frame = av_frame_alloc();
 
@@ -100,15 +101,15 @@ public sealed class WaveformReader : IDisposable
 
         while (!token.IsCancellationRequested)
         {
-            _demuxer.Interrupter.ReadRequest();
-            int ret = av_read_frame(_demuxer.fmtCtx, _packet);
+            demuxer.Interrupter.ReadRequest();
+            int ret = av_read_frame(demuxer.fmtCtx, _packet);
 
             if (ret != 0)
             {
                 av_packet_unref(_packet);
 
                 // EOF, cancellation, or a timed-out interrupt all end the single pass.
-                if (ret == AVERROR_EOF || token.IsCancellationRequested || _demuxer.Interrupter.Timedout)
+                if (ret == AVERROR_EOF || token.IsCancellationRequested || demuxer.Interrupter.Timedout)
                     break;
 
                 if (CanWarn) Log.Warn($"av_read_frame: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
@@ -151,7 +152,7 @@ public sealed class WaveformReader : IDisposable
                 else
                     framePts = framePts == NoTs ? 0 : framePts + _frame->duration;
 
-                long frameStartTicks = (long)(framePts * _stream.Timebase) - _demuxer.StartTime;
+                long frameStartTicks = (long)(framePts * _stream.Timebase) - demuxer.StartTime;
                 if (frameStartTicks < 0)
                     frameStartTicks = 0;
 

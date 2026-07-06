@@ -15,6 +15,7 @@ Allowed tracked native assets:
 - `FFmpeg/*.dll`
 - `LLPlayer/lib/7z.dll`
 - `LLPlayer/lib/license.7z.txt`
+- `LLPlayer/Assets/silero_vad.onnx`
 - `Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
 
 Treat any new binary as suspicious until its role in the Windows release package is documented.
