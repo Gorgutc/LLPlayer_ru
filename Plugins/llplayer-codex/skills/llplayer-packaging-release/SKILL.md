@@ -20,8 +20,9 @@ Use `scripts/codex/ship.ps1` as the local offline packaging smoke; keep it in sy
 8. Archive with 7-Zip.
 
 Publish steps must keep warnings fatal (`/warnaserror`) for both app and `Plugins/YoutubeDL`.
-The package must include committed runtime source/assets (`FFmpeg`, `LLPlayer/lib/7z.dll`, `dub_sidecar/`
-source including `uv.lock`) and must reject generated/runtime data (`DubEngine/`, `dubmodels/`,
+The package must include committed runtime source/assets (`FFmpeg`, `LLPlayer/lib/7z.dll`,
+`LLPlayer/Assets/silero_vad.onnx`, `onnxruntime.dll`, `dub_sidecar/` source including `uv.lock`)
+and must reject generated/runtime data (`DubEngine/`, `dubmodels/`,
 `*.ru.dub.*`, `*.ru.voices.json`, downloaded local `yt-dlp.exe`).
 
 Local Codex verification should stay offline unless explicitly shipping.

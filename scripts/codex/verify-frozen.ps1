@@ -61,6 +61,8 @@ try {
     Require-Text ".\.github\actions\build-package\action.yml" "\*\.ru\.voices\.json" "Release package action must reject per-line voice assignment companion files."
     Require-Text ".\.github\actions\build-package\action.yml" "Release package is missing required file" "Release package action must positively validate required publish contents."
     Require-Text ".\.github\actions\build-package\action.yml" "LLPlayer\.exe" "Release package action must verify LLPlayer.exe is present."
+    Require-Text ".\.github\actions\build-package\action.yml" "Assets\\silero_vad\.onnx" "Release package action must verify the bundled Silero VAD model is present."
+    Require-Text ".\.github\actions\build-package\action.yml" "onnxruntime\.dll" "Release package action must verify ONNX Runtime native library is present."
     foreach ($ffmpegDll in @(
         "avcodec-62\.dll",
         "avdevice-62\.dll",
@@ -90,6 +92,8 @@ try {
     Require-Text ".\scripts\codex\ship.ps1" "Release dry-run" "Ship smoke must dry-run release-only packaging tail."
     Require-Text ".\scripts\codex\ship.ps1" "yt-dlp\.exe_here" "Ship smoke must create yt-dlp placeholder."
     Require-Text ".\scripts\codex\ship.ps1" "LLPlayer\\lib\\7z\.dll" "Ship smoke must verify publish output contains LLPlayer/lib/7z.dll."
+    Require-Text ".\scripts\codex\ship.ps1" "Assets\\silero_vad\.onnx" "Ship smoke must verify publish output contains Assets/silero_vad.onnx."
+    Require-Text ".\scripts\codex\ship.ps1" "onnxruntime\.dll" "Ship smoke must verify publish output contains onnxruntime.dll."
     Require-Text ".\scripts\codex\ship.ps1" "dub_sidecar\\server\.py" "Ship smoke must verify committed dubbing sidecar source is published."
     Require-Text ".\scripts\codex\ship.ps1" "dub_sidecar\\uv\.lock" "Ship smoke must verify committed dubbing lockfile is published."
     Require-Text ".\scripts\codex\ship.ps1" "DubEngine" "Ship smoke must verify dubbing runtime engine is not published."
@@ -135,6 +139,8 @@ try {
     Require-Text ".\FlyleafLib\Engine\Config.cs" "ASRSilenceRmsThreshold\s*\{[^\r\n}]*\}\s*=\s*0\.01\s*;" "ASRSilenceRmsThreshold default must remain 0.01."
     Require-Text ".\FlyleafLib\Engine\Config.cs" "ASRFoldBack\s*\{[^\r\n}]*\}\s*=\s*false\s*;" "ASRFoldBack (T-08 mid-video fold-back) default must remain off."
     Require-Text ".\FlyleafLib\Engine\Config.cs" "ASRPerSegmentLanguage\s*\{[^\r\n}]*\}\s*=\s*false\s*;" "ASRPerSegmentLanguage (T-10 per-segment language) default must remain off (frozen byte-identical)."
+    Require-Text ".\FlyleafLib\Engine\Config.cs" "WordTimestamps\s*\{[^\r\n}]*\}\s*=\s*true\s*;" "WordTimestamps (F-19 faster-whisper word timing) default must remain on."
+    Require-Text ".\FlyleafLib\Engine\Config.cs" "VadCueSnapping\s*\{[^\r\n}]*\}\s*=\s*true\s*;" "VadCueSnapping (F-19 Silero VAD cue snapping) default must remain on."
     Require-Text ".\FlyleafLib\Engine\Config.cs" "PersistPerLineVoices\s*\{[^\r\n}]*\}\s*=\s*false\s*;" "PersistPerLineVoices (F-16 opt-in per-line voice persistence) default must remain off (frozen byte-identical)."
     Require-Text ".\FlyleafLib\Engine\Config.cs" '(?s)loadedVer\s*<=\s*System\.Version\.Parse\("0\.3\.5"\).*TranslateMethod\s*==\s*ChatTranslateMethod\.KeepContext.*TranslateMethod\s*=\s*ChatTranslateMethod\.ContextWindow' "Config.UpdateDefault must migrate old KeepContext default to ContextWindow."
     Require-Text ".\FlyleafLib\Engine\Config.cs" '(?s)loadedVer\s*<=\s*System\.Version\.Parse\("0\.3\.6"\).*SubtitleMaxLinesPerCue\s*==\s*2.*SubtitleMaxLinesPerCue\s*=\s*3.*SubtitleMaxCharsPerLine\s*==\s*42.*SubtitleMaxCharsPerLine\s*=\s*48.*SubtitleMaxCjkCharsPerLine\s*==\s*21.*SubtitleMaxCjkCharsPerLine\s*=\s*24.*SubtitleMaxCueDurationSec\s*==\s*6\.0.*SubtitleMaxCueDurationSec\s*=\s*7\.0' "Config.UpdateDefault must migrate old subtitle re-segmentation defaults to 0.3.7 values."
@@ -150,6 +156,8 @@ try {
     Require-Text ".\docs\agent\dependency-baseline.md" "Microsoft Visual C\+\+ Redistributable 2022" "Dependency baseline must document VC++ Redistributable prerequisite."
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "Save & Close" "Manual smoke matrix must cover settings persistence."
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "Left-click a subtitle word" "Manual smoke matrix must cover subtitle word lookup."
+    Require-Text ".\docs\agent\manual-smoke-matrix.md" "Word-Level Cue Timing" "Manual smoke matrix must cover F-19 word-timestamp cue timing."
+    Require-Text ".\docs\agent\manual-smoke-matrix.md" "Snap Cue Timing to Speech" "Manual smoke matrix must cover F-19 VAD cue snapping."
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "Open CheatSheet with F1" "Manual smoke matrix must cover CheatSheet workflow."
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "current-session assignment also reaches the SRT-only render path" "Manual smoke matrix must cover per-line voice batch render from existing SRT."
     Require-Text ".\docs\agent\dubbing-contract.md" "IDubbingVoiceAssignmentProvider" "Dubbing contract must document per-line voice assignment provider."
@@ -161,11 +169,15 @@ try {
     Require-Text ".\docs\agent\dubbing\dubbing-roadmap.md" "Phase 2a progress" "Dubbing roadmap must include per-line voice phase 2a progress."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "verification_reviewer" "Subagent review matrix must require verification review."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "LLPlayer/Converters/\*\*" "Subagent review matrix must route LLPlayer converters through WPF review."
+    Require-Text ".\docs\agent\subagent-review-matrix.md" "LLPlayer/Assets/\*\*" "Subagent review matrix must route bundled native/model assets through dependency/package review."
+    Require-Text ".\docs\agent\subagent-review-matrix.md" "FlyleafLib/Vad/\*\*" "Subagent review matrix must route VAD code through media/native review."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "FlyleafLib/Utils/\*\*" "Subagent review matrix must route FlyleafLib utilities through media/.NET review."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "FlyleafLibTests/\*\*" "Subagent review matrix must route tests through .NET review."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "\*\.csproj" "Subagent review matrix must route project files through .NET/package review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "LLPlayer/\(Views\|Controls\|ViewModels\|Converters\|Themes\|Resources\)" "Frozen audit must route LLPlayer converters/resources/themes through WPF review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "FlyleafLib/Utils/" "Frozen audit must route FlyleafLib utilities through media/.NET review."
+    Require-Text ".\scripts\codex\audit-frozen.ps1" "FlyleafLib/Vad/" "Frozen audit must route VAD code through media/native review."
+    Require-Text ".\scripts\codex\audit-frozen.ps1" "LLPlayer/Assets/" "Frozen audit must route bundled native/model assets through dependency/package review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "FlyleafLibTests/" "Frozen audit must route tests through .NET review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "\.csproj" "Frozen audit must route project files through .NET/package review."
     Require-Text ".\.codex\config.toml" "LLPlayer_ru" ".codex/config.toml must describe LLPlayer_ru."
@@ -175,8 +187,15 @@ try {
     Require-Text ".\dub_sidecar\uv.lock" "https://download\.pytorch\.org/whl/cu128" "Dubbing lockfile must resolve torch from the CUDA 12.8 PyTorch index."
     Require-Text ".\docs\agent\dependency-baseline.md" "torch.*2\.11\.0\+cu128" "Dependency baseline must document the reviewed torch lockfile resolution."
     Require-Text ".\DO_NOT_PUSH.md" "\*\.ru\.voices\.json" "Do-not-push guidance must mention per-line voice assignment companion files."
+    Require-Text ".\DO_NOT_PUSH.md" "LLPlayer/Assets/silero_vad\.onnx" "Do-not-push guidance must whitelist the tracked Silero VAD model."
+    Require-Text ".\Plugins\llplayer-codex\skills\llplayer-runtime-assets\SKILL.md" "LLPlayer/Assets/silero_vad\.onnx" "Runtime assets skill must document the tracked Silero VAD model."
+    Require-Text ".\Plugins\llplayer-codex\skills\llplayer-packaging-release\SKILL.md" "LLPlayer/Assets/silero_vad\.onnx" "Packaging release skill must document the tracked Silero VAD model."
+    Require-Text ".\Plugins\llplayer-codex\skills\llplayer-packaging-release\SKILL.md" "onnxruntime\.dll" "Packaging release skill must document ONNX Runtime native publish content."
     Require-Text ".\docs\agent\dependency-baseline.md" "\*\.ru\.voices\.json" "Dependency baseline must document voice companion files as runtime data."
+    Require-Text ".\docs\agent\dependency-baseline.md" "Plugins/YoutubeDL/yt-dlp\.exe_here" "Dependency baseline must document the release yt-dlp placeholder marker."
     Require-Text ".\docs\agent\verification.md" "\*\.ru\.voices\.json" "Verification docs must document ship rejection of voice companion files."
+    Require-Text ".\docs\agent\verification.md" "Assets/silero_vad\.onnx" "Verification docs must document Silero VAD model ship validation."
+    Require-Text ".\docs\agent\verification.md" "onnxruntime\.dll" "Verification docs must document ONNX Runtime ship validation."
     Require-Text ".\docs\agent\manual-smoke-matrix.md" "\*\.ru\.voices\.json" "Manual smoke matrix must document packaging rejection of voice companion files."
 
     $forbidden = @(
@@ -239,6 +258,7 @@ try {
         "FFmpeg/swscale-9.dll",
         "LLPlayer/lib/7z.dll",
         "LLPlayer/lib/license.7z.txt",
+        "LLPlayer/Assets/silero_vad.onnx",
         "Plugins/YoutubeDL/Libs/yt-dlp.exe_here",
         "dub_sidecar/uv.lock"
     )
@@ -304,6 +324,7 @@ try {
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "CliWrap" "3.10.1"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "DeepL.net" "1.21.0"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "Flyleaf.FFmpeg.Bindings" "8.0.1"
+    Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "Microsoft.ML.OnnxRuntime" "1.20.1"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "SearchPioneer.Lingua" "1.0.5"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "TesseractOCR" "5.5.2"
     Require-PackageVersion ".\FlyleafLib\FlyleafLib.csproj" "UTF.Unknown" "2.6.0"

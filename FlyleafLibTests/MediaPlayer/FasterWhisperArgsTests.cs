@@ -66,6 +66,33 @@ public class FasterWhisperArgsTests
     }
 
     [Fact]
+    public void BuildCommand_WordTimestampsOn_AddsJsonOutputAndWordTimestampsFlag()
+    {
+        FasterWhisperConfig config = new() { ExtraArguments = "--device cuda" };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig(), wordTimestamps: true).Arguments;
+
+        args.Should().Contain("--output_format");
+        args.Should().Contain("srt");
+        args.Should().Contain("json");
+        args.Should().Contain("--word_timestamps");
+        args.Should().Contain("True");
+    }
+
+    [Fact]
+    public void BuildCommand_WordTimestampsOff_OmitsJsonOutputAndWordTimestampsFlag()
+    {
+        FasterWhisperConfig config = new() { ExtraArguments = "--device cuda" };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig(), wordTimestamps: false).Arguments;
+
+        args.Should().Contain("--output_format");
+        args.Should().Contain("srt");
+        args.Should().NotContain("json");
+        args.Should().NotContain("--word_timestamps");
+    }
+
+    [Fact]
     public void BuildCommand_PromptSet_AddsInitialPrompt()
     {
         // F-17/F-18: a first-class initial_prompt biases language/script and casing at the source.

@@ -38,6 +38,7 @@ $patterns = @(
     '^Plugins/YoutubeDL/',
     '^LLPlayer/Properties/PublishProfiles/',
     '^FFmpeg/',
+    '^LLPlayer/Assets/',
     '^LLPlayer/lib/',
     '\.pubxml$'
 )

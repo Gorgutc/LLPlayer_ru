@@ -42,6 +42,11 @@ try {
     if (-not (Test-Path (Join-Path $appPublish "lib\7z.dll"))) {
         throw "Publish smoke is missing LLPlayer\lib\7z.dll."
     }
+    foreach ($runtimeFile in @("Assets\silero_vad.onnx", "onnxruntime.dll")) {
+        if (-not (Test-Path (Join-Path $appPublish $runtimeFile))) {
+            throw "Publish smoke is missing required runtime asset $runtimeFile."
+        }
+    }
     foreach ($sidecarSource in @("dub_sidecar\server.py", "dub_sidecar\pyproject.toml", "dub_sidecar\uv.lock", "dub_sidecar\README.md")) {
         if (-not (Test-Path (Join-Path $appPublish $sidecarSource))) {
             throw "Publish smoke is missing committed dubbing sidecar source $sidecarSource."
@@ -123,6 +128,8 @@ try {
         "yt-dlp placeholder" = "yt-dlp.exe_here"
         "release required content check" = "Release package is missing required file"
         "release recursive dub runtime rejection" = "Get-ChildItem `$pub -Directory -Recurse"
+        "release Silero VAD model check" = "Assets\silero_vad.onnx"
+        "release ONNX Runtime native check" = "onnxruntime.dll"
         "release FFmpeg avcodec check" = "FFmpeg\avcodec-62.dll"
         "release FFmpeg avdevice check" = "FFmpeg\avdevice-62.dll"
         "release FFmpeg avfilter check" = "FFmpeg\avfilter-11.dll"

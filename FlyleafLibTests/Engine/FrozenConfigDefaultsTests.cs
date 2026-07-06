@@ -9,6 +9,18 @@ namespace FlyleafLib;
 public class FrozenConfigDefaultsTests
 {
     [Fact]
+    public void WordTimestamps_DefaultsToTrue()
+    {
+        new Config.SubtitlesConfig().WordTimestamps.Should().BeTrue();
+    }
+
+    [Fact]
+    public void VadCueSnapping_DefaultsToTrue()
+    {
+        new Config.SubtitlesConfig().VadCueSnapping.Should().BeTrue();
+    }
+
+    [Fact]
     public void ASRPerSegmentLanguage_DefaultsToFalse()
     {
         new Config.SubtitlesConfig().ASRPerSegmentLanguage.Should().BeFalse();

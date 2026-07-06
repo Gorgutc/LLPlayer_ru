@@ -12,6 +12,7 @@ Runtime assets are part of app behavior.
 - `FFmpeg/*.dll`
 - `LLPlayer/lib/7z.dll`
 - `LLPlayer/lib/license.7z.txt`
+- `LLPlayer/Assets/silero_vad.onnx`
 - Placeholder `Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
 
 ## Do Not Commit

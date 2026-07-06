@@ -703,7 +703,7 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Тесты: 1193/1193** (на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
+**Последний наблюдавшийся прогон: 1347/1347** (на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
 `TranslateServiceHelperTests` (8: `TryGetLanguage` throw-ветки + success), `BatchSubtitleConfigSnapshotTests`
 (+5: обобщённые nested-config completeness-guards HC-39), `ConfigCloneTests` (4: характеризация `Clone` HC-40).
 Прод-код не менялся (версия остаётся v0.3.40). Ранее на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —

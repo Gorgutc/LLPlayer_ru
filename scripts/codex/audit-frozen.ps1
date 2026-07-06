@@ -133,6 +133,18 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
         }
+        if ($normalized -match '^FlyleafLib/Vad/') {
+            $contracts.Add("media-runtime-contract.md")
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("native_dependency_auditor")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+            $gates.Add("ship")
+            $gates.Add("playback smoke")
+        }
         if ($normalized -match '^FlyleafLib/MediaPlayer/Dubbing/') {
             $contracts.Add("dubbing-contract.md")
             $agents.Add("media_runtime_mapper")
@@ -152,7 +164,7 @@ try {
             $gates.Add("verify-fast")
             $gates.Add("dubbing manual smoke")
         }
-        if ($normalized -match '^(FFmpeg/|LLPlayer/lib/|Plugins/YoutubeDL/|\.github/actions/build-package/|LLPlayer/Properties/PublishProfiles/|.*\.pubxml$)') {
+        if ($normalized -match '^(FFmpeg/|LLPlayer/lib/|LLPlayer/Assets/|Plugins/YoutubeDL/|\.github/actions/build-package/|LLPlayer/Properties/PublishProfiles/|.*\.pubxml$)') {
             $contracts.Add("dependency-baseline.md")
             $contracts.Add("media-runtime-contract.md")
             $agents.Add("native_dependency_auditor")

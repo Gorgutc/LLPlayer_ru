@@ -457,7 +457,7 @@ public class AudioReader : IDisposable
     // it false). Fail-soft — a missing model / ONNX load failure just skips snapping.
     private readonly bool _enableVadSnapping;
 
-    private Demuxer? _demuxer;
+    private OfflineDemuxer.IsolatedDemuxer? _demuxer;
     private AudioDecoder? _decoder;
     private AudioStream? _stream;
 
@@ -496,7 +496,7 @@ public class AudioReader : IDisposable
             throw new InvalidOperationException($"demuxer open error: {error}");
         }
 
-        _stream = (AudioStream)_demuxer.AVStreamToStream[streamIndex];
+        _stream = (AudioStream)_demuxer.Demuxer.AVStreamToStream[streamIndex];
 
         _decoder = new AudioDecoder(_config, _subIndex + 1);
         _decoder.Log.Prefix = _decoder.Log.Prefix.Replace("Decoder: ", "DecoderA:");
@@ -526,6 +526,8 @@ public class AudioReader : IDisposable
     {
         if (_demuxer == null || _decoder == null || _stream == null)
             throw new InvalidOperationException("Open() is not called");
+
+        Demuxer demuxer = _demuxer.Demuxer;
 
         // Assume a network stream and parallelize the reading of packets and the execution of whisper.
         // For network video, increase capacity as downloads may take longer.
@@ -790,12 +792,12 @@ public class AudioReader : IDisposable
             if (curTime > TimeSpan.FromSeconds(30))
             {
                 // copy from DecoderContext.CalcSeekTimestamp()
-                long startTime = _demuxer.hlsCtx == null ? _demuxer.StartTime : _demuxer.hlsCtx->first_timestamp * 10;
+                long startTime = demuxer.hlsCtx == null ? demuxer.StartTime : demuxer.hlsCtx->first_timestamp * 10;
 
                 if (foldBack)
                 {
                     // Backfill [floor .. curTime): seek to the stream start, transcribe until we reach curTime.
-                    if (_demuxer.Seek(startTime + floor.Ticks, true) >= 0)
+                    if (demuxer.Seek(startTime + floor.Ticks, true) >= 0)
                     {
                         RunPass(curTime);
                         backfilled = true;
@@ -813,20 +815,20 @@ public class AudioReader : IDisposable
 
                     bool forward = false;
 
-                    if (_demuxer.Type == MediaType.Audio) ticks -= _config.Audio.Delay;
+                    if (demuxer.Type == MediaType.Audio) ticks -= _config.Audio.Delay;
 
                     if (ticks < startTime)
                     {
                         ticks = startTime;
                         forward = true;
                     }
-                    else if (ticks > startTime + _demuxer.Duration - (50 * 10000))
+                    else if (ticks > startTime + demuxer.Duration - (50 * 10000))
                     {
-                        ticks = Math.Max(startTime, startTime + _demuxer.Duration - (50 * 10000));
+                        ticks = Math.Max(startTime, startTime + demuxer.Duration - (50 * 10000));
                         forward = false;
                     }
 
-                    _ = _demuxer.Seek(ticks, forward);
+                    _ = demuxer.Seek(ticks, forward);
                 }
 
                 // When the backfill pass ran, the demuxer is already positioned right after curTime, so the forward
@@ -867,14 +869,14 @@ public class AudioReader : IDisposable
 
                 while (!stop && !token.IsCancellationRequested)
                 {
-                    _demuxer.Interrupter.ReadRequest();
-                    int ret = av_read_frame(_demuxer.fmtCtx, _packet);
+                    demuxer.Interrupter.ReadRequest();
+                    int ret = av_read_frame(demuxer.fmtCtx, _packet);
 
                     if (ret != 0)
                     {
                         av_packet_unref(_packet);
 
-                        if (_demuxer.Interrupter.Timedout)
+                        if (demuxer.Interrupter.Timedout)
                         {
                             if (token.IsCancellationRequested)
                                 break;
@@ -953,7 +955,7 @@ public class AudioReader : IDisposable
 
                         if (chunkStart == null)
                         {
-                            chunkStart = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                            chunkStart = new TimeSpan((long)(framePts * _stream.Timebase) - demuxer.StartTime);
                             if (chunkStart.Value.Ticks < 0)
                             {
                                 // Correct to 0 if negative
@@ -967,7 +969,7 @@ public class AudioReader : IDisposable
                         // (b) T-09 — past the soft fraction of the budget AND this frame is silent (cleaner phrase
                         // boundary); or (c) T-08 — a backfill pass reached its stop time. The hard cap guarantees a
                         // cut always fires, so back-pressure / EOF-tail semantics are unchanged.
-                        TimeSpan frameTime = new((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                        TimeSpan frameTime = new((long)(framePts * _stream.Timebase) - demuxer.StartTime);
                         bool reachedStop = AsrFoldback.ReachedStop(frameTime, stopAt);
                         bool hardCap = waveStream.Length >= chunkSize || chunkSw.Elapsed >= chunkElapsed;
                         bool softCut = splitOnSilence
@@ -985,7 +987,7 @@ public class AudioReader : IDisposable
                             if (reachedStop)
                                 DenoiseFlush(waveStream);
 
-                            TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                            TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - demuxer.StartTime);
                             chunkCnt++;
 
                             if (CanInfo) Log.Info(
@@ -1030,7 +1032,7 @@ public class AudioReader : IDisposable
                 // Process remaining (this pass's tail chunk).
                 if (waveStream.Length > waveHeaderSize && framePts != NoTs)
                 {
-                    TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - _demuxer.StartTime);
+                    TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - demuxer.StartTime);
 
                     chunkCnt++;
 
