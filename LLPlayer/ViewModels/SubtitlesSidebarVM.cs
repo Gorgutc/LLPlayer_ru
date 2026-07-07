@@ -21,6 +21,10 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         FL.Config.PropertyChanged += OnConfigOnPropertyChanged;
         // F-16 phase 2a: keep each row's per-line dub-voice menu in sync with the dub voice bank.
         FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged += OnDubbingConfigPropertyChanged;
+        _voiceAssignmentSaves = new(
+            () => FL.PlayerConfig.Subtitles.PersistPerLineVoices,
+            DubbingVoiceAssignmentStore.SaveAtomic,
+            TimeSpan.FromMilliseconds(VoicePersistDebounceMs));
 
         // Initialize filtered view for the sidebar
         for (int i = 0; i < _filteredSubs.Length; i++)
@@ -34,20 +38,7 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         FL.Config.PropertyChanged -= OnConfigOnPropertyChanged;
         FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged -= OnDubbingConfigPropertyChanged;
 
-        // HC-27/F-19 monitor follow-up: flush the request captured at edit time so teardown after a fast media switch
-        // writes the original media's companion file, not whatever is currently selected.
-        if (_voicesDirty && FL.PlayerConfig.Subtitles.PersistPerLineVoices)
-        {
-            try
-            {
-                VoiceAssignmentSaveRequest? request = _pendingVoiceAssignmentSave;
-                if (request != null)
-                    SaveVoiceAssignmentsNow(request);
-                else
-                    _voicesDirty = false;
-            }
-            catch { /* best-effort */ }
-        }
+        _voiceAssignmentSaves.Dispose();
     }
 
     private void OnDubbingConfigPropertyChanged(object? sender, PropertyChangedEventArgs args)
@@ -234,20 +225,9 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         PersistVoiceAssignments();
     });
 
-    // HC-27 debounce state. Each voice edit stamps a new generation (Interlocked); the scheduled off-UI save only
-    // proceeds if it is still the latest, so a burst of picks coalesces into a single write.
-    private int _persistVoicesGeneration;
-    // Set when a save is pending, cleared once one completes; guards the flush-on-Dispose so an edit still inside the
-    // debounce window is not lost at teardown (matching the pre-debounce synchronous save's durability).
-    private volatile bool _voicesDirty;
-    // Serializes the actual file writes so completion order matches edit order. The generation check alone only gates
-    // SCHEDULING; without this lock two saves that both passed the check (e.g. a slow SMB write overtaken by a newer
-    // edit's save, or a background save racing the Dispose flush) could complete out of order and let a stale snapshot
-    // overwrite a newer one. Under the lock each save re-checks the generation, so writes never regress (last edit wins).
-    private readonly object _voicesSaveLock = new();
+    private readonly DubbingVoiceAssignmentSaveQueue _voiceAssignmentSaves;
     private const int VoicePersistDebounceMs = 400;
-    private sealed record VoiceAssignmentSaveRequest(int Generation, string MediaPath, List<SubtitleData> Subtitles);
-    private VoiceAssignmentSaveRequest? _pendingVoiceAssignmentSave;
+    private sealed record VoiceAssignmentSaveRequest(string MediaPath, List<SubtitleData> Subtitles);
 
     // F-16 persistence (opt-in): mirror per-line voice edits to the companion file (video.ru.voices.json) beside
     // the open local media so they survive a restart / dub re-render. Best-effort; the store swallows I/O errors and
@@ -257,43 +237,15 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         if (!FL.PlayerConfig.Subtitles.PersistPerLineVoices)
             return;
 
-        // HC-27 perf: move the blocking work off the UI thread. The old synchronous path froze the UI on each pick —
-        // up to 3x File.Exists (blocking on SMB shares) + a 2x O(n) snapshot of both tracks under _subsLocker + JSON
-        // serialize + file write — noticeable on large/network files. Debounce so a burst of picks writes once.
-        int generation = Interlocked.Increment(ref _persistVoicesGeneration);
-        VoiceAssignmentSaveRequest? request = CreateVoiceAssignmentSaveRequest(generation);
-        if (request is null)
-        {
-            _pendingVoiceAssignmentSave = null;
-            _voicesDirty = false;
-            return;
-        }
-
-        _pendingVoiceAssignmentSave = request;
-        _voicesDirty = true;
-
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await Task.Delay(VoicePersistDebounceMs).ConfigureAwait(false);
-                if (Volatile.Read(ref _persistVoicesGeneration) != generation)
-                    return; // superseded by a newer edit, which will write the latest state
-
-                SaveVoiceAssignmentsNow(request);
-            }
-            catch
-            {
-                // The store already swallows I/O errors; guard the async/debounce path too so an unexpected fault does
-                // not go unobserved on a background thread.
-            }
-        });
+        VoiceAssignmentSaveRequest? request = CreateVoiceAssignmentSaveRequest();
+        if (request is not null)
+            _voiceAssignmentSaves.Enqueue(request.MediaPath, request.Subtitles);
     }
 
     // Captures the target media path and minimal per-line assignment fields at edit/flush time. The delayed write must
     // not resolve them again later: by then playback may have switched to another local file or mutated the subtitle
     // objects.
-    private VoiceAssignmentSaveRequest? CreateVoiceAssignmentSaveRequest(int generation)
+    private VoiceAssignmentSaveRequest? CreateVoiceAssignmentSaveRequest()
     {
         string? mediaPath = GetCurrentLocalMediaPath();
         if (mediaPath is null)
@@ -313,37 +265,7 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
             }
         }
 
-        return new VoiceAssignmentSaveRequest(generation, mediaPath, all);
-    }
-
-    // Writes the companion file from a captured request. Off the UI thread in the debounce path; also called
-    // synchronously from Dispose to flush a pending edit. Writes are serialized under _voicesSaveLock and re-check the
-    // generation and opt-in toggle, so stale snapshots and disabled persistence never write.
-    private void SaveVoiceAssignmentsNow(VoiceAssignmentSaveRequest request)
-    {
-        lock (_voicesSaveLock)
-        {
-            // Skip if a newer edit exists — its own save (or the Dispose flush) will write the latest state. Combined
-            // with the lock serializing writes, this guarantees the on-disk file only ever moves forward in edit order.
-            if (Volatile.Read(ref _persistVoicesGeneration) != request.Generation)
-                return;
-
-            if (!_voicesDirty && !ReferenceEquals(_pendingVoiceAssignmentSave, request))
-                return;
-
-            if (!FL.PlayerConfig.Subtitles.PersistPerLineVoices)
-            {
-                if (ReferenceEquals(_pendingVoiceAssignmentSave, request))
-                    _pendingVoiceAssignmentSave = null;
-                _voicesDirty = false;
-                return;
-            }
-
-            DubbingVoiceAssignmentStore.SaveAtomic(request.MediaPath, request.Subtitles);
-            if (ReferenceEquals(_pendingVoiceAssignmentSave, request))
-                _pendingVoiceAssignmentSave = null;
-            _voicesDirty = false;
-        }
+        return new VoiceAssignmentSaveRequest(mediaPath, all);
     }
 
     // The full path of the currently open LOCAL media (video), or null for web/streams (mirrors
