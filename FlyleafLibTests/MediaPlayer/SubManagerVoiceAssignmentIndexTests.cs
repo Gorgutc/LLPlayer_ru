@@ -200,9 +200,15 @@ public class SubManagerVoiceAssignmentIndexTests
             () => manager.ApplyVoiceAssignments("movie.mkv", provider),
             TestContext.Current.CancellationToken);
         await assignmentApplied.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        TaskCompletionSource snapshotStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         Task<List<SubtitleData>> snapshotTask = Task.Run(
-            manager.SnapshotVoiceAssignments,
+            () =>
+            {
+                snapshotStarted.TrySetResult();
+                return manager.SnapshotVoiceAssignments();
+            },
             TestContext.Current.CancellationToken);
+        await snapshotStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
         try
         {
