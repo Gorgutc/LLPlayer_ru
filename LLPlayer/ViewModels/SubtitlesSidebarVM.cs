@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.IO;
 using System.Windows.Data;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
@@ -213,82 +212,67 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
 
     // F-16 phase 2a: assign (or clear) a per-line dub voice on a sidebar cue. The "use default voice" entry (or a
     // blank id) clears the override (null) so the renderer falls back to DubbingConfig.DefaultVoiceId; otherwise
-    // the trimmed id is stored and passed verbatim to the engine at dub time. Interactive/in-memory only.
+    // the trimmed id is stored and passed verbatim to the engine at dub time. Persistence remains separately opt-in.
     public DelegateCommand<SubVoiceAssignment> CmdSubSetVoice => field ??= new(assignment =>
     {
         if (assignment?.Sub is null)
             return;
 
-        assignment.Sub.AssignedVoiceId =
-            string.IsNullOrWhiteSpace(assignment.VoiceId) ? null : assignment.VoiceId.Trim();
+        long mediaGeneration = FL.Player.MediaGeneration;
+        if (FL.Player.IsOpening
+            || FL.Player.IsMediaResetting
+            || !FL.Player.SubtitlesManager.TrySetAssignedVoiceId(assignment.Sub, assignment.VoiceId))
+        {
+            return;
+        }
 
-        PersistVoiceAssignments();
+        PersistVoiceAssignments(mediaGeneration);
     });
 
     private readonly DubbingVoiceAssignmentSaveQueue _voiceAssignmentSaves;
     private const int VoicePersistDebounceMs = 400;
-    private sealed record VoiceAssignmentSaveRequest(string MediaPath, List<SubtitleData> Subtitles);
+    private const int VoiceCaptureMaxAttempts = 3;
 
     // F-16 persistence (opt-in): mirror per-line voice edits to the companion file (video.ru.voices.json) beside
     // the open local media so they survive a restart / dub re-render. Best-effort; the store swallows I/O errors and
     // writes nothing (deletes any stale file) when no assignments remain. No-op when the toggle is off.
-    private void PersistVoiceAssignments()
+    private void PersistVoiceAssignments(long expectedMediaGeneration)
     {
         if (!FL.PlayerConfig.Subtitles.PersistPerLineVoices)
             return;
 
-        VoiceAssignmentSaveRequest? request = CreateVoiceAssignmentSaveRequest();
-        if (request is not null)
-            _voiceAssignmentSaves.Enqueue(request.MediaPath, request.Subtitles);
-    }
+        var selected = FL.Player.Playlist.Selected;
+        string? selectedUrl = selected?.Url;
+        string? selectedDirectUrl = selected?.DirectUrl;
+        string? playlistUrl = FL.Player.Playlist.Url;
 
-    // Captures the target media path and minimal per-line assignment fields at edit/flush time. The delayed write must
-    // not resolve them again later: by then playback may have switched to another local file or mutated the subtitle
-    // objects.
-    private VoiceAssignmentSaveRequest? CreateVoiceAssignmentSaveRequest()
-    {
-        string? mediaPath = GetCurrentLocalMediaPath();
-        if (mediaPath is null)
-            return null;
+        // Capture the three media candidates now (O(1), no File.Exists) so a delayed save remains tied to this media.
+        // The queue resolves the first existing candidate on its background worker.
+        DubbingVoiceAssignmentMediaTarget target = DubbingVoiceAssignmentMediaTarget.Capture(
+            selectedUrl,
+            selectedDirectUrl,
+            playlistUrl);
+        if (target.IsEmpty)
+            return;
 
-        List<SubtitleData> all = [];
-        for (int i = 0; i < 2; i++)
+        // Opening runs on a worker and can replace Playlist.Selected and both subtitle collections during this
+        // multi-step capture. Retry track-only mutations, but abort immediately when the media identity changed.
+        List<SubtitleData>? assigned = FL.Player.SubtitlesManager.TrySnapshotVoiceAssignments(
+            () => !FL.Player.IsOpening
+                  && !FL.Player.IsMediaResetting
+                  && FL.Player.MediaGeneration == expectedMediaGeneration
+                  && ReferenceEquals(selected, FL.Player.Playlist.Selected)
+                  && string.Equals(selectedUrl, selected?.Url, StringComparison.Ordinal)
+                  && string.Equals(selectedDirectUrl, selected?.DirectUrl, StringComparison.Ordinal)
+                  && string.Equals(playlistUrl, FL.Player.Playlist.Url, StringComparison.Ordinal),
+            VoiceCaptureMaxAttempts);
+        if (assigned is null)
         {
-            foreach (SubtitleData sub in FL.Player.SubtitlesManager[i].SnapshotSubs())
-            {
-                all.Add(new SubtitleData
-                {
-                    StartTime = sub.StartTime,
-                    EndTime = sub.EndTime,
-                    AssignedVoiceId = sub.AssignedVoiceId,
-                });
-            }
+            return;
         }
 
-        return new VoiceAssignmentSaveRequest(mediaPath, all);
-    }
-
-    // The full path of the currently open LOCAL media (video), or null for web/streams (mirrors
-    // BatchSubtitlesDialogVM.GetCurrentLocalMediaPath).
-    private string? GetCurrentLocalMediaPath()
-    {
-        string?[] candidates =
-        [
-            FL.Player.Playlist.Selected?.Url,
-            FL.Player.Playlist.Selected?.DirectUrl,
-            FL.Player.Playlist.Url,
-        ];
-
-        foreach (string? candidate in candidates)
-        {
-            if (string.IsNullOrWhiteSpace(candidate) || !File.Exists(candidate))
-                continue;
-
-            try { return Path.GetFullPath(candidate); }
-            catch { return candidate; }
-        }
-
-        return null;
+        // The queue takes ownership of these minimal clones without another enumeration or clone.
+        _voiceAssignmentSaves.Enqueue(target, assigned);
     }
 
     public DelegateCommand CmdClearSearch => field ??= new(() =>

@@ -203,6 +203,10 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     }
     internal volatile Status status = Status.Stopped;
     internal Status _Status = Status.Stopped;
+    private readonly MediaResetState mediaResetState = new();
+    /// <summary>Changes before each full media/open-switch reset so multi-step UI captures can reject mixed state.</summary>
+    public long MediaGeneration => mediaResetState.Generation;
+    public bool IsMediaResetting => mediaResetState.IsResetting;
     public bool         IsPlaying           => status == Status.Playing;
     public bool         IsOpening           => status == Status.Opening;
 
@@ -673,6 +677,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
 
         lock (lockActions) // Required in case of OpenAsync and Stop requests
         {
+            mediaResetState.Begin(status);
             try
             {
                 Engine.TimeBeginPeriod1();
@@ -704,6 +709,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
 
             } finally
             {
+                mediaResetState.Complete();
                 Engine.TimeEndPeriod1();
             }
         }
@@ -749,6 +755,24 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
             Exception = exception
         });
     }
+}
+
+internal sealed class MediaResetState
+{
+    private long _generation;
+    private int _isResetting;
+
+    public long Generation => Interlocked.Read(ref _generation);
+    public bool IsResetting => Volatile.Read(ref _isResetting) != 0;
+
+    public void Begin(Status _)
+    {
+        // Every Initialize call performs a full Reset, including Stop/Dispose where status is not Opening.
+        Volatile.Write(ref _isResetting, 1);
+        Interlocked.Increment(ref _generation);
+    }
+
+    public void Complete() => Volatile.Write(ref _isResetting, 0);
 }
 
 public enum KnownErrorType
