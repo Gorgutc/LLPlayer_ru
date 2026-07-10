@@ -12,10 +12,10 @@
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
 >
-> **Актуальный рабочий срез (2026-07-10, v0.3.60):** GitHub `main` и база текущей ветки — `fea2029`
-> (tree идентичен `be4d6ce`; сверху два history-only merge-коммита); Build & Test run `29080255164` — PASS;
-> полный локальный `verify.ps1` на `fea2029` — **1353/1353** тестов, LLPlayer/YoutubeDL 0 warnings/errors.
-> Активная очередь и оба ranking ниже очищены от DONE-строк; канонический следующий риск — `HC-27b`.
+> **Актуальный рабочий срез (2026-07-10, v0.3.61 candidate):** GitHub `main@fea2029`; app-коммит
+> `a468c3e` (`HC-27b`) идёт отдельным срезом поверх docs-коммита `2c3c463`. Полный локальный `verify.ps1` и
+> `ship.ps1` — PASS: **1376/1376** тестов, LLPlayer/YoutubeDL 0 warnings/errors, publish smoke green.
+> Автоматизированная реализация `HC-27b` готова; следующий обязательный шаг — targeted owner smoke, затем `T-13` hardening.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -719,7 +719,7 @@ instruction-drift, WPF, media-runtime, packaging и architecture reviews — SHI
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Последний наблюдавшийся прогон: 1353/1353** (на 2026-07-10, voice-persistence queue `4d80d39` / merge-tree `be4d6ce`: +6 — `DubbingVoiceAssignmentSaveQueueTests` для двух media внутри debounce, same-media latest-wins, Dispose flush/wait и неблокирующего Enqueue. GitHub `main@fea2029` отличается только двумя history-only merge-коммитами. Ранее на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
+**Последний наблюдавшийся прогон: 1376/1376** (на 2026-07-10, HC-27b `a468c3e`: +23 — детерминированные OFF/latest-wins/A-B/alias/Dispose race-тесты, compact voice-index, atomic restore, stable recapture и Stop/reset generation; full verify + ship PASS). Предыдущий baseline **1353/1353**: voice-persistence queue `4d80d39` / merge-tree `be4d6ce`, +6 — `DubbingVoiceAssignmentSaveQueueTests` для двух media внутри debounce, same-media latest-wins, Dispose flush/wait и неблокирующего Enqueue. GitHub `main@fea2029` отличается только двумя history-only merge-коммитами. Ранее на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
 `TranslateServiceHelperTests` (8: `TryGetLanguage` throw-ветки + success), `BatchSubtitleConfigSnapshotTests`
 (+5: обобщённые nested-config completeness-guards HC-39), `ConfigCloneTests` (4: характеризация `Clone` HC-40).
 Прод-код не менялся (версия остаётся v0.3.40). Ранее на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —
@@ -976,11 +976,11 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-10 / v0.3.60)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-10 / v0.3.61)
 
 | # | ID | Следующий результат | Важн. | Сложн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
-| 1 | **HC-27b** | OFF получает последнее слово; capture не блокирует UI; deterministic race tests | 🟠 | Ⓜ | TODO — следующий app-срез |
+| 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice `a468c3e` complete; owner acceptance pending |
 | 2 | **T-13a** | Injection-safe Testing Release inputs/outputs | 🟠 | ⓢ | TODO после targeted smoke |
 | 3 | **T-13b** | `verify-fast` становится частью Build & Test | 🟠 | ⓢ | TODO после targeted smoke |
 | 4 | **T-13c** | Full-verify/reviewer routing для всех app/project paths | 🟡 | ⓢ-Ⓜ | TODO после targeted smoke |
@@ -1031,7 +1031,7 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-10 / v0.3.60)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-10 / v0.3.61)
 
 | # | ID | Следующий результат | Сложн. | Важн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
@@ -1039,7 +1039,7 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 | 2 | **T-13b** | `verify-fast` в Build & Test | ⓢ | 🟠 | TODO |
 | 3 | **T-13f** | Разрешимость hook targets | ⓢ | 🟢 | TODO |
 | 4 | **T-13c** | Полное routing-покрытие C#/XAML/project paths | ⓢ-Ⓜ | 🟡 | TODO |
-| 5 | **HC-27b** | Save-lock opt-in re-check + неблокирующий capture + race tests | Ⓜ | 🟠 | следующий app-срез |
+| 5 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice complete; owner acceptance pending |
 | 6 | **T-13e** | Fresh full verify перед packaging | Ⓜ | 🟡 | TODO; release-runs BLOCKED |
 | 7 | **T-03** | Closure audit вместо бесконечного роста счётчика | Ⓜ | 🟡 | после accumulated smoke |
 
@@ -1096,9 +1096,8 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
   одним «ASR-quality» PR. `B-04` — можно приклеить к быстрому PR `B-01`.
 
 ## 6. 🧭 Рекомендуемая последовательность ближайших сессий (мои рассуждения)
-1. **HC-27b** — отдельный app+tests срез: повторная opt-in проверка непосредственно перед записью,
-   неблокирующий capture и детерминированные race/latest-wins тесты.
-2. **Targeted owner smoke** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
+1. **HC-27b automated slice ✅** — app+tests коммит `a468c3e`, v0.3.61; full verify 1376/1376 и ship PASS.
+2. **Targeted owner smoke (следующий шаг)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
    `manual-smoke-matrix.md`. Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
    гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
 3. **T-13a/T-13b/T-13c/T-13e-preflight/T-13f** — actionable workflow/verification hardening отдельным
@@ -1331,7 +1330,7 @@ frozen-контрактами; для app-кода обязательны `scrip
     + `PersistPerLineVoices=on` → фриз на каждый выбор голоса.
   - Решение: быстрый снимок только override-cue на UI, а `File.Exists`/сериализацию/запись — в `Task.Run` с debounce.
   - Зачем: назначение голоса замораживает UI на больших/сетевых файлах.
-- **HC-27b — Voice-save queue: OFF может опоздать, capture всё ещё блокирует UI 🟠 Ⓜ · TODO (подтверждено 2026-07-10)**
+- **HC-27b — Voice-save queue: OFF-race + UI capture 🟠 Ⓜ · IN-PROGRESS — automated slice complete (v0.3.61, `a468c3e`, 2026-07-10); owner acceptance pending**
   - **Почему follow-up отдельный:** `HC-27` остаётся исторически закрытым срезом v0.3.45, но рефакторинг
     capture в `d83efa5` и последующий `DubbingVoiceAssignmentSaveQueue` в `4d80d39` изменили реализацию и выявили
     новые проверяемые границы: UI-I/O/сканы происходят из первого среза, повторный clone и поздний OFF race — из второго.
@@ -1341,11 +1340,17 @@ frozen-контрактами; для app-кода обязательны `scrip
     трёх `File.Exists`, два `SnapshotSubs` и минимальный clone; очередь после этого повторно клонирует snapshot.
   - **Пробел тестов:** шесть существующих queue-тестов не покрывают queued-behind-save → OFF и
     same-media old-in-flight → final latest state.
+  - **Реализация:** повторный OFF/latest check стоит непосредственно под save-lock; media identity захватывается
+    без I/O и разрешается на worker; per-track compact index копирует только назначенные cue; immutable snapshots,
+    A/B isolation, stale ContextMenu и Stop/open generation защищены отдельными revision/generation guards.
+  - **Evidence:** RED-before-fix для трёх исходных дефектов; +23 теста (race/alias/index/restore/reset), targeted
+    49/49, full **1376/1376**, build 0 warnings/errors, `verify-fast`/`verify`/`ship` PASS; обязательные WPF,
+    media-runtime, .NET, native и packaging review — SHIP, 0 Critical/Important.
   - **DoD:** повторно проверить opt-in непосредственно под save-lock перед `_save`; убрать с dispatcher filesystem
     probes, повторный clone и полные O(n)-сканы обоих subtitle-треков на каждую правку (либо заменить их доказуемо
     ограниченным incremental capture), сохранив immutable capture-at-edit и корректность при смене media; добавить детерминированные race/latest-wins тесты;
-    full verify + targeted owner smoke из `manual-smoke-matrix.md`. До этого весь dubbing не объявляется сломанным:
-    риск ограничен opt-in companion-файлом `*.ru.voices.json` и отзывчивостью назначения голоса.
+    full verify + targeted owner smoke из `manual-smoke-matrix.md`. Автоматизированная часть выполнена; наблюдаемый
+    owner smoke остаётся обязательным и не подменяется unit-тестами.
 - **HC-28 — Bing/Microsoft: отменённая задача access-токена залипает в кэше 🟢 ⓢ · `FlyleafLib/MediaPlayer/Translation/Services/MicrosoftTranslateServiceBase.cs:177`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — **постоянный баг уже был закрыт ранее** (eviction-гарды: 401 compare-and-clear + faulted-task eviction в `catch`); остаточное упрочнение — общий fetch токена с `CancellationToken.None` (был токен вызывающего) снимает и разовый сбой + thrash после отмены. Каждый вызывающий бейлит через `WaitAsync(token)`. Network/abstract path → покрыт корректностью + ревью.
   - Проблема: `GetAccessTokenTask` кэширует Task с токеном первого вызывающего; если Cancel пришёл во время первого
     fetch, canceled-task остаётся в `_accessToken` → следующий перевод детерминированно фейлится «A task was canceled».
