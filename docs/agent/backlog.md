@@ -12,10 +12,11 @@
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
 >
-> **Актуальный рабочий срез (2026-07-10, v0.3.61 candidate):** GitHub `main@fea2029`; app-коммит
-> `a468c3e` (`HC-27b`) идёт отдельным срезом поверх docs-коммита `2c3c463`. Полный локальный `verify.ps1` и
-> `ship.ps1` — PASS: **1376/1376** тестов, LLPlayer/YoutubeDL 0 warnings/errors, publish smoke green.
-> Автоматизированная реализация `HC-27b` готова; следующий обязательный шаг — targeted owner smoke, затем `T-13` hardening.
+> **Актуальный рабочий срез (2026-07-11, v0.3.61):** PR [#142](https://github.com/Gorgutc/LLPlayer_ru/pull/142)
+> смёржен в GitHub `main@f61780c`; PR Build & Test run `29146811692` и post-merge main run `29146932278` — PASS.
+> Полный локальный `verify.ps1` и `ship.ps1` — PASS: **1376/1376** тестов, LLPlayer/YoutubeDL
+> 0 warnings/errors, publish smoke green. Автоматизированный срез `HC-27b` влит; общий статус остаётся
+> `IN-PROGRESS` до targeted owner smoke, затем следует `T-13` hardening.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -719,7 +720,7 @@ instruction-drift, WPF, media-runtime, packaging и architecture reviews — SHI
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Последний наблюдавшийся прогон: 1376/1376** (на 2026-07-10, HC-27b `a468c3e`: +23 — детерминированные OFF/latest-wins/A-B/alias/Dispose race-тесты, compact voice-index, atomic restore, stable recapture и Stop/reset generation; full verify + ship PASS). Предыдущий baseline **1353/1353**: voice-persistence queue `4d80d39` / merge-tree `be4d6ce`, +6 — `DubbingVoiceAssignmentSaveQueueTests` для двух media внутри debounce, same-media latest-wins, Dispose flush/wait и неблокирующего Enqueue. GitHub `main@fea2029` отличается только двумя history-only merge-коммитами. Ранее на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
+**Последний наблюдавшийся прогон: 1376/1376** (на 2026-07-11, HC-27b `a468c3e`, PR #142 merged `f61780c`: +23 — детерминированные OFF/latest-wins/A-B/alias/Dispose race-тесты, compact voice-index, atomic restore, stable recapture и Stop/reset generation; full verify + ship PASS; PR и post-merge Build & Test PASS). Предыдущий baseline **1353/1353**: voice-persistence queue `4d80d39` / merge-tree `be4d6ce`, +6 — `DubbingVoiceAssignmentSaveQueueTests` для двух media внутри debounce, same-media latest-wins, Dispose flush/wait и неблокирующего Enqueue. Ранее на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
 `TranslateServiceHelperTests` (8: `TryGetLanguage` throw-ветки + success), `BatchSubtitleConfigSnapshotTests`
 (+5: обобщённые nested-config completeness-guards HC-39), `ConfigCloneTests` (4: характеризация `Clone` HC-40).
 Прод-код не менялся (версия остаётся v0.3.40). Ранее на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —
@@ -980,7 +981,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 | # | ID | Следующий результат | Важн. | Сложн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
-| 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice `a468c3e` complete; owner acceptance pending |
+| 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice merged via PR #142; owner acceptance pending |
 | 2 | **T-13a** | Injection-safe Testing Release inputs/outputs | 🟠 | ⓢ | TODO после targeted smoke |
 | 3 | **T-13b** | `verify-fast` становится частью Build & Test | 🟠 | ⓢ | TODO после targeted smoke |
 | 4 | **T-13c** | Full-verify/reviewer routing для всех app/project paths | 🟡 | ⓢ-Ⓜ | TODO после targeted smoke |
@@ -1096,7 +1097,7 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
   одним «ASR-quality» PR. `B-04` — можно приклеить к быстрому PR `B-01`.
 
 ## 6. 🧭 Рекомендуемая последовательность ближайших сессий (мои рассуждения)
-1. **HC-27b automated slice ✅** — app+tests коммит `a468c3e`, v0.3.61; full verify 1376/1376 и ship PASS.
+1. **HC-27b automated slice ✅** — app+tests коммит `a468c3e`, PR #142 merged `f61780c`, v0.3.61; local full/ship и PR/post-merge CI PASS.
 2. **Targeted owner smoke (следующий шаг)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
    `manual-smoke-matrix.md`. Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
    гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
@@ -1330,7 +1331,7 @@ frozen-контрактами; для app-кода обязательны `scrip
     + `PersistPerLineVoices=on` → фриз на каждый выбор голоса.
   - Решение: быстрый снимок только override-cue на UI, а `File.Exists`/сериализацию/запись — в `Task.Run` с debounce.
   - Зачем: назначение голоса замораживает UI на больших/сетевых файлах.
-- **HC-27b — Voice-save queue: OFF-race + UI capture 🟠 Ⓜ · IN-PROGRESS — automated slice complete (v0.3.61, `a468c3e`, 2026-07-10); owner acceptance pending**
+- **HC-27b — Voice-save queue: OFF-race + UI capture 🟠 Ⓜ · IN-PROGRESS — automated slice merged (v0.3.61, PR #142, `f61780c`, 2026-07-11); owner acceptance pending**
   - **Почему follow-up отдельный:** `HC-27` остаётся исторически закрытым срезом v0.3.45, но рефакторинг
     capture в `d83efa5` и последующий `DubbingVoiceAssignmentSaveQueue` в `4d80d39` изменили реализацию и выявили
     новые проверяемые границы: UI-I/O/сканы происходят из первого среза, повторный clone и поздний OFF race — из второго.
