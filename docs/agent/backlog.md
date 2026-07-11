@@ -12,11 +12,14 @@
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
 >
-> **Актуальный рабочий срез (2026-07-11, v0.3.61):** PR [#142](https://github.com/Gorgutc/LLPlayer_ru/pull/142)
-> смёржен в GitHub `main@f61780c`; PR Build & Test run `29146811692` и post-merge main run `29146932278` — PASS.
-> Полный локальный `verify.ps1` и `ship.ps1` — PASS: **1376/1376** тестов, LLPlayer/YoutubeDL
-> 0 warnings/errors, publish smoke green. Автоматизированный срез `HC-27b` влит; общий статус остаётся
-> `IN-PROGRESS` до targeted owner smoke, затем следует `T-13` hardening.
+> **Актуальный рабочий срез (2026-07-11, v0.3.61):** app-срез `HC-27b` смёржен через
+> [PR #142](https://github.com/Gorgutc/LLPlayer_ru/pull/142), post-merge truth sync — через
+> [PR #143](https://github.com/Gorgutc/LLPlayer_ru/pull/143). `T-13a` реализован и проверен в
+> [PR #144](https://github.com/Gorgutc/LLPlayer_ru/pull/144): Testing Release больше не интерполирует release
+> input/outputs в PowerShell, а fast gate содержит adversarial fixtures. Полный локальный `verify.ps1` и
+> `ship.ps1` — PASS: **1376/1376**, 0 warnings/errors, publish smoke green. Post-merge CI #143 выявил один
+> thread-pool-starvation timeout в HC-27b lock-тесте; в #144 тест переведён на dedicated workers и прошёл 20/20.
+> `HC-27b` остаётся `IN-PROGRESS` до targeted owner smoke; следующий agent-action — `T-13b`.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -953,7 +956,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 ### T-13 — Workflow / verification hardening 🟠 Ⓜ · IN-PROGRESS (1/7 срезов, 2026-07-11)
 > Общий пакет регистрирует infra-находки; `DOC-01` только даёт им ID и не меняет workflows/scripts/ruleset.
 
-- **T-13a — injection-safe Testing Release inputs/outputs 🟠 ⓢ · ✅ DONE (2026-07-11, infra-only).**
+- **T-13a — injection-safe Testing Release inputs/outputs 🟠 ⓢ · ✅ DONE (PR #144, 2026-07-11, infra-only).**
   `workflow_dispatch` ref и derived release metadata теперь попадают в PowerShell только через `env`.
   `validate-release-token.ps1` fail-closed проверяет ref/tag/hash/archive до `GITHUB_OUTPUT`; короткий SHA берётся
   только из checkout-нутого `HEAD`, `github-script` возвращает строку, upload получает quoted validated basename.
@@ -961,7 +964,8 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
   `verify-release-workflow.ps1` закрепляет positive fixtures и негативные `;`, `$()`, `--`, CR/LF, `..`, `@{`,
   path/ref сценарии и запрещает возврат `${{ }}`-интерполяции в `run` blocks. Реальный Testing Release не запускался:
   overwrite-run остаётся owner-gated частью `T-13e`. Выполнено раньше owner smoke по прямой команде владельца;
-  это не закрывает `HC-27b` acceptance.
+  это не закрывает `HC-27b` acceptance. Evidence: `verify-release-workflow`/fast/full/ship PASS, 1376/1376,
+  CI-flake regression 20/20, три профильных `/review` — SHIP без Critical/Important.
 - **T-13b — `verify-fast.ps1` в Build & Test 🟠 ⓢ · TODO.** `build.yml` выполняет restore/build/test, но не
   проверяет plugin/docs/frozen/license gates. **DoD:** намеренно сломанный frozen/plugin marker красит CI;
   обычный PR/push остаётся зелёным.
