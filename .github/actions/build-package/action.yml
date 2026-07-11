@@ -164,7 +164,12 @@ runs:
     - name: Archive with 7-Zip
       id: archive
       shell: pwsh
+      env:
+        ARCHIVE_NAME: ${{ inputs.archive-name }}
       run: |
         $pub = "${{ runner.temp }}\publish"
-        $out = "${{ inputs.archive-name }}"
+        $out = "$env:ARCHIVE_NAME"
+        if ($out -notmatch '^LLPlayer-[0-9A-Za-z][0-9A-Za-z._+\-]{0,139}\.7z$' -or $out.Contains("..")) {
+          throw "Archive name must be a single path-safe LLPlayer-*.7z basename."
+        }
         & "C:\Program Files\7-Zip\7z.exe" a -t7z -mx=8 -mmt=4 "$out" "$pub\*"

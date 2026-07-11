@@ -7,6 +7,7 @@ try {
     & ".\scripts\codex\verify-plugin.ps1"
     & ".\scripts\codex\verify-doc-coverage.ps1"
     & ".\scripts\codex\verify-frozen.ps1"
+    & ".\scripts\codex\verify-release-workflow.ps1"
     & ".\scripts\codex\check-dub-licenses.ps1"
     Write-Host "LLPlayer fast verification completed."
 }

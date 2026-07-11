@@ -6,7 +6,8 @@
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.ps1
 ```
 
-Checks environment basics, plugin/skills/docs structure, documentation coverage, hooks, and frozen stack/product decisions.
+Checks environment basics, plugin/skills/docs structure, documentation coverage, hooks, frozen stack/product decisions,
+and release-workflow input/output safety.
 
 The fast gate includes:
 
@@ -14,7 +15,14 @@ The fast gate includes:
 - `scripts/codex/verify-plugin.ps1`
 - `scripts/codex/verify-doc-coverage.ps1`
 - `scripts/codex/verify-frozen.ps1`
+- `scripts/codex/verify-release-workflow.ps1`
 - `scripts/codex/check-dub-licenses.ps1`
+
+`verify-release-workflow.ps1` executes positive and adversarial fixtures against
+`validate-release-token.ps1`, then fails closed if `testing-release.yml` again interpolates dispatch inputs or
+derived release metadata directly inside PowerShell. The workflow validates the requested ref, latest stable tag,
+checked-out commit hash, and archive basename before writing GitHub outputs or calling the overwrite upload tail.
+This gate does not dispatch a release or modify GitHub assets.
 
 Use this read-only helper before review when you need to map changed files to frozen contracts, agents, and gates:
 

@@ -196,18 +196,22 @@ public class SubManagerVoiceAssignmentIndexTests
         TaskCompletionSource releaseApply = new(TaskCreationOptions.RunContinuationsAsynchronously);
         BlockingAssignmentProvider provider = new(assignmentApplied, releaseApply.Task);
 
-        Task applyTask = Task.Run(
+        Task applyTask = Task.Factory.StartNew(
             () => manager.ApplyVoiceAssignments("movie.mkv", provider),
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
         await assignmentApplied.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
         TaskCompletionSource snapshotStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        Task<List<SubtitleData>> snapshotTask = Task.Run(
+        Task<List<SubtitleData>> snapshotTask = Task.Factory.StartNew(
             () =>
             {
                 snapshotStarted.TrySetResult();
                 return manager.SnapshotVoiceAssignments();
             },
-            TestContext.Current.CancellationToken);
+            TestContext.Current.CancellationToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
         await snapshotStarted.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
         try
