@@ -155,6 +155,25 @@ public class DubbingVoiceAssignmentStoreTests
     }
 
     [Fact]
+    public void SaveAtomic_EmptyAuthoritativeSnapshot_DeletesStaleCompanion()
+    {
+        string mediaPath = NewTempMediaPath();
+        try
+        {
+            DubbingVoiceAssignmentStore.SaveAtomic(mediaPath, [Cue("src", 1, 2, "voice-a")]);
+            File.Exists(DubbingVoiceAssignmentStore.BuildVoicesPath(mediaPath)).Should().BeTrue();
+
+            DubbingVoiceAssignmentStore.SaveAtomic(mediaPath, []);
+
+            File.Exists(DubbingVoiceAssignmentStore.BuildVoicesPath(mediaPath)).Should().BeFalse();
+        }
+        finally
+        {
+            CleanupDir(mediaPath);
+        }
+    }
+
+    [Fact]
     public void LoadMap_MissingFile_ReturnsEmptyAndAppliesNothing()
     {
         string mediaPath = NewTempMediaPath();

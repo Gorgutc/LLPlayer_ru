@@ -1,15 +1,21 @@
 # LLPlayer_ru — Task Backlog (рабочий бэклог)
 
 > **Назначение:** единый, максимально подробный список незакрытых задач для работы в будущих сессиях.
-> Каждая задача имеет стабильный ID (`B-`/`F-`/`T-`/`HC-`), описание, файлы, ссылки, важность, сложность, статус
+> Каждая задача имеет стабильный ID (`DOC-`/`B-`/`F-`/`T-`/`HC-`), описание, файлы, ссылки, важность, сложность, статус
 > и мои рассуждения. В конце — два ранжирования: **по важности** и **по сложности**.
-> **§8 (HC-*) — находки многоагентного аудита здоровья кода (сессия #16, 2026-07-02): 44 подтверждённых задачи,
-> ранжированы простое→сложное (ⓢ→Ⓜ→Ⓛ); начинать оттуда для планомерной чистки багов/мёртвого кода/дублей.**
+> **§8 (HC-*) — living-набор находок многоагентного аудита здоровья кода (сессия #16 и follow-up-раунды),
+> ранжирован простое→сложное (ⓢ→Ⓜ→Ⓛ). Ручной счётчик намеренно не пиннится: follow-up ID добавляются по мере
+> подтверждения, а актуальный порядок живёт в §4–§6.**
 >
 > Создан 2026-06-25 (сессия-анализ). Жив (living) — обновлять по мере закрытия задач.
 > Дополняет, а не заменяет: `docs/agent/*-contract.md` (frozen-контракты), второй мозг
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
+>
+> **Актуальный рабочий срез (2026-07-10, v0.3.61 candidate):** GitHub `main@fea2029`; app-коммит
+> `a468c3e` (`HC-27b`) идёт отдельным срезом поверх docs-коммита `2c3c463`. Полный локальный `verify.ps1` и
+> `ship.ps1` — PASS: **1376/1376** тестов, LLPlayer/YoutubeDL 0 warnings/errors, publish smoke green.
+> Автоматизированная реализация `HC-27b` готова; следующий обязательный шаг — targeted owner smoke, затем `T-13` hardening.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -672,6 +678,16 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 
 ## 3. 🧰 ТЕХДОЛГ / ИНФРАСТРУКТУРА / МЕЛКИЕ TODO
 
+### DOC-01 — Truth sync канонического backlog и manual-smoke 🟠 ⓢ · ✅ DONE (2026-07-10, docs-only)
+**Цель:** синхронизировать рабочий срез v0.3.60, baseline 1353, активные ranking/sequence и стабильные ID
+для `HC-27b`/workflow-находок. Меняются только `backlog.md` и `manual-smoke-matrix.md`; app-код, workflows,
+скрипты и тесты не входят в этот срез. Frozen product decisions не меняются: с явного разрешения владельца
+расширяется только acceptance-матрица будущего `HC-27b`. **DoD:** docs-only diff, fast/full verify,
+обязательные domain-reviewers и `/review` без Critical/Important; ручной smoke остаётся pending.
+**Evidence:** `verify-fast.ps1` PASS; полный `verify.ps1` PASS (**1353/1353**, 0 warnings/errors);
+instruction-drift, WPF, media-runtime, packaging и architecture reviews — SHIP после исправлений. Owner smoke не
+объявлялся выполненным: это acceptance следующего app-среза `HC-27b`.
+
 ### T-01 — Рассинхрон FFmpeg-биндингов (8.0.1 vs 7.1.1) 🟠 Ⓜ · ✅ **DONE (этот PR, v0.3.12, 2026-06-27)**
 > ✅ **Закрыт up-align'ом FlyleafLib 7.1.1→8.0.1.** ⚠️ **Премиса верификатора была НЕВЕРНА** («отгружаемые DLL =
 > FFmpeg 7.x» → down-align). Проверка по коду: tracked DLL в `FFmpeg/` = **FFmpeg 8.0** (`avcodec-62`/`avutil-60`/
@@ -703,7 +719,7 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
 ### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Последний наблюдавшийся прогон: 1347/1347** (на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
+**Последний наблюдавшийся прогон: 1376/1376** (на 2026-07-10, HC-27b `a468c3e`: +23 — детерминированные OFF/latest-wins/A-B/alias/Dispose race-тесты, compact voice-index, atomic restore, stable recapture и Stop/reset generation; full verify + ship PASS). Предыдущий baseline **1353/1353**: voice-persistence queue `4d80d39` / merge-tree `be4d6ce`, +6 — `DubbingVoiceAssignmentSaveQueueTests` для двух media внутри debounce, same-media latest-wins, Dispose flush/wait и неблокирующего Enqueue. GitHub `main@fea2029` отличается только двумя history-only merge-коммитами. Ранее на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
 `TranslateServiceHelperTests` (8: `TryGetLanguage` throw-ветки + success), `BatchSubtitleConfigSnapshotTests`
 (+5: обобщённые nested-config completeness-guards HC-39), `ConfigCloneTests` (4: характеризация `Clone` HC-40).
 Прод-код не менялся (версия остаётся v0.3.40). Ранее на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —
@@ -716,6 +732,9 @@ diarization-aware). **Рассуждение:** крупно; держать к�
 null-терминированный CF_UNICODETEXT-буфер) → 1163. Ранее на 2026-07-02 (сессия #16-монитор, PR #112 merge `e96c41d`): monitor follow-up +1 `GetWhisperLanguages_TitleCaseIsCultureInvariant_UnderTurkishCulture` вместе с прод-фиксом `char.ToUpper`→`char.ToUpperInvariant` в `WhisperLanguage.cs` → 1133. См. также новую секцию **§8 «Аудит здоровья кода» (HC-*)** — бэклог находок аудита сессии #16, ранжирован простое→сложное; конкретные тест-пробелы аудита — HC-34/HC-39/HC-40. На 2026-07-01 (сессия #15, v0.3.38): срез №5 +31 — `LanguageBadgeTests` (11: код/гейт сайдбар-бейджа языка, см. T-10 follow-up ниже), `UtilsFindNextAvailableFileTests` (8: next-free «name (N).ext», regex-стрип суффикса `(N)`, обе стороны границы 100 слотов — слот 100 занимается + null после 100), `ImageProcessorTests` (11: OCR `BlackText`/`AddPadding` — размеры/PixelFormat/пиксели вне блендинг-границ), culture-guard `GetWhisperLanguages_OrderIsCultureInvariant_UnderCzechCulture` (+1) вместе с прод-фиксом FS-orderby: `WhisperLanguage.GetWhisperLanguages` OrderBy теперь пиннит `StringComparer.InvariantCulture` (зеркало `Language.AllLanguages`; **RED-without-fix доказан под cs-CZ** — чешская «ch»-диграф-коллация смещала «Chinese» за H-имена; да-DK «aa»-пробник оказался вакуумным — пары различаются ДО диграфа) → 1132. SKIP-решения среза №5: `Interrupter` (frozen media-runtime + FFmpeg-callback → интеграционный путь), `SubtitlesOCR.Binarize` (private unsafe — seam не оправдан), `GetUniqueId` (тавтология Interlocked). Ранее: на 2026-07-01 (поздн.): F-16 companion-json persistence v0.3.37 +20 `DubbingVoiceAssignmentStoreTests` (ToJson/FromJson round-trip, atomic Save/LoadMap, disk/composite providers) → 1101; на 2026-07-01 (сред.): F-05-gap DubbingConfig-снапшот PR #109 +2 (regression + reflection-guard) → 1081; на 2026-07-01 (ранее): monitor follow-up добавил +16 регрессов для `DubbingConfig` normalization, `DubbingVoiceAssignmentMap`, и batch dubbing per-line voice bridge → 1079; на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
 **Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
 playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
+> **Следующий шаг T-03:** closure audit после накопленного owner smoke. Выбрать только non-vacuous deterministic
+> seam с доказуемым RED-сценарием либо закрыть бесконечный backlog-пункт и оставить тестовое покрытие постоянной
+> policy в verification gates; не добавлять тесты ради счётчика.
 > **Прогресс 2026-06-28 (PR #98, +100 тестов → 1026, tests-only):** покрыты ранее непокрытые
 > ПУБЛИЧНЫЕ/internal-seam чистые функции 4 областей (ожидания ИЗ КОДА):
 > **(1) Переводческие мапперы** — `GoogleV1TranslateService`/`MicrosoftTranslateServiceBase`
@@ -930,9 +949,53 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 **но только с явным sign-off владельца** — эвристика «локальный ли endpoint» рискованна (ложно-облачные хосты). Идеально
 совмещать с принципиальным решением B-04 (streaming + скользящий read-timeout). Пока не трогать без запроса.
 
+### T-13 — Workflow / verification hardening 🟠 Ⓜ · TODO (6 стабильных срезов, подтверждено 2026-07-10)
+> Общий пакет регистрирует infra-находки; `DOC-01` только даёт им ID и не меняет workflows/scripts/ruleset.
+
+- **T-13a — injection-safe Testing Release inputs/outputs 🟠 ⓢ · TODO.** `testing-release.yml` напрямую вставляет
+  `workflow_dispatch` input и derived outputs в PowerShell при `contents: write`. **DoD:** передавать через `env`,
+  валидировать ref/token и закрепить негативный injection-сценарий.
+- **T-13b — `verify-fast.ps1` в Build & Test 🟠 ⓢ · TODO.** `build.yml` выполняет restore/build/test, но не
+  проверяет plugin/docs/frozen/license gates. **DoD:** намеренно сломанный frozen/plugin marker красит CI;
+  обычный PR/push остаётся зелёным.
+- **T-13c — full-verify routing для всех app/project paths 🟡 ⓢ-Ⓜ · TODO.** `audit-frozen.ps1` и
+  `subagent-review-matrix.md` неполно покрывают tracked C#/XAML и фактический `LLPlayer.slnx`; catch-all рекомендует
+  только fast gate. **DoD:** любые tracked `*.cs`, `*.xaml`, `*.csproj`, `*.slnx` получают full verify и reviewers.
+- **T-13d — required `Build & Test` status check 🟡 ⓢ · BLOCKED (owner decision).** Ruleset защищает deletion/
+  non-fast-forward, но не требует CI check. **DoD:** владелец явно принимает или отклоняет required check;
+  при принятии ruleset блокирует merge без успешного `Build & Test`.
+- **T-13e — release preflight + controlled runs 🟡 Ⓜ · TODO (runs BLOCKED: owner approval).** Stable/Testing
+  Release ещё не доказаны реальным run, а packaging action не делает fresh full verify перед archive. Добавление
+  preflight — actionable; только фактические release-runs требуют разрешения. **DoD:** full verification перед packaging,
+  затем отдельный owner-approved controlled run для **каждого** workflow с сохранёнными evidence: Stable проверяет
+  tag/draft-release tail, Testing — dispatch/overwrite-upload tail. Пока хотя бы один путь не проверен, `T-13e`
+  остаётся открытым; оба запуска — только с явного разрешения владельца.
+- **T-13f — проверка hook targets 🟢 ⓢ · TODO.** `verify-plugin.ps1` проверяет наличие `.codex/hooks.json`, но не
+  разбирает команды и не подтверждает существование их `-File`. **DoD:** fail-closed parse всех Windows hooks;
+  каждый target существует внутри repo и разрешается однозначно.
+
 ---
 
-## 4. 📊 РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв.)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-10 / v0.3.61)
+
+| # | ID | Следующий результат | Важн. | Сложн. | Статус |
+|---|----|---------------------|:---:|:---:|--------|
+| 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice `a468c3e` complete; owner acceptance pending |
+| 2 | **T-13a** | Injection-safe Testing Release inputs/outputs | 🟠 | ⓢ | TODO после targeted smoke |
+| 3 | **T-13b** | `verify-fast` становится частью Build & Test | 🟠 | ⓢ | TODO после targeted smoke |
+| 4 | **T-13c** | Full-verify/reviewer routing для всех app/project paths | 🟡 | ⓢ-Ⓜ | TODO после targeted smoke |
+| 5 | **T-13e** | Fresh full verify перед packaging; controlled runs отдельно owner-approved | 🟡 | Ⓜ | preflight TODO; runs BLOCKED |
+| 6 | **T-03** | Closure audit: доказуемый seam либо постоянная coverage-policy | 🟡 | Ⓜ | ONGOING; не гнаться за счётчиком |
+| 7 | **T-13f** | Hook commands и их `-File` targets проверяются fail-closed | 🟢 | ⓢ | TODO после targeted smoke |
+
+**Owner-gated / не брать без решения:** `T-13d` required status check · только controlled Stable/Testing runs
+из `T-13e` (сам preflight actionable) ·
+GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
+
+**Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу; `HC-22` — до появления настоящей
+точки уничтожения; `F-13` Avalonia — DEFERRED.
+
+### Исторический снимок важности до 2026-07-01 (не использовать для выбора новой работы)
 
 | # | ID | Задача | Важн. | Сложн. |
 |---|----|--------|:---:|:---:|
@@ -946,7 +1009,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 8 | ~~**T-02**~~ ✅ | Ранняя диагностика VC++ → DONE PR #62/#64 v0.3.15-16 | 🟠 | ⓢ-Ⓜ |
 | 9 | ~~**F-06**~~ ✅ | Экспорт TXT/VTT → DONE PR #59 v0.3.13 | 🟡 | ⓢ-Ⓜ |
 | 10 | ~~**F-07**~~ ✅ | AI-summary / лексика → DONE PR #67 v0.3.18 | 🟡 | Ⓜ |
-| 11 | **F-15** | Yomitan/10ten в плеере | 🟡 | Ⓜ-Ⓛ |
+| 11 | ~~**F-15**~~ ✅ | Yomitan/10ten → DONE-BY-F-11 (решение владельца 2026-06-28) | 🟡 | Ⓜ-Ⓛ |
 | 12 | **F-03** | Диаризация | 🟡 | Ⓛ |
 | 13 | **T-03** | Тестовое покрытие (ONGOING) | 🟡 | Ⓜ |
 | 14 | ~~**F-08**~~ ✅ | Sync-хелпер (shift-all) → ALREADY DONE v0.3.17 | 🟡 | ⓢ-Ⓜ |
@@ -959,15 +1022,31 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 21 | **F-16** | Дубляж: voice-bank ✅ PR #93; custom voice-ID ✅ PR #96; per-line voice ✅ PR #106 + monitor bridge; per-speaker/фазы 3-6 TODO | 🟢 | Ⓛ |
 | 22 | ~~**F-12**~~ ✅ | Аудио-waveform → DONE PR этот v0.3.28 (A-B повтор DONE v0.3.27) | 🟢 | Ⓛ |
 | 23 | ~~**T-07**~~ ✅ | SrtExporter теги `<i>` → DONE PR #59 v0.3.13 | 🟢 | ⓢ |
-| 24 | ~~**T-08/T-09**~~ ✅ + **T-10** | fold-back/silence-split ✅ DONE PR #69 v0.3.19; **T-10** per-seg lang ⚠️ конфликт F-17 (OPEN) | 🟢 | Ⓜ/Ⓛ |
+| 24 | ~~**T-08/T-09/T-10**~~ ✅ | fold-back/silence-split DONE PR #69; per-segment language DONE v0.3.32 | 🟢 | Ⓜ/Ⓛ |
 | 25 | ~~**T-06**~~ ✅ | Дрейф документации форка → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 | 26 | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | 🟢 | — |
 | 27 | **F-13** | Кросс-платформенность Avalonia | 🟢 | ⓍⓁ |
 | 28 | ~~**T-11**~~ ✅ | Sandbox/SDK окружение (doc) → DONE PR #84 (doc-only) | 🟢 | ⓢ |
 
-> ✅ DONE-строки выше зачёркнуты для быстрого скана. **Открыто на 2026-07-01 (v0.3.38):** T-03(ongoing), F-03(prep-срез SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO), F-16(per-line voice ✅; per-speaker/фазы 3-6 TODO), F-13, F-02-full(Demucs, по триггеру). **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** См. также 5b (B-04/F-17/F-18 — все ✅ DONE). **F-11/T-06/T-11 ✅ DONE (v0.3.25); F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11; T-05 ✅ DONE (PR #31 закрыт + opt-in M3 цвет PR #91 v0.3.29).**
+> Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
+> `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр. — самое лёгкое сверху)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-10 / v0.3.61)
+
+| # | ID | Следующий результат | Сложн. | Важн. | Статус |
+|---|----|---------------------|:---:|:---:|--------|
+| 1 | **T-13a** | Безопасная передача/валидация release input и outputs | ⓢ | 🟠 | TODO |
+| 2 | **T-13b** | `verify-fast` в Build & Test | ⓢ | 🟠 | TODO |
+| 3 | **T-13f** | Разрешимость hook targets | ⓢ | 🟢 | TODO |
+| 4 | **T-13c** | Полное routing-покрытие C#/XAML/project paths | ⓢ-Ⓜ | 🟡 | TODO |
+| 5 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice complete; owner acceptance pending |
+| 6 | **T-13e** | Fresh full verify перед packaging | Ⓜ | 🟡 | TODO; release-runs BLOCKED |
+| 7 | **T-03** | Closure audit вместо бесконечного роста счётчика | Ⓜ | 🟡 | после accumulated smoke |
+
+**Вне actionable-очереди:** `T-13d` и controlled runs из `T-13e` требуют решения владельца; GPU ADR, `F-03` и остаток `F-16`
+крупные и заблокированы GPU-lease/координатором; `F-02-full` trigger-only; `HC-22` и `F-13` DEFERRED.
+
+### Исторический снимок сложности до 2026-07-01 (не использовать для выбора новой работы)
 
 | # | ID | Задача | Сложн. | Важн. |
 |---|----|--------|:---:|:---:|
@@ -989,8 +1068,8 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 16 | ~~**T-01**~~ ✅ | FFmpeg-биндинги → DONE PR #58 v0.3.12 | Ⓜ | 🟠 |
 | 17 | **T-03** | Тестовое покрытие (ongoing) | Ⓜ | 🟡 |
 | 18 | ~~**F-07**~~ ✅ | AI-summary / лексика → DONE PR #67 v0.3.18 | Ⓜ | 🟡 |
-| 19 | ~~**T-08/T-09**~~ ✅ + **T-10** | fold-back/silence-split ✅ DONE PR #69 v0.3.19; **T-10** per-seg lang ⚠️ конфликт F-17 (OPEN, large) | Ⓜ/Ⓛ | 🟢 |
-| 20 | **F-15** | Yomitan/10ten мост | Ⓜ-Ⓛ | 🟡 |
+| 19 | ~~**T-08/T-09/T-10**~~ ✅ | fold-back/silence-split DONE PR #69; per-segment language DONE v0.3.32 | Ⓜ/Ⓛ | 🟢 |
+| 20 | ~~**F-15**~~ ✅ | Yomitan/10ten → DONE-BY-F-11 | Ⓜ-Ⓛ | 🟡 |
 | 21 | ~~**F-02 срез**~~ ✅ | ASR денойз → DONE PR #76 v0.3.23; **полный Demucs-сайдкар = STANDBY (по триггеру)** | Ⓛ | 🟠 |
 | 22 | **F-03** | Диаризация (сайдкар) | Ⓛ | 🟡 |
 | 23 | **F-16** | Дубляж: voice-bank/custom/per-line ✅; per-speaker/фазы 3-6 TODO | Ⓛ | 🟢 |
@@ -1000,7 +1079,8 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | 27 | **F-13** | Avalonia (переписывание UI) | ⓍⓁ | 🟢 |
 | — | ~~**T-05**~~ ✅ | M3-редизайн: закрыт PR #31 + opt-in M3 цвет-фундамент → DONE PR #91 v0.3.29 | — | 🟢 |
 
-> ✅ **Открыто на 2026-07-01 (v0.3.38), легче→тяжелее:** T-03(ongoing) · F-03(prep SpeakerId ✅ PR #102 v0.3.33; диаризация GPU TODO) · F-16(per-line voice ✅; per-speaker/фазы 3-6 TODO) · F-02-full(Demucs, по триггеру) · F-13. **T-10 ✅ DONE (v0.3.32, opt-in `ASRPerSegmentLanguage`).** **T-05 ✅ DONE** (PR #31 закрыт + opt-in M3 цвет-фундамент PR #91 v0.3.29). **F-11/T-06/T-11 ✅ DONE; F-12 полностью ✅ DONE (A-B повтор v0.3.27 + waveform v0.3.28); F-15 ✅ DONE-BY-F-11.** Всё остальное в таблице — ✅ DONE.
+> Историческая пометка: порядок на 2026-07-01 сохранён только как аудит-след; текущая сложность и статусы —
+> в активной таблице выше. `T-10` и `F-15` закрыты и кандидатами не являются.
 
 ---
 
@@ -1016,15 +1096,20 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
   одним «ASR-quality» PR. `B-04` — можно приклеить к быстрому PR `B-01`.
 
 ## 6. 🧭 Рекомендуемая последовательность ближайших сессий (мои рассуждения)
-1. ~~**B-01** — отдельным быстрым PR~~ ✅ **СДЕЛАНО (PR #46, v0.3.8, 2026-06-25).** Гипотеза подтверждена: на старте
-   `FlyleafLoader` читает `App.Version` в `try/catch` с `Environment.Exit(1)` → краш мог блокировать запуск на
-   сборке без SHA с существующим конфигом. Фикс снят. (SHA-инъекция при publish оказалась автоматической на git-сборках.)
-2. ~~**B-02 + B-03**~~ ✅ **СДЕЛАНО (codex PR #48 + усиленные тесты PR #49, 2026-06-26).** Осталось **F-01** —
-   универсальная ре-сегментация загруженных/sidecar/встроенных субтитров (`SubtitleReader.ReadAll` минует
-   `Resegment`), отдельным PR. **B-04** (LM Studio timeout) codex намеренно оставил для основной машины.
-3. Затем по важности: **T-01** (FFmpeg), **F-05/F-04** (upstream «Now»), **F-06** (быстрый win), далее Tier-1/2.
-**Координация:** ветка дубляжа и PR #31 — не конфликтовать; перед поведенческими правками сверяться с
-frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -warnaserror 0/0 + xUnit) + launch-test `.exe`.
+1. **HC-27b automated slice ✅** — app+tests коммит `a468c3e`, v0.3.61; full verify 1376/1376 и ship PASS.
+2. **Targeted owner smoke (следующий шаг)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
+   `manual-smoke-matrix.md`. Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
+   гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
+3. **T-13a/T-13b/T-13c/T-13e-preflight/T-13f** — actionable workflow/verification hardening отдельным
+   infra-срезом. `T-13d` и controlled Stable/Testing runs из `T-13e` остаются заблокированы до решения владельца.
+4. **Accumulated owner smoke** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external subtitles; B-05 `.ru.srt`
+   + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
+5. **T-03 closure audit** — выбрать только non-vacuous deterministic seam либо закрепить coverage как policy.
+6. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
+
+**Не берём сейчас:** `F-02-full` (trigger-only), `HC-22` (нет безопасной точки teardown) и `F-13` (DEFERRED).
+Перед поведенческими правками сверяться с
+frozen-контрактами; для app-кода обязательны `scripts/codex/verify.ps1`, domain-reviewers и targeted smoke.
 
 ## 7. ⚙️ Процессные заметки (грабли инфры — для будущих сессий)
 - **`/deep-research` харнесс упал ДВАЖДЫ** (auth 403 → server rate-limit, 0 источников): параллельный веер
@@ -1239,12 +1324,33 @@ frozen-контрактами; гейты `scripts/codex/verify.ps1` (build -war
     биндит только FontSize/FontFamily — FontWeight нигде не привязан.
   - Решение: `FontWeight="{Binding FL.Config.SidebarFontWeight}"` на `SubtitleListBox` (либо убрать выбор веса из диалога).
   - Зачем: настройка не имеет эффекта — вводит в заблуждение.
-- **HC-27 — `PersistVoiceAssignments`: синхронный I/O + двойной O(n)-снимок на UI-потоке 🟢 ⓢ · `LLPlayer/ViewModels/SubtitlesSidebarVM.cs:210`** (perf) · ✅ **DONE (v0.3.45, 2026-07-03, сессия #22, бандл B4)** — вся блокирующая работа (до 3×`File.Exists` SMB + 2×O(n) `SnapshotSubs` + JSON-запись) ушла с UI-потока в debounce-`Task.Run` (400мс, коалесинг по generation через `Interlocked`); flush на `Dispose` (`_voicesDirty`) чтобы не терять правку при teardown. ⚠️ **Adversarial-ревью поймало Important-регрессию durability** первого прохода: debounce гейтил только планирование, не выполнение — на медленном SMB старая generation-запись могла завершиться ПОСЛЕ новой, затерев последнюю правку (GUID-temp защищает от порчи, не от порядка). Исправлено: общий `_voicesSaveLock` сериализует записи + повторная проверка generation под локом (записи не регрессируют, last-edit-wins). Manual-smoke.
+- **HC-27 — `PersistVoiceAssignments`: синхронный I/O + двойной O(n)-снимок на UI-потоке 🟢 ⓢ · `LLPlayer/ViewModels/SubtitlesSidebarVM.cs:210`** (perf) · ✅ **DONE (v0.3.45, 2026-07-03, сессия #22, бандл B4)** — вся блокирующая работа (до 3×`File.Exists` SMB + 2×O(n) `SnapshotSubs` + JSON-запись) ушла с UI-потока в debounce-`Task.Run` (400мс, коалесинг по generation через `Interlocked`); flush на `Dispose` (`_voicesDirty`) чтобы не терять правку при teardown. ⚠️ **Adversarial-ревью поймало Important-регрессию durability** первого прохода: debounce гейтил только планирование, не выполнение — на медленном SMB старая generation-запись могла завершиться ПОСЛЕ новой, затерев последнюю правку (GUID-temp защищает от порчи, не от порядка). Исправлено: общий `_voicesSaveLock` сериализует записи + повторная проверка generation под локом (записи не регрессируют, last-edit-wins). Manual-smoke. **Исторический DONE относится к v0.3.45. В `d83efa5` immutable capture ради корректной смены media вернул `File.Exists` и полные subtitle-снимки на dispatcher; `4d80d39` сохранил этот capture, добавил очередь с повторным clone и утратил opt-in re-check непосредственно перед записью. Поэтому исходное утверждение «вся блокирующая работа ушла» больше не описывает live-код — см. `HC-27b`.**
   - Проблема: `CmdSubSetVoice` на UI-потоке синхронно: до 3× `File.Exists` (для SMB — блокирующие сетевые), `SnapshotSubs`
     копирует ОБА трека (2×O(n) под локом, блокируя per-frame скример), `SaveAtomic` пишет JSON. Сетевой файл + 5000+ cue
     + `PersistPerLineVoices=on` → фриз на каждый выбор голоса.
   - Решение: быстрый снимок только override-cue на UI, а `File.Exists`/сериализацию/запись — в `Task.Run` с debounce.
   - Зачем: назначение голоса замораживает UI на больших/сетевых файлах.
+- **HC-27b — Voice-save queue: OFF-race + UI capture 🟠 Ⓜ · IN-PROGRESS — automated slice complete (v0.3.61, `a468c3e`, 2026-07-10); owner acceptance pending**
+  - **Почему follow-up отдельный:** `HC-27` остаётся исторически закрытым срезом v0.3.45, но рефакторинг
+    capture в `d83efa5` и последующий `DubbingVoiceAssignmentSaveQueue` в `4d80d39` изменили реализацию и выявили
+    новые проверяемые границы: UI-I/O/сканы происходят из первого среза, повторный clone и поздний OFF race — из второго.
+  - **Проблема 1 — opt-in race:** `_isEnabled()` проверяется до ожидания глобального `_saveLock`; если другой save
+    держит lock, пользователь выключает `PersistPerLineVoices`, а уже claimed request затем всё равно вызывает `_save`.
+  - **Проблема 2 — UI capture:** `CreateVoiceAssignmentSaveRequest` вызывается с WPF dispatcher и всё ещё делает до
+    трёх `File.Exists`, два `SnapshotSubs` и минимальный clone; очередь после этого повторно клонирует snapshot.
+  - **Пробел тестов:** шесть существующих queue-тестов не покрывают queued-behind-save → OFF и
+    same-media old-in-flight → final latest state.
+  - **Реализация:** повторный OFF/latest check стоит непосредственно под save-lock; media identity захватывается
+    без I/O и разрешается на worker; per-track compact index копирует только назначенные cue; immutable snapshots,
+    A/B isolation, stale ContextMenu и Stop/open generation защищены отдельными revision/generation guards.
+  - **Evidence:** RED-before-fix для трёх исходных дефектов; +23 теста (race/alias/index/restore/reset), targeted
+    49/49, full **1376/1376**, build 0 warnings/errors, `verify-fast`/`verify`/`ship` PASS; обязательные WPF,
+    media-runtime, .NET, native и packaging review — SHIP, 0 Critical/Important.
+  - **DoD:** повторно проверить opt-in непосредственно под save-lock перед `_save`; убрать с dispatcher filesystem
+    probes, повторный clone и полные O(n)-сканы обоих subtitle-треков на каждую правку (либо заменить их доказуемо
+    ограниченным incremental capture), сохранив immutable capture-at-edit и корректность при смене media; добавить детерминированные race/latest-wins тесты;
+    full verify + targeted owner smoke из `manual-smoke-matrix.md`. Автоматизированная часть выполнена; наблюдаемый
+    owner smoke остаётся обязательным и не подменяется unit-тестами.
 - **HC-28 — Bing/Microsoft: отменённая задача access-токена залипает в кэше 🟢 ⓢ · `FlyleafLib/MediaPlayer/Translation/Services/MicrosoftTranslateServiceBase.cs:177`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — **постоянный баг уже был закрыт ранее** (eviction-гарды: 401 compare-and-clear + faulted-task eviction в `catch`); остаточное упрочнение — общий fetch токена с `CancellationToken.None` (был токен вызывающего) снимает и разовый сбой + thrash после отмены. Каждый вызывающий бейлит через `WaitAsync(token)`. Network/abstract path → покрыт корректностью + ревью.
   - Проблема: `GetAccessTokenTask` кэширует Task с токеном первого вызывающего; если Cancel пришёл во время первого
     fetch, canceled-task остаётся в `_accessToken` → следующий перевод детерминированно фейлится «A task was canceled».

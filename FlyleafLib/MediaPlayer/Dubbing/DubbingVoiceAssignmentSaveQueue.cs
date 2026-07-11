@@ -8,7 +8,11 @@ namespace FlyleafLib.MediaPlayer.Dubbing;
 /// </summary>
 public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
 {
-    private sealed record SaveRequest(string MediaPath, IReadOnlyList<SubtitleData> Subtitles);
+    private sealed record SaveRequest(
+        DubbingVoiceAssignmentMediaTarget Target,
+        string MediaKey,
+        long Revision,
+        IReadOnlyList<SubtitleData> Subtitles);
 
     private readonly Func<bool> _isEnabled;
     private readonly Action<string, IReadOnlyList<SubtitleData>> _save;
@@ -16,7 +20,12 @@ public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
     private readonly TimeSpan _delay;
     private readonly object _lock = new();
     private readonly object _saveLock = new();
-    private readonly Dictionary<string, SaveRequest> _pendingByMediaPath = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, SaveRequest> _pendingByMediaKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _latestRevisionByMediaKey = new(StringComparer.OrdinalIgnoreCase);
+    // Kept for the queue lifetime: a late alias request must never outlive and overwrite a newer save to the same
+    // resolved file, even after that newer request completed and removed its capture-key marker.
+    private readonly Dictionary<string, long> _latestRevisionByResolvedPath = new(StringComparer.OrdinalIgnoreCase);
+    private long _nextRevision;
     private int _activeSaves;
     private bool _isDisposed;
 
@@ -40,18 +49,40 @@ public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
         _onSaveClaimed = onSaveClaimed;
     }
 
-    public void Enqueue(string mediaPath, IEnumerable<SubtitleData> subtitles)
+    /// <summary>
+    /// Queues an already-owned immutable snapshot for a resolved media path. The queue deliberately does not
+    /// enumerate or clone the snapshot; callers must not mutate it after ownership is transferred.
+    /// </summary>
+    public void Enqueue(string mediaPath, IReadOnlyList<SubtitleData> ownedSnapshot)
     {
-        if (string.IsNullOrWhiteSpace(mediaPath) || !_isEnabled())
+        if (string.IsNullOrWhiteSpace(mediaPath))
             return;
 
-        SaveRequest request = new(mediaPath, Snapshot(subtitles));
+        Enqueue(DubbingVoiceAssignmentMediaTarget.FromResolvedPath(mediaPath), ownedSnapshot);
+    }
+
+    /// <summary>
+    /// Queues an already-owned immutable snapshot for a media identity captured at edit time. Filesystem probing is
+    /// deferred to the background worker so a slow local/UNC path never blocks the WPF dispatcher.
+    /// </summary>
+    public void Enqueue(DubbingVoiceAssignmentMediaTarget target, IReadOnlyList<SubtitleData> ownedSnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(ownedSnapshot);
+
+        if (target.IsEmpty || !_isEnabled())
+            return;
+
+        SaveRequest request;
         lock (_lock)
         {
             if (_isDisposed)
                 return;
 
-            _pendingByMediaPath[mediaPath] = request;
+            long revision = ++_nextRevision;
+            request = new SaveRequest(target, target.QueueKey, revision, ownedSnapshot);
+            _pendingByMediaKey[target.QueueKey] = request;
+            _latestRevisionByMediaKey[target.QueueKey] = revision;
         }
 
         _ = Task.Run(async () =>
@@ -59,7 +90,7 @@ public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
             try
             {
                 await Task.Delay(_delay).ConfigureAwait(false);
-                SaveIfCurrent(request);
+                RunSaveSafely(request);
             }
             catch
             {
@@ -77,11 +108,27 @@ public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
                 return;
 
             _isDisposed = true;
-            pending = [.. _pendingByMediaPath.Values];
+            pending = [.. _pendingByMediaKey.Values];
         }
 
-        foreach (SaveRequest request in pending)
-            SaveIfCurrent(request);
+        // A sidebar VM is disposed from WPF lifecycle code. Flush on pool threads so File.Exists, path resolution,
+        // JSON and filesystem writes never execute on the dispatcher. Waiting preserves the existing durability
+        // guarantee; the active-save wait below also covers delayed workers that claimed before this flush.
+        if (pending.Count > 0)
+        {
+            // LongRunning uses a dedicated worker and cannot be inlined by this synchronous wait onto the caller.
+            // A plain Task.Run + Wait can be inlined by the default scheduler, reintroducing dispatcher I/O.
+            Task flushTask = Task.Factory.StartNew(
+                () =>
+                {
+                    foreach (SaveRequest request in pending)
+                        RunSaveSafely(request);
+                },
+                CancellationToken.None,
+                TaskCreationOptions.DenyChildAttach | TaskCreationOptions.LongRunning,
+                TaskScheduler.Default);
+            flushTask.GetAwaiter().GetResult();
+        }
 
         lock (_lock)
         {
@@ -92,32 +139,46 @@ public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
 
     private void SaveIfCurrent(SaveRequest request)
     {
-        bool shouldSave;
         lock (_lock)
         {
-            if (!_pendingByMediaPath.TryGetValue(request.MediaPath, out SaveRequest? current)
+            if (!_pendingByMediaKey.TryGetValue(request.MediaKey, out SaveRequest? current)
                 || !ReferenceEquals(current, request))
             {
                 return;
             }
 
-            _pendingByMediaPath.Remove(request.MediaPath);
-            shouldSave = _isEnabled();
-            if (shouldSave)
+            _pendingByMediaKey.Remove(request.MediaKey);
+            if (!_isEnabled())
             {
-                _activeSaves++;
-                _onSaveClaimed?.Invoke(request.MediaPath);
+                RemoveLatestRevisionLocked(request);
+                return;
             }
-        }
 
-        if (!shouldSave)
-            return;
+            _activeSaves++;
+        }
 
         try
         {
+            if (!_isEnabled() || !IsLatestCapture(request))
+                return;
+
+            string? mediaPath = request.Target.ResolveLocalMediaPath();
+            if (mediaPath is null)
+                return;
+
+            RecordResolvedRevision(mediaPath, request.Revision);
+            _onSaveClaimed?.Invoke(mediaPath);
+
             lock (_saveLock)
             {
-                _save(request.MediaPath, request.Subtitles);
+                // Authoritative checks belong immediately before the side effect. A request may have been claimed
+                // while waiting behind another slow save, then superseded or disabled before it acquires this lock.
+                if (!_isEnabled()
+                    || !IsLatestCapture(request)
+                    || !IsLatestResolvedPath(mediaPath, request.Revision))
+                    return;
+
+                _save(mediaPath, request.Subtitles);
             }
         }
         finally
@@ -125,24 +186,62 @@ public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
             lock (_lock)
             {
                 _activeSaves--;
+                if (!_pendingByMediaKey.ContainsKey(request.MediaKey)
+                    && _latestRevisionByMediaKey.TryGetValue(request.MediaKey, out long latest)
+                    && latest == request.Revision)
+                {
+                    RemoveLatestRevisionLocked(request);
+                }
                 Monitor.PulseAll(_lock);
             }
         }
     }
 
-    private static IReadOnlyList<SubtitleData> Snapshot(IEnumerable<SubtitleData> subtitles)
+    private void RunSaveSafely(SaveRequest request)
     {
-        List<SubtitleData> snapshot = [];
-        foreach (SubtitleData sub in subtitles)
+        try
         {
-            snapshot.Add(new SubtitleData
-            {
-                StartTime = sub.StartTime,
-                EndTime = sub.EndTime,
-                AssignedVoiceId = sub.AssignedVoiceId,
-            });
+            SaveIfCurrent(request);
         }
+        catch
+        {
+            // Best-effort persistence must not escape a background flush or strand Dispose.
+        }
+    }
 
-        return snapshot;
+    private bool IsLatestCapture(SaveRequest request)
+    {
+        lock (_lock)
+        {
+            return _latestRevisionByMediaKey.TryGetValue(request.MediaKey, out long latest)
+                   && latest == request.Revision;
+        }
+    }
+
+    private void RecordResolvedRevision(string mediaPath, long revision)
+    {
+        lock (_lock)
+        {
+            if (!_latestRevisionByResolvedPath.TryGetValue(mediaPath, out long latest) || revision > latest)
+                _latestRevisionByResolvedPath[mediaPath] = revision;
+        }
+    }
+
+    private bool IsLatestResolvedPath(string mediaPath, long revision)
+    {
+        lock (_lock)
+        {
+            return _latestRevisionByResolvedPath.TryGetValue(mediaPath, out long latest)
+                   && latest == revision;
+        }
+    }
+
+    private void RemoveLatestRevisionLocked(SaveRequest request)
+    {
+        if (_latestRevisionByMediaKey.TryGetValue(request.MediaKey, out long latest)
+            && latest == request.Revision)
+        {
+            _latestRevisionByMediaKey.Remove(request.MediaKey);
+        }
     }
 }

@@ -673,11 +673,8 @@ public class Subtitle : NotifyPropertyChanged
         if (mediaPath is null)
             return;
 
-        List<SubtitleData> subs = _player.SubtitlesManager[_subIndex].SnapshotSubs();
-        if (subs.Count == 0)
-            return;
-
-        DubbingVoiceAssignmentStore.LoadMap(mediaPath).Apply(mediaPath, subs);
+        DubbingVoiceAssignmentMap assignments = DubbingVoiceAssignmentStore.LoadMap(mediaPath);
+        _player.SubtitlesManager[_subIndex].ApplyVoiceAssignments(mediaPath, assignments);
     }
 
     // The full path of the currently open LOCAL media (video), or null for web/streams. The per-line voice

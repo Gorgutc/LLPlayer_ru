@@ -10,6 +10,7 @@ using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaStream;
+using FlyleafLib.MediaPlayer.Dubbing;
 using FlyleafLib.MediaPlayer.Translation;
 
 namespace FlyleafLib.MediaPlayer;
@@ -53,6 +54,73 @@ public class SubtitlesManager
         {
             this[i].SetCurrentTime(currentTime);
         }
+    }
+
+    /// <summary>Updates a cue only if it still belongs to one of the current subtitle tracks.</summary>
+    public bool TrySetAssignedVoiceId(SubtitleData sub, string? voiceId)
+    {
+        ArgumentNullException.ThrowIfNull(sub);
+
+        foreach (SubManager manager in _subManagers)
+        {
+            if (manager.TrySetAssignedVoiceId(sub, voiceId))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Captures both tracks in track order together with per-track generations. Call
+    /// <see cref="IsVoiceAssignmentSnapshotCurrent"/> before enqueueing to reject a concurrent load/edit.
+    /// </summary>
+    internal List<SubtitleData> SnapshotVoiceAssignments(out long[] generations)
+    {
+        generations = new long[_subManagers.Length];
+        List<SubtitleData> assigned = [];
+        for (int i = 0; i < _subManagers.Length; i++)
+        {
+            assigned.AddRange(_subManagers[i].SnapshotVoiceAssignments(out long generation));
+            generations[i] = generation;
+        }
+
+        return assigned;
+    }
+
+    internal bool IsVoiceAssignmentSnapshotCurrent(IReadOnlyList<long> generations)
+    {
+        if (generations.Count != _subManagers.Length)
+            return false;
+
+        for (int i = 0; i < _subManagers.Length; i++)
+        {
+            if (!_subManagers[i].IsVoiceAssignmentGenerationCurrent(generations[i]))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Retries a compact capture when a concurrent subtitle mutation invalidates its generations. A false context
+    /// predicate aborts immediately (for example, when the owning media changed); null means no stable capture.
+    /// </summary>
+    public List<SubtitleData>? TrySnapshotVoiceAssignments(Func<bool> contextIsCurrent, int maxAttempts)
+    {
+        ArgumentNullException.ThrowIfNull(contextIsCurrent);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxAttempts);
+
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            List<SubtitleData> assigned = SnapshotVoiceAssignments(out long[] generations);
+            if (!contextIsCurrent())
+                return null;
+
+            if (IsVoiceAssignmentSnapshotCurrent(generations))
+                return assigned;
+        }
+
+        return null;
     }
 }
 
@@ -121,6 +189,8 @@ public class SubManager : INotifyPropertyChanged
     public int Height { get; internal set; }
 
     private readonly object _subsLocker = new();
+    private readonly HashSet<SubtitleData> _voiceAssignedSubs = [];
+    private long _voiceAssignmentGeneration;
     private readonly Config _config;
     private readonly int _subIndex;
     private readonly SubTranslator _subTranslator;
@@ -204,12 +274,16 @@ public class SubManager : INotifyPropertyChanged
 
     public void Load(IEnumerable<SubtitleData> items)
     {
+        List<SubtitleData> loaded = [.. items];
         lock (_subsLocker)
         {
             CurrentIndex = -1;
             SelectedSub = null;
             Subs.Clear();
-            Subs.AddRange(items);
+            Subs.AddRange(loaded);
+            ReindexSubtitlesLocked();
+            RebuildVoiceAssignmentIndexLocked();
+            _voiceAssignmentGeneration++;
         }
     }
 
@@ -219,14 +293,26 @@ public class SubManager : INotifyPropertyChanged
         {
             sub.Index = Subs.Count;
             Subs.Add(sub);
+            if (TrackVoiceAssignmentLocked(sub))
+                _voiceAssignmentGeneration++;
         }
     }
 
     public void AddRange(IEnumerable<SubtitleData> items)
     {
+        List<SubtitleData> added = [.. items];
         lock (_subsLocker)
         {
-            Subs.AddRange(items);
+            int nextIndex = Subs.Count;
+            foreach (SubtitleData sub in added)
+                sub.Index = nextIndex++;
+
+            Subs.AddRange(added);
+            bool addedAssignment = false;
+            foreach (SubtitleData sub in added)
+                addedAssignment |= TrackVoiceAssignmentLocked(sub);
+            if (addedAssignment)
+                _voiceAssignmentGeneration++;
         }
     }
 
@@ -242,6 +328,110 @@ public class SubManager : INotifyPropertyChanged
         {
             return Subs.ToList();
         }
+    }
+
+    /// <summary>
+    /// Captures only cues that currently override the default dubbing voice. The assigned-cue index is maintained
+    /// incrementally by load/add/restore/sidebar-edit paths, so an interactive save is O(k overrides), not O(n cues).
+    /// Returned cues are minimal owned clones and may be handed directly to a background save queue.
+    /// </summary>
+    internal List<SubtitleData> SnapshotVoiceAssignments()
+        => SnapshotVoiceAssignments(out _);
+
+    internal List<SubtitleData> SnapshotVoiceAssignments(out long generation)
+    {
+        lock (_subsLocker)
+        {
+            generation = _voiceAssignmentGeneration;
+            return _voiceAssignedSubs
+                .OrderBy(sub => sub.Index)
+                .ThenBy(sub => sub.StartTime)
+                .ThenBy(sub => sub.EndTime)
+                .Select(sub => new SubtitleData
+                {
+                    StartTime = sub.StartTime,
+                    EndTime = sub.EndTime,
+                    AssignedVoiceId = sub.AssignedVoiceId,
+                })
+                .ToList();
+        }
+    }
+
+    /// <summary>Updates a live cue only when it still belongs to this manager.</summary>
+    internal bool TrySetAssignedVoiceId(SubtitleData sub, string? voiceId)
+    {
+        ArgumentNullException.ThrowIfNull(sub);
+
+        lock (_subsLocker)
+        {
+            if (sub.Index < 0 || sub.Index >= Subs.Count || !ReferenceEquals(Subs[sub.Index], sub))
+                return false;
+
+            string? normalized = string.IsNullOrWhiteSpace(voiceId) ? null : voiceId.Trim();
+            bool changed = !string.Equals(sub.AssignedVoiceId, normalized, StringComparison.Ordinal);
+            sub.AssignedVoiceId = normalized;
+            TrackVoiceAssignmentLocked(sub);
+            if (changed)
+                _voiceAssignmentGeneration++;
+            return true;
+        }
+    }
+
+    internal bool IsVoiceAssignmentGenerationCurrent(long generation)
+    {
+        lock (_subsLocker)
+        {
+            return _voiceAssignmentGeneration == generation;
+        }
+    }
+
+    /// <summary>Applies fill-empty persisted values and rebuilds the compact index as one locked operation.</summary>
+    internal void ApplyVoiceAssignments(string mediaPath, IDubbingVoiceAssignmentProvider assignments)
+    {
+        ArgumentNullException.ThrowIfNull(assignments);
+
+        lock (_subsLocker)
+        {
+            if (Subs.Count == 0)
+                return;
+
+            Dictionary<SubtitleData, string?> before = _voiceAssignedSubs.ToDictionary(
+                sub => sub,
+                sub => sub.AssignedVoiceId);
+            assignments.Apply(mediaPath, Subs.ToList());
+            RebuildVoiceAssignmentIndexLocked();
+            bool changed = before.Count != _voiceAssignedSubs.Count
+                           || _voiceAssignedSubs.Any(sub =>
+                               !before.TryGetValue(sub, out string? oldVoice)
+                               || !string.Equals(oldVoice, sub.AssignedVoiceId, StringComparison.Ordinal));
+            if (changed)
+                _voiceAssignmentGeneration++;
+        }
+    }
+
+    private void ReindexSubtitlesLocked()
+    {
+        for (int i = 0; i < Subs.Count; i++)
+            Subs[i].Index = i;
+    }
+
+    private void RebuildVoiceAssignmentIndexLocked()
+    {
+        _voiceAssignedSubs.Clear();
+        foreach (SubtitleData sub in Subs)
+            TrackVoiceAssignmentLocked(sub);
+    }
+
+    private bool TrackVoiceAssignmentLocked(SubtitleData sub)
+    {
+        if (string.IsNullOrWhiteSpace(sub.AssignedVoiceId))
+        {
+            _voiceAssignedSubs.Remove(sub);
+            return false;
+        }
+
+        _voiceAssignedSubs.Add(sub);
+        return true;
     }
 
     public SubtitleData? GetCurrent()
@@ -453,6 +643,9 @@ public class SubManager : INotifyPropertyChanged
                 return;
 
             Subs.Sort(SubtitleTimeStartComparer.Instance);
+            ReindexSubtitlesLocked();
+            RebuildVoiceAssignmentIndexLocked();
+            _voiceAssignmentGeneration++;
         }
     }
 
@@ -652,6 +845,8 @@ public class SubManager : INotifyPropertyChanged
                 sub.Dispose();
             }
             Subs.Clear();
+            _voiceAssignedSubs.Clear();
+            _voiceAssignmentGeneration++;
             State = PositionState.First;
             LanguageSource = null;
             IsLoading = false;
@@ -1175,9 +1370,10 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
     /// Per-line dub voice override (F-16 phase 2a), or null to use the run's default dub voice
     /// (<see cref="DubbingConfig.DefaultVoiceId"/>). Default null → byte-identical: the dub renderer falls back to
     /// the default voice, so a track with no assignments renders exactly as the single-voice dub. Inert for
-    /// everything except the AI dub (display/export/translation ignore it). Interactive/in-memory only — never
-    /// serialized (a re-render from an existing .srt loses it); a blank value means "no override". Set via the
-    /// sidebar per-row voice picker. Notifies so the picker's set/unset visual state updates live.
+    /// everything except the AI dub (display/export/translation ignore it). The cue itself is never serialized;
+    /// a separate opt-in companion-file workflow can persist the override across restarts and SRT-only re-renders.
+    /// A blank value means "no override". Set via the sidebar per-row voice picker. Notifies so the picker's set/unset
+    /// visual state updates live.
     /// </summary>
     public string? AssignedVoiceId { get; set => Set(ref field, value); }
 
