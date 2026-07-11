@@ -950,12 +950,18 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 **но только с явным sign-off владельца** — эвристика «локальный ли endpoint» рискованна (ложно-облачные хосты). Идеально
 совмещать с принципиальным решением B-04 (streaming + скользящий read-timeout). Пока не трогать без запроса.
 
-### T-13 — Workflow / verification hardening 🟠 Ⓜ · TODO (6 стабильных срезов, подтверждено 2026-07-10)
+### T-13 — Workflow / verification hardening 🟠 Ⓜ · IN-PROGRESS (1/7 срезов, 2026-07-11)
 > Общий пакет регистрирует infra-находки; `DOC-01` только даёт им ID и не меняет workflows/scripts/ruleset.
 
-- **T-13a — injection-safe Testing Release inputs/outputs 🟠 ⓢ · TODO.** `testing-release.yml` напрямую вставляет
-  `workflow_dispatch` input и derived outputs в PowerShell при `contents: write`. **DoD:** передавать через `env`,
-  валидировать ref/token и закрепить негативный injection-сценарий.
+- **T-13a — injection-safe Testing Release inputs/outputs 🟠 ⓢ · ✅ DONE (2026-07-11, infra-only).**
+  `workflow_dispatch` ref и derived release metadata теперь попадают в PowerShell только через `env`.
+  `validate-release-token.ps1` fail-closed проверяет ref/tag/hash/archive до `GITHUB_OUTPUT`; короткий SHA берётся
+  только из checkout-нутого `HEAD`, `github-script` возвращает строку, upload получает quoted validated basename.
+  Composite packaging action тоже читает archive input через `env` и повторно проверяет basename.
+  `verify-release-workflow.ps1` закрепляет positive fixtures и негативные `;`, `$()`, `--`, CR/LF, `..`, `@{`,
+  path/ref сценарии и запрещает возврат `${{ }}`-интерполяции в `run` blocks. Реальный Testing Release не запускался:
+  overwrite-run остаётся owner-gated частью `T-13e`. Выполнено раньше owner smoke по прямой команде владельца;
+  это не закрывает `HC-27b` acceptance.
 - **T-13b — `verify-fast.ps1` в Build & Test 🟠 ⓢ · TODO.** `build.yml` выполняет restore/build/test, но не
   проверяет plugin/docs/frozen/license gates. **DoD:** намеренно сломанный frozen/plugin marker красит CI;
   обычный PR/push остаётся зелёным.
@@ -974,20 +980,24 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 - **T-13f — проверка hook targets 🟢 ⓢ · TODO.** `verify-plugin.ps1` проверяет наличие `.codex/hooks.json`, но не
   разбирает команды и не подтверждает существование их `-File`. **DoD:** fail-closed parse всех Windows hooks;
   каждый target существует внутри repo и разрешается однозначно.
+- **T-13g — изоляция write-token от выбранного release ref 🟠 Ⓜ · TODO (review finding 2026-07-11).**
+  `T-13a` закрывает shell/output injection, но Testing Release по-прежнему выполняет composite action и build-код
+  выбранного ref в job с `contents: write`. **DoD:** build/package идёт в отдельном job с `contents: read`, а узкий
+  upload job получает только проверенный artifact и `contents: write`; фактический overwrite-run остаётся owner-gated.
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-10 / v0.3.61)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-11 / v0.3.61)
 
 | # | ID | Следующий результат | Важн. | Сложн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
 | 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice merged via PR #142; owner acceptance pending |
-| 2 | **T-13a** | Injection-safe Testing Release inputs/outputs | 🟠 | ⓢ | TODO после targeted smoke |
-| 3 | **T-13b** | `verify-fast` становится частью Build & Test | 🟠 | ⓢ | TODO после targeted smoke |
-| 4 | **T-13c** | Full-verify/reviewer routing для всех app/project paths | 🟡 | ⓢ-Ⓜ | TODO после targeted smoke |
+| 2 | **T-13b** | `verify-fast` становится частью Build & Test | 🟠 | ⓢ | следующий agent-action; T-13a DONE |
+| 3 | **T-13g** | Build не получает write-token; upload изолирован | 🟠 | Ⓜ | TODO; controlled run BLOCKED |
+| 4 | **T-13c** | Full-verify/reviewer routing для всех app/project paths | 🟡 | ⓢ-Ⓜ | TODO |
 | 5 | **T-13e** | Fresh full verify перед packaging; controlled runs отдельно owner-approved | 🟡 | Ⓜ | preflight TODO; runs BLOCKED |
 | 6 | **T-03** | Closure audit: доказуемый seam либо постоянная coverage-policy | 🟡 | Ⓜ | ONGOING; не гнаться за счётчиком |
-| 7 | **T-13f** | Hook commands и их `-File` targets проверяются fail-closed | 🟢 | ⓢ | TODO после targeted smoke |
+| 7 | **T-13f** | Hook commands и их `-File` targets проверяются fail-closed | 🟢 | ⓢ | TODO |
 
 **Owner-gated / не брать без решения:** `T-13d` required status check · только controlled Stable/Testing runs
 из `T-13e` (сам preflight actionable) ·
@@ -1032,15 +1042,15 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-10 / v0.3.61)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-11 / v0.3.61)
 
 | # | ID | Следующий результат | Сложн. | Важн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
-| 1 | **T-13a** | Безопасная передача/валидация release input и outputs | ⓢ | 🟠 | TODO |
-| 2 | **T-13b** | `verify-fast` в Build & Test | ⓢ | 🟠 | TODO |
-| 3 | **T-13f** | Разрешимость hook targets | ⓢ | 🟢 | TODO |
-| 4 | **T-13c** | Полное routing-покрытие C#/XAML/project paths | ⓢ-Ⓜ | 🟡 | TODO |
-| 5 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice complete; owner acceptance pending |
+| 1 | **T-13b** | `verify-fast` в Build & Test | ⓢ | 🟠 | следующий agent-action |
+| 2 | **T-13f** | Разрешимость hook targets | ⓢ | 🟢 | TODO |
+| 3 | **T-13c** | Полное routing-покрытие C#/XAML/project paths | ⓢ-Ⓜ | 🟡 | TODO |
+| 4 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice merged; owner acceptance pending |
+| 5 | **T-13g** | Разделить read-only build и write-only upload | Ⓜ | 🟠 | TODO; release-run BLOCKED |
 | 6 | **T-13e** | Fresh full verify перед packaging | Ⓜ | 🟡 | TODO; release-runs BLOCKED |
 | 7 | **T-03** | Closure audit вместо бесконечного роста счётчика | Ⓜ | 🟡 | после accumulated smoke |
 
@@ -1098,15 +1108,18 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
 ## 6. 🧭 Рекомендуемая последовательность ближайших сессий (мои рассуждения)
 1. **HC-27b automated slice ✅** — app+tests коммит `a468c3e`, PR #142 merged `f61780c`, v0.3.61; local full/ship и PR/post-merge CI PASS.
-2. **Targeted owner smoke (следующий шаг)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
+2. **T-13a ✅ (выполнен вне очереди по прямой команде владельца)** — Testing Release больше не вставляет
+   dispatch input/outputs в PowerShell; fail-closed validator и негативные injection fixtures входят в fast gate.
+   Controlled Testing Release не запускался и остаётся owner-gated в `T-13e`.
+3. **Targeted owner smoke (следующий owner-action)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
    `manual-smoke-matrix.md`. Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
    гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
-3. **T-13a/T-13b/T-13c/T-13e-preflight/T-13f** — actionable workflow/verification hardening отдельным
-   infra-срезом. `T-13d` и controlled Stable/Testing runs из `T-13e` остаются заблокированы до решения владельца.
-4. **Accumulated owner smoke** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external subtitles; B-05 `.ru.srt`
+4. **T-13b (следующий agent-action), затем T-13g/T-13c/T-13e-preflight/T-13f** — оставшийся actionable
+   workflow/verification hardening. `T-13d` и controlled Stable/Testing runs из `T-13e` остаются заблокированы.
+5. **Accumulated owner smoke** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external subtitles; B-05 `.ru.srt`
    + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
-5. **T-03 closure audit** — выбрать только non-vacuous deterministic seam либо закрепить coverage как policy.
-6. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
+6. **T-03 closure audit** — выбрать только non-vacuous deterministic seam либо закрепить coverage как policy.
+7. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
 
 **Не берём сейчас:** `F-02-full` (trigger-only), `HC-22` (нет безопасной точки teardown) и `F-13` (DEFERRED).
 Перед поведенческими правками сверяться с
