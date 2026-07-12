@@ -152,6 +152,7 @@ try {
         "verify-plugin",
         "verify-doc-coverage",
         "verify-frozen",
+        "verify-build-workflow",
         "audit-frozen",
         "ship"
     )

@@ -15,6 +15,7 @@ The fast gate includes:
 - `scripts/codex/verify-plugin.ps1`
 - `scripts/codex/verify-doc-coverage.ps1`
 - `scripts/codex/verify-frozen.ps1`
+- `scripts/codex/verify-build-workflow.ps1`
 - `scripts/codex/verify-release-workflow.ps1`
 - `scripts/codex/check-dub-licenses.ps1`
 
@@ -23,6 +24,12 @@ The fast gate includes:
 derived release metadata directly inside PowerShell. The workflow validates the requested ref, latest stable tag,
 checked-out commit hash, and archive basename before writing GitHub outputs or calling the overwrite upload tail.
 This gate does not dispatch a release or modify GitHub assets.
+
+GitHub's `Build & Test` workflow runs the fast gate after setting up .NET 10 and before its separate
+restore, app/plugin build, and test steps, so infrastructure or frozen-contract drift fails before compilation.
+`verify-build-workflow.ps1` validates .NET 10 setup and fast-gate placement relative to restore inside
+`jobs.build`, rejects conditional or continue-on-error bypasses, and exercises adversarial hierarchy,
+cross-job, block-scalar, setup, SDK, and ordering fixtures.
 
 Use this read-only helper before review when you need to map changed files to frozen contracts, agents, and gates:
 
