@@ -18,6 +18,9 @@ jobs:
       with:
         dotnet-version: 10.0.x
 
+    - name: Verify fast repository gates
+      run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.ps1
+
     - name: Restore dependencies
       run: dotnet restore -warnaserror
 

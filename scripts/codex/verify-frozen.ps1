@@ -78,6 +78,7 @@ try {
     Require-Text ".\.github\actions\build-package\action.yml" "Plugins\\YoutubeDL\\YoutubeDL\.dll" "Release package action must verify YoutubeDL.dll is present."
     Require-Text ".\.github\actions\build-package\action.yml" "dub_sidecar\\uv\.lock" "Release package action must verify committed dubbing lockfile is present."
     Require-Text ".\.github\actions\build-package\action.yml" "Get-ChildItem \`$pub -Directory -Recurse" "Release package action must recursively reject dubbing runtime/model directories."
+    Require-Text ".\scripts\codex\verify-fast.ps1" '(?m)^\s*& "\.\\scripts\\codex\\verify-build-workflow\.ps1"\s*$' "Fast verification must run the Build & Test workflow contract validator."
     Require-Text ".\.github\workflows\build.yml" "dotnet restore -warnaserror" "Build workflow restore must treat NuGet audit warnings as errors."
     Require-Text ".\scripts\codex\verify.ps1" 'Invoke-Checked dotnet "restore" "-warnaserror"' "Full verification restore must treat NuGet audit warnings as errors."
     Require-Text ".\scripts\codex\ship.ps1" 'Invoke-Checked dotnet "restore" "\.\\LLPlayer\\LLPlayer\.csproj" "/p:PublishReadyToRun=true" "-warnaserror"' "Ship smoke app restore must treat NuGet audit warnings as errors."
