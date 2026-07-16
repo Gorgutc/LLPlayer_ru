@@ -7,18 +7,38 @@ on:
         description: 'Build Commit Hash or ref'
         required: true
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
-  release:
+  prepare:
     runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      commit_sha: ${{ steps.release-commit.outputs.sha }}
+      archive_name: ${{ steps.archive-name.outputs.name }}
 
     steps:
+      - name: Require trusted workflow ref
+        shell: pwsh
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $expectedRef = "refs/heads/$env:DEFAULT_BRANCH"
+          if (-not [string]::Equals(
+              "$env:WORKFLOW_REF",
+              $expectedRef,
+              [System.StringComparison]::Ordinal)) {
+            throw "Testing Release must be dispatched from the default branch."
+          }
+
       - name: Checkout workflow control source
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Stage trusted release validator
         shell: pwsh
@@ -45,7 +65,7 @@ jobs:
 
       - name: Get latest stable release tag
         id: latest-tag
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           result-encoding: string
@@ -69,25 +89,36 @@ jobs:
             -OutputName value `
             -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
 
-      - name: Checkout release ref
-        uses: actions/checkout@v5
+      - name: Checkout selected ref for resolution
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           ref: ${{ steps.release-ref.outputs.value }}
+          path: selected-source
+          persist-credentials: false
 
-      - name: Get short commit hash
-        id: short-hash
+      - name: Resolve immutable release commit
+        id: release-commit
         shell: pwsh
         env:
           VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1
         run: |
-          $short = (& git rev-parse --short=12 HEAD).Trim()
-          if ($LASTEXITCODE -ne 0) {
-            throw "Could not resolve the checked-out commit."
+          $ErrorActionPreference = "Stop"
+          $full = (& git -C .\selected-source rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $full -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw "Could not resolve the selected ref to one full commit id."
           }
+
+          & "$env:VALIDATOR_PATH" `
+            -Kind Hash `
+            -Value "$full" `
+            -OutputName sha `
+            -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
+
+          $short = $full.Substring(0, 12)
           & "$env:VALIDATOR_PATH" `
             -Kind Hash `
             -Value "$short" `
-            -OutputName sha `
+            -OutputName short `
             -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
 
       - name: Set archive name
@@ -95,7 +126,7 @@ jobs:
         shell: pwsh
         env:
           STABLE_TAG: ${{ steps.stable-tag.outputs.value }}
-          SHORT_HASH: ${{ steps.short-hash.outputs.sha }}
+          SHORT_HASH: ${{ steps.release-commit.outputs.short }}
           VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1
         run: |
           $archiveName = "LLPlayer-testing-$env:STABLE_TAG-$env:SHORT_HASH.7z"
@@ -105,15 +136,205 @@ jobs:
             -OutputName name `
             -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
 
+  build:
+    needs: prepare
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout immutable release commit
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit_sha }}
+          persist-credentials: false
+
+      - name: Verify immutable checkout
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT_SHA: ${{ needs.prepare.outputs.commit_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $actual = (& git rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($LASTEXITCODE -ne 0 -or -not [string]::Equals(
+              $actual,
+              "$env:EXPECTED_COMMIT_SHA",
+              [System.StringComparison]::Ordinal)) {
+            throw "The build checkout does not match the prepared commit id."
+          }
+
       - name: Build & Package
         uses: ./.github/actions/build-package
         with:
-          archive-name: ${{ steps.archive-name.outputs.name }}
+          archive-name: ${{ needs.prepare.outputs.archive_name }}
+
+      - name: Upload testing release artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: llplayer-testing-release-unverified
+          path: ${{ needs.prepare.outputs.archive_name }}
+          if-no-files-found: error
+          overwrite: false
+          compression-level: 0
+          include-hidden-files: false
+          retention-days: 1
+
+  verify:
+    needs: [prepare, build]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download unverified testing release artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: llplayer-testing-release-unverified
+          path: ${{ runner.temp }}\llplayer-testing-release-unverified
+          digest-mismatch: error
+
+      - name: Validate unverified testing package
+        id: verified-asset
+        shell: pwsh
+        env:
+          EXPECTED_ARCHIVE_NAME: ${{ needs.prepare.outputs.archive_name }}
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-testing-release-unverified
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $name = "$env:EXPECTED_ARCHIVE_NAME"
+          if ($name.Length -gt 160 -or
+              $name -notmatch '^LLPlayer-[0-9A-Za-z][0-9A-Za-z._+\-]{0,139}\.7z$' -or
+              $name.Contains("..")) {
+            throw "Unexpected release archive name."
+          }
+
+          $root = [System.IO.Path]::GetFullPath("$env:ARTIFACT_DIRECTORY")
+          if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+            throw "Downloaded artifact directory is missing."
+          }
+
+          $entries = @(Get-ChildItem -LiteralPath $root -Force)
+          if ($entries.Count -ne 1) {
+            throw "Artifact must contain exactly one direct entry."
+          }
+
+          $file = $entries[0]
+          if ($file.PSIsContainer -or
+              (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+              $file.Length -le 0) {
+            throw "Artifact entry must be one non-empty regular file."
+          }
+
+          if (-not [string]::Equals(
+              $file.Name,
+              $name,
+              [System.StringComparison]::Ordinal)) {
+            throw "Downloaded archive name does not match the trusted build metadata."
+          }
+
+          $expectedPath = [System.IO.Path]::GetFullPath((Join-Path $root $name))
+          if (-not [string]::Equals(
+              $file.FullName,
+              $expectedPath,
+              [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Downloaded archive escaped the fixed artifact directory."
+          }
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT,
+            "path=$expectedPath$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
+
+      - name: Upload verified testing release artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: llplayer-testing-release-verified
+          path: ${{ steps.verified-asset.outputs.path }}
+          if-no-files-found: error
+          overwrite: false
+          compression-level: 0
+          include-hidden-files: false
+          retention-days: 1
+
+  upload:
+    needs: [prepare, verify]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download testing release artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: llplayer-testing-release-verified
+          path: ${{ runner.temp }}\llplayer-testing-release-verified
+          digest-mismatch: error
+
+      - name: Validate downloaded testing package
+        id: release-asset
+        shell: pwsh
+        env:
+          EXPECTED_ARCHIVE_NAME: ${{ needs.prepare.outputs.archive_name }}
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-testing-release-verified
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $name = "$env:EXPECTED_ARCHIVE_NAME"
+          if ($name.Length -gt 160 -or
+              $name -notmatch '^LLPlayer-[0-9A-Za-z][0-9A-Za-z._+\-]{0,139}\.7z$' -or
+              $name.Contains("..")) {
+            throw "Unexpected release archive name."
+          }
+
+          $root = [System.IO.Path]::GetFullPath("$env:ARTIFACT_DIRECTORY")
+          if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+            throw "Downloaded artifact directory is missing."
+          }
+
+          $entries = @(Get-ChildItem -LiteralPath $root -Force)
+          if ($entries.Count -ne 1) {
+            throw "Artifact must contain exactly one direct entry."
+          }
+
+          $file = $entries[0]
+          if ($file.PSIsContainer -or
+              (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+              $file.Length -le 0) {
+            throw "Artifact entry must be one non-empty regular file."
+          }
+
+          if (-not [string]::Equals(
+              $file.Name,
+              $name,
+              [System.StringComparison]::Ordinal)) {
+            throw "Downloaded archive name does not match the trusted build metadata."
+          }
+
+          $expectedPath = [System.IO.Path]::GetFullPath((Join-Path $root $name))
+          if (-not [string]::Equals(
+              $file.FullName,
+              $expectedPath,
+              [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Downloaded archive escaped the fixed artifact directory."
+          }
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT,
+            "path=$expectedPath$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
 
       - name: Upload Testing Asset (overwrite)
         shell: pwsh
         env:
-          ARCHIVE_NAME: ${{ steps.archive-name.outputs.name }}
+          ARCHIVE_PATH: ${{ steps.release-asset.outputs.path }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v0.0.1 "$env:ARCHIVE_NAME" --clobber
+          $ErrorActionPreference = "Stop"
+          & gh release upload v0.0.1 "$env:ARCHIVE_PATH" `
+            --clobber `
+            --repo "$env:RELEASE_REPOSITORY"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Testing release upload failed."
+          }

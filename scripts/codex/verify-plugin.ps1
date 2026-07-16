@@ -153,6 +153,9 @@ try {
         "verify-doc-coverage",
         "verify-frozen",
         "verify-build-workflow",
+        "verify-release-workflow",
+        "verify-testing-release-boundary",
+        "validate-release-token",
         "audit-frozen",
         "ship"
     )

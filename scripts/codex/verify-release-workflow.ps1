@@ -211,19 +211,7 @@ Assert-RunFixtureRejected $indentedRunFixture "an indented block-scalar interpol
 $workflowText = Get-Content -LiteralPath $testingWorkflow -Raw
 $actionText = Get-Content -LiteralPath $packageAction -Raw
 
-foreach ($fragment in @(
-    'REQUESTED_REF: ${{ inputs.commit }}',
-    'VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1',
-    'ref: ${{ steps.release-ref.outputs.value }}',
-    'git rev-parse --short=12 HEAD',
-    'result-encoding: string',
-    'STABLE_TAG: ${{ steps.latest-tag.outputs.result }}',
-    'SHORT_HASH: ${{ steps.short-hash.outputs.sha }}',
-    'ARCHIVE_NAME: ${{ steps.archive-name.outputs.name }}',
-    'gh release upload v0.0.1 "$env:ARCHIVE_NAME" --clobber'
-)) {
-    Require-Fragment $workflowText $fragment "Testing Release workflow is missing required injection-safe fragment: $fragment"
-}
+& (Join-Path $PSScriptRoot "verify-testing-release-boundary.ps1")
 
 Require-StepFragments $testingWorkflow "Validate requested ref" @(
     '& "$env:VALIDATOR_PATH"',
@@ -239,11 +227,13 @@ Require-StepFragments $testingWorkflow "Validate stable release tag" @(
     '-OutputName value',
     '-OutputFile "$env:GITHUB_OUTPUT"'
 )
-Require-StepFragments $testingWorkflow "Get short commit hash" @(
-    '& "$env:VALIDATOR_PATH"',
+Require-StepFragments $testingWorkflow "Resolve immutable release commit" @(
+    'git -C .\selected-source rev-parse HEAD',
     '-Kind Hash',
-    '-Value "$short"',
+    '-Value "$full"',
     '-OutputName sha',
+    '-Value "$short"',
+    '-OutputName short',
     '-OutputFile "$env:GITHUB_OUTPUT"'
 )
 Require-StepFragments $testingWorkflow "Set archive name" @(
@@ -270,4 +260,4 @@ foreach ($fragment in @(
 Require-Fragment $actionText 'ARCHIVE_NAME: ${{ inputs.archive-name }}' "Build/package action must pass archive-name through env."
 Require-Fragment $actionText '$out = "$env:ARCHIVE_NAME"' "Build/package action must read archive-name from env."
 
-Write-Host "Release workflow injection verification completed."
+Write-Host "Release workflow input/output and token-boundary verification completed."
