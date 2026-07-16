@@ -12,17 +12,19 @@
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
 >
-> **Актуальный рабочий срез (2026-07-12, v0.3.61):** app-срез `HC-27b` смёржен через
+> **Актуальный рабочий срез (2026-07-16, v0.3.61):** app-срез `HC-27b` смёржен через
 > [PR #142](https://github.com/Gorgutc/LLPlayer_ru/pull/142), post-merge truth sync — через
 > [PR #143](https://github.com/Gorgutc/LLPlayer_ru/pull/143). `T-13a` реализован и проверен в
 > [PR #144](https://github.com/Gorgutc/LLPlayer_ru/pull/144): Testing Release больше не интерполирует release
 > input/outputs в PowerShell, а fast gate содержит adversarial fixtures. `T-13b` добавил fast gate в обычный
 > Build & Test: [PR #145](https://github.com/Gorgutc/LLPlayer_ru/pull/145) зелёный, а закрытый без merge
 > proof-[PR #146](https://github.com/Gorgutc/LLPlayer_ru/pull/146) намеренно покрасил тот же gate на сломанном marker.
-> Полный локальный `verify.ps1` и
-> `ship.ps1` — PASS: **1376/1376**, 0 warnings/errors, publish smoke green. Post-merge CI #143 выявил один
+> `T-13g` изолировал write-token в [PR #147](https://github.com/Gorgutc/LLPlayer_ru/pull/147): выбранный ref собирается
+> read-only, отдельный trusted verify job выпускает fixed-name verified artifact, а write job только загружает его.
+> Первый feature-head [run 29526902608](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29526902608) зелёный.
+> Полный локальный `verify.ps1` и `ship.ps1` — PASS: **1376/1376**, 0 warnings/errors, publish smoke green. Post-merge CI #143 выявил один
 > thread-pool-starvation timeout в HC-27b lock-тесте; в #144 тест переведён на dedicated workers и прошёл 20/20.
-> `HC-27b` остаётся `IN-PROGRESS` до targeted owner smoke; следующий agent-action — `T-13g`.
+> `HC-27b` остаётся `IN-PROGRESS` до targeted owner smoke; active **5**, unresolved **12**; следующий agent-action — `T-13c`.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -956,7 +958,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 **но только с явным sign-off владельца** — эвристика «локальный ли endpoint» рискованна (ложно-облачные хосты). Идеально
 совмещать с принципиальным решением B-04 (streaming + скользящий read-timeout). Пока не трогать без запроса.
 
-### T-13 — Workflow / verification hardening 🟠 Ⓜ · IN-PROGRESS (2/7 срезов, 2026-07-12)
+### T-13 — Workflow / verification hardening 🟠 Ⓜ · IN-PROGRESS (3/7 срезов, 2026-07-16)
 > Общий пакет регистрирует infra-находки; `DOC-01` только даёт им ID и не меняет workflows/scripts/ruleset.
 
 - **T-13a — injection-safe Testing Release inputs/outputs 🟠 ⓢ · ✅ DONE (PR #144, 2026-07-11, infra-only).**
@@ -994,23 +996,30 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 - **T-13f — проверка hook targets 🟢 ⓢ · TODO.** `verify-plugin.ps1` проверяет наличие `.codex/hooks.json`, но не
   разбирает команды и не подтверждает существование их `-File`. **DoD:** fail-closed parse всех Windows hooks;
   каждый target существует внутри repo и разрешается однозначно.
-- **T-13g — изоляция write-token от выбранного release ref 🟠 Ⓜ · TODO (review finding 2026-07-11).**
-  `T-13a` закрывает shell/output injection, но Testing Release по-прежнему выполняет composite action и build-код
-  выбранного ref в job с `contents: write`. **DoD:** build/package идёт в отдельном job с `contents: read`, а узкий
-  upload job получает только проверенный artifact и `contents: write`; фактический overwrite-run остаётся owner-gated.
+- **T-13g — изоляция write-token от выбранного release ref 🟠 Ⓜ · ✅ DONE (PR #147, 2026-07-16, infra-only).**
+  Testing Release разделён на четыре fresh GitHub-hosted job: trusted `prepare`, selected-ref `build`, trusted `verify`
+  и узкий `upload`. Build/package выполняется только с `contents: read`; selected ref один раз разрешается в полный SHA.
+  Verify job с `contents: read` принимает fixed-name unverified artifact, fail-closed проверяет единственный непустой
+  regular `.7z` и перевыпускает его под отдельным fixed verified-name. Только upload job получает `contents: write`;
+  он не checkout-ит и не исполняет selected code/archive, повторно проверяет verified artifact текущего run и передаёт
+  validated absolute path фиксированной команде `gh release upload`. Все внешние Actions закреплены полными commit SHA.
+  Structural validator с exact allowlists, adversarial mutations и filesystem fixtures включён в fast/full/ship.
+  [Run 29526902608](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29526902608) зелёный на implementation head
+  `61f7e33`: fast, restore, app/plugin build и 1376 тестов прошли. Локальные fast/full/ship PASS; три профильных review
+  и финальный `/review` — SHIP без Critical/Important/Minor. Фактический overwrite-run не запускался и остаётся
+  owner-gated частью `T-13e`; проверенная граница защищает token/transport, но не аттестует содержимое выбранной сборки.
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-12 / v0.3.61)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-16 / v0.3.61)
 
 | # | ID | Следующий результат | Важн. | Сложн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
 | 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice merged via PR #142; owner acceptance pending |
-| 2 | **T-13g** | Build не получает write-token; upload изолирован | 🟠 | Ⓜ | следующий agent-action; controlled run BLOCKED |
-| 3 | **T-13c** | Full-verify/reviewer routing для всех app/project paths | 🟡 | ⓢ-Ⓜ | TODO |
-| 4 | **T-13e** | Fresh full verify перед packaging; controlled runs отдельно owner-approved | 🟡 | Ⓜ | preflight TODO; runs BLOCKED |
-| 5 | **T-03** | Closure audit: доказуемый seam либо постоянная coverage-policy | 🟡 | Ⓜ | ONGOING; не гнаться за счётчиком |
-| 6 | **T-13f** | Hook commands и их `-File` targets проверяются fail-closed | 🟢 | ⓢ | TODO |
+| 2 | **T-13c** | Full-verify/reviewer routing для всех app/project paths | 🟡 | ⓢ-Ⓜ | следующий agent-action |
+| 3 | **T-13e** | Fresh full verify перед packaging; controlled runs отдельно owner-approved | 🟡 | Ⓜ | preflight TODO; runs BLOCKED |
+| 4 | **T-03** | Closure audit: доказуемый seam либо постоянная coverage-policy | 🟡 | Ⓜ | ONGOING; не гнаться за счётчиком |
+| 5 | **T-13f** | Hook commands и их `-File` targets проверяются fail-closed | 🟢 | ⓢ | TODO |
 
 **Owner-gated / не брать без решения:** `T-13d` required status check · только controlled Stable/Testing runs
 из `T-13e` (сам preflight actionable) ·
@@ -1055,16 +1064,15 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-12 / v0.3.61)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-16 / v0.3.61)
 
 | # | ID | Следующий результат | Сложн. | Важн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
 | 1 | **T-13f** | Разрешимость hook targets | ⓢ | 🟢 | TODO |
-| 2 | **T-13c** | Полное routing-покрытие C#/XAML/project paths | ⓢ-Ⓜ | 🟡 | TODO |
+| 2 | **T-13c** | Полное routing-покрытие C#/XAML/project paths | ⓢ-Ⓜ | 🟡 | следующий agent-action |
 | 3 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice merged; owner acceptance pending |
-| 4 | **T-13g** | Разделить read-only build и write-only upload | Ⓜ | 🟠 | следующий agent-action; release-run BLOCKED |
-| 5 | **T-13e** | Fresh full verify перед packaging | Ⓜ | 🟡 | TODO; release-runs BLOCKED |
-| 6 | **T-03** | Closure audit вместо бесконечного роста счётчика | Ⓜ | 🟡 | после accumulated smoke |
+| 4 | **T-13e** | Fresh full verify перед packaging | Ⓜ | 🟡 | TODO; release-runs BLOCKED |
+| 5 | **T-03** | Closure audit вместо бесконечного роста счётчика | Ⓜ | 🟡 | после accumulated smoke |
 
 **Вне actionable-очереди:** `T-13d` и controlled runs из `T-13e` требуют решения владельца; GPU ADR, `F-03` и остаток `F-16`
 крупные и заблокированы GPU-lease/координатором; `F-02-full` trigger-only; `HC-22` и `F-13` DEFERRED.
@@ -1126,7 +1134,7 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 3. **Targeted owner smoke (следующий owner-action)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
    `manual-smoke-matrix.md`. Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
    гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
-4. **T-13b ✅; следующий agent-action — T-13g, затем T-13c/T-13e-preflight/T-13f** — оставшийся actionable
+4. **T-13b ✅; T-13g ✅; следующий agent-action — T-13c, затем T-13e-preflight/T-13f** — оставшийся actionable
    workflow/verification hardening. `T-13d` и controlled Stable/Testing runs из `T-13e` остаются заблокированы.
 5. **Accumulated owner smoke** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external subtitles; B-05 `.ru.srt`
    + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
