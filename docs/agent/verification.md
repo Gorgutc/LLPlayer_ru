@@ -20,10 +20,29 @@ The fast gate includes:
 - `scripts/codex/check-dub-licenses.ps1`
 
 `verify-release-workflow.ps1` executes positive and adversarial fixtures against
-`validate-release-token.ps1`, then fails closed if `testing-release.yml` again interpolates dispatch inputs or
-derived release metadata directly inside PowerShell. The workflow validates the requested ref, latest stable tag,
-checked-out commit hash, and archive basename before writing GitHub outputs or calling the overwrite upload tail.
-This gate does not dispatch a release or modify GitHub assets.
+`validate-release-token.ps1`, rejects direct expression interpolation inside PowerShell, and invokes the structural
+`verify-testing-release-boundary.ps1` contract. Testing Release is split across four fresh GitHub-hosted jobs:
+
+- `prepare` runs with `contents: read`, requires the workflow itself to be dispatched from the default branch,
+  validates the requested ref and release metadata, and resolves the selected ref once to a full commit id;
+- `build` runs that immutable commit with `contents: read`, packages it, and uploads one fixed-name unverified
+  workflow artifact without exposing any build-job output to the privileged job;
+- `verify` runs trusted workflow-owned validation with `contents: read`, downloads the unverified artifact from the
+  current run with digest mismatch set to `error`, accepts exactly one non-empty regular archive, and republishes
+  only its validated absolute path under a distinct fixed verified-artifact name;
+- `upload` runs with `contents: write`, performs no checkout and executes no selected-ref code, depends on `verify`,
+  downloads only that fixed verified artifact with digest mismatch set to `error`, repeats the path/shape validation,
+  and passes only its validated absolute path to the fixed Testing Release upload command.
+
+The structural gate uses exact job/step allowlists plus adversarial mutations for permission widening, missing
+prepare/build/verify dependencies, moving-ref checkout, self-hosted runners, mutable action tags, wildcard or
+overwrite transport, raw-artifact delivery to the write job, cross-run downloads, digest downgrade, checkout/local
+actions in the write job, token leakage, path-validation bypass, artifact extraction, expression injection,
+duplicate/quoted keys, and custom shell defaults. It also runs filesystem fixtures for valid, extra, nested, empty,
+mismatched, and unsafe archive shapes. This gate does not dispatch a release or modify GitHub assets; the overwrite
+run remains owner-gated. The boundary protects the write token and artifact transport, but it does not attest that
+owner-selected package bytes are trustworthy, and the default-branch guard is an accidental-misdispatch check rather
+than protection from an authorized contributor changing the control workflow.
 
 GitHub's `Build & Test` workflow runs the fast gate after setting up .NET 10 and before its separate
 restore, app/plugin build, and test steps, so infrastructure or frozen-contract drift fails before compilation.
