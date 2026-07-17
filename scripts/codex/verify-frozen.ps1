@@ -16,6 +16,16 @@ try {
         }
     }
 
+    function Require-ExactLine($Path, $ExpectedLine, $Message) {
+        if (-not (Test-Path $Path)) {
+            $failures.Add("Missing $Path.")
+            return
+        }
+        if (@(Get-Content $Path) -cnotcontains $ExpectedLine) {
+            $failures.Add($Message)
+        }
+    }
+
     function Require-PackageVersion($ProjectPath, $PackageName, $Version) {
         $pattern = '<PackageReference\s+Include="' + [regex]::Escape($PackageName) + '"\s+Version="' + [regex]::Escape($Version) + '"'
         Require-Text $ProjectPath $pattern "$ProjectPath must keep $PackageName version $Version."
@@ -31,6 +41,52 @@ try {
         if (-not $tracked) {
             $failures.Add("Required asset must be tracked by git: $Path.")
         }
+    }
+
+    function Get-AuditRouteViolations {
+        param(
+            [object]$Route,
+            [string]$ExpectedPath,
+            [string[]]$RequiredAgents = @(),
+            [string[]]$RequiredGates = @(),
+            [string[]]$ForbiddenAgents = @(),
+            [string[]]$ForbiddenGates = @()
+        )
+
+        $issues = New-Object System.Collections.Generic.List[string]
+        if ($null -eq $Route) {
+            $issues.Add("$ExpectedPath`: route is missing")
+            return $issues
+        }
+
+        if ($Route.Path -cne $ExpectedPath) {
+            $issues.Add("$ExpectedPath`: route returned path '$($Route.Path)'")
+        }
+
+        [string[]]$routeAgents = @($Route.Agents)
+        [string[]]$routeGates = @($Route.Gates)
+        foreach ($agent in $RequiredAgents) {
+            if ($routeAgents -cnotcontains $agent) {
+                $issues.Add("$ExpectedPath`: missing agent '$agent'")
+            }
+        }
+        foreach ($gate in $RequiredGates) {
+            if ($routeGates -cnotcontains $gate) {
+                $issues.Add("$ExpectedPath`: missing gate '$gate'")
+            }
+        }
+        foreach ($agent in $ForbiddenAgents) {
+            if ($routeAgents -ccontains $agent) {
+                $issues.Add("$ExpectedPath`: unexpected agent '$agent'")
+            }
+        }
+        foreach ($gate in $ForbiddenGates) {
+            if ($routeGates -ccontains $gate) {
+                $issues.Add("$ExpectedPath`: unexpected gate '$gate'")
+            }
+        }
+
+        return $issues
     }
 
     Require-Text ".\LLPlayer\LLPlayer.csproj" "<TargetFramework>net10\.0-windows10\.0\.18362\.0</TargetFramework>" "LLPlayer must target net10.0-windows10.0.18362.0."
@@ -177,12 +233,205 @@ try {
     Require-Text ".\docs\agent\subagent-review-matrix.md" "FlyleafLib/Utils/\*\*" "Subagent review matrix must route FlyleafLib utilities through media/.NET review."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "FlyleafLibTests/\*\*" "Subagent review matrix must route tests through .NET review."
     Require-Text ".\docs\agent\subagent-review-matrix.md" "\*\.csproj" "Subagent review matrix must route project files through .NET/package review."
+    Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.cs`: `dotnet_quality_guardian`, `verification_reviewer`.' "Subagent review matrix must define the exact generic C# reviewer floor."
+    Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.xaml`: `wpf_xaml_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact generic XAML reviewer floor."
+    Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.xaml.cs`: `dotnet_quality_guardian`, `wpf_xaml_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact XAML code-behind reviewer floor."
+    Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `*.sln`, `*.slnx`, `*.csproj`, `Directory.Build.*`, `Directory.Packages.props`, `global.json`: `dotnet_quality_guardian`, `packaging_release_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact project/solution reviewer floor."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "LLPlayer/\(Views\|Controls\|ViewModels\|Converters\|Themes\|Resources\)" "Frozen audit must route LLPlayer converters/resources/themes through WPF review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "FlyleafLib/Utils/" "Frozen audit must route FlyleafLib utilities through media/.NET review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "FlyleafLib/Vad/" "Frozen audit must route VAD code through media/native review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "LLPlayer/Assets/" "Frozen audit must route bundled native/model assets through dependency/package review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "FlyleafLibTests/" "Frozen audit must route tests through .NET review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "\.csproj" "Frozen audit must route project files through .NET/package review."
+    Require-Text ".\docs\agent\verification.md" "complete tracked target set" "Verification docs must describe exhaustive routing behavior coverage."
+
+    # T-13c: prove routing behavior over the live tracked set. The human-facing audit and this guard share the
+    # same implementation through -ChangedPath/-PassThru; do not replace this with source-marker assertions.
+    $auditScript = ".\scripts\codex\audit-frozen.ps1"
+    [string[]]$targetExtensions = @(".cs", ".xaml", ".csproj", ".sln", ".slnx")
+    [string[]]$trackedAppProjectPaths = @(git ls-files | Where-Object {
+        $targetExtensions -contains [System.IO.Path]::GetExtension($_).ToLowerInvariant()
+    })
+    if ($trackedAppProjectPaths.Count -eq 0) {
+        $failures.Add("Frozen audit routing guard found no tracked C#/XAML/project paths.")
+    }
+    else {
+        $trackedRoutes = @(& $auditScript -ChangedPath $trackedAppProjectPaths -PassThru)
+        $routesByPath = @{}
+        foreach ($group in @($trackedRoutes | Group-Object Path)) {
+            $routesByPath[$group.Name] = @($group.Group)
+        }
+
+        $trackedRouteViolations = New-Object System.Collections.Generic.List[string]
+        foreach ($path in $trackedAppProjectPaths) {
+            $pathRoutes = @($routesByPath[$path])
+            if ($pathRoutes.Count -ne 1) {
+                $trackedRouteViolations.Add("$path`: expected one route, got $($pathRoutes.Count)")
+                continue
+            }
+
+            $requiredAgents = New-Object System.Collections.Generic.List[string]
+            $requiredAgents.Add("verification_reviewer")
+            $extension = [System.IO.Path]::GetExtension($path).ToLowerInvariant()
+            switch ($extension) {
+                ".cs" {
+                    $requiredAgents.Add("dotnet_quality_guardian")
+                    if ($path -match '(?i)\.xaml\.cs$') {
+                        $requiredAgents.Add("wpf_xaml_reviewer")
+                    }
+                }
+                ".xaml" { $requiredAgents.Add("wpf_xaml_reviewer") }
+                ".csproj" {
+                    $requiredAgents.Add("dotnet_quality_guardian")
+                    $requiredAgents.Add("packaging_release_reviewer")
+                }
+                ".slnx" {
+                    $requiredAgents.Add("dotnet_quality_guardian")
+                    $requiredAgents.Add("packaging_release_reviewer")
+                }
+                ".sln" {
+                    $requiredAgents.Add("dotnet_quality_guardian")
+                    $requiredAgents.Add("packaging_release_reviewer")
+                }
+            }
+
+            if ($path -match '^(?i)FlyleafLib/.*\.(cs|xaml)$') {
+                $requiredAgents.Add("media_runtime_mapper")
+            }
+            if ($path -match '^(?i)(FlyleafLib/(Controls/WPF|Themes)/|WpfColorFontDialog/).*\.(cs|xaml)$') {
+                $requiredAgents.Add("wpf_xaml_reviewer")
+            }
+            if ($path -match '^(?i)Plugins/YoutubeDL/') {
+                $requiredAgents.Add("media_runtime_mapper")
+                $requiredAgents.Add("packaging_release_reviewer")
+            }
+
+            foreach ($issue in @(Get-AuditRouteViolations `
+                -Route $pathRoutes[0] `
+                -ExpectedPath $path `
+                -RequiredAgents @($requiredAgents | Sort-Object -Unique) `
+                -RequiredGates @("verify"))) {
+                $trackedRouteViolations.Add($issue)
+            }
+        }
+
+        if ($trackedRouteViolations.Count -gt 0) {
+            $missingVerify = @($trackedRouteViolations | Where-Object { $_ -match "missing gate 'verify'" }).Count
+            $examples = @($trackedRouteViolations | Select-Object -First 8) -join "; "
+            $failures.Add(
+                "Tracked audit routing invariant failed with $($trackedRouteViolations.Count) requirement gap(s); " +
+                "$missingVerify tracked path(s) lack literal full 'verify'. Examples: $examples"
+            )
+        }
+    }
+
+    # Table-driven future-path coverage and exact-extension near misses. These inputs need not be tracked: the
+    # router must remain safe for a newly-created file before its first commit.
+    $positiveRouteFixtures = @(
+        @{ Path = "Future/Thing.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future/Thing.CS"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future\Thing.xaml"; Agents = @("wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future/Thing.xaml.cs"; Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "FlyleafLib/Controls/WPF/Future.xaml"; Agents = @("media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "WpfColorFontDialog/Future.xaml.cs"; Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Plugins/YoutubeDL/Future.cs"; Agents = @("media_runtime_mapper", "dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "ship") },
+        @{ Path = "Future/Future.csproj"; Agents = @("dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future.sln"; Agents = @("dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future.slnx"; Agents = @("dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify") }
+    )
+    $positiveRouteViolations = New-Object System.Collections.Generic.List[string]
+    foreach ($fixture in $positiveRouteFixtures) {
+        # Route individually so the Windows case-insensitive de-duplication in audit-frozen can still be
+        # exercised with both Thing.cs and Thing.CS fixtures.
+        $route = @(& $auditScript -ChangedPath @($fixture.Path) -PassThru)
+        if ($route.Count -ne 1) {
+            $positiveRouteViolations.Add("$($fixture.Path): expected one fixture route, got $($route.Count)")
+            continue
+        }
+        foreach ($issue in @(Get-AuditRouteViolations `
+            -Route $route[0] `
+            -ExpectedPath $fixture.Path `
+            -RequiredAgents $fixture.Agents `
+            -RequiredGates $fixture.Gates)) {
+            $positiveRouteViolations.Add($issue)
+        }
+    }
+    if ($positiveRouteViolations.Count -gt 0) {
+        $failures.Add("Frozen audit positive fixtures failed: $(@($positiveRouteViolations) -join '; ')")
+    }
+
+    $nearMissFixtures = @(
+        @{ Path = "Future/Thing.cs.bak"; ForbiddenAgents = @("dotnet_quality_guardian"); ForbiddenGates = @("verify") },
+        @{ Path = "Future/Thing.xaml.txt"; ForbiddenAgents = @("wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "Future/Thing.csproj.user"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "Future/Thing.sln.txt"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "Future/Thing.slnx.bak"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "PluginsX/YoutubeDL/Thing.cs"; ForbiddenAgents = @("media_runtime_mapper", "packaging_release_reviewer"); ForbiddenGates = @() }
+    )
+    $nearMissPaths = @($nearMissFixtures | ForEach-Object { $_.Path })
+    $nearMissRoutes = @(& $auditScript -ChangedPath $nearMissPaths -PassThru)
+    $nearMissViolations = New-Object System.Collections.Generic.List[string]
+    foreach ($fixture in $nearMissFixtures) {
+        $route = @($nearMissRoutes | Where-Object { $_.Path -ceq $fixture.Path })
+        if ($route.Count -ne 1) {
+            $nearMissViolations.Add("$($fixture.Path): expected one near-miss route, got $($route.Count)")
+            continue
+        }
+        foreach ($issue in @(Get-AuditRouteViolations `
+            -Route $route[0] `
+            -ExpectedPath $fixture.Path `
+            -ForbiddenAgents $fixture.ForbiddenAgents `
+            -ForbiddenGates $fixture.ForbiddenGates)) {
+            $nearMissViolations.Add($issue)
+        }
+    }
+    if ($nearMissViolations.Count -gt 0) {
+        $failures.Add("Frozen audit near-miss fixtures failed: $(@($nearMissViolations) -join '; ')")
+    }
+
+    # Adversarial self-check: prove the assertion helper rejects a route with a widened fast-only gate or a
+    # missing reviewer. This guards the behavioral test itself from silently becoming permissive.
+    $adversarialRouteFixtures = @(
+        @{
+            Name = "missing full verify"
+            Route = [pscustomobject]@{ Path = "Mutation/MissingVerify.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify-fast") }
+            Path = "Mutation/MissingVerify.cs"
+            Agents = @("dotnet_quality_guardian", "verification_reviewer")
+            Gates = @("verify")
+        },
+        @{
+            Name = "missing domain reviewer"
+            Route = [pscustomobject]@{ Path = "Mutation/MissingReviewer.xaml"; Agents = @("verification_reviewer"); Gates = @("verify") }
+            Path = "Mutation/MissingReviewer.xaml"
+            Agents = @("wpf_xaml_reviewer", "verification_reviewer")
+            Gates = @("verify")
+        },
+        @{
+            Name = "wrong-case gate id"
+            Route = [pscustomobject]@{ Path = "Mutation/WrongCaseGate.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("Verify") }
+            Path = "Mutation/WrongCaseGate.cs"
+            Agents = @("dotnet_quality_guardian", "verification_reviewer")
+            Gates = @("verify")
+        },
+        @{
+            Name = "wrong-case agent id"
+            Route = [pscustomobject]@{ Path = "Mutation/WrongCaseAgent.cs"; Agents = @("dotnet_quality_guardian", "Verification_Reviewer"); Gates = @("verify") }
+            Path = "Mutation/WrongCaseAgent.cs"
+            Agents = @("dotnet_quality_guardian", "verification_reviewer")
+            Gates = @("verify")
+        }
+    )
+    foreach ($fixture in $adversarialRouteFixtures) {
+        $detected = @(Get-AuditRouteViolations `
+            -Route $fixture.Route `
+            -ExpectedPath $fixture.Path `
+            -RequiredAgents $fixture.Agents `
+            -RequiredGates $fixture.Gates)
+        if ($detected.Count -eq 0) {
+            $failures.Add("Frozen audit adversarial fixture '$($fixture.Name)' was accepted.")
+        }
+    }
+
     Require-Text ".\.codex\config.toml" "LLPlayer_ru" ".codex/config.toml must describe LLPlayer_ru."
     Require-Text ".\LLPlayer\LLPlayer.csproj" "dub_sidecar\\uv\.lock" "LLPlayer publish items must include dub_sidecar/uv.lock."
     Require-Text ".\dub_sidecar\pyproject.toml" "pytorch-cu128" "Dubbing sidecar must pin torch to the CUDA 12.8 PyTorch index."

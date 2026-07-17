@@ -1,3 +1,9 @@
+[CmdletBinding()]
+param(
+    [string[]]$ChangedPath,
+    [switch]$PassThru
+)
+
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
@@ -5,19 +11,28 @@ Push-Location $repoRoot
 try {
     $changed = New-Object System.Collections.Generic.List[string]
 
-    foreach ($path in @(git diff --name-only)) {
-        if ($path) { $changed.Add($path) }
+    if ($PSBoundParameters.ContainsKey("ChangedPath")) {
+        foreach ($path in @($ChangedPath)) {
+            if ($path) { $changed.Add($path) }
+        }
     }
-    foreach ($path in @(git diff --cached --name-only)) {
-        if ($path) { $changed.Add($path) }
-    }
-    foreach ($path in @(git ls-files --others --exclude-standard)) {
-        if ($path) { $changed.Add($path) }
+    else {
+        foreach ($path in @(git diff --name-only)) {
+            if ($path) { $changed.Add($path) }
+        }
+        foreach ($path in @(git diff --cached --name-only)) {
+            if ($path) { $changed.Add($path) }
+        }
+        foreach ($path in @(git ls-files --others --exclude-standard)) {
+            if ($path) { $changed.Add($path) }
+        }
     }
 
     $changed = @($changed | Sort-Object -Unique)
     if ($changed.Count -eq 0) {
-        Write-Host "No changed paths found."
+        if (-not $PassThru) {
+            Write-Host "No changed paths found."
+        }
         return
     }
 
@@ -185,13 +200,47 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
         }
-        if ($normalized -match '(^|/).*\.csproj$|\.sln$|^Directory\.Build\.|^Directory\.Packages\.props$|^global\.json$') {
+
+        # T-13c routing floors are cumulative with the narrower domain rules above. Exact extensions keep
+        # future C#/XAML/project files from silently falling through to the infrastructure-only fast gate.
+        if ($normalized -match '(?i)\.cs$') {
+            $contracts.Add("check relevant frozen contract")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+
+            if ($normalized -match '(?i)\.xaml\.cs$') {
+                $contracts.Add("wpf-design-contract.md")
+                $agents.Add("wpf_xaml_reviewer")
+            }
+        }
+        if ($normalized -match '(?i)\.xaml$') {
+            $contracts.Add("wpf-design-contract.md")
+            $agents.Add("wpf_xaml_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+        }
+        if ($normalized -match '(?i)^FlyleafLib/.*\.(cs|xaml)$') {
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("media_runtime_mapper")
+        }
+        if ($normalized -match '(?i)^(FlyleafLib/(Controls/WPF|Themes)/|WpfColorFontDialog/).*\.(cs|xaml)$') {
+            $contracts.Add("wpf-design-contract.md")
+            $agents.Add("wpf_xaml_reviewer")
+        }
+        if ($normalized -match '(?i)^Plugins/YoutubeDL/') {
+            $contracts.Add("media-runtime-contract.md")
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("packaging_release_reviewer")
+        }
+        if ($normalized -match '(?i)((^|/).*\.(csproj|slnx|sln)$|^Directory\.Build\.|^Directory\.Packages\.props$|^global\.json$)') {
             $contracts.Add("dependency-baseline.md")
             $agents.Add("dotnet_quality_guardian")
             $agents.Add("packaging_release_reviewer")
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
-            if ($normalized -match '^(LLPlayer/|Plugins/YoutubeDL/).*\.csproj$') {
+            if ($normalized -match '(?i)^(LLPlayer/|Plugins/YoutubeDL/).*\.csproj$') {
                 $gates.Add("ship")
             }
         }
@@ -204,13 +253,27 @@ try {
 
         $rows.Add([pscustomobject]@{
             Path = $path
-            Contracts = (@($contracts | Sort-Object -Unique) -join ", ")
-            Agents = (@($agents | Sort-Object -Unique) -join ", ")
-            Gates = (@($gates | Sort-Object -Unique) -join ", ")
+            Contracts = [string[]]@($contracts | Sort-Object -Unique)
+            Agents = [string[]]@($agents | Sort-Object -Unique)
+            Gates = [string[]]@($gates | Sort-Object -Unique)
         })
     }
 
-    $rows | Format-Table -AutoSize
+    if ($PassThru) {
+        $rows
+    }
+    else {
+        $rows |
+            ForEach-Object {
+                [pscustomobject]@{
+                    Path = $_.Path
+                    Contracts = ($_.Contracts -join ", ")
+                    Agents = ($_.Agents -join ", ")
+                    Gates = ($_.Gates -join ", ")
+                }
+            } |
+            Format-Table -AutoSize
+    }
 }
 finally {
     Pop-Location
