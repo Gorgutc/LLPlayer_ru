@@ -26,10 +26,16 @@
 > **477/477** tracked C#/XAML/project paths получают literal `verify`, а behavioral guard проверяет будущие пути,
 > near-miss и wrong-case mutations. Feature-head [run 29604134291](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29604134291)
 > и post-merge [run 29604405369](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29604405369) зелёные.
+> `T-13e` preflight смёржен через [PR #150](https://github.com/Gorgutc/LLPlayer_ru/pull/150): оба release-workflow
+> после exact checkout используют immutable `setup-dotnet` v5.4.0 для установки канала `10.0.x` и запускают свежий
+> полный `verify.ps1` до общей packaging action. Feature-head `2492dd7`
+> [run 29608244720](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29608244720) и post-merge `99a2720`
+> [run 29608443490](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29608443490) зелёные; реальные Stable/Testing
+> Release не запускались и остаются owner-gated.
 > Полный локальный `verify.ps1` и `ship.ps1` — PASS: **1376/1376**, 0 warnings/errors, publish smoke green. Post-merge CI #143 выявил один
 > thread-pool-starvation timeout в HC-27b lock-тесте; в #144 тест переведён на dedicated workers и прошёл 20/20.
 > `HC-27b` остаётся `IN-PROGRESS` до targeted owner smoke; active **4**, unresolved **11**; следующий agent-action —
-> `T-13e` preflight, затем `T-13f`.
+> `T-13f`.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -999,12 +1005,17 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 - **T-13d — required `Build & Test` status check 🟡 ⓢ · BLOCKED (owner decision).** Ruleset защищает deletion/
   non-fast-forward, но не требует CI check. **DoD:** владелец явно принимает или отклоняет required check;
   при принятии ruleset блокирует merge без успешного `Build & Test`.
-- **T-13e — release preflight + controlled runs 🟡 Ⓜ · TODO (runs BLOCKED: owner approval).** Stable/Testing
-  Release ещё не доказаны реальным run, а packaging action не делает fresh full verify перед archive. Добавление
-  preflight — actionable; только фактические release-runs требуют разрешения. **DoD:** full verification перед packaging,
-  затем отдельный owner-approved controlled run для **каждого** workflow с сохранёнными evidence: Stable проверяет
-  tag/draft-release tail, Testing — dispatch/overwrite-upload tail. Пока хотя бы один путь не проверен, `T-13e`
-  остаётся открытым; оба запуска — только с явного разрешения владельца.
+- **T-13e — release preflight + controlled runs 🟡 Ⓜ · IN-PROGRESS — preflight DONE (PR #150, 2026-07-17);
+  Stable/Testing runs BLOCKED (owner approval).** Оба caller-workflow после exact checkout используют immutable
+  `setup-dotnet` v5.4.0 для канала `10.0.x`, выполняют канонический полный `verify.ps1` без skip/bypass и только затем
+  вызывают общую packaging action. Fail-closed validators закрепляют порядок и отклоняют missing/late/fast-only
+  preflight, `SkipRestore`, `continue-on-error`, mutable setup, неверный SDK и sibling packaging job. Локальные
+  focused/fast/full/ship PASS, **1376/1376**, профильные reviews и финальный `/review` — SHIP без замечаний;
+  feature-head `2492dd7` [run 29608244720](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29608244720) и
+  post-merge `99a2720` [run 29608443490](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29608443490) GREEN.
+  Stable tag, Testing dispatch, release/assets не создавались и не менялись. Оставшийся **DoD:** отдельный owner-approved
+  controlled run для **каждого** workflow с сохранёнными evidence: Stable проверяет tag/draft-release tail,
+  Testing — dispatch/overwrite-upload tail. Пока хотя бы один путь не проверен, `T-13e` остаётся открытым.
 - **T-13f — проверка hook targets 🟢 ⓢ · TODO.** `verify-plugin.ps1` проверяет наличие `.codex/hooks.json`, но не
   разбирает команды и не подтверждает существование их `-File`. **DoD:** fail-closed parse всех Windows hooks;
   каждый target существует внутри repo и разрешается однозначно.
@@ -1028,12 +1039,12 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 | # | ID | Следующий результат | Важн. | Сложн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
 | 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice merged via PR #142; owner acceptance pending |
-| 2 | **T-13e** | Fresh full verify перед packaging; controlled runs отдельно owner-approved | 🟡 | Ⓜ | следующий agent-action: preflight; runs BLOCKED |
+| 2 | **T-13e** | Controlled Stable + Testing runs с release-tail evidence | 🟡 | Ⓜ | IN-PROGRESS — preflight DONE; runs BLOCKED |
 | 3 | **T-03** | Closure audit: доказуемый seam либо постоянная coverage-policy | 🟡 | Ⓜ | ONGOING; не гнаться за счётчиком |
-| 4 | **T-13f** | Hook commands и их `-File` targets проверяются fail-closed | 🟢 | ⓢ | после T-13e preflight |
+| 4 | **T-13f** | Hook commands и их `-File` targets проверяются fail-closed | 🟢 | ⓢ | следующий agent-action |
 
 **Owner-gated / не брать без решения:** `T-13d` required status check · только controlled Stable/Testing runs
-из `T-13e` (сам preflight actionable) ·
+из `T-13e` ·
 GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
 **Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу; `HC-22` — до появления настоящей
@@ -1079,9 +1090,9 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
 | # | ID | Следующий результат | Сложн. | Важн. | Статус |
 |---|----|---------------------|:---:|:---:|--------|
-| 1 | **T-13f** | Разрешимость hook targets | ⓢ | 🟢 | TODO |
+| 1 | **T-13f** | Разрешимость hook targets | ⓢ | 🟢 | следующий agent-action |
 | 2 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice merged; owner acceptance pending |
-| 3 | **T-13e** | Fresh full verify перед packaging | Ⓜ | 🟡 | следующий agent-action; release-runs BLOCKED |
+| 3 | **T-13e** | Controlled Stable + Testing runs | Ⓜ | 🟡 | IN-PROGRESS — preflight DONE; runs BLOCKED |
 | 4 | **T-03** | Closure audit вместо бесконечного роста счётчика | Ⓜ | 🟡 | после accumulated smoke |
 
 **Вне actionable-очереди:** `T-13d` и controlled runs из `T-13e` требуют решения владельца; GPU ADR, `F-03` и остаток `F-16`
@@ -1142,9 +1153,9 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
    dispatch input/outputs в PowerShell; fail-closed validator и негативные injection fixtures входят в fast gate.
    Controlled Testing Release не запускался и остаётся owner-gated в `T-13e`.
 3. **Targeted owner smoke (следующий owner-action)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
-   `manual-smoke-matrix.md`. Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
+   [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md). Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
    гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
-4. **T-13b ✅; T-13g ✅; T-13c ✅; следующий agent-action — T-13e-preflight, затем T-13f** — оставшийся actionable
+4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e preflight ✅; следующий agent-action — T-13f** — оставшийся actionable
    workflow/verification hardening. `T-13d` и controlled Stable/Testing runs из `T-13e` остаются заблокированы.
 5. **Accumulated owner smoke** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external subtitles; B-05 `.ru.srt`
    + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
