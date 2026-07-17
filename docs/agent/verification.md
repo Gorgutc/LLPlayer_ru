@@ -56,6 +56,16 @@ Use this read-only helper before review when you need to map changed files to fr
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\audit-frozen.ps1
 ```
 
+Routing rules are cumulative. Every tracked or newly-created `*.cs`, `*.xaml`, `*.csproj`, `*.sln`, and `*.slnx` path must
+receive the literal full `verify` gate plus the minimum reviewers from `subagent-review-matrix.md`; narrower WPF,
+media, plugin, native, or packaging matches add requirements and never replace those minimums. `ship` remains an
+additional packaging gate even though `ship.ps1` invokes the full gate internally.
+
+`verify-frozen.ps1` enforces these extension floors over the complete tracked target set through the same structured
+router used by the human-readable command. It also checks representative additive domain routes, table-driven
+future/untracked paths, case and slash variants, exact-extension near misses, and adversarial routes missing `verify`
+or a mandatory reviewer. This is executable behavior coverage, not a source-text marker substitute.
+
 Before final handoff, run spawned `/review` with at least `verification_reviewer`. If no subagent spawn tool is available, report that explicitly and do not claim `/review` has been satisfied.
 
 ## Full Build/Test Gate
