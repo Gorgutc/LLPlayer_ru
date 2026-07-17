@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $validator = Join-Path $PSScriptRoot "validate-release-token.ps1"
 $testingWorkflow = Join-Path $repoRoot ".github\workflows\testing-release.yml"
+$stableWorkflow = Join-Path $repoRoot ".github\workflows\stable-release.yml"
 $packageAction = Join-Path $repoRoot ".github\actions\build-package\action.yml"
 
 function Assert-TokenPass([string]$Kind, [string]$Value, [string]$Expected = $Value) {
@@ -66,6 +67,26 @@ function Require-StepFragments([string]$Path, [string]$StepName, [string[]]$Frag
     }
 }
 
+function Require-ExactStepBlock([string]$Path, [string]$StepName, [string[]]$ExpectedLines) {
+    $marker = "- name: $StepName"
+    $markerCount = @(Get-Content -LiteralPath $Path | Where-Object {
+        [string]::Equals($_.Trim(), $marker, [System.StringComparison]::Ordinal)
+    }).Count
+    if ($markerCount -ne 1) {
+        throw "$Path must contain exactly one '$StepName' step; found $markerCount."
+    }
+    $block = Get-StepBlock $Path $StepName
+    $actualLines = @($block -split '\r?\n' | Where-Object { $_.Trim() })
+    if ($actualLines.Count -ne $ExpectedLines.Count) {
+        throw "Workflow step '$StepName' in $Path must contain exactly $($ExpectedLines.Count) nonblank lines; found $($actualLines.Count)."
+    }
+    for ($index = 0; $index -lt $ExpectedLines.Count; $index++) {
+        if (-not [string]::Equals($actualLines[$index], $ExpectedLines[$index], [System.StringComparison]::Ordinal)) {
+            throw "Workflow step '$StepName' in $Path drifted at line $($index + 1): '$($actualLines[$index])'."
+        }
+    }
+}
+
 function Assert-NoExpressionInRunBlock([string]$Path, [string]$ForbiddenExpression) {
     $insideRun = $false
     $runIndent = -1
@@ -114,6 +135,188 @@ function Assert-RunFixtureRejected([string]$Yaml, [string]$Description) {
     }
     finally {
         Remove-Item -LiteralPath $fixture -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Normalize-WorkflowText([string]$Text) {
+    return (($Text -replace "`r`n", "`n") -replace "`r", "`n").TrimEnd("`n")
+}
+
+function Get-StableReleaseSteps([string]$Text, [string]$Source) {
+    $normalized = Normalize-WorkflowText $Text
+    $lines = @($normalized -split "`n")
+    $jobs = @()
+    $release = @()
+    $steps = @()
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ([string]::Equals($lines[$index], "jobs:", [System.StringComparison]::Ordinal)) {
+            $jobs += $index
+        }
+        if ([string]::Equals($lines[$index], "  release:", [System.StringComparison]::Ordinal)) {
+            $release += $index
+        }
+        if ([string]::Equals($lines[$index], "    steps:", [System.StringComparison]::Ordinal)) {
+            $steps += $index
+        }
+    }
+    if ($jobs.Count -ne 1 -or $release.Count -ne 1 -or $steps.Count -ne 1) {
+        throw "$Source must contain exactly one canonical jobs.release.steps path."
+    }
+    if (-not ($jobs[0] -lt $release[0] -and $release[0] -lt $steps[0])) {
+        throw "$Source jobs.release.steps hierarchy is malformed."
+    }
+
+    $jobNames = New-Object System.Collections.Generic.List[string]
+    for ($index = $jobs[0] + 1; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index]
+        $trimmed = $line.Trim()
+        $indent = $line.Length - $line.TrimStart().Length
+        if ($trimmed -and $indent -eq 0) {
+            break
+        }
+        if (-not $trimmed -or $trimmed.StartsWith("#", [System.StringComparison]::Ordinal) -or $indent -ne 2) {
+            continue
+        }
+        if ($line -cnotmatch '^  ([A-Za-z0-9_-]+):\s*(?:#.*)?$') {
+            throw "$Source jobs contains a non-canonical job entry: '$trimmed'."
+        }
+        $jobNames.Add($Matches[1])
+    }
+    if ($jobNames.Count -ne 1 -or -not [string]::Equals(
+        $jobNames[0],
+        "release",
+        [System.StringComparison]::Ordinal)) {
+        throw "$Source jobs must contain only the protected release job."
+    }
+
+    $stepLines = New-Object System.Collections.Generic.List[string]
+    for ($index = $steps[0] + 1; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index]
+        $trimmed = $line.Trim()
+        $indent = $line.Length - $line.TrimStart().Length
+        if ($trimmed -and $indent -le 4) {
+            break
+        }
+        $stepLines.Add($line)
+    }
+    if ($stepLines.Count -eq 0) {
+        throw "$Source jobs.release.steps must not be empty."
+    }
+    return $stepLines.ToArray()
+}
+
+function Get-StableNamedStep([string[]]$StepLines, [string]$Name, [string]$Source) {
+    $marker = "      - name: $Name"
+    $indices = @()
+    for ($index = 0; $index -lt $StepLines.Count; $index++) {
+        if ([string]::Equals($StepLines[$index], $marker, [System.StringComparison]::Ordinal)) {
+            $indices += $index
+        }
+    }
+    if ($indices.Count -ne 1) {
+        throw "$Source jobs.release.steps must contain exactly one '$Name' step; found $($indices.Count)."
+    }
+
+    $start = [int]$indices[0]
+    $end = $StepLines.Count
+    for ($index = $start + 1; $index -lt $StepLines.Count; $index++) {
+        if ($StepLines[$index] -cmatch '^      - ') {
+            $end = $index
+            break
+        }
+    }
+    return @($StepLines[$start..($end - 1)] | Where-Object { $_.Trim() })
+}
+
+function Assert-ExactStableStep(
+    [string[]]$Actual,
+    [string[]]$Expected,
+    [string]$Description,
+    [string]$Source
+) {
+    if ($Actual.Count -ne $Expected.Count) {
+        throw "$Source $Description must contain exactly $($Expected.Count) nonblank lines; found $($Actual.Count)."
+    }
+    for ($index = 0; $index -lt $Expected.Count; $index++) {
+        if (-not [string]::Equals($Actual[$index], $Expected[$index], [System.StringComparison]::Ordinal)) {
+            throw "$Source $Description drifted at line $($index + 1): '$($Actual[$index])'."
+        }
+    }
+}
+
+function Assert-StableReleasePreflightContract([string]$Text, [string]$Source) {
+    $stepLines = Get-StableReleaseSteps $Text $Source
+    $normalized = Normalize-WorkflowText $Text
+    $packageUses = @($normalized -split "`n" | Where-Object {
+        [string]::Equals($_.Trim(), "uses: ./.github/actions/build-package", [System.StringComparison]::Ordinal)
+    })
+    if ($packageUses.Count -ne 1) {
+        throw "$Source must invoke the shared build/package action exactly once; found $($packageUses.Count)."
+    }
+
+    $actualNames = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $stepLines) {
+        $indent = $line.Length - $line.TrimStart().Length
+        if ($indent -ne 6 -or -not $line.TrimStart().StartsWith("- ", [System.StringComparison]::Ordinal)) {
+            continue
+        }
+        if ($line -cnotmatch '^      - name:\s*(.+?)\s*$') {
+            throw "$Source jobs.release.steps contains an anonymous or non-canonical step: '$($line.Trim())'."
+        }
+        $actualNames.Add($Matches[1])
+    }
+
+    $expectedNames = @(
+        "Checkout",
+        "Setup .NET",
+        "Full verification preflight",
+        "Build & Package",
+        "Create or update GitHub Draft Release & Upload Asset"
+    )
+    if ($actualNames.Count -ne $expectedNames.Count) {
+        throw "$Source jobs.release.steps must contain exactly $($expectedNames.Count) named steps; found $($actualNames.Count)."
+    }
+    for ($index = 0; $index -lt $expectedNames.Count; $index++) {
+        if (-not [string]::Equals($actualNames[$index], $expectedNames[$index], [System.StringComparison]::Ordinal)) {
+            throw "$Source jobs.release.steps has unexpected order at position $($index + 1): '$($actualNames[$index])'."
+        }
+    }
+
+    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Checkout" $Source) @(
+        "      - name: Checkout",
+        "        uses: actions/checkout@v5",
+        "        with:",
+        '          ref: ${{ github.sha }}'
+    ) "checkout step" $Source
+    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Setup .NET" $Source) @(
+        "      - name: Setup .NET",
+        "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0",
+        "        with:",
+        "          dotnet-version: 10.0.x"
+    ) ".NET setup step" $Source
+    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Full verification preflight" $Source) @(
+        "      - name: Full verification preflight",
+        "        shell: pwsh",
+        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1"
+    ) "full verification preflight step" $Source
+    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Build & Package" $Source) @(
+        "      - name: Build & Package",
+        "        uses: ./.github/actions/build-package",
+        "        with:",
+        '          archive-name: ${{ env.ARCHIVE_NAME }}'
+    ) "build/package step" $Source
+}
+
+function Assert-StableContractRejected([string]$Text, [string]$Description) {
+    $rejected = $false
+    try {
+        Assert-StableReleasePreflightContract $Text "adversarial fixture ($Description)"
+    }
+    catch {
+        $rejected = $true
+    }
+    if (-not $rejected) {
+        throw "Stable Release preflight validator accepted adversarial fixture: $Description."
     }
 }
 
@@ -209,9 +412,73 @@ Assert-RunFixtureRejected $chompedRunFixture "a chomped block-scalar interpolati
 Assert-RunFixtureRejected $indentedRunFixture "an indented block-scalar interpolation"
 
 $workflowText = Get-Content -LiteralPath $testingWorkflow -Raw
+$stableText = Get-Content -LiteralPath $stableWorkflow -Raw
 $actionText = Get-Content -LiteralPath $packageAction -Raw
 
 & (Join-Path $PSScriptRoot "verify-testing-release-boundary.ps1")
+
+Assert-StableReleasePreflightContract $stableText "stable-release.yml"
+$normalizedStableText = Normalize-WorkflowText $stableText
+
+$stablePreflightBlock = @'
+      - name: Full verification preflight
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1
+'@
+$stablePackageBlock = @'
+      - name: Build & Package
+        uses: ./.github/actions/build-package
+        with:
+          archive-name: ${{ env.ARCHIVE_NAME }}
+'@
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace($stablePreflightBlock + "`n`n", "")) `
+    "a missing full verification preflight"
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace(
+        "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0",
+        "        uses: actions/setup-dotnet@v5")) `
+    "a mutable release SDK setup action"
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace(
+        "          dotnet-version: 10.0.x",
+        "          dotnet-version: 11.0.x")) `
+    "the wrong release SDK channel"
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace(
+        $stablePreflightBlock + "`n`n" + $stablePackageBlock,
+        $stablePackageBlock + "`n`n" + $stablePreflightBlock)) `
+    "full verification after packaging"
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace(
+        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1",
+        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.ps1")) `
+    "a fast-only release preflight"
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace(
+        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1",
+        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1 -SkipRestore")) `
+    "a full verification preflight with restore skipped"
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace(
+        "      - name: Full verification preflight`n        shell: pwsh",
+        "      - name: Full verification preflight`n        continue-on-error: true`n        shell: pwsh")) `
+    "continue-on-error on the full verification preflight"
+Assert-StableContractRejected `
+    ($normalizedStableText.Replace(
+        "      - name: Full verification preflight`n        shell: pwsh",
+        '      - name: Full verification preflight' + "`n" + '        if: ${{ always() }}' + "`n" + "        shell: pwsh")) `
+    "an always-run conditional on the full verification preflight"
+Assert-StableContractRejected `
+    ($normalizedStableText + @'
+
+  bypass-package:
+    runs-on: windows-latest
+    steps: # unprotected package path
+      - name: Package without preflight
+        uses: ./.github/actions/build-package
+'@) `
+    "a sibling packaging job without the preflight"
 
 Require-StepFragments $testingWorkflow "Validate requested ref" @(
     '& "$env:VALIDATOR_PATH"',
@@ -246,6 +513,13 @@ Require-StepFragments $testingWorkflow "Set archive name" @(
 
 Assert-NoExpressionInRunBlock $testingWorkflow '${{'
 Assert-NoExpressionInRunBlock $packageAction '${{ inputs.archive-name }}'
+
+Require-ExactStepBlock $packageAction "Setup .NET" @(
+    "    - name: Setup .NET",
+    "      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0",
+    "      with:",
+    "        dotnet-version: 10.0.x"
+)
 
 foreach ($fragment in @(
     'git rev-parse --short ${{ github.event.inputs.commit }}',

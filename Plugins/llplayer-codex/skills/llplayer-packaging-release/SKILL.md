@@ -10,14 +10,22 @@ Use `scripts/codex/ship.ps1` as the local offline packaging smoke; keep it in sy
 
 ## Preserve Flow
 
-1. Setup .NET 10.
-2. Restore and publish `LLPlayer`.
-3. Clean unused Whisper/Tesseract runtime folders.
-4. Copy `FFmpeg`.
-5. Restore and publish `Plugins/YoutubeDL`.
-6. Copy `YoutubeDL.dll` and `YoutubeDL.pdb`.
-7. Download `yt-dlp.exe` in CI release only.
-8. Archive with 7-Zip.
+1. Checkout the exact tag or immutable selected commit.
+2. Use the immutable `setup-dotnet` v5.4.0 action to install the repository's `10.0.x` SDK channel.
+3. Run the canonical full `scripts/codex/verify.ps1` preflight with no skip switch.
+4. Invoke the shared packaging action only after the preflight succeeds.
+5. Restore and publish `LLPlayer`.
+6. Clean unused Whisper/Tesseract runtime folders.
+7. Copy `FFmpeg`.
+8. Restore and publish `Plugins/YoutubeDL`.
+9. Copy `YoutubeDL.dll` and `YoutubeDL.pdb`.
+10. Download `yt-dlp.exe` in CI release only.
+11. Archive with 7-Zip.
+
+Keep the full gate in both Stable and Testing caller workflows, not only in the local composite action: Testing can
+select an older commit whose copy of `.github/actions/build-package/action.yml` predates the preflight. A missing
+canonical verifier must fail closed before packaging. The composite action remains the source of truth for the
+publish/cleanup/download/archive tail and repeats the same immutable `setup-dotnet` setup so it stays self-contained.
 
 Publish steps must keep warnings fatal (`/warnaserror`) for both app and `Plugins/YoutubeDL`.
 The package must include committed runtime source/assets (`FFmpeg`, `LLPlayer/lib/7z.dll`,
@@ -25,7 +33,8 @@ The package must include committed runtime source/assets (`FFmpeg`, `LLPlayer/li
 and must reject generated/runtime data (`DubEngine/`, `dubmodels/`,
 `*.ru.dub.*`, `*.ru.voices.json`, downloaded local `yt-dlp.exe`).
 
-Local Codex verification should stay offline unless explicitly shipping.
+Local Codex verification should stay offline unless explicitly shipping. Do not push a Stable release tag, dispatch
+Testing Release, or upload/overwrite release assets without separate explicit owner approval.
 
 ## Review
 

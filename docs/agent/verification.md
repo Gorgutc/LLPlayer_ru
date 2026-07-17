@@ -44,6 +44,27 @@ run remains owner-gated. The boundary protects the write token and artifact tran
 owner-selected package bytes are trustworthy, and the default-branch guard is an accidental-misdispatch check rather
 than protection from an authorized contributor changing the control workflow.
 
+Both release callers have a mandatory fresh full-verification preflight before the shared packaging action:
+
+1. checkout the exact tag/immutable commit;
+2. use the immutable `setup-dotnet` v5.4.0 action to install the repository's `10.0.x` SDK channel;
+3. run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1` with no skip switch;
+4. only after success invoke `.github/actions/build-package/action.yml` and its publish/archive tail.
+
+The preflight is caller-owned rather than present only inside the composite action. Testing Release intentionally
+executes the local action from the owner-selected commit, so an older selected ref could otherwise carry a preflight-
+free action. With the caller gate, a selected ref that lacks the canonical `verify.ps1` fails closed before packaging.
+Stable tags are protected when they point to a commit containing this workflow revision; historical tag commits cannot
+be changed retroactively.
+
+`verify-testing-release-boundary.ps1` locks the Testing build-job order after immutable-checkout verification.
+`verify-release-workflow.ps1` locks the Stable same-job order. Their adversarial fixtures reject a missing or late
+preflight, `verify-fast.ps1` substitution, `-SkipRestore`, `continue-on-error`, conditional bypass,
+anonymous/duplicate steps, and packaging before the gate. These structural checks do not push tags, dispatch a
+workflow, create a draft release, or overwrite `v0.0.1`; both controlled release runs remain separately owner-gated.
+The separate Stable risk of executing tag-selected repository code in a job with `contents: write` is not resolved by
+the preflight.
+
 GitHub's `Build & Test` workflow runs the fast gate after setting up .NET 10 and before its separate
 restore, app/plugin build, and test steps, so infrastructure or frozen-contract drift fails before compilation.
 `verify-build-workflow.ps1` validates .NET 10 setup and fast-gate placement relative to restore inside
