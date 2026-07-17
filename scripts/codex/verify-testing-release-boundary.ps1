@@ -363,6 +363,8 @@ function Assert-TestingReleaseContract([string]$Text, [string]$Source) {
     Assert-StepOrder $buildSteps @(
         "Checkout immutable release commit",
         "Verify immutable checkout",
+        "Setup .NET",
+        "Full verification preflight",
         "Build & Package",
         "Upload testing release artifact"
     ) "build" $Source
@@ -537,6 +539,17 @@ if ($LASTEXITCODE -ne 0 -or -not [string]::Equals(
   throw "The build checkout does not match the prepared commit id."
 }
 '@ "immutable checkout verification run" $Source
+
+    $buildSetup = Get-NamedStep $buildSteps "Setup .NET" "build" $Source
+    Assert-AllowedMappingKeys $buildSetup 8 @("uses", "with") "build .NET setup step" $Source
+    Require-ExactLine $buildSetup "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" "build .NET setup action must remain immutable" $Source
+    $null = Assert-ExactMappingBlock $buildSetup 8 "with" @(
+        "          dotnet-version: 10.0.x"
+    ) "build .NET setup inputs" $Source
+
+    $fullPreflight = Get-NamedStep $buildSteps "Full verification preflight" "build" $Source
+    Assert-ShellStep $fullPreflight @("shell", "run") "full verification preflight step" $Source
+    Require-ExactLine $fullPreflight "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1" "full verification preflight must run the canonical full gate" $Source
 
     $buildPackage = Get-NamedStep $buildSteps "Build & Package" "build" $Source
     Assert-AllowedMappingKeys $buildPackage 8 @("uses", "with") "build/package step" $Source
@@ -794,6 +807,50 @@ if (-not (Test-Path -LiteralPath $workflowPath)) {
 
 $workflowText = Normalize-Text (Get-Content -LiteralPath $workflowPath -Raw)
 Assert-TestingReleaseContract $workflowText "testing-release.yml"
+
+$fullPreflightBlock = @'
+      - name: Full verification preflight
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1
+'@
+$buildPackageBlock = @'
+      - name: Build & Package
+        uses: ./.github/actions/build-package
+        with:
+          archive-name: ${{ needs.prepare.outputs.archive_name }}
+'@
+Assert-MutationRejected $workflowText `
+    ($fullPreflightBlock + "`n`n") `
+    "" `
+    "a missing full verification preflight"
+Assert-MutationRejected $workflowText `
+    "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" `
+    "        uses: actions/setup-dotnet@v5" `
+    "a mutable build SDK setup action"
+Assert-MutationRejected $workflowText `
+    "          dotnet-version: 10.0.x" `
+    "          dotnet-version: 11.0.x" `
+    "the wrong build SDK channel"
+Assert-MutationRejected $workflowText `
+    ($fullPreflightBlock + "`n`n" + $buildPackageBlock) `
+    ($buildPackageBlock + "`n`n" + $fullPreflightBlock) `
+    "full verification after packaging"
+Assert-MutationRejected $workflowText `
+    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1" `
+    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.ps1" `
+    "fast-only release preflight"
+Assert-MutationRejected $workflowText `
+    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1" `
+    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1 -SkipRestore" `
+    "a full verification preflight with restore skipped"
+Assert-MutationRejected $workflowText `
+    "      - name: Full verification preflight`n        shell: pwsh" `
+    "      - name: Full verification preflight`n        continue-on-error: true`n        shell: pwsh" `
+    "continue-on-error on the full verification preflight"
+Assert-MutationRejected $workflowText `
+    "      - name: Full verification preflight`n        shell: pwsh" `
+    '      - name: Full verification preflight' + "`n" + '        if: ${{ always() }}' + "`n" + "        shell: pwsh" `
+    "an always-run conditional on the full verification preflight"
 
 Assert-MutationRejected $workflowText `
     "permissions: {}" `
