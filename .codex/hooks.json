@@ -2,17 +2,35 @@
   "hooks": {
     "SessionStart": [
       {
-        "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\session-start.ps1"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\session-start.ps1",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\session-start.ps1"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\user-prompt-nudge.ps1"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\user-prompt-nudge.ps1",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\user-prompt-nudge.ps1"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "commandWindows": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\post-tool-verify.ps1"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\post-tool-verify.ps1",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\.codex\\hooks\\post-tool-verify.ps1"
+          }
+        ]
       }
     ]
   }
