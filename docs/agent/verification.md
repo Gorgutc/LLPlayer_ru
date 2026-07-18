@@ -30,29 +30,48 @@ The fast gate includes:
 - `scripts/codex/check-dub-licenses.ps1`
 
 `verify-release-workflow.ps1` executes positive and adversarial fixtures against
-`validate-release-token.ps1`, rejects direct expression interpolation inside PowerShell, and invokes the structural
-`verify-testing-release-boundary.ps1` contract. Testing Release is split across four fresh GitHub-hosted jobs:
+`validate-release-token.ps1`, rejects direct expression interpolation inside PowerShell, and invokes both release
+boundary contracts: `verify-testing-release-boundary.ps1` and `verify-stable-release-boundary.ps1`. Each boundary
+validator locks the normalized reviewed workflow SHA-256 and then checks semantic invariants and adversarial
+mutations, so duplicate keys, extra jobs/triggers, mutable Actions, broader permissions, bypassed verification, or
+privileged artifact execution fail closed.
+
+Testing Release is split across four fresh GitHub-hosted jobs:
 
 - `prepare` runs with `contents: read`, requires the workflow itself to be dispatched from the default branch,
-  validates the requested ref and release metadata, and resolves the selected ref once to a full commit id;
+  accepts only one exact lowercase 40-character commit SHA, requires it to equal the trusted workflow `${{ github.sha }}`,
+  resolves that same commit exactly once, and derives the immutable
+  `testing-<12sha>` tag plus `LLPlayer-testing-<12sha>-x64.7z` asset name;
 - `build` runs that immutable commit with `contents: read`, packages it, and uploads one fixed-name unverified
   workflow artifact without exposing any build-job output to the privileged job;
 - `verify` runs trusted workflow-owned validation with `contents: read`, downloads the unverified artifact from the
-  current run with digest mismatch set to `error`, accepts exactly one non-empty regular archive, and republishes
-  only its validated absolute path under a distinct fixed verified-artifact name;
+  current run with digest mismatch set to `error`, accepts exactly one non-empty regular archive, recomputes its
+  size/SHA-256, runs `7z t`, verifies the archived yt-dlp size/SHA-256, and republishes only its validated absolute
+  path under a distinct fixed verified-artifact name;
 - `upload` runs with `contents: write`, performs no checkout and executes no selected-ref code, depends on `verify`,
-  downloads only that fixed verified artifact with digest mismatch set to `error`, repeats the path/shape validation,
-  and passes only its validated absolute path to the fixed Testing Release upload command.
+  downloads only that fixed verified artifact with digest mismatch set to `error`, repeats path/shape/hash validation,
+  and creates or reuses only the exact per-commit draft prerelease. The job never moves a tag; `--clobber` is allowed
+  only when the existing tag still points directly to the same commit and the Release is still a draft containing no
+  unexpected assets.
 
-The structural gate uses exact job/step allowlists plus adversarial mutations for permission widening, missing
-prepare/build/verify dependencies, moving-ref checkout, self-hosted runners, mutable action tags, wildcard or
-overwrite transport, raw-artifact delivery to the write job, cross-run downloads, digest downgrade, checkout/local
-actions in the write job, token leakage, path-validation bypass, artifact extraction, expression injection,
-duplicate/quoted keys, and custom shell defaults. It also runs filesystem fixtures for valid, extra, nested, empty,
-mismatched, and unsafe archive shapes. This gate does not dispatch a release or modify GitHub assets; the overwrite
-run remains owner-gated. The boundary protects the write token and artifact transport, but it does not attest that
-owner-selected package bytes are trustworthy, and the default-branch guard is an accidental-misdispatch check rather
-than protection from an authorized contributor changing the control workflow.
+Stable Release uses the same four-stage isolation with `prepare`, `build`, `verify`, and `publish`:
+
+- it is manually dispatched from the default branch with an exact lowercase 40-character commit SHA that must equal
+  the trusted workflow `${{ github.sha }}`, plus a strict `vMAJOR.MINOR.PATCH` tag;
+- the read-only build proves the tag matches the single `<Version>` value in `LLPlayer/LLPlayer.csproj`, runs the full
+  gate, packages selected code, and emits no GitHub release mutation;
+- trusted verification independently tests the archive and evidence before republishing a fixed verified artifact;
+- only `publish` receives `contents: write`; it has no checkout/local action/archive parsing, revalidates the file hash
+  and size, creates a new direct tag without force, creates a draft non-prerelease, uploads one asset, and reads the
+  tag/Release/asset back. It never publishes or replaces an existing Stable tag/Release.
+
+The structural gates exercise adversarial mutations for permission widening, missing dependencies, moving-ref
+checkout, self-hosted runners, mutable or unexpected Actions, raw-artifact delivery to a write job, digest downgrade,
+checkout/local actions under a write token, path-validation bypass, expression injection, duplicate keys, and bypass
+conditions. Filesystem fixtures cover valid, extra, empty, wrong-name, wrong-size, and wrong-digest shapes. These gates
+do not dispatch workflows, create tags/Releases, or upload assets. They protect token/transport boundaries but do not
+replace review of the selected package bytes; the default-branch guard is an accidental-misdispatch check, not a
+defense against an authorized contributor changing the trusted control workflow.
 
 Both release callers have a mandatory fresh full-verification preflight before the shared packaging action:
 
@@ -61,19 +80,18 @@ Both release callers have a mandatory fresh full-verification preflight before t
 3. run `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1` with no skip switch;
 4. only after success invoke `.github/actions/build-package/action.yml` and its publish/archive tail.
 
-The preflight is caller-owned rather than present only inside the composite action. Testing Release intentionally
-executes the local action from the owner-selected commit, so an older selected ref could otherwise carry a preflight-
-free action. With the caller gate, a selected ref that lacks the canonical `verify.ps1` fails closed before packaging.
-Stable tags are protected when they point to a commit containing this workflow revision; historical tag commits cannot
-be changed retroactively.
+The preflight is caller-owned rather than present only inside the composite action. Both workflows fail closed unless
+the dispatch input, trusted default-branch workflow `${{ github.sha }}`, run `head_sha`, and selected commit are the same
+commit. The caller gate and frozen boundary checks reject a missing canonical `verify.ps1` or a preflight-order
+regression before packaging. Stable no longer executes a tag-selected workflow: the trusted default-branch control
+plane creates the requested tag only after that same commit has passed read-only build and trusted artifact verification.
 
-`verify-testing-release-boundary.ps1` locks the Testing build-job order after immutable-checkout verification.
-`verify-release-workflow.ps1` locks the Stable same-job order. Their adversarial fixtures reject a missing or late
-preflight, `verify-fast.ps1` substitution, `-SkipRestore`, `continue-on-error`, conditional bypass,
-anonymous/duplicate steps, and packaging before the gate. These structural checks do not push tags, dispatch a
-workflow, create a draft release, or overwrite `v0.0.1`; both controlled release runs remain separately owner-gated.
-The separate Stable risk of executing tag-selected repository code in a job with `contents: write` is not resolved by
-the preflight.
+Both boundary validators lock checkout -> exact-SHA/version verification -> immutable .NET 10 setup -> full preflight
+-> package ordering. Their fixtures reject a missing or late preflight, `verify-fast.ps1` substitution, bypass flags,
+conditional execution, packaging before the gate, and any write-token regression. Static verification never creates
+tags, draft Releases, or assets; each real controlled run remains a separately authorized external action. Operational
+release evidence must prove the dispatched control ref, selected SHA, run SHA, tag target, draft state, exact asset
+name/size/SHA-256, `7z t`, and resolved yt-dlp version/size/SHA-256.
 
 GitHub's `Build & Test` workflow runs the fast gate after setting up .NET 10 and before its separate
 restore, app/plugin build, and test steps, so infrastructure or frozen-contract drift fails before compilation.
