@@ -99,7 +99,7 @@ runs:
         # HC-12: a hard-coded default pin ships a ~year-old yt-dlp that almost certainly fails on current
         # YouTube (nsig/player). Resolve the latest release at build time (logged for traceability). An explicit
         # yt-dlp-version input still pins a specific version for a reproducible build. The input is read from an
-        # env var (NOT ${{ }}-interpolated into the script) to avoid GitHub Actions script injection.
+        # env var (not expression-interpolated into the script) to avoid GitHub Actions script injection.
         $pinned = "$env:YTDLP_VERSION".Trim()
         if ($pinned) {
           $ver = $pinned
@@ -123,7 +123,7 @@ runs:
         YTDLP_VERSION: ${{ steps.fetch-yt.outputs.version }}
       run: |
         $pub = "${{ runner.temp }}\publish"
-        # Read the resolved version from an env var (not ${{ }}-interpolated) — same injection-safe pattern.
+        # Read the resolved version from an env var (not expression-interpolated) — same injection-safe pattern.
         $ver = "$env:YTDLP_VERSION"
         $url = "https://github.com/yt-dlp/yt-dlp/releases/download/$ver/yt-dlp.exe"
         $outDir = "$pub\Plugins\YoutubeDL"
