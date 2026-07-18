@@ -8,7 +8,7 @@ LLPlayer is a Windows-only WPF app targeting `.NET 10` and `win-x64`.
 dotnet restore -warnaserror
 dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
-dotnet test --no-restore .\FlyleafLibTests
+dotnet test --no-restore -warnaserror .\FlyleafLibTests
 ```
 
 ## Codex Gates

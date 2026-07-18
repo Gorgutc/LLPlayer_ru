@@ -5,8 +5,9 @@ LLPlayer quality tooling is PowerShell/.NET-first.
 ## Allowed Baseline
 
 - `dotnet restore -warnaserror`
-- `dotnet build -warnaserror`
-- `dotnet test`
+- `dotnet build --no-restore -warnaserror .\LLPlayer`
+- `dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL`
+- `dotnet test --no-restore -warnaserror .\FlyleafLibTests`
 - PowerShell verification scripts
 - GitHub Actions on Windows runners
 - Future Roslyn analyzers or `dotnet format` only when added intentionally

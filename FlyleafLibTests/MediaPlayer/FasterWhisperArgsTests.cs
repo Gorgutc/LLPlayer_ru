@@ -1,5 +1,6 @@
 using AwesomeAssertions;
 using FlyleafLib.MediaPlayer;
+using System.Text.RegularExpressions;
 
 namespace FlyleafLib;
 
@@ -92,6 +93,54 @@ public class FasterWhisperArgsTests
         args.Should().NotContain("--word_timestamps");
     }
 
+    [Theory]
+    [InlineData("--device cuda --compute_type float16", "--compute_type float32", "float16")]
+    [InlineData("--device=cuda --compute_type=int8_float16", "--compute_type int8", "int8_float16")]
+    public void BuildCommand_ForceCpu_RewritesDeviceAndGpuOnlyComputeType(
+        string extraArguments,
+        string expectedComputeType,
+        string rejectedComputeType)
+    {
+        FasterWhisperConfig config = new() { ExtraArguments = extraArguments };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig(), forceCpu: true).Arguments;
+
+        AssertUnquotedFlagValue(args, "--device", "cpu", expectedCount: 1);
+        AssertUnquotedFlagValue(args, "--device", "cuda", expectedCount: 0);
+        AssertUnquotedArgument(args, expectedComputeType, expectedCount: 1);
+        AssertUnquotedFlagValue(args, "--compute_type", rejectedComputeType, expectedCount: 0);
+    }
+
+    [Fact]
+    public void BuildCommand_ForceCpu_AddsExactlyOneDeviceWhenMissing()
+    {
+        FasterWhisperConfig config = new() { ExtraArguments = "--compute_type float16" };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig(), forceCpu: true).Arguments;
+
+        AssertUnquotedFlagValue(args, "--device", "cpu", expectedCount: 1);
+        AssertUnquotedFlagValue(args, "--compute_type", "float32", expectedCount: 1);
+    }
+
+    [Fact]
+    public void BuildCommand_ForceCpu_PreservesQuotedFlagText()
+    {
+        const string prompt = "keep --device cuda and --compute_type float16 verbatim";
+        FasterWhisperConfig config = new()
+        {
+            Prompt = prompt,
+            ExtraArguments = "--device=cuda --compute_type=int8_float16"
+        };
+
+        string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig(), forceCpu: true).Arguments;
+
+        args.Should().Contain($"--initial_prompt \"{prompt}\"");
+        AssertUnquotedFlagValue(args, "--device", "cpu", expectedCount: 1);
+        AssertUnquotedFlagValue(args, "--compute_type", "int8", expectedCount: 1);
+        AssertUnquotedFlagValue(args, "--device", "cuda", expectedCount: 0);
+        AssertUnquotedFlagValue(args, "--compute_type", "int8_float16", expectedCount: 0);
+    }
+
     [Fact]
     public void BuildCommand_PromptSet_AddsInitialPrompt()
     {
@@ -116,6 +165,21 @@ public class FasterWhisperArgsTests
         string args = FasterWhisperASRService.BuildCommand(config, new WhisperConfig()).Arguments;
 
         args.Should().NotContain("--initial_prompt");
+    }
+
+    private static void AssertUnquotedArgument(string arguments, string expectedArgument, int expectedCount)
+    {
+        string[] parts = expectedArgument.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+        parts.Should().HaveCount(2);
+        AssertUnquotedFlagValue(arguments, parts[0], parts[1], expectedCount);
+    }
+
+    private static void AssertUnquotedFlagValue(string arguments, string flag, string value, int expectedCount)
+    {
+        string withoutQuotedArguments = Regex.Replace(arguments, "\"(?:\\\\.|[^\"\\\\])*\"", "\"\"");
+        string pattern = $@"(?<!\S){Regex.Escape(flag)}(?:\s+|=){Regex.Escape(value)}(?=\s|$)";
+
+        Regex.Matches(withoutQuotedArguments, pattern).Count.Should().Be(expectedCount);
     }
 
     [Fact]

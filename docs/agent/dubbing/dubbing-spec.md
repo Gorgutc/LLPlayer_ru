@@ -264,8 +264,10 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
 - **Unit (xUnit, off-GPU, deterministic):** `DubbingOutputPathBuilder`; `DubbingIsochrony`
   (atempo clamp, drift-reset-at-pause); `DubbingConfig` defaults; `DubbedAudioAutoLoader` path
   logic. The `--mock` sidecar enables an optional end-to-end sidecar-assembly smoke with a generated tone.
-- **Gates:** `dotnet build -warnaserror` (LLPlayer + Plugins/YoutubeDL); `dotnet test
-  FlyleafLibTests`; `verify-fast`/`verify` (frozen) **incl. the new lockfile NC-package gate**;
+- **Gates:** `dotnet build --no-restore -warnaserror .\LLPlayer`;
+  `dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL`;
+  `dotnet test --no-restore -warnaserror .\FlyleafLibTests`; `verify-fast`/`verify` (frozen)
+  **incl. the new lockfile NC-package gate**;
   multi-agent `/review` (close Critical/Important).
 - **Owner first-run acceptance (NOT a merge gate):** provisioning download; sidecar boot; CosyVoice2
   Russian **ear-test** on real content; dub track appears in Audio ▸ External, plays, ducking
