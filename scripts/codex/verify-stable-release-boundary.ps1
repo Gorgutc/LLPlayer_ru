@@ -750,6 +750,7 @@ function Assert-StableReleaseBoundary([string]$Text, [string]$Source) {
         'Uploaded Stable asset digest does not match the verified archive.',
         '$expectedRemoteDigest = "sha256:$archiveSha256"',
         'for ($attempt = 1; $attempt -le 6; $attempt++)',
+        '$releaseReadback = Invoke-GitHubRequest -Uri "$repoUri/releases/$($releaseCreate.Body.id)" -Method Get',
         'Draft release readback failed.',
         '$releaseAssets.Count -gt 1',
         '$releaseAssets.Count -eq 1',
@@ -1128,6 +1129,11 @@ Assert-MutationRejected $workflowText `
 Assert-MutationRejected $workflowText '& "$sevenZip" t "$expectedPath"' '# archive test removed' "removal of trusted archive testing"
 Assert-MutationRejected $workflowText "-Method Post -Body `$tagBody" "-Method Patch -Body `$tagBody" "tag mutation by PATCH"
 Assert-MutationRejected $workflowText 'draft = $true' 'draft = $false' "publication instead of a draft"
+Assert-MutationRejected $workflowText `
+    '$releaseReadback = Invoke-GitHubRequest -Uri "$repoUri/releases/$($releaseCreate.Body.id)" -Method Get' `
+    '$releaseReadback = Invoke-GitHubRequest -Uri "$repoUri/releases/tags/$encodedTag" -Method Get' `
+    "post-create Stable readback through a draft-blind tag endpoint" `
+    "privileged publication invariant"
 Assert-MutationRejected $workflowText 'if ($null -eq $verifiedRelease)' 'if ($false)' "acceptance without a remote asset digest"
 Assert-MutationRejected $workflowText "    runs-on: windows-latest`n    permissions:" "    runs-on: windows-latest`n    if: `${{ always() }}`n    permissions:" "an always-run success bypass"
 Assert-MutationRejected $workflowText "if (`$commitSha -cnotmatch '^[0-9a-f]{40}$')" "if (`$commitSha -cnotmatch '^[0-9a-f]{7,40}$')" "a non-exact commit id"

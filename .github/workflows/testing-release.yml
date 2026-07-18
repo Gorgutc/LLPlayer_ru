@@ -454,7 +454,7 @@ jobs:
           function Invoke-GhApiJson([string]$Endpoint, [switch]$AllowNotFound) {
             $lines = @(& gh api "$Endpoint" 2>&1)
             $exitCode = $LASTEXITCODE
-            $body = $lines -join "`n"
+            $body = @($lines | ForEach-Object { "$_" }) -join "`n"
             if ($exitCode -eq 0) {
               if (-not $body) {
                 throw "GitHub API returned an empty response."
@@ -466,6 +466,55 @@ jobs:
               return $null
             }
             throw "GitHub API request failed for a trusted release endpoint."
+          }
+
+          function Get-GhReleaseByTag(
+              [string]$Repo,
+              [string]$Tag,
+              [switch]$AllowNotFound) {
+            $commandErrorPreference = $ErrorActionPreference
+            $nativeErrorPreference = $PSNativeCommandUseErrorActionPreference
+            try {
+              $ErrorActionPreference = "Continue"
+              $PSNativeCommandUseErrorActionPreference = $false
+              $lines = @(& gh release view "$Tag" `
+                --repo "$Repo" `
+                --json databaseId,tagName,isDraft,isPrerelease,assets 2>&1)
+              $exitCode = $LASTEXITCODE
+            }
+            finally {
+              $PSNativeCommandUseErrorActionPreference = $nativeErrorPreference
+              $ErrorActionPreference = $commandErrorPreference
+            }
+
+            $body = @($lines | ForEach-Object { "$_" }) -join "`n"
+            if ($exitCode -ne 0) {
+              if ($AllowNotFound -and
+                  [string]::Equals(
+                    $body.Trim(),
+                    "release not found",
+                    [System.StringComparison]::Ordinal)) {
+                return $null
+              }
+              throw "GitHub CLI failed to resolve the exact Testing draft release."
+            }
+            if (-not $body) {
+              throw "GitHub CLI returned empty Testing release metadata."
+            }
+
+            $view = $body | ConvertFrom-Json
+            [long]$releaseId = 0
+            if (-not [long]::TryParse("$($view.databaseId)", [ref]$releaseId) -or
+                $releaseId -le 0) {
+              throw "GitHub CLI returned invalid Testing release identity."
+            }
+            return [pscustomobject]@{
+              id = $releaseId
+              tag_name = "$($view.tagName)"
+              draft = $view.isDraft
+              prerelease = $view.isPrerelease
+              assets = @($view.assets)
+            }
           }
 
           function Assert-TagTarget($TagState, [string]$Tag, [string]$Sha) {
@@ -549,7 +598,6 @@ jobs:
           }
 
           $tagEndpoint = "repos/$repo/git/ref/tags/$tag"
-          $releaseEndpoint = "repos/$repo/releases/tags/$tag"
           $tagState = Invoke-GhApiJson $tagEndpoint -AllowNotFound
           if ($null -eq $tagState) {
             & gh api "repos/$repo/git/refs" `
@@ -563,7 +611,9 @@ jobs:
           }
           Assert-TagTarget $tagState $tag $sha
 
-          $release = Invoke-GhApiJson $releaseEndpoint -AllowNotFound
+          # GitHub's REST release-by-tag endpoint does not return draft releases. Resolve the authenticated
+          # draft with gh release view, then bind every privileged readback to its immutable numeric id.
+          $release = Get-GhReleaseByTag $repo $tag -AllowNotFound
           if ($null -eq $release) {
             & gh release create "$tag" `
               --repo "$repo" `
@@ -575,9 +625,10 @@ jobs:
             if ($LASTEXITCODE -ne 0) {
               throw "Could not create the testing draft release."
             }
-            $release = Invoke-GhApiJson $releaseEndpoint
+            $release = Get-GhReleaseByTag $repo $tag
           }
           Assert-DraftRelease $release $tag $name
+          $releaseEndpoint = "repos/$repo/releases/$($release.id)"
 
           $preUploadTag = Invoke-GhApiJson $tagEndpoint
           $preUploadRelease = Invoke-GhApiJson $releaseEndpoint
