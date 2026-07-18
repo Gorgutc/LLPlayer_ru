@@ -36,6 +36,15 @@ function Forbid-Fragment([string]$Text, [string]$Fragment, [string]$Message) {
     }
 }
 
+function Assert-NoEmptyGitHubExpression([string]$Text, [string]$Source) {
+    if ([regex]::IsMatch(
+            $Text,
+            '\$\{\{\s*\}\}',
+            [System.Text.RegularExpressions.RegexOptions]::CultureInvariant)) {
+        throw "$Source contains an empty GitHub expression token that the Actions runner cannot parse."
+    }
+}
+
 function Get-StepBlock([string]$Path, [string]$StepName) {
     $lines = @(Get-Content -LiteralPath $Path)
     $marker = "- name: $StepName"
@@ -367,6 +376,21 @@ Assert-RunFixtureRejected $indentedRunFixture "an indented block-scalar interpol
 $workflowText = Get-Content -LiteralPath $testingWorkflow -Raw
 $stableText = Get-Content -LiteralPath $stableWorkflow -Raw
 $actionText = Get-Content -LiteralPath $packageAction -Raw
+
+Assert-NoEmptyGitHubExpression $workflowText "Testing workflow"
+Assert-NoEmptyGitHubExpression $stableText "Stable workflow"
+Assert-NoEmptyGitHubExpression $actionText "Build/package action"
+
+$emptyExpressionRejected = $false
+try {
+    Assert-NoEmptyGitHubExpression 'run: ${{ }}' "empty-expression regression fixture"
+}
+catch {
+    $emptyExpressionRejected = $true
+}
+if (-not $emptyExpressionRejected) {
+    throw "Empty GitHub expression regression fixture unexpectedly passed validation."
+}
 
 & (Join-Path $PSScriptRoot "verify-testing-release-boundary.ps1")
 & (Join-Path $PSScriptRoot "verify-stable-release-boundary.ps1")
