@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $workflowPath = Join-Path $repoRoot ".github\workflows\testing-release.yml"
-$expectedWorkflowSha256 = "dc15f8089953e59242caad7582edbff4009674d6d04c24278612d1391c797624"
+$expectedWorkflowSha256 = "ade832a68c5b49611c8d949518a7510b7358d6dfa9a4faee01bfd545a2964e35"
 
 function Normalize-Text([string]$Text) {
     return (($Text -replace "`r`n", "`n") -replace "`r", "`n").TrimEnd("`n")
@@ -293,6 +293,28 @@ function Assert-TestingReleaseSemantics([string]$Text, [string]$Source) {
     Require-LiteralCount $normalized '$name -cnotmatch ''^LLPlayer-testing-[0-9a-f]{12}-x64\.7z$''' 1 "privileged asset allowlist" $Source
     Require-LiteralCount $normalized '"refs/tags/$Tag"' 1 "exact tag-ref comparison" $Source
     Require-LiteralCount $normalized '"ref=refs/tags/$tag"' 1 "non-force exact tag creation" $Source
+    Require-LiteralCount $normalized "          function Get-GhReleaseByTag(" 1 "authenticated draft release lookup helper" $Source
+    Require-LiteralCount $normalized '            $commandErrorPreference = $ErrorActionPreference' 1 "native lookup error-preference capture" $Source
+    Require-LiteralCount $normalized '              $ErrorActionPreference = "Continue"' 1 "nonterminating native not-found capture" $Source
+    Require-LiteralCount $normalized '              $PSNativeCommandUseErrorActionPreference = $false' 1 "PowerShell 7 native exit capture" $Source
+    Require-LiteralCount $normalized '              $PSNativeCommandUseErrorActionPreference = $nativeErrorPreference' 1 "PowerShell 7 native exit preference restoration" $Source
+    Require-LiteralCount $normalized '              $ErrorActionPreference = $commandErrorPreference' 1 "native lookup error-preference restoration" $Source
+    Require-LiteralCount $normalized '              $lines = @(& gh release view "$Tag" `' 1 "draft-aware GitHub CLI lookup" $Source
+    Require-LiteralCount $normalized '                --repo "$Repo" `' 1 "exact draft lookup repository binding" $Source
+    Require-LiteralCount $normalized "                --json databaseId,tagName,isDraft,isPrerelease,assets 2>&1)" 1 "draft lookup metadata allowlist" $Source
+    Require-LiteralCount $normalized '                    "release not found",' 1 "exact release-not-found classification" $Source
+    Require-LiteralCount $normalized '            if (-not [long]::TryParse("$($view.databaseId)", [ref]$releaseId) -or' 1 "positive numeric draft identity parsing" $Source
+    Require-LiteralCount $normalized '                $releaseId -le 0) {' 1 "positive numeric draft identity guard" $Source
+    Require-LiteralCount $normalized '              tag_name = "$($view.tagName)"' 1 "draft tag-name normalization" $Source
+    Require-LiteralCount $normalized '              draft = $view.isDraft' 1 "draft-state normalization" $Source
+    Require-LiteralCount $normalized '              prerelease = $view.isPrerelease' 1 "prerelease-state normalization" $Source
+    Require-LiteralCount $normalized '              assets = @($view.assets)' 1 "draft asset normalization" $Source
+    Require-LiteralCount $normalized '          $release = Get-GhReleaseByTag $repo $tag -AllowNotFound' 1 "pre-create authenticated draft lookup" $Source
+    Require-LiteralCount $normalized '          if ($null -eq $release) {' 1 "existing-draft recovery branch" $Source
+    Require-LiteralCount $normalized '            $release = Get-GhReleaseByTag $repo $tag' 1 "post-create authenticated draft lookup" $Source
+    Require-LiteralCount $normalized '          $releaseEndpoint = "repos/$repo/releases/$($release.id)"' 1 "numeric-id draft readback binding" $Source
+    Require-LiteralCount $normalized '          $preUploadRelease = Invoke-GhApiJson $releaseEndpoint' 1 "pre-upload numeric-id draft readback" $Source
+    Require-LiteralCount $normalized '            $finalRelease = Invoke-GhApiJson $releaseEndpoint' 1 "post-upload numeric-id draft readback" $Source
     Require-LiteralCount $normalized "              --verify-tag ``" 1 "existing-tag release creation" $Source
     Require-LiteralCount $normalized "              --draft ``" 1 "draft-only release creation" $Source
     Require-LiteralCount $normalized "          Assert-DraftRelease `$release `$tag `$name" 1 "pre-upload draft assertion" $Source
@@ -312,6 +334,7 @@ function Assert-TestingReleaseSemantics([string]$Text, [string]$Source) {
     Forbid-Literal $normalized "self-hosted" "non-ephemeral runner" $Source
     Forbid-Literal $normalized "permissions: write-all" "broad write permissions" $Source
     Forbid-Literal $normalized "actions/github-script@" "obsolete release metadata action" $Source
+    Forbid-Literal $normalized 'repos/$repo/releases/tags/$tag' "published-only release-by-tag draft lookup" $Source
     if ($normalized -cmatch '(?m)^\s*uses:\s+[^@\s]+@(?:v|main|master)(?:\s|$)') {
         throw "$Source contains a mutable external action reference."
     }
@@ -663,6 +686,76 @@ Assert-MutationRejected $workflowText `
     "              --latest ``" `
     "a published testing release" `
     "draft-only release creation"
+Assert-MutationRejected $workflowText `
+    '          $release = Get-GhReleaseByTag $repo $tag -AllowNotFound' `
+    '          $release = Invoke-GhApiJson "repos/$repo/releases/tags/$tag" -AllowNotFound' `
+    "a published-only REST lookup for an existing draft" `
+    "pre-create authenticated draft lookup"
+Assert-MutationRejected $workflowText `
+    '          $releaseEndpoint = "repos/$repo/releases/$($release.id)"' `
+    '          $releaseEndpoint = "repos/$repo/releases/tags/$tag"' `
+    "post-create readback through a draft-blind tag endpoint" `
+    "numeric-id draft readback binding"
+Assert-MutationRejected $workflowText `
+    '                    "release not found",' `
+    '                    "Not Found",' `
+    "broad release not-found classification" `
+    "exact release-not-found classification"
+Assert-MutationRejected $workflowText `
+    '              $ErrorActionPreference = "Continue"' `
+    '              $ErrorActionPreference = "Stop"' `
+    "terminating native not-found output before classification" `
+    "nonterminating native not-found capture"
+Assert-MutationRejected $workflowText `
+    '                --repo "$Repo" `' `
+    '                --repo "Gorgutc/another-repository" `' `
+    "draft lookup in a different repository" `
+    "exact draft lookup repository binding"
+Assert-MutationRejected $workflowText `
+    '              $PSNativeCommandUseErrorActionPreference = $nativeErrorPreference' `
+    '              $PSNativeCommandUseErrorActionPreference = $null' `
+    "a leaked PowerShell native error preference" `
+    "PowerShell 7 native exit preference restoration"
+Assert-MutationRejected $workflowText `
+    '                $releaseId -le 0) {' `
+    '                $false) {' `
+    "acceptance of a missing or invalid draft release id" `
+    "positive numeric draft identity guard"
+Assert-MutationRejected $workflowText `
+    '              tag_name = "$($view.tagName)"' `
+    '              tag_name = $Tag' `
+    "replacement of authenticated tag metadata with requested input" `
+    "draft tag-name normalization"
+Assert-MutationRejected $workflowText `
+    '              draft = $view.isDraft' `
+    '              draft = $true' `
+    "replacement of authenticated draft state with a constant" `
+    "draft-state normalization"
+Assert-MutationRejected $workflowText `
+    '              prerelease = $view.isPrerelease' `
+    '              prerelease = $true' `
+    "replacement of authenticated prerelease state with a constant" `
+    "prerelease-state normalization"
+Assert-MutationRejected $workflowText `
+    '            $release = Get-GhReleaseByTag $repo $tag' `
+    '            $release = $null' `
+    "a missing post-create authenticated draft lookup" `
+    "post-create authenticated draft lookup"
+Assert-MutationRejected $workflowText `
+    '          if ($null -eq $release) {' `
+    '          if ($true) {' `
+    "unconditional replacement of an existing exact draft" `
+    "existing-draft recovery branch"
+Assert-MutationRejected $workflowText `
+    '          $preUploadRelease = Invoke-GhApiJson $releaseEndpoint' `
+    '          $preUploadRelease = $release' `
+    "a stale pre-upload draft snapshot" `
+    "pre-upload numeric-id draft readback"
+Assert-MutationRejected $workflowText `
+    '            $finalRelease = Invoke-GhApiJson $releaseEndpoint' `
+    '            $finalRelease = $release' `
+    "a stale post-upload draft snapshot" `
+    "post-upload numeric-id draft readback"
 Assert-MutationRejected $workflowText `
     "                `$Release.prerelease -ne `$true)" `
     "                `$false)" `
