@@ -37,10 +37,15 @@
 > literal `-File` внутри repo, reparse/Unicode/CMD обходы и repo-local launcher shadow. Feature-head
 > [run 29642170977](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29642170977) и post-merge
 > [run 29642254294](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29642254294) зелёные.
-> Полный локальный `verify.ps1` и `ship.ps1` — PASS: **1376/1376**, 0 warnings/errors, publish smoke green. Post-merge CI #143 выявил один
+> `T-03` закрыт через [PR #154](https://github.com/Gorgutc/LLPlayer_ru/pull/154), merge `067ddec`: четыре
+> regression-теста защищают `FasterWhisperASRService.BuildCommand(... forceCpu: true)`, а срез `T-03-CI-GUARD`
+> закрепляет точную unfiltered warning-clean команду полного test run и fail-closed CI/full gate. Feature-head
+> [run 29646601648](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29646601648) зелёный на .NET SDK 10.0.302;
+> post-merge [run 29646754522](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29646754522) зелёный на `067ddec`.
+> Полный локальный `verify.ps1` и `ship.ps1` — PASS: **1380/1380**, 0 warnings/errors, publish smoke green. Post-merge CI #143 выявил один
 > thread-pool-starvation timeout в HC-27b lock-тесте; в #144 тест переведён на dedicated workers и прошёл 20/20.
-> `HC-27b` остаётся `IN-PROGRESS` до targeted owner smoke; active **3**, unresolved **10**; следующий agent-action —
-> `T-03` closure audit.
+> `HC-27b` остаётся `IN-PROGRESS` до targeted owner smoke; active **2**, unresolved **9**; `T-13` остаётся **5/7**.
+> Следующей независимой agent-action нет: дальнейшие шаги требуют owner smoke или owner decision.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -743,8 +748,23 @@ instruction-drift, WPF, media-runtime, packaging и architecture reviews — SHI
 Без VC++ 2022+ приложение стартует, но падает при включении ASR/OCR (README/FAQ). **Решение:** усилить
 раннюю диагностику/понятное сообщение до включения ASR/OCR. **Рассуждение:** молчаливый краш = плохой UX.
 
-### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ONGOING
-**Последний наблюдавшийся прогон: 1376/1376** (на 2026-07-11, HC-27b `a468c3e`, PR #142 merged `f61780c`: +23 — детерминированные OFF/latest-wins/A-B/alias/Dispose race-тесты, compact voice-index, atomic restore, stable recapture и Stop/reset generation; full verify + ship PASS; PR и post-merge Build & Test PASS). Предыдущий baseline **1353/1353**: voice-persistence queue `4d80d39` / merge-tree `be4d6ce`, +6 — `DubbingVoiceAssignmentSaveQueueTests` для двух media внутри debounce, same-media latest-wins, Dispose flush/wait и неблокирующего Enqueue. Ранее на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
+### T-03 — Расширение тестового покрытия 🟡 Ⓜ · ✅ DONE (closure 2026-07-18, PR #154, merge `067ddec`)
+**Закрытие: 1380/1380.** Финальный deterministic seam добавил четыре регресса для
+`FasterWhisperASRService.BuildCommand(... forceCpu: true)`: space- и equals-формы device/compute flags,
+ровно один добавленный `--device cpu` при отсутствии device и дословное сохранение flag-like текста quoted prompt
+в формируемой managed-строке `Arguments`.
+Intentional RED доказан четырьмя независимыми production-мутациями (`0/4`, `0/4`, `2/4`, `3/4`), после чего
+`SubtitlesASR.cs` восстановлен без diff; focused suite — 14/14, full/ship — 1380/1380. Эти unit-тесты доказывают
+преобразование команды, но не реальное переключение внешнего GPU-процесса на CPU — оно остаётся manual smoke.
+
+Стабильный tooling-срез **T-03-CI-GUARD** закрыл доказанный zero-test обход: `dotnet test` с фильтром на
+несуществующий тест возвращал exit 0, а прежний workflow-validator принимал такую команду. Канонический gate теперь
+требует точный unfiltered `dotnet test --no-restore -warnaserror .\FlyleafLibTests`, проверяет порядок restore/build/test
+и fail-closed отклоняет фильтр, пропуск/подмену шага и no-op/early-return обход. Постоянная policy требует для
+behavior/bug change невакуумный deterministic regression с RED там, где это безопасно; для WPF/native/GPU/network/timing
+границ — явный manual/integration smoke. Глобальный процент покрытия и hard-coded счётчик тестов намеренно не вводятся.
+
+**Предыдущий наблюдавшийся прогон: 1376/1376** (на 2026-07-11, HC-27b `a468c3e`, PR #142 merged `f61780c`: +23 — детерминированные OFF/latest-wins/A-B/alias/Dispose race-тесты, compact voice-index, atomic restore, stable recapture и Stop/reset generation; full verify + ship PASS; PR и post-merge Build & Test PASS). Предыдущий baseline **1353/1353**: voice-persistence queue `4d80d39` / merge-tree `be4d6ce`, +6 — `DubbingVoiceAssignmentSaveQueueTests` для двух media внутри debounce, same-media latest-wins, Dispose flush/wait и неблокирующего Enqueue. Ранее на 2026-07-06 (monitor follow-up F-19 guards): +5 — `OfflineDemuxerTests.RegisterInterrupt_DisposeUnsubscribesCancellationCallback`, `FrozenConfigDefaultsTests` для `WordTimestamps`/`VadCueSnapping`, `FasterWhisperArgsTests` для `wordTimestamps` ON/OFF. Ранее на 2026-07-03 (сессия #21, HC-40 вариант A, app-код): +1 — `ConfigCloneTests` element-distinctness тест; 2 характеризационных теста перевёрнуты в ассерты корректного deep-copy `SubConfigs` (RED-without-fix). Ранее на 2026-07-02 (сессия #20, T-03 срез №6 HC-34/39/40 + docs-sync, tests+docs-only): +17 —
 `TranslateServiceHelperTests` (8: `TryGetLanguage` throw-ветки + success), `BatchSubtitleConfigSnapshotTests`
 (+5: обобщённые nested-config completeness-guards HC-39), `ConfigCloneTests` (4: характеризация `Clone` HC-40).
 Прод-код не менялся (версия остаётся v0.3.40). Ранее на 2026-07-02 (сессия #19, UI/краш+cleanup-бандл HC-02/03/04/06/07/32, v0.3.40): +12 —
@@ -755,11 +775,8 @@ instruction-drift, WPF, media-runtime, packaging и architecture reviews — SHI
 `ProcessUrlSafetyTests` (15: валидация URL для аргумента процесса, инъекционные негативы),
 `SafeChildPathTests` (11: safe-child-path против traversal/absolute), `NullTerminatedUtf16Tests` (4:
 null-терминированный CF_UNICODETEXT-буфер) → 1163. Ранее на 2026-07-02 (сессия #16-монитор, PR #112 merge `e96c41d`): monitor follow-up +1 `GetWhisperLanguages_TitleCaseIsCultureInvariant_UnderTurkishCulture` вместе с прод-фиксом `char.ToUpper`→`char.ToUpperInvariant` в `WhisperLanguage.cs` → 1133. См. также новую секцию **§8 «Аудит здоровья кода» (HC-*)** — бэклог находок аудита сессии #16, ранжирован простое→сложное; конкретные тест-пробелы аудита — HC-34/HC-39/HC-40. На 2026-07-01 (сессия #15, v0.3.38): срез №5 +31 — `LanguageBadgeTests` (11: код/гейт сайдбар-бейджа языка, см. T-10 follow-up ниже), `UtilsFindNextAvailableFileTests` (8: next-free «name (N).ext», regex-стрип суффикса `(N)`, обе стороны границы 100 слотов — слот 100 занимается + null после 100), `ImageProcessorTests` (11: OCR `BlackText`/`AddPadding` — размеры/PixelFormat/пиксели вне блендинг-границ), culture-guard `GetWhisperLanguages_OrderIsCultureInvariant_UnderCzechCulture` (+1) вместе с прод-фиксом FS-orderby: `WhisperLanguage.GetWhisperLanguages` OrderBy теперь пиннит `StringComparer.InvariantCulture` (зеркало `Language.AllLanguages`; **RED-without-fix доказан под cs-CZ** — чешская «ch»-диграф-коллация смещала «Chinese» за H-имена; да-DK «aa»-пробник оказался вакуумным — пары различаются ДО диграфа) → 1132. SKIP-решения среза №5: `Interrupter` (frozen media-runtime + FFmpeg-callback → интеграционный путь), `SubtitlesOCR.Binarize` (private unsafe — seam не оправдан), `GetUniqueId` (тавтология Interlocked). Ранее: на 2026-07-01 (поздн.): F-16 companion-json persistence v0.3.37 +20 `DubbingVoiceAssignmentStoreTests` (ToJson/FromJson round-trip, atomic Save/LoadMap, disk/composite providers) → 1101; на 2026-07-01 (сред.): F-05-gap DubbingConfig-снапшот PR #109 +2 (regression + reflection-guard) → 1081; на 2026-07-01 (ранее): monitor follow-up добавил +16 регрессов для `DubbingConfig` normalization, `DubbingVoiceAssignmentMap`, и batch dubbing per-line voice bridge → 1079; на 2026-06-30 (поздн.): clean-up находок Codex PR #104 — корневой фикс whitespace-blank пикера голоса дубляжа через trim `DubbingConfig.DefaultVoiceId` на set + закрытие 4 тест-пробелов `VoiceBankResolver` (+7 → 1049, v0.3.34); adversarial-ревью отвергло первый вариант (raw-append в `ForConfig` вносил on-refresh-blank через `ContainsVoiceId`-дифф); на 2026-06-30 (ранее): monitor follow-up добавил +4 регресса для `DubbingConfig.CustomVoiceIds` null-normalization и `VoiceBankResolver.ContainsVoiceId` → 1042; на 2026-06-29 после F-03 prep SpeakerId PR #102 +3 и T-10 per-segment language +9 → 1038; на 2026-06-28 после T-03-среза №4 PR #98 мапперы/SSA/snapshot/Utils +100 → 1026; T-03-срез №3 PR #95 language-мапперы +70 → 915, затем F-16 ф.2 PR #96 +11 → 926; промежуточно 783→845 за счёт НЕ-T-03 срезов F-12 waveform +17 → 820 и F-16 ф.1 +25 → 845. Ранее: F-10 PR #79 → 548, F-11 PR #82 +59 → 607, T-03-срез PR #85 +114 → 721, PR #86 +4 → 725, PR #88 +58 → 783). Крупные области ещё без юнитов.
-**Решение:** покрыть парсинг субтитров, перевод (моки сети), ASR/OCR (где детерминируемо),
-playlist/demuxer-утилиты. Связано с фиксами B-01/B-02/B-03 (добавить регресс).
-> **Следующий шаг T-03:** closure audit — текущая agent-action, не зависящая от параллельного owner-smoke. Выбрать
-> только non-vacuous deterministic seam с доказуемым RED-сценарием либо закрыть бесконечный backlog-пункт и оставить
-> тестовое покрытие постоянной policy в verification gates; не добавлять тесты ради счётчика.
+**Закрытое решение:** T-03 больше не является бесконечным счётчиком. Новые поведенческие изменения получают
+risk-based regression или явно документированный manual/integration smoke через постоянную verification-policy.
 > **Прогресс 2026-06-28 (PR #98, +100 тестов → 1026, tests-only):** покрыты ранее непокрытые
 > ПУБЛИЧНЫЕ/internal-seam чистые функции 4 областей (ожидания ИЗ КОДА):
 > **(1) Переводческие мапперы** — `GoogleV1TranslateService`/`MicrosoftTranslateServiceBase`
@@ -1051,7 +1068,6 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 |---|----|---------------------|:---:|:---:|--------|
 | 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice merged via PR #142; owner acceptance pending |
 | 2 | **T-13e** | Controlled Stable + Testing runs с release-tail evidence | 🟡 | Ⓜ | IN-PROGRESS — preflight DONE; runs BLOCKED |
-| 3 | **T-03** | Closure audit: доказуемый seam либо постоянная coverage-policy | 🟡 | Ⓜ | ONGOING; не гнаться за счётчиком |
 
 **Owner-gated / не брать без решения:** `T-13d` required status check · только controlled Stable/Testing runs
 из `T-13e` ·
@@ -1102,7 +1118,6 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 |---|----|---------------------|:---:|:---:|--------|
 | 1 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice merged; owner acceptance pending |
 | 2 | **T-13e** | Controlled Stable + Testing runs | Ⓜ | 🟡 | IN-PROGRESS — preflight DONE; runs BLOCKED |
-| 3 | **T-03** | Closure audit вместо бесконечного роста счётчика | Ⓜ | 🟡 | следующий agent-action |
 
 **Вне actionable-очереди:** `T-13d` и controlled runs из `T-13e` требуют решения владельца; GPU ADR, `F-03` и остаток `F-16`
 крупные и заблокированы GPU-lease/координатором; `F-02-full` trigger-only; `HC-22` и `F-13` DEFERRED.
@@ -1164,10 +1179,10 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 3. **Targeted owner smoke (следующий owner-action)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
    [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md). Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
    гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
-4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e preflight ✅; T-13f ✅; следующий agent-action — T-03 closure audit.**
-   `T-13d` и controlled Stable/Testing runs из `T-13e` остаются заблокированы.
-5. **T-03 closure audit (текущая agent-action)** — выбрать только non-vacuous deterministic seam либо закрепить
-   coverage как policy; эта работа не ждёт ручных smoke.
+4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e preflight ✅; T-13f ✅; T-13 остаётся 5/7.**
+   `T-13d` и controlled Stable/Testing runs из `T-13e` остаются owner-gated.
+5. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
+   coverage закреплено как risk-based policy, а T-03 удалён из активной очереди.
 6. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
    subtitles; B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
 7. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
