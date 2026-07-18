@@ -1,25 +1,229 @@
 name: Stable Release
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Exact full lowercase commit SHA to release'
+        required: true
+        type: string
+      release_tag:
+        description: 'Strict stable tag (vMAJOR.MINOR.PATCH)'
+        required: true
+        type: string
 
-permissions:
-  contents: write
+permissions: {}
 
-env:
-  ARCHIVE_NAME: LLPlayer-${{ github.ref_name }}-x64.7z
+concurrency:
+  group: stable-release
+  cancel-in-progress: false
 
 jobs:
-  release:
+  prepare:
     runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      commit_sha: ${{ steps.release-request.outputs.commit_sha }}
+      release_tag: ${{ steps.release-request.outputs.release_tag }}
+      archive_name: ${{ steps.release-request.outputs.archive_name }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Require trusted workflow ref
+        shell: pwsh
+        env:
+          WORKFLOW_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $expectedRef = "refs/heads/$env:DEFAULT_BRANCH"
+          if (-not [string]::Equals(
+              "$env:WORKFLOW_REF",
+              $expectedRef,
+              [System.StringComparison]::Ordinal)) {
+            throw "Stable Release must be dispatched from the default branch."
+          }
+
+      - name: Checkout trusted control source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate stable release request
+        id: release-request
+        shell: pwsh
+        env:
+          REQUESTED_COMMIT_SHA: ${{ inputs.commit_sha }}
+          REQUESTED_RELEASE_TAG: ${{ inputs.release_tag }}
+          WORKFLOW_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $rawCommitSha = "$env:REQUESTED_COMMIT_SHA"
+          if (-not [string]::Equals($rawCommitSha, $rawCommitSha.Trim(), [System.StringComparison]::Ordinal)) {
+            throw "Stable Release commit SHA must not contain leading or trailing whitespace."
+          }
+          $commitSha = $rawCommitSha
+          if ($commitSha -cnotmatch '^[0-9a-f]{40}$') {
+            throw "Stable Release requires one exact full lowercase commit SHA."
+          }
+          $workflowCommitSha = "$env:WORKFLOW_COMMIT_SHA"
+          if ($workflowCommitSha -cnotmatch '^[0-9a-f]{40}$' -or
+              -not [string]::Equals(
+                $commitSha,
+                $workflowCommitSha,
+                [System.StringComparison]::Ordinal)) {
+            throw "Stable Release commit SHA must equal the trusted default-branch workflow commit."
+          }
+
+          $rawReleaseTag = "$env:REQUESTED_RELEASE_TAG"
+          if (-not [string]::Equals($rawReleaseTag, $rawReleaseTag.Trim(), [System.StringComparison]::Ordinal)) {
+            throw "Stable Release tag must not contain leading or trailing whitespace."
+          }
+          $releaseTag = $rawReleaseTag
+          if ($releaseTag.Length -gt 64 -or
+              $releaseTag -cnotmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw "Stable Release requires a strict vMAJOR.MINOR.PATCH tag without leading zeroes."
+          }
+
+          $archiveName = "LLPlayer-$releaseTag-x64.7z"
+          if ($archiveName.Length -gt 160 -or
+              $archiveName -cnotmatch '^LLPlayer-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-x64\.7z$') {
+            throw "Stable Release archive name is not path-safe."
+          }
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT,
+            "commit_sha=$commitSha$([Environment]::NewLine)release_tag=$releaseTag$([Environment]::NewLine)archive_name=LLPlayer-$releaseTag-x64.7z$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
+
+      - name: Verify selected commit and release absence
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        env:
+          APPROVED_COMMIT_SHA: ${{ steps.release-request.outputs.commit_sha }}
+          APPROVED_RELEASE_TAG: ${{ steps.release-request.outputs.release_tag }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const commitSha = process.env.APPROVED_COMMIT_SHA;
+            const releaseTag = process.env.APPROVED_RELEASE_TAG;
+
+            const commit = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: commitSha
+            });
+            if (commit.data.sha.toLowerCase() !== commitSha) {
+              throw new Error("GitHub did not resolve the approved commit SHA exactly.");
+            }
+
+            let tagExists = false;
+            try {
+              await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${releaseTag}`
+              });
+              tagExists = true;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            if (tagExists) {
+              throw new Error("The requested Stable tag already exists.");
+            }
+
+            let releaseExists = false;
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: releaseTag
+              });
+              releaseExists = true;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            if (releaseExists) {
+              throw new Error("A GitHub Release already exists for the requested Stable tag.");
+            }
+
+  build:
+    needs: prepare
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      yt_dlp_version: ${{ steps.package-evidence.outputs.yt_dlp_version }}
+      yt_dlp_sha256: ${{ steps.package-evidence.outputs.yt_dlp_sha256 }}
+      yt_dlp_size: ${{ steps.package-evidence.outputs.yt_dlp_size }}
+      archive_sha256: ${{ steps.package-evidence.outputs.archive_sha256 }}
+      archive_size: ${{ steps.package-evidence.outputs.archive_size }}
+
+    steps:
+      - name: Checkout immutable release commit
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.commit_sha }}
+          persist-credentials: false
+
+      - name: Verify immutable checkout
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT_SHA: ${{ needs.prepare.outputs.commit_sha }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $actual = (& git rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($LASTEXITCODE -ne 0 -or -not [string]::Equals(
+              $actual,
+              "$env:EXPECTED_COMMIT_SHA",
+              [System.StringComparison]::Ordinal)) {
+            throw "The Stable build checkout does not match the approved commit SHA."
+          }
+
+      - name: Verify release version
+        shell: pwsh
+        env:
+          APPROVED_RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $projectPath = ".\LLPlayer\LLPlayer.csproj"
+          if (-not (Test-Path -LiteralPath $projectPath -PathType Leaf)) {
+            throw "LLPlayer project file is missing from the approved commit."
+          }
+          $xmlSettings = [System.Xml.XmlReaderSettings]::new()
+          $xmlSettings.DtdProcessing = [System.Xml.DtdProcessing]::Prohibit
+          $xmlSettings.XmlResolver = $null
+          $xmlReader = [System.Xml.XmlReader]::Create($projectPath, $xmlSettings)
+          $projectDocument = [System.Xml.XmlDocument]::new()
+          $projectDocument.XmlResolver = $null
+          try {
+            $projectDocument.Load($xmlReader)
+          }
+          finally {
+            $xmlReader.Dispose()
+          }
+
+          $versionNodes = @($projectDocument.SelectNodes(
+            "/*[local-name()='Project']/*[local-name()='PropertyGroup']/*[local-name()='Version']"))
+          if ($versionNodes.Count -ne 1) {
+            throw "LLPlayer project must contain exactly one literal Version element."
+          }
+
+          $rawVersion = $versionNodes[0].InnerText
+          if (-not [string]::Equals($rawVersion, $rawVersion.Trim(), [System.StringComparison]::Ordinal) -or
+              $rawVersion -cnotmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw "LLPlayer project Version must be one strict MAJOR.MINOR.PATCH value."
+          }
+
+          $expectedTag = "v$rawVersion"
+          if (-not [string]::Equals(
+              "$env:APPROVED_RELEASE_TAG",
+              $expectedTag,
+              [System.StringComparison]::Ordinal)) {
+            throw "Stable tag must equal v plus the exact LLPlayer project Version."
+          }
 
       - name: Setup .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
@@ -31,15 +235,509 @@ jobs:
         run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1
 
       - name: Build & Package
+        id: package
         uses: ./.github/actions/build-package
         with:
-          archive-name: ${{ env.ARCHIVE_NAME }}
+          archive-name: ${{ needs.prepare.outputs.archive_name }}
 
-      - name: Create or update GitHub Draft Release & Upload Asset
-        uses: softprops/action-gh-release@v2
+      - name: Validate package evidence
+        id: package-evidence
+        shell: pwsh
+        env:
+          EXPECTED_ARCHIVE_NAME: ${{ needs.prepare.outputs.archive_name }}
+          YTDLP_VERSION: ${{ steps.package.outputs['yt-dlp-version'] }}
+          YTDLP_SHA256: ${{ steps.package.outputs['yt-dlp-sha256'] }}
+          YTDLP_SIZE: ${{ steps.package.outputs['yt-dlp-size'] }}
+          ARCHIVE_SHA256: ${{ steps.package.outputs['archive-sha256'] }}
+          ARCHIVE_SIZE: ${{ steps.package.outputs['archive-size'] }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $name = "$env:EXPECTED_ARCHIVE_NAME"
+          if ($name.Length -gt 160 -or
+              $name -cnotmatch '^LLPlayer-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-x64\.7z$') {
+            throw "Unexpected Stable archive name."
+          }
+
+          $archivePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $name))
+          $archive = Get-Item -LiteralPath $archivePath -ErrorAction Stop
+          if ($archive.PSIsContainer -or
+              (($archive.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+              $archive.Length -le 0) {
+            throw "Stable package must be one non-empty regular archive."
+          }
+
+          $ytDlpVersion = "$env:YTDLP_VERSION".Trim()
+          $ytDlpSha256 = "$env:YTDLP_SHA256".Trim()
+          $ytDlpSize = "$env:YTDLP_SIZE".Trim()
+          $archiveSha256 = "$env:ARCHIVE_SHA256".Trim()
+          $archiveSize = "$env:ARCHIVE_SIZE".Trim()
+          if ($ytDlpVersion.Length -gt 64 -or
+              $ytDlpVersion -cnotmatch '^[0-9A-Za-z._-]+$' -or
+              $ytDlpVersion.Contains("..")) {
+            throw "Package action returned an invalid yt-dlp version."
+          }
+          if ($ytDlpSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+              $archiveSha256 -cnotmatch '^[0-9a-f]{64}$') {
+            throw "Package action returned an invalid SHA-256 value."
+          }
+          if ($ytDlpSize -cnotmatch '^[1-9][0-9]*$' -or
+              $archiveSize -cnotmatch '^[1-9][0-9]*$') {
+            throw "Package action returned an invalid file size."
+          }
+
+          $actualArchiveSha256 = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (-not [string]::Equals($actualArchiveSha256, $archiveSha256, [System.StringComparison]::Ordinal) -or
+              -not [string]::Equals("$($archive.Length)", $archiveSize, [System.StringComparison]::Ordinal)) {
+            throw "Package action archive evidence does not match the produced file."
+          }
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT,
+            "yt_dlp_version=$ytDlpVersion$([Environment]::NewLine)yt_dlp_sha256=$ytDlpSha256$([Environment]::NewLine)yt_dlp_size=$ytDlpSize$([Environment]::NewLine)archive_sha256=$archiveSha256$([Environment]::NewLine)archive_size=$archiveSize$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_STEP_SUMMARY,
+            "### Stable package evidence$([Environment]::NewLine)- archive: ``$name``$([Environment]::NewLine)- archive SHA-256: ``$archiveSha256``$([Environment]::NewLine)- archive bytes: ``$archiveSize``$([Environment]::NewLine)- yt-dlp: ``$ytDlpVersion``$([Environment]::NewLine)- yt-dlp SHA-256: ``$ytDlpSha256``$([Environment]::NewLine)- yt-dlp bytes: ``$ytDlpSize``$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
+
+      - name: Upload unverified stable artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: "${{ github.ref_name }}"
-          draft: true # created as draft, later published manually
-          prerelease: false
-          files: ${{ env.ARCHIVE_NAME }}
+          name: llplayer-stable-release-unverified
+          path: ${{ needs.prepare.outputs.archive_name }}
+          if-no-files-found: error
+          overwrite: false
+          compression-level: 0
+          include-hidden-files: false
+          retention-days: 1
+
+  verify:
+    needs: [prepare, build]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      yt_dlp_version: ${{ steps.verified-evidence.outputs.yt_dlp_version }}
+      yt_dlp_sha256: ${{ steps.verified-evidence.outputs.yt_dlp_sha256 }}
+      yt_dlp_size: ${{ steps.verified-evidence.outputs.yt_dlp_size }}
+      archive_sha256: ${{ steps.verified-evidence.outputs.archive_sha256 }}
+      archive_size: ${{ steps.verified-evidence.outputs.archive_size }}
+
+    steps:
+      - name: Download unverified stable artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: llplayer-stable-release-unverified
+          path: ${{ runner.temp }}\llplayer-stable-release-unverified
+          digest-mismatch: error
+
+      - name: Validate stable package and evidence
+        id: verified-evidence
+        shell: pwsh
+        env:
+          EXPECTED_ARCHIVE_NAME: ${{ needs.prepare.outputs.archive_name }}
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-stable-release-unverified
+          EXPECTED_YTDLP_VERSION: ${{ needs.build.outputs.yt_dlp_version }}
+          EXPECTED_YTDLP_SHA256: ${{ needs.build.outputs.yt_dlp_sha256 }}
+          EXPECTED_YTDLP_SIZE: ${{ needs.build.outputs.yt_dlp_size }}
+          EXPECTED_ARCHIVE_SHA256: ${{ needs.build.outputs.archive_sha256 }}
+          EXPECTED_ARCHIVE_SIZE: ${{ needs.build.outputs.archive_size }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $name = "$env:EXPECTED_ARCHIVE_NAME"
+          if ($name.Length -gt 160 -or
+              $name -cnotmatch '^LLPlayer-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-x64\.7z$') {
+            throw "Unexpected release archive name."
+          }
+
+          $root = [System.IO.Path]::GetFullPath("$env:ARTIFACT_DIRECTORY")
+          if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+            throw "Downloaded artifact directory is missing."
+          }
+          $entries = @(Get-ChildItem -LiteralPath $root -Force)
+          if ($entries.Count -ne 1) {
+            throw "Artifact must contain exactly one direct entry."
+          }
+
+          $file = $entries[0]
+          if ($file.PSIsContainer -or
+              (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+              $file.Length -le 0) {
+            throw "Artifact entry must be one non-empty regular file."
+          }
+          if (-not [string]::Equals($file.Name, $name, [System.StringComparison]::Ordinal)) {
+            throw "Downloaded archive name does not match the trusted release metadata."
+          }
+
+          $expectedPath = [System.IO.Path]::GetFullPath((Join-Path $root $name))
+          if (-not [string]::Equals(
+              $file.FullName,
+              $expectedPath,
+              [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Downloaded archive escaped the fixed artifact directory."
+          }
+
+          $ytDlpVersion = "$env:EXPECTED_YTDLP_VERSION".Trim()
+          $ytDlpSha256 = "$env:EXPECTED_YTDLP_SHA256".Trim()
+          $ytDlpSize = "$env:EXPECTED_YTDLP_SIZE".Trim()
+          $archiveSha256 = "$env:EXPECTED_ARCHIVE_SHA256".Trim()
+          $archiveSize = "$env:EXPECTED_ARCHIVE_SIZE".Trim()
+          if ($ytDlpVersion.Length -gt 64 -or
+              $ytDlpVersion -cnotmatch '^[0-9A-Za-z._-]+$' -or
+              $ytDlpVersion.Contains("..") -or
+              $ytDlpSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+              $archiveSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+              $ytDlpSize -cnotmatch '^[1-9][0-9]*$' -or
+              $archiveSize -cnotmatch '^[1-9][0-9]*$') {
+            throw "Selected-code package evidence is malformed."
+          }
+
+          $actualArchiveSha256 = (Get-FileHash -LiteralPath $expectedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (-not [string]::Equals($actualArchiveSha256, $archiveSha256, [System.StringComparison]::Ordinal) -or
+              -not [string]::Equals("$($file.Length)", $archiveSize, [System.StringComparison]::Ordinal)) {
+            throw "Archive evidence does not match the downloaded artifact."
+          }
+
+          $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+          if (-not (Test-Path -LiteralPath $sevenZip -PathType Leaf)) {
+            throw "Trusted 7-Zip executable is missing from the GitHub-hosted runner."
+          }
+          & "$sevenZip" t "$expectedPath"
+          if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip archive integrity test failed with exit code $LASTEXITCODE."
+          }
+
+          $extractRoot = Join-Path "$env:RUNNER_TEMP" "llplayer-stable-yt-dlp-evidence"
+          if (Test-Path -LiteralPath $extractRoot) {
+            throw "Trusted yt-dlp evidence directory already exists."
+          }
+          $null = New-Item -ItemType Directory -Path $extractRoot
+          & "$sevenZip" e "$expectedPath" "Plugins\YoutubeDL\yt-dlp.exe" "-o$extractRoot" -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not extract yt-dlp.exe for trusted evidence verification."
+          }
+          $extracted = @(Get-ChildItem -LiteralPath $extractRoot -Force)
+          if ($extracted.Count -ne 1 -or
+              $extracted[0].PSIsContainer -or
+              (($extracted[0].Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+              -not [string]::Equals($extracted[0].Name, "yt-dlp.exe", [System.StringComparison]::Ordinal) -or
+              $extracted[0].Length -le 0) {
+            throw "Trusted extraction must produce exactly one regular yt-dlp.exe."
+          }
+          $actualYtDlpSha256 = (Get-FileHash -LiteralPath $extracted[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (-not [string]::Equals($actualYtDlpSha256, $ytDlpSha256, [System.StringComparison]::Ordinal) -or
+              -not [string]::Equals("$($extracted[0].Length)", $ytDlpSize, [System.StringComparison]::Ordinal)) {
+            throw "yt-dlp evidence does not match the tested archive."
+          }
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT,
+            "path=$expectedPath$([Environment]::NewLine)yt_dlp_version=$ytDlpVersion$([Environment]::NewLine)yt_dlp_sha256=$ytDlpSha256$([Environment]::NewLine)yt_dlp_size=$ytDlpSize$([Environment]::NewLine)archive_sha256=$archiveSha256$([Environment]::NewLine)archive_size=$archiveSize$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_STEP_SUMMARY,
+            "### Trusted Stable verification$([Environment]::NewLine)- ``7z t``: PASS$([Environment]::NewLine)- archive SHA-256: ``$archiveSha256``$([Environment]::NewLine)- archive bytes: ``$archiveSize``$([Environment]::NewLine)- yt-dlp: ``$ytDlpVersion``$([Environment]::NewLine)- yt-dlp SHA-256: ``$ytDlpSha256``$([Environment]::NewLine)- yt-dlp bytes: ``$ytDlpSize``$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
+
+      - name: Upload verified stable artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: llplayer-stable-release-verified
+          path: ${{ steps.verified-evidence.outputs.path }}
+          if-no-files-found: error
+          overwrite: false
+          compression-level: 0
+          include-hidden-files: false
+          retention-days: 1
+
+  publish:
+    needs: [prepare, verify]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download verified stable artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: llplayer-stable-release-verified
+          path: ${{ runner.temp }}\llplayer-stable-release-verified
+          digest-mismatch: error
+
+      - name: Validate verified artifact for publication
+        id: release-asset
+        shell: pwsh
+        env:
+          EXPECTED_ARCHIVE_NAME: ${{ needs.prepare.outputs.archive_name }}
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-stable-release-verified
+          EXPECTED_ARCHIVE_SHA256: ${{ needs.verify.outputs.archive_sha256 }}
+          EXPECTED_ARCHIVE_SIZE: ${{ needs.verify.outputs.archive_size }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $name = "$env:EXPECTED_ARCHIVE_NAME"
+          if ($name.Length -gt 160 -or
+              $name -cnotmatch '^LLPlayer-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-x64\.7z$') {
+            throw "Unexpected verified archive name."
+          }
+
+          $root = [System.IO.Path]::GetFullPath("$env:ARTIFACT_DIRECTORY")
+          if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+            throw "Verified artifact directory is missing."
+          }
+          $entries = @(Get-ChildItem -LiteralPath $root -Force)
+          if ($entries.Count -ne 1) {
+            throw "Verified artifact must contain exactly one direct entry."
+          }
+
+          $file = $entries[0]
+          if ($file.PSIsContainer -or
+              (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+              $file.Length -le 0) {
+            throw "Verified artifact entry must be one non-empty regular file."
+          }
+          if (-not [string]::Equals($file.Name, $name, [System.StringComparison]::Ordinal)) {
+            throw "Verified archive name does not match trusted metadata."
+          }
+
+          $expectedPath = [System.IO.Path]::GetFullPath((Join-Path $root $name))
+          if (-not [string]::Equals(
+              $file.FullName,
+              $expectedPath,
+              [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Verified archive escaped the fixed artifact directory."
+          }
+
+          $expectedSha256 = "$env:EXPECTED_ARCHIVE_SHA256".Trim()
+          $expectedSize = "$env:EXPECTED_ARCHIVE_SIZE".Trim()
+          if ($expectedSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+              $expectedSize -cnotmatch '^[1-9][0-9]*$') {
+            throw "Trusted verification evidence is malformed."
+          }
+          $actualSha256 = (Get-FileHash -LiteralPath $expectedPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (-not [string]::Equals($actualSha256, $expectedSha256, [System.StringComparison]::Ordinal) -or
+              -not [string]::Equals("$($file.Length)", $expectedSize, [System.StringComparison]::Ordinal)) {
+            throw "Verified archive hash or size changed before publication."
+          }
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_OUTPUT,
+            "path=$expectedPath$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))
+
+      - name: Create immutable tag and draft release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+          APPROVED_COMMIT_SHA: ${{ needs.prepare.outputs.commit_sha }}
+          APPROVED_RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          ARCHIVE_PATH: ${{ steps.release-asset.outputs.path }}
+          ARCHIVE_SHA256: ${{ needs.verify.outputs.archive_sha256 }}
+          ARCHIVE_SIZE: ${{ needs.verify.outputs.archive_size }}
+          YTDLP_VERSION: ${{ needs.verify.outputs.yt_dlp_version }}
+          YTDLP_SHA256: ${{ needs.verify.outputs.yt_dlp_sha256 }}
+          YTDLP_SIZE: ${{ needs.verify.outputs.yt_dlp_size }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          if (-not "$env:GH_TOKEN") {
+            throw "GitHub write token is missing."
+          }
+
+          $commitSha = "$env:APPROVED_COMMIT_SHA".Trim()
+          $releaseTag = "$env:APPROVED_RELEASE_TAG".Trim()
+          $archivePath = [System.IO.Path]::GetFullPath("$env:ARCHIVE_PATH")
+          $archiveSha256 = "$env:ARCHIVE_SHA256".Trim()
+          $archiveSize = "$env:ARCHIVE_SIZE".Trim()
+          $ytDlpVersion = "$env:YTDLP_VERSION".Trim()
+          $ytDlpSha256 = "$env:YTDLP_SHA256".Trim()
+          $ytDlpSize = "$env:YTDLP_SIZE".Trim()
+          if ($commitSha -cnotmatch '^[0-9a-f]{40}$' -or
+              $releaseTag -cnotmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' -or
+              $archiveSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+              $archiveSize -cnotmatch '^[1-9][0-9]*$' -or
+              $ytDlpVersion -cnotmatch '^[0-9A-Za-z._-]+$' -or
+              $ytDlpSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+              $ytDlpSize -cnotmatch '^[1-9][0-9]*$') {
+            throw "Trusted Stable publication metadata is malformed."
+          }
+          if (-not (Test-Path -LiteralPath $archivePath -PathType Leaf)) {
+            throw "Verified Stable archive is missing before publication."
+          }
+
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+            "User-Agent" = "LLPlayer-stable-release"
+          }
+
+          function Invoke-GitHubRequest(
+              [string]$Uri,
+              [ValidateSet("Get", "Post")][string]$Method,
+              [object]$Body = $null,
+              [string]$InFile = $null,
+              [string]$ContentType = "application/vnd.github+json") {
+            $parameters = @{
+              Uri = $Uri
+              Headers = $headers
+              Method = $Method
+              SkipHttpErrorCheck = $true
+              StatusCodeVariable = "responseStatus"
+            }
+            if ($null -ne $Body) {
+              $parameters.Body = ($Body | ConvertTo-Json -Depth 8 -Compress)
+              $parameters.ContentType = $ContentType
+            }
+            if ($InFile) {
+              $parameters.InFile = $InFile
+              $parameters.ContentType = $ContentType
+            }
+            $response = Invoke-RestMethod @parameters
+            return [pscustomobject]@{
+              Status = [int]$responseStatus
+              Body = $response
+            }
+          }
+
+          $repoUri = "https://api.github.com/repos/$env:RELEASE_REPOSITORY"
+          $encodedTag = [System.Uri]::EscapeDataString($releaseTag)
+
+          $tagCheck = Invoke-GitHubRequest -Uri "$repoUri/git/ref/tags/$encodedTag" -Method Get
+          if ($tagCheck.Status -eq 200) {
+            throw "Stable tag already exists; refusing to move or replace it."
+          }
+          if ($tagCheck.Status -ne 404) {
+            throw "Stable tag absence check failed with HTTP $($tagCheck.Status)."
+          }
+
+          $releaseCheck = Invoke-GitHubRequest -Uri "$repoUri/releases/tags/$encodedTag" -Method Get
+          if ($releaseCheck.Status -eq 200) {
+            throw "Stable Release already exists; refusing to replace it."
+          }
+          if ($releaseCheck.Status -ne 404) {
+            throw "Stable Release absence check failed with HTTP $($releaseCheck.Status)."
+          }
+
+          $tagBody = @{
+            ref = "refs/tags/$releaseTag"
+            sha = $commitSha
+          }
+          $tagCreate = Invoke-GitHubRequest -Uri "$repoUri/git/refs" -Method Post -Body $tagBody
+          if ($tagCreate.Status -ne 201) {
+            throw "Immutable Stable tag creation failed or raced with HTTP $($tagCreate.Status)."
+          }
+          if (-not [string]::Equals($tagCreate.Body.ref, "refs/tags/$releaseTag", [System.StringComparison]::Ordinal) -or
+              -not [string]::Equals($tagCreate.Body.object.sha.ToLowerInvariant(), $commitSha, [System.StringComparison]::Ordinal)) {
+            throw "Created Stable tag does not match the approved ref and commit."
+          }
+
+          $tagReadback = Invoke-GitHubRequest -Uri "$repoUri/git/ref/tags/$encodedTag" -Method Get
+          if ($tagReadback.Status -ne 200 -or
+              -not [string]::Equals($tagReadback.Body.ref, "refs/tags/$releaseTag", [System.StringComparison]::Ordinal) -or
+              -not [string]::Equals($tagReadback.Body.object.sha.ToLowerInvariant(), $commitSha, [System.StringComparison]::Ordinal)) {
+            throw "Initial tag readback does not match the approved commit."
+          }
+
+          $releaseNotes = @"
+          Controlled Stable draft created from verified commit ``$commitSha``.
+
+          - Archive SHA-256: ``$archiveSha256``
+          - Archive bytes: ``$archiveSize``
+          - yt-dlp version: ``$ytDlpVersion``
+          - yt-dlp SHA-256: ``$ytDlpSha256``
+          - yt-dlp bytes: ``$ytDlpSize``
+
+          This workflow never publishes the draft automatically.
+          "@
+          $releaseBody = @{
+            tag_name = $releaseTag
+            target_commitish = $commitSha
+            name = $releaseTag
+            body = $releaseNotes
+            draft = $true
+            prerelease = $false
+            generate_release_notes = $false
+            make_latest = "false"
+          }
+          $releaseCreate = Invoke-GitHubRequest -Uri "$repoUri/releases" -Method Post -Body $releaseBody
+          if ($releaseCreate.Status -ne 201) {
+            throw "Draft Stable Release creation failed or raced with HTTP $($releaseCreate.Status). The immutable tag is intentionally left in place."
+          }
+          if (-not $releaseCreate.Body.draft -or
+              $releaseCreate.Body.prerelease -or
+              -not [string]::Equals($releaseCreate.Body.tag_name, $releaseTag, [System.StringComparison]::Ordinal)) {
+            throw "GitHub did not create the requested draft-only Stable Release."
+          }
+
+          $uploadBase = "$($releaseCreate.Body.upload_url)".Split('{')[0]
+          $assetName = [System.Uri]::EscapeDataString([System.IO.Path]::GetFileName($archivePath))
+          $assetUpload = Invoke-GitHubRequest `
+            -Uri "$uploadBase`?name=$assetName" `
+            -Method Post `
+            -InFile $archivePath `
+            -ContentType "application/x-7z-compressed"
+          if ($assetUpload.Status -ne 201) {
+            throw "Stable asset upload failed with HTTP $($assetUpload.Status). The draft and immutable tag are intentionally left in place."
+          }
+          if (-not [string]::Equals($assetUpload.Body.name, [System.IO.Path]::GetFileName($archivePath), [System.StringComparison]::Ordinal) -or
+              -not [string]::Equals("$($assetUpload.Body.size)", $archiveSize, [System.StringComparison]::Ordinal)) {
+            throw "Uploaded Stable asset metadata does not match the verified archive."
+          }
+          if ($assetUpload.Body.digest -and
+              -not [string]::Equals($assetUpload.Body.digest, "sha256:$archiveSha256", [System.StringComparison]::Ordinal)) {
+            throw "Uploaded Stable asset digest does not match the verified archive."
+          }
+
+          $expectedRemoteDigest = "sha256:$archiveSha256"
+          $verifiedRelease = $null
+          for ($attempt = 1; $attempt -le 6; $attempt++) {
+            $releaseReadback = Invoke-GitHubRequest -Uri "$repoUri/releases/$($releaseCreate.Body.id)" -Method Get
+            if ($releaseReadback.Status -ne 200 -or
+                -not $releaseReadback.Body.draft -or
+                $releaseReadback.Body.prerelease -or
+                -not [string]::Equals($releaseReadback.Body.tag_name, $releaseTag, [System.StringComparison]::Ordinal)) {
+              throw "Draft release readback failed."
+            }
+
+            $finalTagReadback = Invoke-GitHubRequest -Uri "$repoUri/git/ref/tags/$encodedTag" -Method Get
+            if ($finalTagReadback.Status -ne 200 -or
+                -not [string]::Equals($finalTagReadback.Body.object.sha.ToLowerInvariant(), $commitSha, [System.StringComparison]::Ordinal)) {
+              throw "Tag readback no longer matches the approved commit."
+            }
+
+            $releaseAssets = @($releaseReadback.Body.assets)
+            if ($releaseAssets.Count -gt 1) {
+              throw "Draft release contains more than the one expected Stable asset."
+            }
+            if ($releaseAssets.Count -eq 1) {
+              if (-not [string]::Equals($releaseAssets[0].name, [System.IO.Path]::GetFileName($archivePath), [System.StringComparison]::Ordinal) -or
+                  -not [string]::Equals("$($releaseAssets[0].size)", $archiveSize, [System.StringComparison]::Ordinal)) {
+                throw "Draft release Stable asset name or size does not match verified evidence."
+              }
+              if ($releaseAssets[0].digest) {
+                if (-not [string]::Equals($releaseAssets[0].digest, $expectedRemoteDigest, [System.StringComparison]::Ordinal)) {
+                  throw "Draft release asset digest does not match the verified archive."
+                }
+                $verifiedRelease = $releaseReadback.Body
+                break
+              }
+            }
+
+            if ($attempt -lt 6) {
+              Start-Sleep -Seconds 5
+            }
+          }
+          if ($null -eq $verifiedRelease) {
+            throw "Draft release never exposed the required SHA-256 asset digest."
+          }
+
+          [System.IO.File]::AppendAllText(
+            $env:GITHUB_STEP_SUMMARY,
+            "### Stable draft created$([Environment]::NewLine)- tag: ``$releaseTag``$([Environment]::NewLine)- commit: ``$commitSha``$([Environment]::NewLine)- draft URL: $($verifiedRelease.html_url)$([Environment]::NewLine)- archive SHA-256: ``$archiveSha256``$([Environment]::NewLine)- yt-dlp: ``$ytDlpVersion`` / ``$ytDlpSha256``$([Environment]::NewLine)",
+            [System.Text.UTF8Encoding]::new($false))

@@ -2,701 +2,369 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $workflowPath = Join-Path $repoRoot ".github\workflows\testing-release.yml"
+$expectedWorkflowSha256 = "dc15f8089953e59242caad7582edbff4009674d6d04c24278612d1391c797624"
 
 function Normalize-Text([string]$Text) {
     return (($Text -replace "`r`n", "`n") -replace "`r", "`n").TrimEnd("`n")
 }
 
-function Get-UniqueLineIndex(
-    [string[]]$Lines,
-    [string]$Pattern,
+function Get-TextSha256([string]$Text) {
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes((Normalize-Text $Text))
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha.ComputeHash($bytes)
+        return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
+function Require-LiteralCount(
+    [string]$Text,
+    [string]$Literal,
+    [int]$ExpectedCount,
     [string]$Description,
     [string]$Source
 ) {
-    $indices = @()
-    for ($index = 0; $index -lt $Lines.Count; $index++) {
-        if ($Lines[$index] -cmatch $Pattern) {
-            $indices += $index
-        }
-    }
-    if ($indices.Count -ne 1) {
-        throw "$Source must contain exactly one $Description; found $($indices.Count)."
-    }
-    return [int]$indices[0]
-}
-
-function Get-MappingKey([string]$Line, [int]$Indent) {
-    $actualIndent = $Line.Length - $Line.TrimStart().Length
-    if ($actualIndent -ne $Indent) {
-        return $null
-    }
-
-    $trimmed = $Line.Trim()
-    if (-not $trimmed -or
-        $trimmed.StartsWith("#", [System.StringComparison]::Ordinal) -or
-        $trimmed.StartsWith("- ", [System.StringComparison]::Ordinal)) {
-        return $null
-    }
-
-    $colonIndex = $trimmed.IndexOf(':')
-    if ($colonIndex -lt 1) {
-        throw "Protected release workflow structure must use canonical mapping syntax; found '$trimmed'."
-    }
-
-    $key = $trimmed.Substring(0, $colonIndex).Trim()
-    if ($key -cnotmatch '^[A-Za-z0-9_-]+$') {
-        throw "Protected release workflow keys must use canonical unquoted syntax; found '$key'."
-    }
-    return $key
-}
-
-function Get-UniqueBlockKeyIndex(
-    [string[]]$Lines,
-    [int]$Indent,
-    [string]$Key,
-    [string]$Description,
-    [string]$Source
-) {
-    $indices = @()
-    for ($index = 0; $index -lt $Lines.Count; $index++) {
-        $lineKey = Get-MappingKey $Lines[$index] $Indent
-        if ([string]::Equals($lineKey, $Key, [System.StringComparison]::Ordinal)) {
-            $indices += $index
-        }
-    }
-    if ($indices.Count -ne 1) {
-        throw "$Source must contain exactly one $Description; found $($indices.Count)."
-    }
-
-    $trimmed = $Lines[$indices[0]].Trim()
-    $remainder = $trimmed.Substring($trimmed.IndexOf(':') + 1).Trim()
-    if ($remainder -and -not $remainder.StartsWith("#", [System.StringComparison]::Ordinal)) {
-        throw "$Source $Description must use a canonical block mapping."
-    }
-    return [int]$indices[0]
-}
-
-function Get-BlockLines(
-    [string[]]$Lines,
-    [int]$Indent,
-    [string]$Key,
-    [string]$Description,
-    [string]$Source
-) {
-    $start = Get-UniqueBlockKeyIndex $Lines $Indent $Key $Description $Source
-    $end = $Lines.Count
-    for ($index = $start + 1; $index -lt $Lines.Count; $index++) {
-        $nextKey = Get-MappingKey $Lines[$index] $Indent
-        if ($null -ne $nextKey) {
-            $end = $index
+    $count = 0
+    $offset = 0
+    while ($offset -le $Text.Length - $Literal.Length) {
+        $index = $Text.IndexOf($Literal, $offset, [System.StringComparison]::Ordinal)
+        if ($index -lt 0) {
             break
         }
+        $count++
+        $offset = $index + $Literal.Length
     }
-    if ($end -le $start + 1) {
-        throw "$Source $Description must not be empty."
+    if ($count -ne $ExpectedCount) {
+        throw "$Source must contain exactly $ExpectedCount $Description; found $count."
     }
-    return @($Lines[($start + 1)..($end - 1)])
 }
 
-function Assert-AllowedMappingKeys(
-    [string[]]$Lines,
-    [int]$Indent,
-    [string[]]$AllowedKeys,
+function Forbid-Literal(
+    [string]$Text,
+    [string]$Literal,
     [string]$Description,
     [string]$Source
 ) {
-    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-    foreach ($line in $Lines) {
-        $key = Get-MappingKey $line $Indent
-        if ($null -eq $key) {
-            continue
-        }
-
-        $allowed = @($AllowedKeys | Where-Object {
-            [string]::Equals($_, $key, [System.StringComparison]::Ordinal)
-        }).Count -eq 1
-        if (-not $allowed) {
-            throw "$Source $Description contains forbidden or unexpected key '$key'."
-        }
-        if (-not $seen.Add($key)) {
-            throw "$Source $Description contains duplicate key '$key'."
-        }
+    if ($Text.Contains($Literal)) {
+        throw "$Source contains forbidden $Description."
     }
 }
 
-function Require-ExactLine(
-    [string[]]$Lines,
-    [string]$Expected,
+function Assert-ExactUsesMultiset(
+    [string]$Text,
+    [string[]]$ExpectedUses,
     [string]$Description,
     [string]$Source
 ) {
-    $count = @($Lines | Where-Object {
-        [string]::Equals($_, $Expected, [System.StringComparison]::Ordinal)
-    }).Count
-    if ($count -ne 1) {
-        throw "$Source $Description; expected exact line '$Expected', found $count."
-    }
-}
-
-function Assert-ExactMappingBlock(
-    [string[]]$Lines,
-    [int]$ParentIndent,
-    [string]$Key,
-    [string[]]$ExpectedLines,
-    [string]$Description,
-    [string]$Source
-) {
-    $block = Get-BlockLines $Lines $ParentIndent $Key $Description $Source
-    $childIndent = $ParentIndent + 2
-    $allowedKeys = New-Object System.Collections.Generic.List[string]
-    foreach ($expectedLine in $ExpectedLines) {
-        $expectedKey = Get-MappingKey $expectedLine $childIndent
-        if ($null -eq $expectedKey) {
-            throw "Validator fixture error: '$expectedLine' is not a canonical mapping line."
+    $matches = [System.Text.RegularExpressions.Regex]::Matches(
+        $Text,
+        '(?m)(?:^|[,{]|^[ \t]*-[ \t]*)[ \t]*(?:uses|"uses"|''uses'')[ \t]*:[ \t]*(?<value>[^,}\r\n]+?)[ \t]*(?=,|}|$)')
+    $actualUses = @(
+        foreach ($match in $matches) {
+            $match.Groups['value'].Value.Trim()
         }
-        $allowedKeys.Add($expectedKey)
-        Require-ExactLine $block $expectedLine "$Description must keep '$expectedKey'" $Source
+    )
+    $actualSorted = @($actualUses | Sort-Object -CaseSensitive)
+    $expectedSorted = @($ExpectedUses | Sort-Object -CaseSensitive)
+    if ($actualSorted.Count -ne $expectedSorted.Count) {
+        throw "$Source must match the $Description; expected $($expectedSorted.Count) uses entries, found $($actualSorted.Count)."
     }
-    Assert-AllowedMappingKeys $block $childIndent $allowedKeys.ToArray() $Description $Source
-    return $block
-}
-
-function Get-NamedStep(
-    [string[]]$StepLines,
-    [string]$Name,
-    [string]$JobName,
-    [string]$Source
-) {
-    $marker = "      - name: $Name"
-    $indices = @()
-    for ($index = 0; $index -lt $StepLines.Count; $index++) {
-        if ([string]::Equals($StepLines[$index], $marker, [System.StringComparison]::Ordinal)) {
-            $indices += $index
-        }
-    }
-    if ($indices.Count -ne 1) {
-        throw "$Source jobs.$JobName must contain exactly one '$Name' step; found $($indices.Count)."
-    }
-
-    $start = [int]$indices[0]
-    $end = $StepLines.Count
-    for ($index = $start + 1; $index -lt $StepLines.Count; $index++) {
-        if ($StepLines[$index] -cmatch '^      - ') {
-            $end = $index
-            break
-        }
-    }
-    return @($StepLines[$start..($end - 1)])
-}
-
-function Assert-StepOrder(
-    [string[]]$StepLines,
-    [string[]]$ExpectedNames,
-    [string]$JobName,
-    [string]$Source
-) {
-    $actualNames = New-Object System.Collections.Generic.List[string]
-    foreach ($line in $StepLines) {
-        $indent = $line.Length - $line.TrimStart().Length
-        if ($indent -ne 6 -or -not $line.TrimStart().StartsWith("- ", [System.StringComparison]::Ordinal)) {
-            continue
-        }
-        if ($line -cnotmatch '^      - name:\s*(.+?)\s*$') {
-            throw "$Source jobs.$JobName.steps contains an anonymous or non-canonical step: '$($line.Trim())'."
-        }
-        $actualNames.Add($Matches[1])
-    }
-
-    if ($actualNames.Count -ne $ExpectedNames.Count) {
-        throw "$Source jobs.$JobName.steps must contain exactly $($ExpectedNames.Count) named steps; found $($actualNames.Count)."
-    }
-    for ($index = 0; $index -lt $ExpectedNames.Count; $index++) {
+    for ($index = 0; $index -lt $expectedSorted.Count; $index++) {
         if (-not [string]::Equals(
-            $actualNames[$index],
-            $ExpectedNames[$index],
-            [System.StringComparison]::Ordinal)) {
-            throw "$Source jobs.$JobName.steps has unexpected order at position $($index + 1): '$($actualNames[$index])'."
+                $actualSorted[$index],
+                $expectedSorted[$index],
+                [System.StringComparison]::Ordinal)) {
+            throw "$Source must match the $Description; unexpected uses entry '$($actualSorted[$index])'."
         }
     }
 }
 
-function Assert-ExactBlockScalar(
-    [string[]]$Lines,
-    [int]$KeyIndent,
-    [string]$Key,
-    [string]$ExpectedBody,
-    [string]$Description,
-    [string]$Source
-) {
-    $indices = @()
-    for ($index = 0; $index -lt $Lines.Count; $index++) {
-        $lineKey = Get-MappingKey $Lines[$index] $KeyIndent
-        if ([string]::Equals($lineKey, $Key, [System.StringComparison]::Ordinal)) {
-            $indices += $index
+function Assert-CanonicalActionSyntax([string]$Text, [string]$Source) {
+    $forbiddenPatterns = @(
+        @{
+            Pattern = '(?m)^ {0,4}[A-Za-z0-9_.-]+[ \t]*:[ \t]*[|>][0-9+-]*[ \t]*(?:#[^\r\n]*)?$'
+            Description = 'workflow or job block scalar'
+        },
+        @{
+            Pattern = '(?m)^ {0,4}[A-Za-z0-9_.-]+[ \t]*:[ \t]*"(?:(?:\\.)|[^"\\])*(?:\\)?[ \t]*$'
+            Description = 'multiline double-quoted workflow or job scalar'
+        },
+        @{
+            Pattern = '(?m)^ {0,4}[A-Za-z0-9_.-]+[ \t]*:[ \t]*''(?:''''|[^''])*[ \t]*$'
+            Description = 'multiline single-quoted workflow or job scalar'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*-[ \t]*(?:#[^\r\n]*)?$'
+            Description = 'bare step declaration with deep-indented child mappings'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*-[ \t]*[\{\[\?&*!"''<]'
+            Description = 'flow, explicit, anchored, aliased, or tagged step declaration'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*(?:"[^\r\n]*"|''[^\r\n]*'')[ \t]*:'
+            Description = 'quoted or escaped workflow key'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*(?:\?[ \t]*(?:#[^\r\n]*)?$|\?[ \t]+[^\r\n]+|<<[ \t]*:)'
+            Description = 'explicit or merged workflow key'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*(?:&[^ \t\r\n,\[\]\{\}]+[ \t]+[^:\r\n]+|\*[^ \t\r\n,\[\]\{\}]+[ \t]*):'
+            Description = 'anchored or aliased workflow key'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*![^\r\n:]*[ \t]+[^\r\n:]+:'
+            Description = 'tagged workflow key'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*[A-Za-z0-9_.-]+[ \t]*:[ \t]*[&*!]'
+            Description = 'anchored, aliased, or tagged workflow value'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*[A-Za-z0-9_.-]+[ \t]*:[ \t]*\{[ \t]*[^}\r\n \t]'
+            Description = 'flow-style workflow mapping value'
+        },
+        @{
+            Pattern = '(?m)^[ \t]*steps[ \t]*:[ \t]*\['
+            Description = 'flow-style steps sequence'
         }
-    }
-    if ($indices.Count -ne 1) {
-        throw "$Source must contain exactly one $Description block scalar; found $($indices.Count)."
-    }
-
-    $start = [int]$indices[0]
-    if (-not [string]::Equals($Lines[$start].Trim(), "$Key`: |", [System.StringComparison]::Ordinal)) {
-        throw "$Source $Description must use the canonical '$Key`: |' form."
-    }
-
-    $end = $Lines.Count
-    for ($index = $start + 1; $index -lt $Lines.Count; $index++) {
-        $nextKey = Get-MappingKey $Lines[$index] $KeyIndent
-        if ($null -ne $nextKey) {
-            $end = $index
-            break
+    )
+    foreach ($entry in $forbiddenPatterns) {
+        if ([System.Text.RegularExpressions.Regex]::IsMatch($Text, $entry.Pattern)) {
+            throw "$Source contains forbidden noncanonical action syntax: $($entry.Description)."
         }
-    }
-    if ($end -le $start + 1) {
-        throw "$Source $Description must not be empty."
-    }
-
-    $contentIndent = $KeyIndent + 2
-    $bodyLines = New-Object System.Collections.Generic.List[string]
-    foreach ($line in $Lines[($start + 1)..($end - 1)]) {
-        if (-not $line.Trim()) {
-            $bodyLines.Add("")
-            continue
-        }
-        $indent = $line.Length - $line.TrimStart().Length
-        if ($indent -lt $contentIndent) {
-            throw "$Source $Description contains a line outside its block scalar."
-        }
-        $bodyLines.Add($line.Substring($contentIndent))
-    }
-
-    $actualBody = Normalize-Text ($bodyLines -join "`n")
-    $normalizedExpected = Normalize-Text $ExpectedBody
-    if (-not [string]::Equals($actualBody, $normalizedExpected, [System.StringComparison]::Ordinal)) {
-        throw "$Source $Description body drifted from the reviewed trusted implementation."
     }
 }
 
-function Assert-ShellStep(
-    [string[]]$Step,
-    [string[]]$AllowedKeys,
-    [string]$Description,
-    [string]$Source
-) {
-    Assert-AllowedMappingKeys $Step 8 $AllowedKeys $Description $Source
-    Require-ExactLine $Step "        shell: pwsh" "$Description must use pwsh" $Source
+function Assert-TestingReleaseSemantics([string]$Text, [string]$Source) {
+    $normalized = Normalize-Text $Text
+    Require-LiteralCount $normalized "name: Testing Release" 1 "workflow name" $Source
+    Require-LiteralCount $normalized "  workflow_dispatch:" 1 "manual trigger" $Source
+    Require-LiteralCount $normalized "  group: testing-release" 1 "serialized release concurrency group" $Source
+    Require-LiteralCount $normalized "  cancel-in-progress: false" 1 "non-cancelling release concurrency policy" $Source
+    Require-LiteralCount $normalized "        description: 'Lowercase full 40-character commit SHA'" 1 "immutable lowercase input description" $Source
+    Require-LiteralCount $normalized '          WORKFLOW_REF: ${{ github.ref }}' 1 "trusted workflow ref input" $Source
+    Require-LiteralCount $normalized '          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}' 1 "default-branch identity input" $Source
+    Require-LiteralCount $normalized '$expectedRef = "refs/heads/$env:DEFAULT_BRANCH"' 1 "default-branch ref construction" $Source
+    Require-LiteralCount $normalized '              "$env:WORKFLOW_REF",' 1 "workflow ref equality operand" $Source
+    Require-LiteralCount $normalized '              $expectedRef,' 1 "default-branch equality operand" $Source
+    Require-LiteralCount $normalized "Testing Release must be dispatched from the default branch." 1 "default-branch control gate" $Source
+    Require-LiteralCount $normalized '          REQUESTED_COMMIT: ${{ inputs.commit }}' 1 "raw input boundary" $Source
+    Require-LiteralCount $normalized '          CONTROL_COMMIT: ${{ github.sha }}' 1 "trusted control-commit input" $Source
+    Require-LiteralCount $normalized "if (`"`$env:REQUESTED_COMMIT`" -cnotmatch '^[0-9a-f]{40}`$')" 1 "lowercase full-SHA input guard" $Source
+    Require-LiteralCount $normalized "`"`$env:CONTROL_COMMIT`" -cnotmatch '^[0-9a-f]{40}`$'" 1 "trusted control-commit format guard" $Source
+    Require-LiteralCount $normalized '                "$env:REQUESTED_COMMIT",' 1 "requested commit equality operand" $Source
+    Require-LiteralCount $normalized '                "$env:CONTROL_COMMIT",' 1 "trusted control commit equality operand" $Source
+    Require-LiteralCount $normalized "Testing Release requires the requested commit to equal the trusted default-branch workflow commit." 1 "trusted control-commit equality gate" $Source
+    Require-LiteralCount $normalized "            -Kind Hash ``" 2 "trusted hash validation invocation" $Source
+
+    $defaultBranchGateIndex = $normalized.IndexOf(
+        "Testing Release must be dispatched from the default branch.",
+        [System.StringComparison]::Ordinal)
+    $controlCheckoutIndex = $normalized.IndexOf(
+        "      - name: Checkout workflow control source",
+        [System.StringComparison]::Ordinal)
+    if ($defaultBranchGateIndex -lt 0 -or
+        $controlCheckoutIndex -lt 0 -or
+        $defaultBranchGateIndex -ge $controlCheckoutIndex) {
+        throw "$Source must verify the default-branch control ref before checkout."
+    }
+
+    $controlGateIndex = $normalized.IndexOf(
+        "Testing Release requires the requested commit to equal the trusted default-branch workflow commit.",
+        [System.StringComparison]::Ordinal)
+    $selectedCheckoutIndex = $normalized.IndexOf(
+        "      - name: Checkout requested commit",
+        [System.StringComparison]::Ordinal)
+    if ($controlGateIndex -lt 0 -or
+        $selectedCheckoutIndex -lt 0 -or
+        $controlGateIndex -ge $selectedCheckoutIndex) {
+        throw "$Source must enforce selected equals trusted control commit before checkout."
+    }
+
+    Require-LiteralCount $normalized "  prepare:" 1 "prepare job" $Source
+    Require-LiteralCount $normalized "  build:" 1 "build job" $Source
+    Require-LiteralCount $normalized "  verify:" 1 "verify job" $Source
+    Require-LiteralCount $normalized "  upload:" 1 "upload job" $Source
+    Require-LiteralCount $normalized "      contents: read" 3 "read-only job permission" $Source
+    Require-LiteralCount $normalized "      contents: write" 1 "narrow write-job permission" $Source
+    Require-LiteralCount $normalized "          persist-credentials: false" 3 "credential-free checkout" $Source
+
+    $checkoutAction = 'actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1'
+    $setupDotnetAction = 'actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0'
+    $uploadArtifactAction = 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1'
+    $downloadArtifactAction = 'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1'
+    $packageAction = './.github/actions/build-package'
+
+    $prepareJobIndex = $normalized.IndexOf("`n  prepare:", [System.StringComparison]::Ordinal)
+    $buildJobIndex = $normalized.IndexOf("`n  build:", [System.StringComparison]::Ordinal)
+    $verifyJobIndex = $normalized.IndexOf("`n  verify:", [System.StringComparison]::Ordinal)
+    $uploadJobIndex = $normalized.IndexOf("`n  upload:", [System.StringComparison]::Ordinal)
+    if ($prepareJobIndex -lt 0 -or
+        $buildJobIndex -le $prepareJobIndex -or
+        $verifyJobIndex -le $buildJobIndex -or
+        $uploadJobIndex -le $verifyJobIndex) {
+        throw "$Source must preserve the reviewed prepare/build/verify/upload job routing."
+    }
+    $prepareBlock = $normalized.Substring($prepareJobIndex, $buildJobIndex - $prepareJobIndex)
+    $buildBlock = $normalized.Substring($buildJobIndex, $verifyJobIndex - $buildJobIndex)
+    $verifyBlock = $normalized.Substring($verifyJobIndex, $uploadJobIndex - $verifyJobIndex)
+    $uploadBlock = $normalized.Substring($uploadJobIndex)
+
+    Forbid-Literal $uploadBlock "actions/checkout@" "checkout in the write job" $Source
+    Forbid-Literal $uploadBlock "uses: ./.github/actions/" "local action execution in the write job" $Source
+    Forbid-Literal $uploadBlock "Expand-Archive" "archive extraction in the write job" $Source
+    Forbid-Literal $uploadBlock "& `$archivePath" "artifact execution in the write job" $Source
+
+    Assert-CanonicalActionSyntax $normalized $Source
+
+    Require-LiteralCount $normalized "        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1" 3 "immutable checkout action" $Source
+    Require-LiteralCount $normalized "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" 1 "immutable .NET setup action" $Source
+    Require-LiteralCount $normalized "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1" 2 "immutable artifact upload action" $Source
+    Require-LiteralCount $normalized "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" 2 "immutable artifact download action" $Source
+    Require-LiteralCount $normalized "        uses: ./.github/actions/build-package" 1 "selected local packaging action" $Source
+
+    Assert-ExactUsesMultiset `
+        -Text $normalized `
+        -ExpectedUses @(
+            $checkoutAction, $checkoutAction, $checkoutAction,
+            $setupDotnetAction, $packageAction,
+            $uploadArtifactAction, $uploadArtifactAction,
+            $downloadArtifactAction, $downloadArtifactAction) `
+        -Description "workflow exact uses multiset" `
+        -Source $Source
+    Assert-ExactUsesMultiset `
+        -Text $prepareBlock `
+        -ExpectedUses @($checkoutAction, $checkoutAction) `
+        -Description "prepare-job exact uses multiset" `
+        -Source $Source
+    Assert-ExactUsesMultiset `
+        -Text $buildBlock `
+        -ExpectedUses @($checkoutAction, $setupDotnetAction, $packageAction, $uploadArtifactAction) `
+        -Description "build-job exact uses multiset" `
+        -Source $Source
+    Assert-ExactUsesMultiset `
+        -Text $verifyBlock `
+        -ExpectedUses @($downloadArtifactAction, $uploadArtifactAction) `
+        -Description "verify-job exact uses multiset" `
+        -Source $Source
+    Assert-ExactUsesMultiset `
+        -Text $uploadBlock `
+        -ExpectedUses @($downloadArtifactAction) `
+        -Description "upload-job exact uses multiset" `
+        -Source $Source
+
+    Require-LiteralCount $prepareBlock ("      - name: Checkout workflow control source`n        uses: " + $checkoutAction) 1 "workflow-control checkout step routing" $Source
+    Require-LiteralCount $prepareBlock ("      - name: Checkout requested commit`n        uses: " + $checkoutAction) 1 "requested-commit checkout step routing" $Source
+    Require-LiteralCount $buildBlock ("      - name: Checkout immutable release commit`n        uses: " + $checkoutAction) 1 "build checkout step routing" $Source
+    Require-LiteralCount $buildBlock ("      - name: Setup .NET`n        uses: " + $setupDotnetAction) 1 ".NET setup step routing" $Source
+    Require-LiteralCount $buildBlock ("      - name: Build & Package`n        id: package`n        uses: " + $packageAction) 1 "packaging action step routing" $Source
+    Require-LiteralCount $buildBlock ("      - name: Upload testing release artifact`n        uses: " + $uploadArtifactAction) 1 "unverified artifact upload step routing" $Source
+    Require-LiteralCount $verifyBlock ("      - name: Download unverified testing release artifact`n        uses: " + $downloadArtifactAction) 1 "unverified artifact download step routing" $Source
+    Require-LiteralCount $verifyBlock ("      - name: Upload verified testing release artifact`n        uses: " + $uploadArtifactAction) 1 "verified artifact upload step routing" $Source
+    Require-LiteralCount $uploadBlock ("      - name: Download verified testing release artifact`n        uses: " + $downloadArtifactAction) 1 "verified artifact download step routing" $Source
+
+    Require-LiteralCount $normalized '      release_tag: ${{ steps.release-metadata.outputs.tag }}' 1 "trusted release-tag output" $Source
+    Require-LiteralCount $normalized '      archive_name: ${{ steps.release-metadata.outputs.archive }}' 1 "trusted archive-name output" $Source
+    Require-LiteralCount $normalized '$tag = "testing-$short"' 1 "commit-scoped testing tag formula" $Source
+    Require-LiteralCount $normalized '$archive = "LLPlayer-testing-$short-x64.7z"' 1 "commit-scoped archive formula" $Source
+    Require-LiteralCount $normalized '          ref: ${{ needs.prepare.outputs.commit_sha }}' 1 "immutable selected checkout" $Source
+    Require-LiteralCount $normalized "        id: package" 1 "packaging evidence step id" $Source
+    Require-LiteralCount $normalized '      yt_dlp_version: ${{ steps.package.outputs.yt-dlp-version }}' 1 "yt-dlp version evidence output" $Source
+    Require-LiteralCount $normalized '      yt_dlp_sha256: ${{ steps.package.outputs.yt-dlp-sha256 }}' 1 "yt-dlp digest evidence output" $Source
+    Require-LiteralCount $normalized '      yt_dlp_size: ${{ steps.package.outputs.yt-dlp-size }}' 1 "yt-dlp size evidence output" $Source
+    Require-LiteralCount $normalized '      archive_sha256: ${{ steps.package.outputs.archive-sha256 }}' 1 "archive digest evidence output" $Source
+    Require-LiteralCount $normalized '      archive_size: ${{ steps.package.outputs.archive-size }}' 1 "archive size evidence output" $Source
+
+    Require-LiteralCount $normalized "          digest-mismatch: error" 2 "fail-closed artifact digest policy" $Source
+    Require-LiteralCount $normalized "          overwrite: false" 2 "non-overwriting workflow artifact policy" $Source
+    Require-LiteralCount $normalized "          retention-days: 1" 2 "short artifact retention" $Source
+    Require-LiteralCount $normalized '& $sevenZip t "$expectedPath"' 1 "7-Zip integrity test" $Source
+    Require-LiteralCount $normalized '& $sevenZip e "$expectedPath" "Plugins\YoutubeDL\yt-dlp.exe" "-o$ytDlpRoot" -y' 1 "bounded yt-dlp evidence extraction" $Source
+    Require-LiteralCount $normalized "Downloaded archive does not match packaging evidence." 1 "archive evidence comparison" $Source
+    Require-LiteralCount $normalized "Archived yt-dlp.exe does not match packaging evidence." 1 "yt-dlp evidence comparison" $Source
+    Require-LiteralCount $normalized "Verified artifact metadata changed before the write boundary." 1 "write-boundary evidence comparison" $Source
+
+    Require-LiteralCount $normalized '$tag -cnotmatch ''^testing-[0-9a-f]{12}$''' 1 "privileged tag allowlist" $Source
+    Require-LiteralCount $normalized '$name -cnotmatch ''^LLPlayer-testing-[0-9a-f]{12}-x64\.7z$''' 1 "privileged asset allowlist" $Source
+    Require-LiteralCount $normalized '"refs/tags/$Tag"' 1 "exact tag-ref comparison" $Source
+    Require-LiteralCount $normalized '"ref=refs/tags/$tag"' 1 "non-force exact tag creation" $Source
+    Require-LiteralCount $normalized "              --verify-tag ``" 1 "existing-tag release creation" $Source
+    Require-LiteralCount $normalized "              --draft ``" 1 "draft-only release creation" $Source
+    Require-LiteralCount $normalized "          Assert-DraftRelease `$release `$tag `$name" 1 "pre-upload draft assertion" $Source
+    Require-LiteralCount $normalized "                `$Release.prerelease -ne `$true)" 1 "draft prerelease state assertion" $Source
+    Require-LiteralCount $normalized "          Assert-TagTarget `$preUploadTag `$tag `$sha" 1 "immediate pre-upload tag assertion" $Source
+    Require-LiteralCount $normalized "          Assert-DraftRelease `$preUploadRelease `$tag `$name" 1 "immediate pre-upload draft assertion" $Source
+    Require-LiteralCount $normalized "            --clobber ``" 1 "scoped testing asset overwrite" $Source
+    Require-LiteralCount $normalized "          Assert-DraftRelease `$finalRelease `$tag `$name" 1 "post-upload draft assertion" $Source
+    Require-LiteralCount $normalized "Testing draft must contain exactly one verified asset after upload." 1 "post-upload asset-shape assertion" $Source
+    Require-LiteralCount $normalized "Uploaded testing asset digest does not match trusted evidence." 1 "post-upload digest assertion" $Source
+    Require-LiteralCount $normalized "          if (-not `$digestConfirmed)" 1 "missing remote digest failure" $Source
+    Require-LiteralCount $normalized "              Start-Sleep -Seconds 5" 1 "bounded remote digest polling" $Source
+
+    Forbid-Literal $normalized "getLatestRelease" "latest published release dependency" $Source
+    Forbid-Literal $normalized "v0.0.1" "legacy shared testing release target" $Source
+    Forbid-Literal $normalized "continue-on-error" "failure bypass" $Source
+    Forbid-Literal $normalized "self-hosted" "non-ephemeral runner" $Source
+    Forbid-Literal $normalized "permissions: write-all" "broad write permissions" $Source
+    Forbid-Literal $normalized "actions/github-script@" "obsolete release metadata action" $Source
+    if ($normalized -cmatch '(?m)^\s*uses:\s+[^@\s]+@(?:v|main|master)(?:\s|$)') {
+        throw "$Source contains a mutable external action reference."
+    }
 }
 
 function Assert-TestingReleaseContract([string]$Text, [string]$Source) {
     $normalized = Normalize-Text $Text
-    $rootLines = @($normalized -split "`n")
-
-    Assert-AllowedMappingKeys $rootLines 0 @("name", "on", "permissions", "jobs") "workflow root" $Source
-    Require-ExactLine $rootLines "name: Testing Release" "workflow name must remain fixed" $Source
-    Require-ExactLine $rootLines "permissions: {}" "workflow-level permissions must default to none" $Source
-
-    $onLines = Get-BlockLines $rootLines 0 "on" "top-level on entry" $Source
-    Assert-AllowedMappingKeys $onLines 2 @("workflow_dispatch") "workflow triggers" $Source
-    $dispatchLines = Get-BlockLines $onLines 2 "workflow_dispatch" "workflow_dispatch entry" $Source
-    Assert-AllowedMappingKeys $dispatchLines 4 @("inputs") "workflow_dispatch" $Source
-    $inputLines = Get-BlockLines $dispatchLines 4 "inputs" "workflow_dispatch inputs" $Source
-    Assert-AllowedMappingKeys $inputLines 6 @("commit") "workflow_dispatch inputs" $Source
-    $commitLines = Get-BlockLines $inputLines 6 "commit" "commit input" $Source
-    Assert-AllowedMappingKeys $commitLines 8 @("description", "required") "commit input" $Source
-    Require-ExactLine $commitLines "        description: 'Build Commit Hash or ref'" "commit input description must remain fixed" $Source
-    Require-ExactLine $commitLines "        required: true" "commit input must remain required" $Source
-
-    $jobsLines = Get-BlockLines $rootLines 0 "jobs" "top-level jobs entry" $Source
-    Assert-AllowedMappingKeys $jobsLines 2 @("prepare", "build", "verify", "upload") "jobs" $Source
-    $prepare = Get-BlockLines $jobsLines 2 "prepare" "jobs.prepare entry" $Source
-    $build = Get-BlockLines $jobsLines 2 "build" "jobs.build entry" $Source
-    $verify = Get-BlockLines $jobsLines 2 "verify" "jobs.verify entry" $Source
-    $upload = Get-BlockLines $jobsLines 2 "upload" "jobs.upload entry" $Source
-
-    Assert-AllowedMappingKeys $prepare 4 @("runs-on", "permissions", "outputs", "steps") "jobs.prepare" $Source
-    Require-ExactLine $prepare "    runs-on: windows-latest" "jobs.prepare must use a fresh GitHub-hosted Windows runner" $Source
-    $null = Assert-ExactMappingBlock $prepare 4 "permissions" @(
-        "      contents: read"
-    ) "jobs.prepare.permissions" $Source
-    $null = Assert-ExactMappingBlock $prepare 4 "outputs" @(
-        '      commit_sha: ${{ steps.release-commit.outputs.sha }}',
-        '      archive_name: ${{ steps.archive-name.outputs.name }}'
-    ) "jobs.prepare.outputs" $Source
-
-    Assert-AllowedMappingKeys $build 4 @("needs", "runs-on", "permissions", "steps") "jobs.build" $Source
-    Require-ExactLine $build "    needs: prepare" "jobs.build must depend only on trusted preparation" $Source
-    Require-ExactLine $build "    runs-on: windows-latest" "jobs.build must use a fresh GitHub-hosted Windows runner" $Source
-    $null = Assert-ExactMappingBlock $build 4 "permissions" @(
-        "      contents: read"
-    ) "jobs.build.permissions" $Source
-
-    Assert-AllowedMappingKeys $verify 4 @("needs", "runs-on", "permissions", "steps") "jobs.verify" $Source
-    Require-ExactLine $verify "    needs: [prepare, build]" "jobs.verify must require successful prepare and build jobs" $Source
-    Require-ExactLine $verify "    runs-on: windows-latest" "jobs.verify must use a fresh GitHub-hosted Windows runner" $Source
-    $null = Assert-ExactMappingBlock $verify 4 "permissions" @(
-        "      contents: read"
-    ) "jobs.verify.permissions" $Source
-
-    Assert-AllowedMappingKeys $upload 4 @("needs", "runs-on", "permissions", "steps") "jobs.upload" $Source
-    Require-ExactLine $upload "    needs: [prepare, verify]" "jobs.upload must require trusted preparation and verified artifact jobs" $Source
-    Require-ExactLine $upload "    runs-on: windows-latest" "jobs.upload must use a fresh GitHub-hosted Windows runner" $Source
-    $null = Assert-ExactMappingBlock $upload 4 "permissions" @(
-        "      contents: write"
-    ) "jobs.upload.permissions" $Source
-
-    $prepareSteps = Get-BlockLines $prepare 4 "steps" "jobs.prepare.steps" $Source
-    $buildSteps = Get-BlockLines $build 4 "steps" "jobs.build.steps" $Source
-    $verifySteps = Get-BlockLines $verify 4 "steps" "jobs.verify.steps" $Source
-    $uploadSteps = Get-BlockLines $upload 4 "steps" "jobs.upload.steps" $Source
-
-    Assert-StepOrder $prepareSteps @(
-        "Require trusted workflow ref",
-        "Checkout workflow control source",
-        "Stage trusted release validator",
-        "Validate requested ref",
-        "Get latest stable release tag",
-        "Validate stable release tag",
-        "Checkout selected ref for resolution",
-        "Resolve immutable release commit",
-        "Set archive name"
-    ) "prepare" $Source
-    Assert-StepOrder $buildSteps @(
-        "Checkout immutable release commit",
-        "Verify immutable checkout",
-        "Setup .NET",
-        "Full verification preflight",
-        "Build & Package",
-        "Upload testing release artifact"
-    ) "build" $Source
-    Assert-StepOrder $verifySteps @(
-        "Download unverified testing release artifact",
-        "Validate unverified testing package",
-        "Upload verified testing release artifact"
-    ) "verify" $Source
-    Assert-StepOrder $uploadSteps @(
-        "Download testing release artifact",
-        "Validate downloaded testing package",
-        "Upload Testing Asset (overwrite)"
-    ) "upload" $Source
-
-    $trustedRef = Get-NamedStep $prepareSteps "Require trusted workflow ref" "prepare" $Source
-    Assert-ShellStep $trustedRef @("shell", "env", "run") "trusted workflow ref step" $Source
-    $null = Assert-ExactMappingBlock $trustedRef 8 "env" @(
-        '          WORKFLOW_REF: ${{ github.ref }}',
-        '          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}'
-    ) "trusted workflow ref env" $Source
-    Assert-ExactBlockScalar $trustedRef 8 "run" @'
-$ErrorActionPreference = "Stop"
-$expectedRef = "refs/heads/$env:DEFAULT_BRANCH"
-if (-not [string]::Equals(
-    "$env:WORKFLOW_REF",
-    $expectedRef,
-    [System.StringComparison]::Ordinal)) {
-  throw "Testing Release must be dispatched from the default branch."
-}
-'@ "trusted workflow ref run" $Source
-
-    $controlCheckout = Get-NamedStep $prepareSteps "Checkout workflow control source" "prepare" $Source
-    Assert-AllowedMappingKeys $controlCheckout 8 @("uses", "with") "control checkout step" $Source
-    Require-ExactLine $controlCheckout "        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1" "control checkout action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $controlCheckout 8 "with" @(
-        '          ref: ${{ github.sha }}',
-        "          persist-credentials: false"
-    ) "control checkout inputs" $Source
-
-    $stageValidator = Get-NamedStep $prepareSteps "Stage trusted release validator" "prepare" $Source
-    Assert-ShellStep $stageValidator @("shell", "env", "run") "validator staging step" $Source
-    $null = Assert-ExactMappingBlock $stageValidator 8 "env" @(
-        '          VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1'
-    ) "validator staging env" $Source
-    Assert-ExactBlockScalar $stageValidator 8 "run" @'
-Copy-Item `
-  -LiteralPath ".\scripts\codex\validate-release-token.ps1" `
-  -Destination "$env:VALIDATOR_PATH" `
-  -Force
-'@ "validator staging run" $Source
-
-    $validateRef = Get-NamedStep $prepareSteps "Validate requested ref" "prepare" $Source
-    Assert-ShellStep $validateRef @("id", "shell", "env", "run") "requested ref validation step" $Source
-    Require-ExactLine $validateRef "        id: release-ref" "requested ref step id must remain fixed" $Source
-    $null = Assert-ExactMappingBlock $validateRef 8 "env" @(
-        '          REQUESTED_REF: ${{ inputs.commit }}',
-        '          VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1'
-    ) "requested ref validation env" $Source
-    Assert-ExactBlockScalar $validateRef 8 "run" @'
-& "$env:VALIDATOR_PATH" `
-  -Kind Ref `
-  -Value "$env:REQUESTED_REF" `
-  -OutputName value `
-  -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
-'@ "requested ref validation run" $Source
-
-    $latestTag = Get-NamedStep $prepareSteps "Get latest stable release tag" "prepare" $Source
-    Assert-AllowedMappingKeys $latestTag 8 @("id", "uses", "with") "latest stable tag step" $Source
-    Require-ExactLine $latestTag "        id: latest-tag" "latest stable tag step id must remain fixed" $Source
-    Require-ExactLine $latestTag "        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0" "latest stable tag action must remain immutable" $Source
-    $latestTagWith = Assert-ExactMappingBlock $latestTag 8 "with" @(
-        '          github-token: ${{ secrets.GITHUB_TOKEN }}',
-        "          result-encoding: string",
-        "          script: |"
-    ) "latest stable tag inputs" $Source
-    Assert-ExactBlockScalar $latestTagWith 10 "script" @'
-const latest = await github.rest.repos.getLatestRelease({
-  owner: context.repo.owner,
-  repo: context.repo.repo
-});
-return latest.data.tag_name;
-'@ "latest stable tag script" $Source
-
-    $validateTag = Get-NamedStep $prepareSteps "Validate stable release tag" "prepare" $Source
-    Assert-ShellStep $validateTag @("id", "shell", "env", "run") "stable tag validation step" $Source
-    Require-ExactLine $validateTag "        id: stable-tag" "stable tag step id must remain fixed" $Source
-    $null = Assert-ExactMappingBlock $validateTag 8 "env" @(
-        '          STABLE_TAG: ${{ steps.latest-tag.outputs.result }}',
-        '          VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1'
-    ) "stable tag validation env" $Source
-    Assert-ExactBlockScalar $validateTag 8 "run" @'
-& "$env:VALIDATOR_PATH" `
-  -Kind Tag `
-  -Value "$env:STABLE_TAG" `
-  -OutputName value `
-  -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
-'@ "stable tag validation run" $Source
-
-    $selectedCheckout = Get-NamedStep $prepareSteps "Checkout selected ref for resolution" "prepare" $Source
-    Assert-AllowedMappingKeys $selectedCheckout 8 @("uses", "with") "selected ref resolution checkout step" $Source
-    Require-ExactLine $selectedCheckout "        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1" "selected ref resolution checkout action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $selectedCheckout 8 "with" @(
-        '          ref: ${{ steps.release-ref.outputs.value }}',
-        "          path: selected-source",
-        "          persist-credentials: false"
-    ) "selected ref resolution checkout inputs" $Source
-
-    $resolveCommit = Get-NamedStep $prepareSteps "Resolve immutable release commit" "prepare" $Source
-    Assert-ShellStep $resolveCommit @("id", "shell", "env", "run") "immutable commit resolution step" $Source
-    Require-ExactLine $resolveCommit "        id: release-commit" "immutable commit step id must remain fixed" $Source
-    $null = Assert-ExactMappingBlock $resolveCommit 8 "env" @(
-        '          VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1'
-    ) "immutable commit resolution env" $Source
-    Assert-ExactBlockScalar $resolveCommit 8 "run" @'
-$ErrorActionPreference = "Stop"
-$full = (& git -C .\selected-source rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $full -notmatch '^[0-9A-Fa-f]{40}$') {
-  throw "Could not resolve the selected ref to one full commit id."
+    $actualHash = Get-TextSha256 $normalized
+    if (-not [string]::Equals(
+        $actualHash,
+        $expectedWorkflowSha256,
+        [System.StringComparison]::Ordinal)) {
+        throw "$Source drifted from the reviewed Testing Release workflow (SHA-256 $actualHash)."
+    }
+    Assert-TestingReleaseSemantics $normalized $Source
 }
 
-& "$env:VALIDATOR_PATH" `
-  -Kind Hash `
-  -Value "$full" `
-  -OutputName sha `
-  -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
-
-$short = $full.Substring(0, 12)
-& "$env:VALIDATOR_PATH" `
-  -Kind Hash `
-  -Value "$short" `
-  -OutputName short `
-  -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
-'@ "immutable commit resolution run" $Source
-
-    $archiveName = Get-NamedStep $prepareSteps "Set archive name" "prepare" $Source
-    Assert-ShellStep $archiveName @("id", "shell", "env", "run") "archive name step" $Source
-    Require-ExactLine $archiveName "        id: archive-name" "archive name step id must remain fixed" $Source
-    $null = Assert-ExactMappingBlock $archiveName 8 "env" @(
-        '          STABLE_TAG: ${{ steps.stable-tag.outputs.value }}',
-        '          SHORT_HASH: ${{ steps.release-commit.outputs.short }}',
-        '          VALIDATOR_PATH: ${{ runner.temp }}\validate-release-token.ps1'
-    ) "archive name env" $Source
-    Assert-ExactBlockScalar $archiveName 8 "run" @'
-$archiveName = "LLPlayer-testing-$env:STABLE_TAG-$env:SHORT_HASH.7z"
-& "$env:VALIDATOR_PATH" `
-  -Kind Archive `
-  -Value "$archiveName" `
-  -OutputName name `
-  -OutputFile "$env:GITHUB_OUTPUT" | Out-Null
-'@ "archive name run" $Source
-
-    $buildCheckout = Get-NamedStep $buildSteps "Checkout immutable release commit" "build" $Source
-    Assert-AllowedMappingKeys $buildCheckout 8 @("uses", "with") "immutable build checkout step" $Source
-    Require-ExactLine $buildCheckout "        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1" "immutable build checkout action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $buildCheckout 8 "with" @(
-        '          ref: ${{ needs.prepare.outputs.commit_sha }}',
-        "          persist-credentials: false"
-    ) "immutable build checkout inputs" $Source
-
-    $verifyCheckout = Get-NamedStep $buildSteps "Verify immutable checkout" "build" $Source
-    Assert-ShellStep $verifyCheckout @("shell", "env", "run") "immutable checkout verification step" $Source
-    $null = Assert-ExactMappingBlock $verifyCheckout 8 "env" @(
-        '          EXPECTED_COMMIT_SHA: ${{ needs.prepare.outputs.commit_sha }}'
-    ) "immutable checkout verification env" $Source
-    Assert-ExactBlockScalar $verifyCheckout 8 "run" @'
-$ErrorActionPreference = "Stop"
-$actual = (& git rev-parse HEAD).Trim().ToLowerInvariant()
-if ($LASTEXITCODE -ne 0 -or -not [string]::Equals(
-    $actual,
-    "$env:EXPECTED_COMMIT_SHA",
-    [System.StringComparison]::Ordinal)) {
-  throw "The build checkout does not match the prepared commit id."
-}
-'@ "immutable checkout verification run" $Source
-
-    $buildSetup = Get-NamedStep $buildSteps "Setup .NET" "build" $Source
-    Assert-AllowedMappingKeys $buildSetup 8 @("uses", "with") "build .NET setup step" $Source
-    Require-ExactLine $buildSetup "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" "build .NET setup action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $buildSetup 8 "with" @(
-        "          dotnet-version: 10.0.x"
-    ) "build .NET setup inputs" $Source
-
-    $fullPreflight = Get-NamedStep $buildSteps "Full verification preflight" "build" $Source
-    Assert-ShellStep $fullPreflight @("shell", "run") "full verification preflight step" $Source
-    Require-ExactLine $fullPreflight "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1" "full verification preflight must run the canonical full gate" $Source
-
-    $buildPackage = Get-NamedStep $buildSteps "Build & Package" "build" $Source
-    Assert-AllowedMappingKeys $buildPackage 8 @("uses", "with") "build/package step" $Source
-    Require-ExactLine $buildPackage "        uses: ./.github/actions/build-package" "selected build/package action must remain local to the checked-out commit" $Source
-    $null = Assert-ExactMappingBlock $buildPackage 8 "with" @(
-        '          archive-name: ${{ needs.prepare.outputs.archive_name }}'
-    ) "build/package inputs" $Source
-
-    $artifactUpload = Get-NamedStep $buildSteps "Upload testing release artifact" "build" $Source
-    Assert-AllowedMappingKeys $artifactUpload 8 @("uses", "with") "artifact upload step" $Source
-    Require-ExactLine $artifactUpload "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1" "artifact upload action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $artifactUpload 8 "with" @(
-        "          name: llplayer-testing-release-unverified",
-        '          path: ${{ needs.prepare.outputs.archive_name }}',
-        "          if-no-files-found: error",
-        "          overwrite: false",
-        "          compression-level: 0",
-        "          include-hidden-files: false",
-        "          retention-days: 1"
-    ) "artifact upload inputs" $Source
-
-    $artifactValidationBody = @'
-$ErrorActionPreference = "Stop"
-
-$name = "$env:EXPECTED_ARCHIVE_NAME"
-if ($name.Length -gt 160 -or
-    $name -notmatch '^LLPlayer-[0-9A-Za-z][0-9A-Za-z._+\-]{0,139}\.7z$' -or
-    $name.Contains("..")) {
-  throw "Unexpected release archive name."
-}
-
-$root = [System.IO.Path]::GetFullPath("$env:ARTIFACT_DIRECTORY")
-if (-not (Test-Path -LiteralPath $root -PathType Container)) {
-  throw "Downloaded artifact directory is missing."
-}
-
-$entries = @(Get-ChildItem -LiteralPath $root -Force)
-if ($entries.Count -ne 1) {
-  throw "Artifact must contain exactly one direct entry."
-}
-
-$file = $entries[0]
-if ($file.PSIsContainer -or
-    (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
-    $file.Length -le 0) {
-  throw "Artifact entry must be one non-empty regular file."
-}
-
-if (-not [string]::Equals(
-    $file.Name,
-    $name,
-    [System.StringComparison]::Ordinal)) {
-  throw "Downloaded archive name does not match the trusted build metadata."
-}
-
-$expectedPath = [System.IO.Path]::GetFullPath((Join-Path $root $name))
-if (-not [string]::Equals(
-    $file.FullName,
-    $expectedPath,
-    [System.StringComparison]::OrdinalIgnoreCase)) {
-  throw "Downloaded archive escaped the fixed artifact directory."
-}
-
-[System.IO.File]::AppendAllText(
-  $env:GITHUB_OUTPUT,
-  "path=$expectedPath$([Environment]::NewLine)",
-  [System.Text.UTF8Encoding]::new($false))
-'@
-
-    $unverifiedDownload = Get-NamedStep $verifySteps "Download unverified testing release artifact" "verify" $Source
-    Assert-AllowedMappingKeys $unverifiedDownload 8 @("uses", "with") "unverified artifact download step" $Source
-    Require-ExactLine $unverifiedDownload "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" "unverified artifact download action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $unverifiedDownload 8 "with" @(
-        "          name: llplayer-testing-release-unverified",
-        '          path: ${{ runner.temp }}\llplayer-testing-release-unverified',
-        "          digest-mismatch: error"
-    ) "unverified artifact download inputs" $Source
-
-    $verifyArtifact = Get-NamedStep $verifySteps "Validate unverified testing package" "verify" $Source
-    Assert-ShellStep $verifyArtifact @("id", "shell", "env", "run") "unverified artifact validation step" $Source
-    Require-ExactLine $verifyArtifact "        id: verified-asset" "unverified artifact validation id must remain fixed" $Source
-    $null = Assert-ExactMappingBlock $verifyArtifact 8 "env" @(
-        '          EXPECTED_ARCHIVE_NAME: ${{ needs.prepare.outputs.archive_name }}',
-        '          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-testing-release-unverified'
-    ) "unverified artifact validation env" $Source
-    Assert-ExactBlockScalar $verifyArtifact 8 "run" $artifactValidationBody "unverified artifact validation run" $Source
-
-    $verifiedUpload = Get-NamedStep $verifySteps "Upload verified testing release artifact" "verify" $Source
-    Assert-AllowedMappingKeys $verifiedUpload 8 @("uses", "with") "verified artifact upload step" $Source
-    Require-ExactLine $verifiedUpload "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1" "verified artifact upload action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $verifiedUpload 8 "with" @(
-        "          name: llplayer-testing-release-verified",
-        '          path: ${{ steps.verified-asset.outputs.path }}',
-        "          if-no-files-found: error",
-        "          overwrite: false",
-        "          compression-level: 0",
-        "          include-hidden-files: false",
-        "          retention-days: 1"
-    ) "verified artifact upload inputs" $Source
-
-    $artifactDownload = Get-NamedStep $uploadSteps "Download testing release artifact" "upload" $Source
-    Assert-AllowedMappingKeys $artifactDownload 8 @("uses", "with") "artifact download step" $Source
-    Require-ExactLine $artifactDownload "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" "artifact download action must remain immutable" $Source
-    $null = Assert-ExactMappingBlock $artifactDownload 8 "with" @(
-        "          name: llplayer-testing-release-verified",
-        '          path: ${{ runner.temp }}\llplayer-testing-release-verified',
-        "          digest-mismatch: error"
-    ) "artifact download inputs" $Source
-
-    $validateArtifact = Get-NamedStep $uploadSteps "Validate downloaded testing package" "upload" $Source
-    Assert-ShellStep $validateArtifact @("id", "shell", "env", "run") "downloaded artifact validation step" $Source
-    Require-ExactLine $validateArtifact "        id: release-asset" "downloaded artifact validation id must remain fixed" $Source
-    $null = Assert-ExactMappingBlock $validateArtifact 8 "env" @(
-        '          EXPECTED_ARCHIVE_NAME: ${{ needs.prepare.outputs.archive_name }}',
-        '          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-testing-release-verified'
-    ) "downloaded artifact validation env" $Source
-    Assert-ExactBlockScalar $validateArtifact 8 "run" $artifactValidationBody "downloaded artifact validation run" $Source
-
-    $releaseUpload = Get-NamedStep $uploadSteps "Upload Testing Asset (overwrite)" "upload" $Source
-    Assert-ShellStep $releaseUpload @("shell", "env", "run") "release asset upload step" $Source
-    $null = Assert-ExactMappingBlock $releaseUpload 8 "env" @(
-        '          ARCHIVE_PATH: ${{ steps.release-asset.outputs.path }}',
-        '          RELEASE_REPOSITORY: ${{ github.repository }}',
-        '          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}'
-    ) "release asset upload env" $Source
-    Assert-ExactBlockScalar $releaseUpload 8 "run" @'
-$ErrorActionPreference = "Stop"
-& gh release upload v0.0.1 "$env:ARCHIVE_PATH" `
-  --clobber `
-  --repo "$env:RELEASE_REPOSITORY"
-if ($LASTEXITCODE -ne 0) {
-  throw "Testing release upload failed."
-}
-'@ "release asset upload run" $Source
-}
-
-function Assert-ContractRejected([string]$Text, [string]$Description) {
-    $rejected = $false
+function Assert-SemanticsRejected(
+    [string]$Text,
+    [string]$Description,
+    [string]$ExpectedErrorFragment
+) {
     try {
-        Assert-TestingReleaseContract $Text "adversarial fixture ($Description)"
+        # Keep the source label free of the fixture description and invariant
+        # text so an unrelated failure cannot satisfy the reason assertion.
+        Assert-TestingReleaseSemantics $Text "adversarial semantic fixture"
     }
     catch {
-        $rejected = $true
+        $message = $_.Exception.Message
+        if (-not $message.Contains($ExpectedErrorFragment)) {
+            throw "Testing Release semantic fixture '$Description' failed for the wrong reason: $message"
+        }
+        return
     }
-    if (-not $rejected) {
-        throw "Testing Release boundary validator accepted adversarial fixture: $Description."
+    throw "Testing Release semantic validator accepted adversarial fixture: $Description."
+}
+
+function Assert-CanonicalSyntaxRejected(
+    [string]$Text,
+    [string]$Description,
+    [string]$ExpectedErrorFragment
+) {
+    try {
+        Assert-CanonicalActionSyntax $Text "adversarial canonical fixture"
     }
+    catch {
+        $message = $_.Exception.Message
+        if (-not $message.Contains($ExpectedErrorFragment)) {
+            throw "Canonical syntax fixture '$Description' failed for the wrong reason: $message"
+        }
+        return
+    }
+    throw "Canonical action validator accepted adversarial fixture: $Description."
 }
 
 function Replace-First(
@@ -716,393 +384,442 @@ function Assert-MutationRejected(
     [string]$Text,
     [string]$OldValue,
     [string]$NewValue,
-    [string]$Description
+    [string]$Description,
+    [string]$ExpectedErrorFragment
 ) {
     $fixture = Replace-First $Text $OldValue $NewValue $Description
-    Assert-ContractRejected $fixture $Description
+    Assert-SemanticsRejected $fixture $Description $ExpectedErrorFragment
 }
 
-function Replace-Last(
-    [string]$Text,
-    [string]$OldValue,
-    [string]$NewValue,
-    [string]$Description
+function Test-DownloadedArtifactEvidence(
+    [string]$Directory,
+    [string]$ExpectedName,
+    [string]$ExpectedSha256,
+    [long]$ExpectedSize
 ) {
-    $index = $Text.LastIndexOf($OldValue, [System.StringComparison]::Ordinal)
-    if ($index -lt 0) {
-        throw "Adversarial fixture setup could not find '$Description'."
-    }
-    return $Text.Substring(0, $index) + $NewValue + $Text.Substring($index + $OldValue.Length)
-}
-
-function Assert-LastMutationRejected(
-    [string]$Text,
-    [string]$OldValue,
-    [string]$NewValue,
-    [string]$Description
-) {
-    $fixture = Replace-Last $Text $OldValue $NewValue $Description
-    Assert-ContractRejected $fixture $Description
-}
-
-function Test-DownloadedArtifactShape([string]$Directory, [string]$ExpectedName) {
-    $name = "$ExpectedName"
-    if ($name.Length -gt 160 -or
-        $name -notmatch '^LLPlayer-[0-9A-Za-z][0-9A-Za-z._+\-]{0,139}\.7z$' -or
-        $name.Contains("..")) {
-        throw "Unexpected release archive name."
+    if ($ExpectedName -cnotmatch '^LLPlayer-testing-[0-9a-f]{12}-x64\.7z$' -or
+        $ExpectedSha256 -cnotmatch '^[0-9a-f]{64}$' -or
+        $ExpectedSize -le 0) {
+        throw "Expected artifact evidence is invalid."
     }
 
     $root = [System.IO.Path]::GetFullPath($Directory)
     if (-not (Test-Path -LiteralPath $root -PathType Container)) {
         throw "Downloaded artifact directory is missing."
     }
-
     $entries = @(Get-ChildItem -LiteralPath $root -Force)
     if ($entries.Count -ne 1) {
         throw "Artifact must contain exactly one direct entry."
     }
-
     $file = $entries[0]
     if ($file.PSIsContainer -or
         (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
-        $file.Length -le 0) {
-        throw "Artifact entry must be one non-empty regular file."
+        $file.Length -ne $ExpectedSize -or
+        -not [string]::Equals(
+            $file.Name,
+            $ExpectedName,
+            [System.StringComparison]::Ordinal)) {
+        throw "Artifact entry does not match trusted shape evidence."
     }
 
+    $expectedPath = [System.IO.Path]::GetFullPath((Join-Path $root $ExpectedName))
+    $actualHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     if (-not [string]::Equals(
-        $file.Name,
-        $name,
-        [System.StringComparison]::Ordinal)) {
-        throw "Downloaded archive name does not match the trusted build metadata."
-    }
-
-    $expectedPath = [System.IO.Path]::GetFullPath((Join-Path $root $name))
-    if (-not [string]::Equals(
-        $file.FullName,
-        $expectedPath,
-        [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Downloaded archive escaped the fixed artifact directory."
+            $file.FullName,
+            $expectedPath,
+            [System.StringComparison]::OrdinalIgnoreCase) -or
+        -not [string]::Equals(
+            $actualHash,
+            $ExpectedSha256,
+            [System.StringComparison]::Ordinal)) {
+        throw "Artifact entry does not match trusted path or digest evidence."
     }
     return $expectedPath
 }
 
-function Assert-ArtifactShapeRejected(
+function Assert-ArtifactEvidenceRejected(
     [string]$Directory,
     [string]$ExpectedName,
+    [string]$ExpectedSha256,
+    [long]$ExpectedSize,
     [string]$Description
 ) {
     try {
-        $null = Test-DownloadedArtifactShape $Directory $ExpectedName
+        $null = Test-DownloadedArtifactEvidence `
+            $Directory `
+            $ExpectedName `
+            $ExpectedSha256 `
+            $ExpectedSize
     }
     catch {
         return
     }
-    throw "Downloaded artifact validator accepted $Description."
+    throw "Downloaded artifact evidence validator accepted $Description."
 }
 
-if (-not (Test-Path -LiteralPath $workflowPath)) {
+if (-not (Test-Path -LiteralPath $workflowPath -PathType Leaf)) {
     throw "Testing Release workflow is missing: $workflowPath"
 }
 
-$workflowText = Normalize-Text (Get-Content -LiteralPath $workflowPath -Raw)
+$workflowText = Normalize-Text (Get-Content -LiteralPath $workflowPath -Raw -Encoding UTF8)
 Assert-TestingReleaseContract $workflowText "testing-release.yml"
 
-$fullPreflightBlock = @'
-      - name: Full verification preflight
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1
-'@
-$buildPackageBlock = @'
-      - name: Build & Package
-        uses: ./.github/actions/build-package
-        with:
-          archive-name: ${{ needs.prepare.outputs.archive_name }}
-'@
-Assert-MutationRejected $workflowText `
-    ($fullPreflightBlock + "`n`n") `
-    "" `
-    "a missing full verification preflight"
-Assert-MutationRejected $workflowText `
-    "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" `
-    "        uses: actions/setup-dotnet@v5" `
-    "a mutable build SDK setup action"
-Assert-MutationRejected $workflowText `
-    "          dotnet-version: 10.0.x" `
-    "          dotnet-version: 11.0.x" `
-    "the wrong build SDK channel"
-Assert-MutationRejected $workflowText `
-    ($fullPreflightBlock + "`n`n" + $buildPackageBlock) `
-    ($buildPackageBlock + "`n`n" + $fullPreflightBlock) `
-    "full verification after packaging"
-Assert-MutationRejected $workflowText `
-    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1" `
-    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.ps1" `
-    "fast-only release preflight"
-Assert-MutationRejected $workflowText `
-    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1" `
-    "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1 -SkipRestore" `
-    "a full verification preflight with restore skipped"
-Assert-MutationRejected $workflowText `
-    "      - name: Full verification preflight`n        shell: pwsh" `
-    "      - name: Full verification preflight`n        continue-on-error: true`n        shell: pwsh" `
-    "continue-on-error on the full verification preflight"
-Assert-MutationRejected $workflowText `
-    "      - name: Full verification preflight`n        shell: pwsh" `
-    '      - name: Full verification preflight' + "`n" + '        if: ${{ always() }}' + "`n" + "        shell: pwsh" `
-    "an always-run conditional on the full verification preflight"
+$commentOnlyFixture = Replace-First `
+    $workflowText `
+    "name: Testing Release`n" `
+    "name: Testing Release`n# semantic no-op fixture`n" `
+    "a semantic no-op comment"
+Assert-TestingReleaseSemantics $commentOnlyFixture "semantic no-op control fixture"
+$hashRejectedComment = $false
+try {
+    Assert-TestingReleaseContract $commentOnlyFixture "hash-lock control fixture"
+}
+catch {
+    if ($_.Exception.Message.Contains("drifted from the reviewed Testing Release workflow")) {
+        $hashRejectedComment = $true
+    }
+    else {
+        throw
+    }
+}
+if (-not $hashRejectedComment) {
+    throw "Testing Release hash lock accepted a semantic no-op workflow mutation."
+}
+
+$variableDepthBareFixture = "    steps:`n          -`n              name: Variable-depth pinned action`n              `"u\u0073es`": actions/cache@0123456789abcdef0123456789abcdef01234567"
+Assert-CanonicalSyntaxRejected `
+    $variableDepthBareFixture `
+    "a variable-depth bare-step action" `
+    "bare step declaration with deep-indented child mappings"
+Assert-CanonicalSyntaxRejected `
+    "      - { name: Flow action, uses: actions/cache@0123456789abcdef0123456789abcdef01234567 }" `
+    "a flow-style action step" `
+    "flow, explicit, anchored, aliased, or tagged step declaration"
+Assert-CanonicalSyntaxRejected `
+    "        &hidden uses: actions/cache@0123456789abcdef0123456789abcdef01234567" `
+    "an anchored mapping key" `
+    "anchored or aliased workflow key"
+Assert-CanonicalSyntaxRejected `
+    "        <<: *hidden" `
+    "a merged mapping key" `
+    "explicit or merged workflow key"
+
+$resolvedAliasActionFixture = Replace-First `
+    $workflowText `
+    "      - name: Stage trusted release validator" `
+    "      - name: &hidden uses`n        shell: pwsh`n        run: Write-Host 'define scalar alias key anchor'`n`n      - name: Stage trusted release validator" `
+    "a scalar uses-key anchor defined on an ordinary run step"
+$resolvedAliasActionFixture = Replace-First `
+    $resolvedAliasActionFixture `
+    "    steps:`n      - name: Download verified testing release artifact" `
+    "    steps:`n      - name: Unexpected aliased-key pinned action`n        *hidden : actions/cache@0123456789abcdef0123456789abcdef01234567`n        with:`n          path: alias-fixture`n          key: alias-fixture`n`n      - name: Download verified testing release artifact" `
+    "the resolved alias key used by an upload-job action"
+Assert-SemanticsRejected `
+    $resolvedAliasActionFixture `
+    "a resolved aliased uses key in the write job" `
+    "anchored or aliased workflow key"
+
+$misroutedActionFixture = Replace-First `
+    $workflowText `
+    "      - name: Stage trusted release validator" `
+    "      - name: Misrouted .NET setup`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0`n`n      - name: Stage trusted release validator" `
+    "a setup action inserted into prepare"
+$misroutedActionFixture = Replace-First `
+    $misroutedActionFixture `
+    "      - name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" `
+    "      - name: Setup .NET`n        shell: pwsh`n        run: Write-Host 'setup action misrouted'" `
+    "the setup action removed from build"
+Assert-SemanticsRejected `
+    $misroutedActionFixture `
+    "an expected action moved to the wrong job" `
+    "prepare-job exact uses multiset"
+
+$writeLocalSwapFixture = Replace-First `
+    $workflowText `
+    "      - name: Build & Package`n        id: package`n        uses: ./.github/actions/build-package" `
+    "      - name: Build & Package`n        id: package`n        uses: __SWAPPED_LOCAL_ACTION__" `
+    "the build-package action staged for a job swap"
+$writeLocalSwapFixture = Replace-First `
+    $writeLocalSwapFixture `
+    "      - name: Download verified testing release artifact`n        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" `
+    "      - name: Download verified testing release artifact`n        uses: ./.github/actions/build-package" `
+    "the local action moved into the write job"
+$writeLocalSwapFixture = Replace-First `
+    $writeLocalSwapFixture `
+    "uses: __SWAPPED_LOCAL_ACTION__" `
+    "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" `
+    "the download action moved into the build job"
+Assert-SemanticsRejected `
+    $writeLocalSwapFixture `
+    "a global-multiset-preserving local-action job swap" `
+    "local action execution in the write job"
+
+$blockScalarActionSpoofFixture = Replace-First `
+    $workflowText `
+    "      - name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" `
+    "      - name: Setup .NET`n        shell: pwsh`n        run: Write-Host 'real setup action removed'" `
+    "the real setup action removed before block-scalar spoofing"
+$blockScalarActionSpoofFixture = Replace-First `
+    $blockScalarActionSpoofFixture `
+    "  build:`n    needs: prepare" `
+    "  build:`n    name: |`n      - name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0`n    needs: prepare" `
+    "the setup action text moved into a job-name block scalar"
+Assert-SemanticsRejected `
+    $blockScalarActionSpoofFixture `
+    "action-looking text inside a job-level block scalar" `
+    "workflow or job block scalar"
+
+$quotedScalarActionBase = Replace-First `
+    $workflowText `
+    "      - name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" `
+    "      - name: Setup .NET`n        shell: pwsh`n        run: Write-Host 'real setup action removed'" `
+    "the real setup action removed before quoted-scalar spoofing"
+$doubleQuotedActionSpoofFixture = Replace-First `
+    $quotedScalarActionBase `
+    "  build:`n    needs: prepare" `
+    "  build:`n    name: `"metadata`n      - name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0`n      `"`n    needs: prepare" `
+    "the setup action text moved into a multiline double-quoted job name"
+Assert-SemanticsRejected `
+    $doubleQuotedActionSpoofFixture `
+    "action-looking text inside a multiline double-quoted job scalar" `
+    "multiline double-quoted workflow or job scalar"
+$singleQuotedActionSpoofFixture = Replace-First `
+    $quotedScalarActionBase `
+    "  build:`n    needs: prepare" `
+    "  build:`n    name: 'metadata`n      - name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0`n      '`n    needs: prepare" `
+    "the setup action text moved into a multiline single-quoted job name"
+Assert-SemanticsRejected `
+    $singleQuotedActionSpoofFixture `
+    "action-looking text inside a multiline single-quoted job scalar" `
+    "multiline single-quoted workflow or job scalar"
 
 Assert-MutationRejected $workflowText `
-    "permissions: {}" `
-    "permissions:`n  contents: write" `
-    "workflow-level write permission"
+    "        description: 'Lowercase full 40-character commit SHA'" `
+    "        description: 'Build Commit Hash or ref'" `
+    "a branch-or-ref input" `
+    "immutable lowercase input description"
 Assert-MutationRejected $workflowText `
-    "  prepare:`n    runs-on: windows-latest`n    permissions:`n      contents: read" `
-    "  prepare:`n    runs-on: windows-latest`n    permissions:`n      contents: write" `
-    "write permission in prepare"
+    "  cancel-in-progress: false" `
+    "  cancel-in-progress: true" `
+    "cancellation of an active release mutation" `
+    "non-cancelling release concurrency policy"
 Assert-MutationRejected $workflowText `
-    "  build:`n    needs: prepare`n    runs-on: windows-latest`n    permissions:`n      contents: read" `
-    "  build:`n    needs: prepare`n    runs-on: windows-latest`n    permissions:`n      contents: write" `
-    "write permission in build"
+    "if (`"`$env:REQUESTED_COMMIT`" -cnotmatch '^[0-9a-f]{40}`$')" `
+    "if (`"`$env:REQUESTED_COMMIT`" -cnotmatch '^[0-9A-Fa-f]{40}`$')" `
+    "acceptance of uppercase commit input" `
+    "lowercase full-SHA input guard"
 Assert-MutationRejected $workflowText `
-    "  build:`n    needs: prepare`n    runs-on: windows-latest`n    permissions:`n      contents: read`n`n    steps:" `
-    "  build:`n    needs: prepare`n    runs-on: windows-latest`n    permissions:`n      contents: read`n    outputs:`n      artifact_id: `${{ steps.package.outputs.artifact-id }}`n`n    steps:" `
-    "an untrusted build-job output"
+    "if (`"`$env:REQUESTED_COMMIT`" -cnotmatch '^[0-9a-f]{40}`$')" `
+    "if (`"`$env:REQUESTED_COMMIT`" -cnotmatch '^[0-9a-f]{7,40}`$')" `
+    "an abbreviated commit id" `
+    "lowercase full-SHA input guard"
 Assert-MutationRejected $workflowText `
-    "  verify:`n    needs: [prepare, build]`n    runs-on: windows-latest`n    permissions:`n      contents: read" `
-    "  verify:`n    needs: [prepare, build]`n    runs-on: windows-latest`n    permissions:`n      contents: write" `
-    "write permission in verify"
+    '              $expectedRef,' `
+    '              "$env:WORKFLOW_REF",' `
+    "acceptance of a non-default workflow ref" `
+    "workflow ref equality operand"
 Assert-MutationRejected $workflowText `
-    "  verify:`n    needs: [prepare, build]" `
-    "  verify:`n    needs: prepare" `
-    "verify job without the selected build"
+    "                `"`$env:REQUESTED_COMMIT`",`n                `"`$env:CONTROL_COMMIT`"," `
+    "                `"`$env:REQUESTED_COMMIT`",`n                `"`$env:REQUESTED_COMMIT`"," `
+    "acceptance of a selected commit different from the control head" `
+    "requested commit equality operand"
 Assert-MutationRejected $workflowText `
-    "  verify:`n    needs: [prepare, build]" `
-    "  verify:`n    needs: [prepare, build]`n    if: always()" `
-    "if always on the verify job"
+    '$tag = "testing-$short"' `
+    '$tag = "testing"' `
+    "a shared movable testing tag" `
+    "commit-scoped testing tag formula"
 Assert-MutationRejected $workflowText `
-    "  verify:`n    needs: [prepare, build]`n    runs-on: windows-latest" `
-    "  verify:`n    needs: [prepare, build]`n    runs-on: self-hosted" `
-    "a self-hosted verification runner"
+    '$archive = "LLPlayer-testing-$short-x64.7z"' `
+    '$archive = "LLPlayer-testing-x64.7z"' `
+    "a cross-commit shared asset name" `
+    "commit-scoped archive formula"
 Assert-MutationRejected $workflowText `
-    "    permissions:`n      contents: write`n`n    steps:" `
-    "    permissions: write-all`n`n    steps:" `
-    "write-all in upload"
+    "          persist-credentials: false" `
+    "          persist-credentials: true" `
+    "persisted checkout credentials" `
+    "credential-free checkout"
 Assert-MutationRejected $workflowText `
-    "    permissions:`n      contents: write`n`n    steps:" `
-    "    permissions:`n      contents: write`n      actions: write`n`n    steps:" `
-    "an extra upload-job permission"
+    "      contents: read" `
+    "      contents: write" `
+    "write permission before the upload job" `
+    "read-only job permission"
 Assert-MutationRejected $workflowText `
-    "  upload:`n    needs: [prepare, verify]" `
-    "  upload:`n    needs: [prepare, verify]`n    if: always()" `
-    "if always on the write job"
-Assert-MutationRejected $workflowText `
-    "  upload:`n    needs: [prepare, verify]" `
-    "  upload:`n    needs: [prepare, build]" `
-    "write job bypassing trusted verification"
-Assert-MutationRejected $workflowText `
-    "  upload:`n    needs: [prepare, verify]`n    runs-on: windows-latest" `
-    "  upload:`n    needs: [prepare, verify]`n    runs-on: self-hosted" `
-    "a self-hosted write runner"
-Assert-MutationRejected $workflowText `
-    "  upload:`n    needs: [prepare, verify]" `
-    "  decoy:`n    runs-on: windows-latest`n    steps:`n      - name: Decoy`n        run: echo decoy`n`n  upload:`n    needs: [prepare, verify]" `
-    "an extra job"
-Assert-MutationRejected $workflowText `
-    "on:`n  workflow_dispatch:" `
-    "on:`n  push:`n  workflow_dispatch:" `
-    "an automatic push trigger"
-Assert-MutationRejected $workflowText `
-    "      - name: Require trusted workflow ref" `
-    "      - name: Skip trusted workflow ref" `
-    "removal of the default-branch dispatch guard"
-Assert-MutationRejected $workflowText `
-    '          ref: ${{ needs.prepare.outputs.commit_sha }}' `
-    '          ref: ${{ inputs.commit }}' `
-    "build checkout of the moving user ref"
-Assert-MutationRejected $workflowText `
-    "        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1" `
-    "        uses: actions/checkout@v5" `
-    "a mutable control checkout action"
-Assert-LastMutationRejected $workflowText `
-    "        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1" `
-    "        uses: actions/checkout@v5" `
-    "a mutable build checkout action"
-Assert-MutationRejected $workflowText `
-    "        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0" `
-    "        uses: actions/github-script@v7" `
-    "a mutable release metadata action"
-Assert-MutationRejected $workflowText `
-    "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1" `
-    "        uses: actions/upload-artifact@v7" `
-    "a mutable unverified artifact upload action"
-Assert-LastMutationRejected $workflowText `
-    "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1" `
-    "        uses: actions/upload-artifact@v7" `
-    "a mutable verified artifact upload action"
-Assert-MutationRejected $workflowText `
-    "          name: llplayer-testing-release-unverified`n          path: `${{ needs.prepare.outputs.archive_name }}" `
-    "          name: `${{ needs.prepare.outputs.archive_name }}`n          path: `${{ needs.prepare.outputs.archive_name }}" `
-    "a dynamic unverified artifact name"
-Assert-MutationRejected $workflowText `
-    '          path: ${{ needs.prepare.outputs.archive_name }}' `
-    "          path: '*.7z'" `
-    "a wildcard unverified artifact upload path"
-Assert-MutationRejected $workflowText `
-    "          overwrite: false" `
-    "          overwrite: true" `
-    "artifact overwrite in the selected-code job"
-Assert-MutationRejected $workflowText `
-    "    steps:`n      - name: Download unverified testing release artifact" `
-    "    steps:`n      - name: Checkout selected code in verify job`n        uses: actions/checkout@v5`n`n      - name: Download unverified testing release artifact" `
-    "checkout in the verify job"
-Assert-MutationRejected $workflowText `
-    "      - name: Upload verified testing release artifact" `
-    "      - name: Execute selected action in verify job`n        uses: ./.github/actions/build-package`n`n      - name: Upload verified testing release artifact" `
-    "a local action in the verify job"
-Assert-MutationRejected $workflowText `
-    "        id: verified-asset`n        shell: pwsh" `
-    "        id: verified-asset`n        continue-on-error: true`n        shell: pwsh" `
-    "continue-on-error on unverified package validation"
-Assert-MutationRejected $workflowText `
-    '          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-testing-release-unverified' `
-    "          ARTIFACT_DIRECTORY: `${{ runner.temp }}\llplayer-testing-release-unverified`n          GH_TOKEN: `${{ secrets.GITHUB_TOKEN }}" `
-    "token exposure to the verify job"
-Assert-MutationRejected $workflowText `
-    "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" `
-    "        uses: actions/download-artifact@v8" `
-    "a mutable unverified artifact download action"
-Assert-MutationRejected $workflowText `
-    "          name: llplayer-testing-release-unverified`n          path: `${{ runner.temp }}\llplayer-testing-release-unverified" `
-    "          artifact-ids: `${{ needs.build.outputs.artifact_id }}`n          path: `${{ runner.temp }}\llplayer-testing-release-unverified" `
-    "artifact selection through an untrusted build output"
+    "& `$sevenZip t `"`$expectedPath`"" `
+    "Write-Host `"Archive test skipped.`"" `
+    "a missing 7-Zip integrity test" `
+    "7-Zip integrity test"
 Assert-MutationRejected $workflowText `
     "          digest-mismatch: error" `
     "          digest-mismatch: warn" `
-    "non-failing unverified artifact digest validation"
+    "a non-failing artifact digest policy" `
+    "fail-closed artifact digest policy"
 Assert-MutationRejected $workflowText `
-    "          digest-mismatch: error" `
-    "          digest-mismatch: error`n          github-token: `${{ secrets.GITHUB_TOKEN }}`n          run-id: 1" `
-    "cross-run unverified artifact download inputs"
+    "              --verify-tag ``" `
+    "              --target `"`$sha`" ``" `
+    "implicit tag movement during release creation" `
+    "existing-tag release creation"
 Assert-MutationRejected $workflowText `
-    "          name: llplayer-testing-release-verified`n          path: `${{ steps.verified-asset.outputs.path }}" `
-    "          name: llplayer-testing-release-verified`n          path: `${{ needs.prepare.outputs.archive_name }}" `
-    "verified re-upload bypassing trusted path validation"
+    "              --draft ``" `
+    "              --latest ``" `
+    "a published testing release" `
+    "draft-only release creation"
 Assert-MutationRejected $workflowText `
-    "          name: llplayer-testing-release-verified`n          path: `${{ steps.verified-asset.outputs.path }}" `
-    "          name: llplayer-testing-release-unverified`n          path: `${{ steps.verified-asset.outputs.path }}" `
-    "verified re-upload using the raw artifact name"
-Assert-LastMutationRejected $workflowText `
-    "          overwrite: false" `
-    "          overwrite: true" `
-    "artifact overwrite in the verification job"
-Assert-LastMutationRejected $workflowText `
-    "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" `
-    "        uses: actions/download-artifact@v8" `
-    "a mutable artifact download action in the write job"
+    "                `$Release.prerelease -ne `$true)" `
+    "                `$false)" `
+    "a non-prerelease testing target" `
+    "draft prerelease state assertion"
 Assert-MutationRejected $workflowText `
-    "          name: llplayer-testing-release-verified`n          path: `${{ runner.temp }}\llplayer-testing-release-verified" `
-    "          name: llplayer-testing-release-unverified`n          path: `${{ runner.temp }}\llplayer-testing-release-unverified" `
-    "write job consuming the unverified artifact"
+    "          if (-not `$digestConfirmed)" `
+    "          if (`$false)" `
+    "acceptance of a missing remote asset digest" `
+    "missing remote digest failure"
 Assert-MutationRejected $workflowText `
-    "          name: llplayer-testing-release-verified`n          path: `${{ runner.temp }}\llplayer-testing-release-verified" `
-    "          artifact-ids: `${{ needs.verify.outputs.artifact_id }}`n          path: `${{ runner.temp }}\llplayer-testing-release-verified" `
-    "write-job artifact selection through an output"
-Assert-LastMutationRejected $workflowText `
-    "          digest-mismatch: error" `
-    "          digest-mismatch: warn" `
-    "non-failing verified artifact digest validation"
-Assert-LastMutationRejected $workflowText `
-    "          digest-mismatch: error" `
-    "          digest-mismatch: error`n          github-token: `${{ secrets.GITHUB_TOKEN }}`n          run-id: 1" `
-    "cross-run verified artifact download inputs"
+    "            --clobber ``" `
+    "            --repo `"`$repo`"" `
+    "a missing exact-asset overwrite flag" `
+    "scoped testing asset overwrite"
 Assert-MutationRejected $workflowText `
-    "    steps:`n      - name: Download testing release artifact" `
-    "    steps:`n      - name: Checkout selected code in write job`n        uses: actions/checkout@v5`n`n      - name: Download testing release artifact" `
+    "    steps:`n      - name: Download verified testing release artifact" `
+    "    steps:`n      - name: Checkout selected code`n        uses: actions/checkout@v5`n`n      - name: Download verified testing release artifact" `
+    "checkout in the write job" `
     "checkout in the write job"
 Assert-MutationRejected $workflowText `
-    "      - name: Upload Testing Asset (overwrite)" `
-    "      - name: Execute selected action in write job`n        uses: ./.github/actions/build-package`n`n      - name: Upload Testing Asset (overwrite)" `
-    "a local action in the write job"
+    "    steps:`n      - name: Download verified testing release artifact" `
+    "    steps:`n      -`n          name: Unexpected deep-indented pinned action`n          `"u\u0073es`": actions/cache@0123456789abcdef0123456789abcdef01234567`n`n      - name: Download verified testing release artifact" `
+    "a bare write-job step with a deep-indented escaped uses key" `
+    "noncanonical action syntax"
 Assert-MutationRejected $workflowText `
-    "        id: release-asset`n        shell: pwsh" `
-    "        id: release-asset`n        continue-on-error: true`n        shell: pwsh" `
-    "continue-on-error on package validation"
+    "    steps:`n      - name: Download verified testing release artifact" `
+    "    steps:`n      - name: Unexpected anchored-key pinned action`n        &hidden uses: actions/cache@0123456789abcdef0123456789abcdef01234567`n`n      - name: Download verified testing release artifact" `
+    "a write-job action encoded with an anchored mapping key" `
+    "anchored or aliased workflow key"
 Assert-MutationRejected $workflowText `
-    '          ARTIFACT_DIRECTORY: ${{ runner.temp }}\llplayer-testing-release-verified' `
-    "          ARTIFACT_DIRECTORY: `${{ runner.temp }}\llplayer-testing-release-verified`n          GH_TOKEN: `${{ secrets.GITHUB_TOKEN }}" `
-    "write token exposure to package validation"
-Assert-LastMutationRejected $workflowText `
-    '          $entries = @(Get-ChildItem -LiteralPath $root -Force)' `
-    "          `$entries = @(Get-ChildItem -LiteralPath `$root -Force)`n          Expand-Archive -LiteralPath `$entries[0].FullName" `
-    "artifact extraction in the write job"
-Assert-LastMutationRejected $workflowText `
-    '          $file = $entries[0]' `
-    "          `$file = `$entries[0]`n          & `$file.FullName" `
-    "artifact execution in the write job"
+    "    steps:`n      - name: Download verified testing release artifact" `
+    "    steps:`n      - name: Unexpected multiline-explicit pinned action`n        ?`n          uses`n        : actions/cache@0123456789abcdef0123456789abcdef01234567`n`n      - name: Download verified testing release artifact" `
+    "a write-job action encoded with a multiline explicit key" `
+    "explicit or merged workflow key"
 Assert-MutationRejected $workflowText `
-    '          ARCHIVE_PATH: ${{ steps.release-asset.outputs.path }}' `
-    '          ARCHIVE_PATH: ${{ needs.prepare.outputs.archive_name }}' `
-    "release upload bypassing write-job path validation"
+    "    steps:`n      - name: Download verified testing release artifact" `
+    "    steps:`n      - uses: actions/cache@0123456789abcdef0123456789abcdef01234567`n`n      - name: Download verified testing release artifact" `
+    "a write-job action encoded as an inline sequence mapping" `
+    "workflow exact uses multiset"
 Assert-MutationRejected $workflowText `
-    '          & gh release upload v0.0.1 "$env:ARCHIVE_PATH" `' `
-    '          & gh release upload v0.0.1 "${{ needs.prepare.outputs.archive_name }}" `' `
-    "direct expression interpolation in the privileged upload command"
+    "      - name: Create or update Testing Draft Release" `
+    "      - name: Execute selected action`n        uses: ./.github/actions/build-package`n`n      - name: Create or update Testing Draft Release" `
+    "local action execution in the write job" `
+    "local action execution in the write job"
 Assert-MutationRejected $workflowText `
-    "permissions: {}" `
-    "permissions: {}`ndefaults:`n  run:`n    shell: cmd" `
-    "workflow-level custom shell defaults"
+    "      - name: Stage trusted release validator" `
+    "      - name: Unexpected fully pinned action`n        uses: actions/cache@0123456789abcdef0123456789abcdef01234567 # adversarial fixture`n`n      - name: Stage trusted release validator" `
+    "an additional fully SHA-pinned action" `
+    "exact uses multiset"
 Assert-MutationRejected $workflowText `
-    "permissions: {}" `
-    "permissions: {}`npermissions: {}" `
-    "duplicate workflow permissions"
+    "      - name: Stage trusted release validator" `
+    "      - name: Unexpected double-quoted pinned action`n        `"uses`": actions/cache@0123456789abcdef0123456789abcdef01234567 # adversarial fixture`n`n      - name: Stage trusted release validator" `
+    "an additional fully SHA-pinned action with a double-quoted uses key" `
+    "quoted or escaped workflow key"
 Assert-MutationRejected $workflowText `
-    "    permissions:`n      contents: read" `
-    '    "permissions":' + "`n      contents: read" `
-    "a quoted protected permission key"
+    "      - name: Stage trusted release validator" `
+    "      - name: Unexpected single-quoted pinned action`n        'uses': actions/cache@0123456789abcdef0123456789abcdef01234567 # adversarial fixture`n`n      - name: Stage trusted release validator" `
+    "an additional fully SHA-pinned action with a single-quoted uses key" `
+    "quoted or escaped workflow key"
+Assert-MutationRejected $workflowText `
+    "      - name: Stage trusted release validator" `
+    "      - name: Unexpected escaped-key pinned action`n        `"u\u0073es`": actions/cache@0123456789abcdef0123456789abcdef01234567 # adversarial fixture`n`n      - name: Stage trusted release validator" `
+    "an additional fully SHA-pinned action with an escaped uses key" `
+    "noncanonical action syntax"
+Assert-MutationRejected $workflowText `
+    "      - name: Stage trusted release validator" `
+    "      - name: Unexpected explicit-key pinned action`n        ? uses`n        : actions/cache@0123456789abcdef0123456789abcdef01234567`n`n      - name: Stage trusted release validator" `
+    "an additional fully SHA-pinned action with an explicit uses key" `
+    "noncanonical action syntax"
+Assert-MutationRejected $workflowText `
+    "      - name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" `
+    "      - &setup_step`n        name: Setup .NET`n        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0" `
+    "an anchored expected action step" `
+    "noncanonical action syntax"
+Assert-MutationRejected $workflowText `
+    "      - name: Build & Package`n        id: package`n        uses: ./.github/actions/build-package" `
+    "      - name: Misnamed package action`n        id: package`n        uses: ./.github/actions/build-package" `
+    "an expected action routed through the wrong named step" `
+    "packaging action step routing"
+Assert-MutationRejected $workflowText `
+    "      - name: Stage trusted release validator" `
+    "      - { name: Unexpected flow-style pinned action, uses: actions/cache@0123456789abcdef0123456789abcdef01234567 }`n`n      - name: Stage trusted release validator" `
+    "an additional fully SHA-pinned flow-style action" `
+    "flow, explicit, anchored, aliased, or tagged step declaration"
+Assert-MutationRejected $workflowText `
+    "        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1" `
+    "        uses: actions/download-artifact@v8" `
+    "a mutable external action" `
+    "immutable artifact download action"
 
 $tempRoot = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $fixtureRoot = [System.IO.Path]::GetFullPath(
-    (Join-Path $tempRoot ("llplayer-release-boundary-" + [guid]::NewGuid().ToString("N"))))
+    (Join-Path $tempRoot ("llplayer-testing-boundary-" + [guid]::NewGuid().ToString("N"))))
 if (-not $fixtureRoot.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Artifact fixture path escaped the system temporary directory."
 }
 
-$expectedArchive = "LLPlayer-testing-v0.3.61-deadbeef1234.7z"
+$expectedArchive = "LLPlayer-testing-deadbeef1234-x64.7z"
 try {
     $positive = Join-Path $fixtureRoot "positive"
     $null = New-Item -ItemType Directory -Path $positive -Force
-    [System.IO.File]::WriteAllBytes((Join-Path $positive $expectedArchive), [byte[]](1, 2, 3))
-    $positivePath = Test-DownloadedArtifactShape $positive $expectedArchive
+    $bytes = [byte[]](1, 2, 3)
+    $positiveFile = Join-Path $positive $expectedArchive
+    [System.IO.File]::WriteAllBytes($positiveFile, $bytes)
+    $positiveHash = (Get-FileHash -LiteralPath $positiveFile -Algorithm SHA256).Hash.ToLowerInvariant()
+    $positivePath = Test-DownloadedArtifactEvidence `
+        $positive `
+        $expectedArchive `
+        $positiveHash `
+        $bytes.Length
     if (-not [string]::Equals(
         $positivePath,
-        [System.IO.Path]::GetFullPath((Join-Path $positive $expectedArchive)),
+        [System.IO.Path]::GetFullPath($positiveFile),
         [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Downloaded artifact validator returned an unexpected positive path."
+        throw "Downloaded artifact evidence validator returned an unexpected positive path."
     }
+
+    Assert-ArtifactEvidenceRejected `
+        $positive `
+        $expectedArchive `
+        ("0" * 64) `
+        $bytes.Length `
+        "a mismatched SHA-256"
+    Assert-ArtifactEvidenceRejected `
+        $positive `
+        $expectedArchive `
+        $positiveHash `
+        ($bytes.Length + 1) `
+        "a mismatched size"
+    Assert-ArtifactEvidenceRejected `
+        $positive `
+        "LLPlayer-testing.7z" `
+        $positiveHash `
+        $bytes.Length `
+        "a shared unsafe asset name"
 
     $extra = Join-Path $fixtureRoot "extra"
     $null = New-Item -ItemType Directory -Path $extra -Force
-    [System.IO.File]::WriteAllBytes((Join-Path $extra $expectedArchive), [byte[]](1))
+    [System.IO.File]::WriteAllBytes((Join-Path $extra $expectedArchive), $bytes)
     [System.IO.File]::WriteAllBytes((Join-Path $extra "extra.txt"), [byte[]](1))
-    Assert-ArtifactShapeRejected $extra $expectedArchive "an artifact with an extra entry"
-
-    $nested = Join-Path $fixtureRoot "nested"
-    $null = New-Item -ItemType Directory -Path (Join-Path $nested "nested") -Force
-    [System.IO.File]::WriteAllBytes((Join-Path $nested "nested\$expectedArchive"), [byte[]](1))
-    Assert-ArtifactShapeRejected $nested $expectedArchive "a nested archive"
+    Assert-ArtifactEvidenceRejected `
+        $extra `
+        $expectedArchive `
+        $positiveHash `
+        $bytes.Length `
+        "an artifact with an extra direct entry"
 
     $empty = Join-Path $fixtureRoot "empty"
     $null = New-Item -ItemType Directory -Path $empty -Force
     [System.IO.File]::WriteAllBytes((Join-Path $empty $expectedArchive), [byte[]]@())
-    Assert-ArtifactShapeRejected $empty $expectedArchive "an empty archive"
-
-    $wrongName = Join-Path $fixtureRoot "wrong-name"
-    $null = New-Item -ItemType Directory -Path $wrongName -Force
-    [System.IO.File]::WriteAllBytes((Join-Path $wrongName "LLPlayer-testing-v0.3.61-cafebabe1234.7z"), [byte[]](1))
-    Assert-ArtifactShapeRejected $wrongName $expectedArchive "a mismatched archive basename"
-
-    Assert-ArtifactShapeRejected $positive "..\LLPlayer-testing-v0.3.61-deadbeef1234.7z" "an unsafe expected basename"
+    Assert-ArtifactEvidenceRejected `
+        $empty `
+        $expectedArchive `
+        $positiveHash `
+        $bytes.Length `
+        "an empty archive"
 }
 finally {
     if (Test-Path -LiteralPath $fixtureRoot) {
@@ -1110,4 +827,4 @@ finally {
     }
 }
 
-Write-Host "Testing Release write-token boundary verification completed."
+Write-Host "Testing Release bootstrap/write-token boundary verification completed."

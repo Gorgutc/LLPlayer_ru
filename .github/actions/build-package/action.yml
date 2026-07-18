@@ -8,6 +8,22 @@ inputs:
     description: 'Explicit yt-dlp version to bundle (pin). Leave empty to resolve the latest release at build time.'
     required: false
     default: ''
+outputs:
+  yt-dlp-version:
+    description: 'Resolved yt-dlp release version bundled in the package.'
+    value: ${{ steps.fetch-yt.outputs.version }}
+  yt-dlp-sha256:
+    description: 'Lowercase SHA-256 of the bundled yt-dlp.exe.'
+    value: ${{ steps.download-yt.outputs.sha256 }}
+  yt-dlp-size:
+    description: 'Byte size of the bundled yt-dlp.exe.'
+    value: ${{ steps.download-yt.outputs.size }}
+  archive-sha256:
+    description: 'Lowercase SHA-256 of the tested release archive.'
+    value: ${{ steps.archive.outputs.sha256 }}
+  archive-size:
+    description: 'Byte size of the tested release archive.'
+    value: ${{ steps.archive.outputs.size }}
 runs:
   using: "composite"
   steps:
@@ -101,6 +117,7 @@ runs:
         "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
     - name: Download yt-dlp.exe
+      id: download-yt
       shell: pwsh
       env:
         YTDLP_VERSION: ${{ steps.fetch-yt.outputs.version }}
@@ -112,6 +129,24 @@ runs:
         $outDir = "$pub\Plugins\YoutubeDL"
         New-Item -Path "$outDir\yt-dlp.exe_here" -ItemType File
         Invoke-WebRequest -Uri "$url" -OutFile "$outDir\yt-dlp.exe"
+        $ytDlpPath = "$outDir\yt-dlp.exe"
+
+        $ytDlpFile = Get-Item -LiteralPath "$ytDlpPath"
+        if ($ytDlpFile.PSIsContainer -or
+            (($ytDlpFile.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+            $ytDlpFile.Length -le 0) {
+          throw "Downloaded yt-dlp.exe must be one non-empty regular file."
+        }
+
+        $sha256 = (Get-FileHash -LiteralPath "$ytDlpPath" -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($sha256 -notmatch '^[0-9a-f]{64}$') {
+          throw "Could not calculate a valid SHA-256 for yt-dlp.exe."
+        }
+
+        [System.IO.File]::AppendAllText(
+          $env:GITHUB_OUTPUT,
+          "sha256=$sha256$([Environment]::NewLine)size=$($ytDlpFile.Length)$([Environment]::NewLine)",
+          [System.Text.UTF8Encoding]::new($false))
 
     - name: Validate release contents
       shell: pwsh
@@ -120,10 +155,37 @@ runs:
         foreach ($requiredFile in @(
           "LLPlayer.exe"
           "lib\7z.dll"
+          "lib\license.7z.txt"
           # F-19 slice 2: bundled Silero VAD model + ONNX Runtime native lib must ship (else cue-timing VAD
           # snapping silently no-ops on end-user machines). Fail closed if either is missing from the package.
           "Assets\silero_vad.onnx"
           "onnxruntime.dll"
+          "onnxruntime_providers_shared.dll"
+          "e_sqlite3.dll"
+          "x64\leptonica-1.85.0.dll"
+          "x64\tesseract55.dll"
+          "runtimes\win-x64\ggml-base-whisper.dll"
+          "runtimes\win-x64\ggml-cpu-whisper.dll"
+          "runtimes\win-x64\ggml-whisper.dll"
+          "runtimes\win-x64\whisper.dll"
+          "runtimes\noavx\win-x64\ggml-base-whisper.dll"
+          "runtimes\noavx\win-x64\ggml-cpu-whisper.dll"
+          "runtimes\noavx\win-x64\ggml-whisper.dll"
+          "runtimes\noavx\win-x64\whisper.dll"
+          "runtimes\openvino\win-x64\ggml-base-whisper.dll"
+          "runtimes\openvino\win-x64\ggml-cpu-whisper.dll"
+          "runtimes\openvino\win-x64\ggml-whisper.dll"
+          "runtimes\openvino\win-x64\whisper.dll"
+          "runtimes\vulkan\win-x64\ggml-base-whisper.dll"
+          "runtimes\vulkan\win-x64\ggml-cpu-whisper.dll"
+          "runtimes\vulkan\win-x64\ggml-vulkan-whisper.dll"
+          "runtimes\vulkan\win-x64\ggml-whisper.dll"
+          "runtimes\vulkan\win-x64\whisper.dll"
+          "runtimes\cuda\win-x64\ggml-base-whisper.dll"
+          "runtimes\cuda\win-x64\ggml-cpu-whisper.dll"
+          "runtimes\cuda\win-x64\ggml-cuda-whisper.dll"
+          "runtimes\cuda\win-x64\ggml-whisper.dll"
+          "runtimes\cuda\win-x64\whisper.dll"
           "FFmpeg\avcodec-62.dll"
           "FFmpeg\avdevice-62.dll"
           "FFmpeg\avfilter-11.dll"
@@ -140,8 +202,19 @@ runs:
           "dub_sidecar\uv.lock"
           "dub_sidecar\README.md"
         )) {
-          if (-not (Test-Path (Join-Path $pub $requiredFile))) {
+          $requiredPath = Join-Path $pub $requiredFile
+          if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
             throw "Release package is missing required file $requiredFile."
+          }
+          $requiredItem = Get-Item -LiteralPath $requiredPath
+          if (($requiredItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Release package contains a reparse-point required file $requiredFile."
+          }
+          # yt-dlp.exe_here is the intentional zero-byte discovery marker used by the plugin; every real
+          # runtime/source/legal file must be non-empty.
+          if ($requiredFile -ne "Plugins\YoutubeDL\yt-dlp.exe_here" -and
+              $requiredItem.Length -le 0) {
+            throw "Release package contains an empty required file $requiredFile."
           }
         }
 
@@ -172,4 +245,35 @@ runs:
         if ($out -notmatch '^LLPlayer-[0-9A-Za-z][0-9A-Za-z._+\-]{0,139}\.7z$' -or $out.Contains("..")) {
           throw "Archive name must be a single path-safe LLPlayer-*.7z basename."
         }
-        & "C:\Program Files\7-Zip\7z.exe" a -t7z -mx=8 -mmt=4 "$out" "$pub\*"
+        $sevenZip = "C:\Program Files\7-Zip\7z.exe"
+        $archivePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $out))
+        if (Test-Path -LiteralPath $archivePath) {
+          throw "Refusing to update a pre-existing release archive: $archivePath"
+        }
+
+        & "$sevenZip" a -t7z -mx=8 -mmt=4 "$archivePath" "$pub\*"
+        if ($LASTEXITCODE -ne 0) {
+          throw "7-Zip archive creation failed with exit code $LASTEXITCODE."
+        }
+
+        $archiveFile = Get-Item -LiteralPath $archivePath
+        if ($archiveFile.PSIsContainer -or
+            (($archiveFile.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) -or
+            $archiveFile.Length -le 0) {
+          throw "7-Zip must produce one non-empty regular archive file."
+        }
+
+        & "$sevenZip" t "$archivePath"
+        if ($LASTEXITCODE -ne 0) {
+          throw "7-Zip archive integrity test failed with exit code $LASTEXITCODE."
+        }
+
+        $sha256 = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($sha256 -notmatch '^[0-9a-f]{64}$') {
+          throw "Could not calculate a valid SHA-256 for the release archive."
+        }
+
+        [System.IO.File]::AppendAllText(
+          $env:GITHUB_OUTPUT,
+          "sha256=$sha256$([Environment]::NewLine)size=$($archiveFile.Length)$([Environment]::NewLine)",
+          [System.Text.UTF8Encoding]::new($false))

@@ -21,6 +21,31 @@ try {
         }
     }
 
+    function Assert-RegularPublishFile {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Root,
+
+            [Parameter(Mandatory = $true)]
+            [string]$RelativePath,
+
+            [switch]$AllowEmpty
+        )
+
+        $path = Join-Path $Root $RelativePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Publish smoke is missing required file $RelativePath."
+        }
+
+        $file = Get-Item -LiteralPath $path
+        if (($file.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Publish smoke required file must not be a reparse point: $RelativePath."
+        }
+        if (-not $AllowEmpty -and $file.Length -le 0) {
+            throw "Publish smoke required file must not be empty: $RelativePath."
+        }
+    }
+
     if (-not $SkipVerify) {
         & ".\scripts\codex\verify.ps1"
     }
@@ -36,21 +61,44 @@ try {
     Invoke-Checked dotnet "restore" ".\LLPlayer\LLPlayer.csproj" "/p:PublishReadyToRun=true" "-warnaserror"
     Invoke-Checked dotnet "msbuild" ".\LLPlayer\LLPlayer.csproj" "/t:Publish" "/p:PublishProfile=FolderProfile" "/p:PublishDir=$appPublish" "/warnaserror"
 
-    if (-not (Test-Path (Join-Path $appPublish "LLPlayer.exe"))) {
-        throw "Publish smoke did not produce LLPlayer.exe."
-    }
-    if (-not (Test-Path (Join-Path $appPublish "lib\7z.dll"))) {
-        throw "Publish smoke is missing LLPlayer\lib\7z.dll."
-    }
-    foreach ($runtimeFile in @("Assets\silero_vad.onnx", "onnxruntime.dll")) {
-        if (-not (Test-Path (Join-Path $appPublish $runtimeFile))) {
-            throw "Publish smoke is missing required runtime asset $runtimeFile."
-        }
-    }
-    foreach ($sidecarSource in @("dub_sidecar\server.py", "dub_sidecar\pyproject.toml", "dub_sidecar\uv.lock", "dub_sidecar\README.md")) {
-        if (-not (Test-Path (Join-Path $appPublish $sidecarSource))) {
-            throw "Publish smoke is missing committed dubbing sidecar source $sidecarSource."
-        }
+    foreach ($requiredFile in @(
+        "LLPlayer.exe"
+        "lib\7z.dll"
+        "lib\license.7z.txt"
+        "Assets\silero_vad.onnx"
+        "onnxruntime.dll"
+        "onnxruntime_providers_shared.dll"
+        "e_sqlite3.dll"
+        "x64\leptonica-1.85.0.dll"
+        "x64\tesseract55.dll"
+        "runtimes\win-x64\ggml-base-whisper.dll"
+        "runtimes\win-x64\ggml-cpu-whisper.dll"
+        "runtimes\win-x64\ggml-whisper.dll"
+        "runtimes\win-x64\whisper.dll"
+        "runtimes\noavx\win-x64\ggml-base-whisper.dll"
+        "runtimes\noavx\win-x64\ggml-cpu-whisper.dll"
+        "runtimes\noavx\win-x64\ggml-whisper.dll"
+        "runtimes\noavx\win-x64\whisper.dll"
+        "runtimes\openvino\win-x64\ggml-base-whisper.dll"
+        "runtimes\openvino\win-x64\ggml-cpu-whisper.dll"
+        "runtimes\openvino\win-x64\ggml-whisper.dll"
+        "runtimes\openvino\win-x64\whisper.dll"
+        "runtimes\vulkan\win-x64\ggml-base-whisper.dll"
+        "runtimes\vulkan\win-x64\ggml-cpu-whisper.dll"
+        "runtimes\vulkan\win-x64\ggml-vulkan-whisper.dll"
+        "runtimes\vulkan\win-x64\ggml-whisper.dll"
+        "runtimes\vulkan\win-x64\whisper.dll"
+        "runtimes\cuda\win-x64\ggml-base-whisper.dll"
+        "runtimes\cuda\win-x64\ggml-cpu-whisper.dll"
+        "runtimes\cuda\win-x64\ggml-cuda-whisper.dll"
+        "runtimes\cuda\win-x64\ggml-whisper.dll"
+        "runtimes\cuda\win-x64\whisper.dll"
+        "dub_sidecar\server.py"
+        "dub_sidecar\pyproject.toml"
+        "dub_sidecar\uv.lock"
+        "dub_sidecar\README.md"
+    )) {
+        Assert-RegularPublishFile -Root $appPublish -RelativePath $requiredFile
     }
     $forbiddenDubRuntimeDirs = @(Get-ChildItem $appPublish -Directory -Recurse -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -in @("DubEngine", "dubmodels") })
@@ -100,9 +148,7 @@ try {
         "swresample-6.dll",
         "swscale-9.dll"
     )) {
-        if (-not (Test-Path (Join-Path $appPublish "FFmpeg\$ffmpegDll"))) {
-            throw "Publish smoke is missing copied FFmpeg DLL $ffmpegDll."
-        }
+        Assert-RegularPublishFile -Root $appPublish -RelativePath "FFmpeg\$ffmpegDll"
     }
 
     Invoke-Checked dotnet "restore" ".\Plugins\YoutubeDL\YoutubeDL.csproj" "/p:PublishReadyToRun=true" "-warnaserror"
@@ -113,12 +159,8 @@ try {
     Copy-Item (Join-Path $pluginPublish "YoutubeDL.dll") -Destination $pluginOut -Force
     Copy-Item (Join-Path $pluginPublish "YoutubeDL.pdb") -Destination $pluginOut -Force
 
-    if (-not (Test-Path (Join-Path $pluginOut "YoutubeDL.dll"))) {
-        throw "Publish smoke is missing Plugins\YoutubeDL\YoutubeDL.dll."
-    }
-    if (-not (Test-Path (Join-Path $pluginOut "YoutubeDL.pdb"))) {
-        throw "Publish smoke is missing Plugins\YoutubeDL\YoutubeDL.pdb."
-    }
+    Assert-RegularPublishFile -Root $appPublish -RelativePath "Plugins\YoutubeDL\YoutubeDL.dll"
+    Assert-RegularPublishFile -Root $appPublish -RelativePath "Plugins\YoutubeDL\YoutubeDL.pdb"
 
     $packageAction = Get-Content ".\.github\actions\build-package\action.yml" -Raw
     $releaseTailChecks = @{
@@ -130,6 +172,11 @@ try {
         "release recursive dub runtime rejection" = "Get-ChildItem `$pub -Directory -Recurse"
         "release Silero VAD model check" = "Assets\silero_vad.onnx"
         "release ONNX Runtime native check" = "onnxruntime.dll"
+        "release ONNX provider native check" = "onnxruntime_providers_shared.dll"
+        "release SQLite native check" = "e_sqlite3.dll"
+        "release 7-Zip license check" = "lib\license.7z.txt"
+        "release Tesseract native check" = "x64\tesseract55.dll"
+        "release Whisper CUDA native check" = "runtimes\cuda\win-x64\ggml-cuda-whisper.dll"
         "release FFmpeg avcodec check" = "FFmpeg\avcodec-62.dll"
         "release FFmpeg avdevice check" = "FFmpeg\avdevice-62.dll"
         "release FFmpeg avfilter check" = "FFmpeg\avfilter-11.dll"
@@ -139,6 +186,9 @@ try {
         "release FFmpeg swscale check" = "FFmpeg\swscale-9.dll"
         "7-Zip executable" = "C:\Program Files\7-Zip\7z.exe"
         "7-Zip add command" = " a -t7z -mx=8 -mmt=4 "
+        "7-Zip integrity test" = '& "$sevenZip" t "$archivePath"'
+        "yt-dlp SHA-256 output" = "yt-dlp-sha256"
+        "archive SHA-256 output" = "archive-sha256"
     }
     foreach ($check in $releaseTailChecks.GetEnumerator()) {
         if (-not $packageAction.Contains($check.Value)) {
@@ -148,9 +198,7 @@ try {
 
     $ytDlpPlaceholder = Join-Path $pluginOut "yt-dlp.exe_here"
     New-Item -Path $ytDlpPlaceholder -ItemType File -Force | Out-Null
-    if (-not (Test-Path $ytDlpPlaceholder)) {
-        throw "Release dry-run did not create Plugins\YoutubeDL\yt-dlp.exe_here placeholder."
-    }
+    Assert-RegularPublishFile -Root $appPublish -RelativePath "Plugins\YoutubeDL\yt-dlp.exe_here" -AllowEmpty
     if (Test-Path (Join-Path $pluginOut "yt-dlp.exe")) {
         throw "Ship dry-run must not download or carry a local yt-dlp.exe."
     }

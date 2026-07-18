@@ -60,13 +60,6 @@ function Get-StepBlock([string]$Path, [string]$StepName) {
     throw "Workflow step '$StepName' is missing from $Path."
 }
 
-function Require-StepFragments([string]$Path, [string]$StepName, [string[]]$Fragments) {
-    $block = Get-StepBlock $Path $StepName
-    foreach ($fragment in $Fragments) {
-        Require-Fragment $block $fragment "Workflow step '$StepName' is missing required fragment: $fragment"
-    }
-}
-
 function Require-ExactStepBlock([string]$Path, [string]$StepName, [string[]]$ExpectedLines) {
     $marker = "- name: $StepName"
     $markerCount = @(Get-Content -LiteralPath $Path | Where-Object {
@@ -85,6 +78,148 @@ function Require-ExactStepBlock([string]$Path, [string]$StepName, [string[]]$Exp
             throw "Workflow step '$StepName' in $Path drifted at line $($index + 1): '$($actualLines[$index])'."
         }
     }
+}
+
+function Assert-ExactCompositeActionUses([string]$Text, [string]$Source) {
+    $normalized = $Text.Replace("`r`n", "`n").Replace("`r", "`n")
+    $lines = @($normalized -split "`n")
+    $expectedReference = "actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1"
+    $runsIndices = @()
+    $stepsIndices = @()
+    for ($index = 0; $index -lt $lines.Count; $index++) {
+        if ([string]::Equals($lines[$index], "runs:", [System.StringComparison]::Ordinal)) {
+            $runsIndices += $index
+        }
+        if ([string]::Equals($lines[$index], "  steps:", [System.StringComparison]::Ordinal)) {
+            $stepsIndices += $index
+        }
+    }
+    if ($runsIndices.Count -ne 1 -or $stepsIndices.Count -ne 1 -or $stepsIndices[0] -le $runsIndices[0]) {
+        throw "$Source must contain exactly one canonical runs.steps mapping."
+    }
+
+    $runsHeader = @(
+        for ($index = $runsIndices[0] + 1; $index -le $stepsIndices[0]; $index++) {
+            $trimmed = $lines[$index].Trim()
+            if ($trimmed -and -not $trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+                $lines[$index]
+            }
+        }
+    )
+    if ($runsHeader.Count -ne 2 -or
+        -not [string]::Equals($runsHeader[0], '  using: "composite"', [System.StringComparison]::Ordinal) -or
+        -not [string]::Equals($runsHeader[1], "  steps:", [System.StringComparison]::Ordinal)) {
+        throw "$Source must bind exact canonical using and steps keys directly beneath runs."
+    }
+
+    $rootKeys = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $lines) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+            continue
+        }
+        $leading = $line.Length - $line.TrimStart().Length
+        if ($leading -ne 0) {
+            continue
+        }
+        if ($line -cnotmatch '^(?<key>name|description|inputs|outputs|runs):(?:\s.*)?$') {
+            throw "$Source contains a non-canonical root action mapping: '$trimmed'."
+        }
+        $rootKeys.Add($Matches["key"])
+    }
+    $expectedRootKeys = @("name", "description", "inputs", "outputs", "runs")
+    if ($rootKeys.Count -ne $expectedRootKeys.Count) {
+        throw "$Source must contain exactly the canonical root action mappings."
+    }
+    for ($index = 0; $index -lt $expectedRootKeys.Count; $index++) {
+        if ($rootKeys[$index] -cne $expectedRootKeys[$index]) {
+            throw "$Source must keep canonical root action mapping order."
+        }
+    }
+
+    $usesReferences = New-Object System.Collections.Generic.List[string]
+    $stepCount = 0
+    for ($index = $stepsIndices[0] + 1; $index -lt $lines.Count; $index++) {
+        $line = $lines[$index]
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+            continue
+        }
+
+        $leading = $line.Length - $line.TrimStart().Length
+        if ($leading -eq 4) {
+            if ($line -cnotmatch '^    - name:\s+\S.*$') {
+                throw "$Source contains a non-canonical composite step mapping at line $($index + 1): '$trimmed'."
+            }
+            $stepCount++
+            continue
+        }
+
+        if ($leading -eq 6) {
+            if ($line -cnotmatch '^      (?<key>uses|with|shell|run|id|env):(?:\s.*)?$') {
+                throw "$Source contains a non-canonical composite step property at line $($index + 1): '$trimmed'."
+            }
+            if ($stepCount -eq 0) {
+                throw "$Source contains a composite step property before the first canonical step."
+            }
+            if ($Matches["key"] -ceq "uses") {
+                $reference = $line.Substring($line.IndexOf(":", [System.StringComparison]::Ordinal) + 1).Trim()
+                $commentIndex = $reference.IndexOf(" #", [System.StringComparison]::Ordinal)
+                if ($commentIndex -ge 0) {
+                    $reference = $reference.Substring(0, $commentIndex).TrimEnd()
+                }
+                $usesReferences.Add($reference)
+            }
+            continue
+        }
+
+        if ($leading -lt 8) {
+            throw "$Source contains non-canonical indentation in composite steps at line $($index + 1): '$trimmed'."
+        }
+    }
+
+    if ($stepCount -eq 0) {
+        throw "$Source composite action must contain at least one canonical step."
+    }
+    if ($usesReferences.Count -ne 1) {
+        throw "$Source must contain exactly one composite-action uses reference; found $($usesReferences.Count)."
+    }
+    if ($usesReferences[0] -cne $expectedReference) {
+        throw "$Source must use only the canonical pinned action reference '$expectedReference'."
+    }
+}
+
+function Replace-FirstOrdinal(
+    [string]$Text,
+    [string]$OldValue,
+    [string]$NewValue,
+    [string]$Description
+) {
+    $index = $Text.IndexOf($OldValue, [System.StringComparison]::Ordinal)
+    if ($index -lt 0) {
+        throw "Composite-action adversarial fixture could not find $Description."
+    }
+
+    return $Text.Remove($index, $OldValue.Length).Insert($index, $NewValue)
+}
+
+function Assert-CompositeActionUsesRejected(
+    [string]$Text,
+    [string]$Description,
+    [string]$ExpectedErrorFragment
+) {
+    try {
+        Assert-ExactCompositeActionUses $Text "adversarial composite-action fixture"
+    }
+    catch {
+        $message = $_.Exception.Message
+        if ($message.IndexOf($ExpectedErrorFragment, [System.StringComparison]::Ordinal) -lt 0) {
+            throw "Composite-action fixture '$Description' failed for the wrong reason: $message"
+        }
+        return
+    }
+
+    throw "Composite-action uses validator accepted adversarial fixture: $Description."
 }
 
 function Assert-NoExpressionInRunBlock([string]$Path, [string]$ForbiddenExpression) {
@@ -135,188 +270,6 @@ function Assert-RunFixtureRejected([string]$Yaml, [string]$Description) {
     }
     finally {
         Remove-Item -LiteralPath $fixture -Force -ErrorAction SilentlyContinue
-    }
-}
-
-function Normalize-WorkflowText([string]$Text) {
-    return (($Text -replace "`r`n", "`n") -replace "`r", "`n").TrimEnd("`n")
-}
-
-function Get-StableReleaseSteps([string]$Text, [string]$Source) {
-    $normalized = Normalize-WorkflowText $Text
-    $lines = @($normalized -split "`n")
-    $jobs = @()
-    $release = @()
-    $steps = @()
-    for ($index = 0; $index -lt $lines.Count; $index++) {
-        if ([string]::Equals($lines[$index], "jobs:", [System.StringComparison]::Ordinal)) {
-            $jobs += $index
-        }
-        if ([string]::Equals($lines[$index], "  release:", [System.StringComparison]::Ordinal)) {
-            $release += $index
-        }
-        if ([string]::Equals($lines[$index], "    steps:", [System.StringComparison]::Ordinal)) {
-            $steps += $index
-        }
-    }
-    if ($jobs.Count -ne 1 -or $release.Count -ne 1 -or $steps.Count -ne 1) {
-        throw "$Source must contain exactly one canonical jobs.release.steps path."
-    }
-    if (-not ($jobs[0] -lt $release[0] -and $release[0] -lt $steps[0])) {
-        throw "$Source jobs.release.steps hierarchy is malformed."
-    }
-
-    $jobNames = New-Object System.Collections.Generic.List[string]
-    for ($index = $jobs[0] + 1; $index -lt $lines.Count; $index++) {
-        $line = $lines[$index]
-        $trimmed = $line.Trim()
-        $indent = $line.Length - $line.TrimStart().Length
-        if ($trimmed -and $indent -eq 0) {
-            break
-        }
-        if (-not $trimmed -or $trimmed.StartsWith("#", [System.StringComparison]::Ordinal) -or $indent -ne 2) {
-            continue
-        }
-        if ($line -cnotmatch '^  ([A-Za-z0-9_-]+):\s*(?:#.*)?$') {
-            throw "$Source jobs contains a non-canonical job entry: '$trimmed'."
-        }
-        $jobNames.Add($Matches[1])
-    }
-    if ($jobNames.Count -ne 1 -or -not [string]::Equals(
-        $jobNames[0],
-        "release",
-        [System.StringComparison]::Ordinal)) {
-        throw "$Source jobs must contain only the protected release job."
-    }
-
-    $stepLines = New-Object System.Collections.Generic.List[string]
-    for ($index = $steps[0] + 1; $index -lt $lines.Count; $index++) {
-        $line = $lines[$index]
-        $trimmed = $line.Trim()
-        $indent = $line.Length - $line.TrimStart().Length
-        if ($trimmed -and $indent -le 4) {
-            break
-        }
-        $stepLines.Add($line)
-    }
-    if ($stepLines.Count -eq 0) {
-        throw "$Source jobs.release.steps must not be empty."
-    }
-    return $stepLines.ToArray()
-}
-
-function Get-StableNamedStep([string[]]$StepLines, [string]$Name, [string]$Source) {
-    $marker = "      - name: $Name"
-    $indices = @()
-    for ($index = 0; $index -lt $StepLines.Count; $index++) {
-        if ([string]::Equals($StepLines[$index], $marker, [System.StringComparison]::Ordinal)) {
-            $indices += $index
-        }
-    }
-    if ($indices.Count -ne 1) {
-        throw "$Source jobs.release.steps must contain exactly one '$Name' step; found $($indices.Count)."
-    }
-
-    $start = [int]$indices[0]
-    $end = $StepLines.Count
-    for ($index = $start + 1; $index -lt $StepLines.Count; $index++) {
-        if ($StepLines[$index] -cmatch '^      - ') {
-            $end = $index
-            break
-        }
-    }
-    return @($StepLines[$start..($end - 1)] | Where-Object { $_.Trim() })
-}
-
-function Assert-ExactStableStep(
-    [string[]]$Actual,
-    [string[]]$Expected,
-    [string]$Description,
-    [string]$Source
-) {
-    if ($Actual.Count -ne $Expected.Count) {
-        throw "$Source $Description must contain exactly $($Expected.Count) nonblank lines; found $($Actual.Count)."
-    }
-    for ($index = 0; $index -lt $Expected.Count; $index++) {
-        if (-not [string]::Equals($Actual[$index], $Expected[$index], [System.StringComparison]::Ordinal)) {
-            throw "$Source $Description drifted at line $($index + 1): '$($Actual[$index])'."
-        }
-    }
-}
-
-function Assert-StableReleasePreflightContract([string]$Text, [string]$Source) {
-    $stepLines = Get-StableReleaseSteps $Text $Source
-    $normalized = Normalize-WorkflowText $Text
-    $packageUses = @($normalized -split "`n" | Where-Object {
-        [string]::Equals($_.Trim(), "uses: ./.github/actions/build-package", [System.StringComparison]::Ordinal)
-    })
-    if ($packageUses.Count -ne 1) {
-        throw "$Source must invoke the shared build/package action exactly once; found $($packageUses.Count)."
-    }
-
-    $actualNames = New-Object System.Collections.Generic.List[string]
-    foreach ($line in $stepLines) {
-        $indent = $line.Length - $line.TrimStart().Length
-        if ($indent -ne 6 -or -not $line.TrimStart().StartsWith("- ", [System.StringComparison]::Ordinal)) {
-            continue
-        }
-        if ($line -cnotmatch '^      - name:\s*(.+?)\s*$') {
-            throw "$Source jobs.release.steps contains an anonymous or non-canonical step: '$($line.Trim())'."
-        }
-        $actualNames.Add($Matches[1])
-    }
-
-    $expectedNames = @(
-        "Checkout",
-        "Setup .NET",
-        "Full verification preflight",
-        "Build & Package",
-        "Create or update GitHub Draft Release & Upload Asset"
-    )
-    if ($actualNames.Count -ne $expectedNames.Count) {
-        throw "$Source jobs.release.steps must contain exactly $($expectedNames.Count) named steps; found $($actualNames.Count)."
-    }
-    for ($index = 0; $index -lt $expectedNames.Count; $index++) {
-        if (-not [string]::Equals($actualNames[$index], $expectedNames[$index], [System.StringComparison]::Ordinal)) {
-            throw "$Source jobs.release.steps has unexpected order at position $($index + 1): '$($actualNames[$index])'."
-        }
-    }
-
-    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Checkout" $Source) @(
-        "      - name: Checkout",
-        "        uses: actions/checkout@v5",
-        "        with:",
-        '          ref: ${{ github.sha }}'
-    ) "checkout step" $Source
-    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Setup .NET" $Source) @(
-        "      - name: Setup .NET",
-        "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0",
-        "        with:",
-        "          dotnet-version: 10.0.x"
-    ) ".NET setup step" $Source
-    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Full verification preflight" $Source) @(
-        "      - name: Full verification preflight",
-        "        shell: pwsh",
-        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1"
-    ) "full verification preflight step" $Source
-    Assert-ExactStableStep (Get-StableNamedStep $stepLines "Build & Package" $Source) @(
-        "      - name: Build & Package",
-        "        uses: ./.github/actions/build-package",
-        "        with:",
-        '          archive-name: ${{ env.ARCHIVE_NAME }}'
-    ) "build/package step" $Source
-}
-
-function Assert-StableContractRejected([string]$Text, [string]$Description) {
-    $rejected = $false
-    try {
-        Assert-StableReleasePreflightContract $Text "adversarial fixture ($Description)"
-    }
-    catch {
-        $rejected = $true
-    }
-    if (-not $rejected) {
-        throw "Stable Release preflight validator accepted adversarial fixture: $Description."
     }
 }
 
@@ -416,102 +369,103 @@ $stableText = Get-Content -LiteralPath $stableWorkflow -Raw
 $actionText = Get-Content -LiteralPath $packageAction -Raw
 
 & (Join-Path $PSScriptRoot "verify-testing-release-boundary.ps1")
+& (Join-Path $PSScriptRoot "verify-stable-release-boundary.ps1")
 
-Assert-StableReleasePreflightContract $stableText "stable-release.yml"
-$normalizedStableText = Normalize-WorkflowText $stableText
+Assert-ExactCompositeActionUses $actionText "canonical build-package action"
 
-$stablePreflightBlock = @'
-      - name: Full verification preflight
-        shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1
-'@
-$stablePackageBlock = @'
-      - name: Build & Package
-        uses: ./.github/actions/build-package
-        with:
-          archive-name: ${{ env.ARCHIVE_NAME }}
-'@
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace($stablePreflightBlock + "`n`n", "")) `
-    "a missing full verification preflight"
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace(
-        "        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0",
-        "        uses: actions/setup-dotnet@v5")) `
-    "a mutable release SDK setup action"
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace(
-        "          dotnet-version: 10.0.x",
-        "          dotnet-version: 11.0.x")) `
-    "the wrong release SDK channel"
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace(
-        $stablePreflightBlock + "`n`n" + $stablePackageBlock,
-        $stablePackageBlock + "`n`n" + $stablePreflightBlock)) `
-    "full verification after packaging"
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace(
-        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1",
-        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.ps1")) `
-    "a fast-only release preflight"
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace(
-        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1",
-        "        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1 -SkipRestore")) `
-    "a full verification preflight with restore skipped"
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace(
-        "      - name: Full verification preflight`n        shell: pwsh",
-        "      - name: Full verification preflight`n        continue-on-error: true`n        shell: pwsh")) `
-    "continue-on-error on the full verification preflight"
-Assert-StableContractRejected `
-    ($normalizedStableText.Replace(
-        "      - name: Full verification preflight`n        shell: pwsh",
-        '      - name: Full verification preflight' + "`n" + '        if: ${{ always() }}' + "`n" + "        shell: pwsh")) `
-    "an always-run conditional on the full verification preflight"
-Assert-StableContractRejected `
-    ($normalizedStableText + @'
+$mutableSetupActionFixture = Replace-FirstOrdinal `
+    $actionText `
+    "actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1" `
+    "actions/setup-dotnet@v5" `
+    "the immutable setup-dotnet reference"
+Assert-CompositeActionUsesRejected `
+    $mutableSetupActionFixture `
+    "mutable setup-dotnet reference" `
+    "canonical pinned action reference"
 
-  bypass-package:
-    runs-on: windows-latest
-    steps: # unprotected package path
-      - name: Package without preflight
-        uses: ./.github/actions/build-package
-'@) `
-    "a sibling packaging job without the preflight"
+$extraPinnedActionFixture = Replace-FirstOrdinal `
+    $actionText `
+    "    - name: Restore dependencies" `
+    "    - name: Unauthorized pinned action`n      uses: example/unapproved@0123456789abcdef0123456789abcdef01234567`n`n    - name: Restore dependencies" `
+    "the Restore dependencies step"
+Assert-CompositeActionUsesRejected `
+    $extraPinnedActionFixture `
+    "additional pinned action" `
+    "exactly one composite-action uses reference"
 
-Require-StepFragments $testingWorkflow "Validate requested ref" @(
-    '& "$env:VALIDATOR_PATH"',
-    '-Kind Ref',
-    '-Value "$env:REQUESTED_REF"',
-    '-OutputName value',
-    '-OutputFile "$env:GITHUB_OUTPUT"'
-)
-Require-StepFragments $testingWorkflow "Validate stable release tag" @(
-    '& "$env:VALIDATOR_PATH"',
-    '-Kind Tag',
-    '-Value "$env:STABLE_TAG"',
-    '-OutputName value',
-    '-OutputFile "$env:GITHUB_OUTPUT"'
-)
-Require-StepFragments $testingWorkflow "Resolve immutable release commit" @(
-    'git -C .\selected-source rev-parse HEAD',
-    '-Kind Hash',
-    '-Value "$full"',
-    '-OutputName sha',
-    '-Value "$short"',
-    '-OutputName short',
-    '-OutputFile "$env:GITHUB_OUTPUT"'
-)
-Require-StepFragments $testingWorkflow "Set archive name" @(
-    '& "$env:VALIDATOR_PATH"',
-    '-Kind Archive',
-    '-Value "$archiveName"',
-    '-OutputName name',
-    '-OutputFile "$env:GITHUB_OUTPUT"'
-)
+$quotedUsesKeyFixture = Replace-FirstOrdinal `
+    $actionText `
+    "      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1" `
+    '      "uses": actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1' `
+    "the canonical uses key"
+Assert-CompositeActionUsesRejected `
+    $quotedUsesKeyFixture `
+    "quoted uses key" `
+    "non-canonical composite step property"
+
+$escapedUsesKeyFixture = Replace-FirstOrdinal `
+    $actionText `
+    "      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1" `
+    '      "u\u0073es": example/unapproved@main' `
+    "the canonical uses key for the escaped-key fixture"
+Assert-CompositeActionUsesRejected `
+    $escapedUsesKeyFixture `
+    "escaped uses key" `
+    "non-canonical composite step property"
+
+$explicitUsesKeyFixture = Replace-FirstOrdinal `
+    $actionText `
+    "      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1" `
+    "      ? uses`n      : example/unapproved@main" `
+    "the canonical uses key for the explicit-key fixture"
+Assert-CompositeActionUsesRejected `
+    $explicitUsesKeyFixture `
+    "explicit uses key" `
+    "non-canonical composite step property"
+
+$flowStepFixture = Replace-FirstOrdinal `
+    $actionText `
+    "    - name: Restore dependencies" `
+    "    - { name: Hidden action, uses: example/unapproved@main }`n`n    - name: Restore dependencies" `
+    "the Restore dependencies step for the flow-step fixture"
+Assert-CompositeActionUsesRejected `
+    $flowStepFixture `
+    "flow-style action step" `
+    "non-canonical composite step mapping"
+
+$anchoredStepFixture = Replace-FirstOrdinal `
+    $actionText `
+    "    - name: Restore dependencies" `
+    "    - &hidden`n      name: Hidden action`n      uses: example/unapproved@main`n`n    - name: Restore dependencies" `
+    "the Restore dependencies step for the anchored-step fixture"
+Assert-CompositeActionUsesRejected `
+    $anchoredStepFixture `
+    "anchor-derived action step" `
+    "non-canonical composite step mapping"
+
+$blockScalarDecoyFixture = Replace-FirstOrdinal `
+    $actionText `
+    'description: "Builds the solution, clean, archive with 7z"' `
+    "" `
+    "the canonical description for the block-scalar fixture"
+$blockScalarDecoyFixture = Replace-FirstOrdinal `
+    $blockScalarDecoyFixture `
+    "  steps:" `
+    '  "s\u0074eps":' `
+    "the canonical steps key for the block-scalar fixture"
+$blockScalarDecoyFixture = Replace-FirstOrdinal `
+    $blockScalarDecoyFixture `
+    "    - name: Restore dependencies" `
+    "    - name: Hidden action`n      uses: example/unapproved@main`n`n    - name: Restore dependencies" `
+    "the Restore dependencies step for the block-scalar fixture"
+$blockScalarDecoyFixture += "`ndescription: |`n  steps:`n    - name: Setup .NET`n      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1`n"
+Assert-CompositeActionUsesRejected `
+    $blockScalarDecoyFixture `
+    "block-scalar steps decoy" `
+    "exact canonical using and steps keys directly beneath runs"
 
 Assert-NoExpressionInRunBlock $testingWorkflow '${{'
+Assert-NoExpressionInRunBlock $stableWorkflow '${{'
 Assert-NoExpressionInRunBlock $packageAction '${{ inputs.archive-name }}'
 
 Require-ExactStepBlock $packageAction "Setup .NET" @(
@@ -528,7 +482,7 @@ foreach ($fragment in @(
     'gh release upload v0.0.1 ${{ steps.archive-name.outputs.name }} --clobber',
     '$out = "${{ inputs.archive-name }}"'
 )) {
-    Forbid-Fragment ($workflowText + $actionText) $fragment "Unsafe release interpolation returned: $fragment"
+    Forbid-Fragment ($workflowText + $stableText + $actionText) $fragment "Unsafe release interpolation returned: $fragment"
 }
 
 Require-Fragment $actionText 'ARCHIVE_NAME: ${{ inputs.archive-name }}' "Build/package action must pass archive-name through env."

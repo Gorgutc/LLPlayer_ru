@@ -119,6 +119,19 @@ try {
     Require-Text ".\.github\actions\build-package\action.yml" "LLPlayer\.exe" "Release package action must verify LLPlayer.exe is present."
     Require-Text ".\.github\actions\build-package\action.yml" "Assets\\silero_vad\.onnx" "Release package action must verify the bundled Silero VAD model is present."
     Require-Text ".\.github\actions\build-package\action.yml" "onnxruntime\.dll" "Release package action must verify ONNX Runtime native library is present."
+    foreach ($nativeRuntime in @(
+        "lib\\license\.7z\.txt",
+        "onnxruntime_providers_shared\.dll",
+        "e_sqlite3\.dll",
+        "x64\\tesseract55\.dll",
+        "runtimes\\cuda\\win-x64\\ggml-cuda-whisper\.dll"
+    )) {
+        Require-Text ".\.github\actions\build-package\action.yml" $nativeRuntime "Release package action must verify native/legal runtime $nativeRuntime is present."
+        Require-Text ".\scripts\codex\ship.ps1" $nativeRuntime "Ship smoke must verify native/legal runtime $nativeRuntime is present."
+    }
+    Require-Text ".\.github\actions\build-package\action.yml" "yt-dlp-sha256" "Release package action must expose yt-dlp SHA-256 evidence."
+    Require-Text ".\.github\actions\build-package\action.yml" "archive-sha256" "Release package action must expose archive SHA-256 evidence."
+    Require-Text ".\.github\actions\build-package\action.yml" '& "\$sevenZip" t "\$archivePath"' "Release package action must run a 7-Zip integrity test."
     foreach ($ffmpegDll in @(
         "avcodec-62\.dll",
         "avdevice-62\.dll",
@@ -136,8 +149,19 @@ try {
     Require-Text ".\.github\actions\build-package\action.yml" "Get-ChildItem \`$pub -Directory -Recurse" "Release package action must recursively reject dubbing runtime/model directories."
     Require-Text ".\scripts\codex\verify-fast.ps1" '(?m)^\s*& "\.\\scripts\\codex\\verify-build-workflow\.ps1"\s*$' "Fast verification must run the Build & Test workflow contract validator."
     Require-Text ".\scripts\codex\verify-fast.ps1" '(?m)^\s*& "\.\\scripts\\codex\\verify-full-gate\.ps1"\s*$' "Fast verification must run the executable full build/test gate contract validator."
-    Require-Text ".\scripts\codex\verify-fast.ps1" '(?m)^\s*& "\.\\scripts\\codex\\verify-release-workflow\.ps1"\s*$' "Fast verification must run the Testing Release contract validator."
-    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '(?m)^\s*& \(Join-Path \$PSScriptRoot "verify-testing-release-boundary\.ps1"\)\s*$' "Release verification must execute the write-token boundary validator."
+    Require-Text ".\scripts\codex\verify-fast.ps1" '(?m)^\s*& "\.\\scripts\\codex\\verify-release-workflow\.ps1"\s*$' "Fast verification must run the release workflow contract validators."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '(?m)^\s*& \(Join-Path \$PSScriptRoot "verify-testing-release-boundary\.ps1"\)\s*$' "Release verification must execute the Testing write-token boundary validator."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '(?m)^\s*& \(Join-Path \$PSScriptRoot "verify-stable-release-boundary\.ps1"\)\s*$' "Release verification must execute the Stable write-token boundary validator."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" 'Assert-ExactCompositeActionUses \$actionText "canonical build-package action"' "Release verification must enforce the composite-action uses allowlist."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '"actions/setup-dotnet@v5"' "Release verification must reject a mutable setup-dotnet action reference."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" 'example/unapproved@0123456789abcdef0123456789abcdef01234567' "Release verification must reject an additional pinned composite action."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '''      "uses": actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1''' "Release verification must reject a non-canonical quoted uses key."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '''      "u\\u0073es": example/unapproved@main''' "Release verification must reject an escaped uses key."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '"      \? uses`n      : example/unapproved@main"' "Release verification must reject explicit YAML uses-key syntax."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '\{ name: Hidden action, uses: example/unapproved@main \}' "Release verification must reject flow-style composite steps."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '"    - &hidden`n      name: Hidden action`n      uses: example/unapproved@main' "Release verification must reject anchor-derived composite steps."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '''  "s\\u0074eps":''' "Release verification must reject an escaped real steps key with a block-scalar decoy."
+    Require-Text ".\scripts\codex\verify-release-workflow.ps1" '"block-scalar steps decoy"' "Release verification must retain the block-scalar decoy adversarial fixture."
     Require-Text ".\.github\workflows\build.yml" "dotnet restore -warnaserror" "Build workflow restore must treat NuGet audit warnings as errors."
     Require-Text ".\scripts\codex\verify.ps1" 'Invoke-Checked dotnet "restore" "-warnaserror"' "Full verification restore must treat NuGet audit warnings as errors."
     Require-Text ".\scripts\codex\ship.ps1" 'Invoke-Checked dotnet "restore" "\.\\LLPlayer\\LLPlayer\.csproj" "/p:PublishReadyToRun=true" "-warnaserror"' "Ship smoke app restore must treat NuGet audit warnings as errors."
@@ -149,9 +173,9 @@ try {
     Require-Text ".\docs\agent\quality-tooling.md" "dotnet restore -warnaserror" "Quality tooling docs must document restore audit warnings as errors."
     Require-Text ".\.codex\agents\dotnet_quality_guardian.toml" "dotnet restore -warnaserror" "dotnet_quality_guardian must require restore audit warnings as errors."
     Require-Text ".\scripts\codex\ship.ps1" "Publish cleanup target\(s\) missing" "Ship smoke must fail if release cleanup targets drift."
-    Require-Text ".\scripts\codex\ship.ps1" "Release dry-run" "Ship smoke must dry-run release-only packaging tail."
+    Require-Text ".\scripts\codex\ship.ps1" "releaseTailChecks" "Ship smoke must inspect the release-only packaging tail."
     Require-Text ".\scripts\codex\ship.ps1" "yt-dlp\.exe_here" "Ship smoke must create yt-dlp placeholder."
-    Require-Text ".\scripts\codex\ship.ps1" "LLPlayer\\lib\\7z\.dll" "Ship smoke must verify publish output contains LLPlayer/lib/7z.dll."
+    Require-Text ".\scripts\codex\ship.ps1" "lib\\7z\.dll" "Ship smoke must verify publish output contains LLPlayer/lib/7z.dll."
     Require-Text ".\scripts\codex\ship.ps1" "Assets\\silero_vad\.onnx" "Ship smoke must verify publish output contains Assets/silero_vad.onnx."
     Require-Text ".\scripts\codex\ship.ps1" "onnxruntime\.dll" "Ship smoke must verify publish output contains onnxruntime.dll."
     Require-Text ".\scripts\codex\ship.ps1" "dub_sidecar\\server\.py" "Ship smoke must verify committed dubbing sidecar source is published."
