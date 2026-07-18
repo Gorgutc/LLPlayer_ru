@@ -20,6 +20,11 @@ Use this shape for LLPlayer implementation plans.
 ## Verification
 - Fast gate, full gate, or ship gate.
 - Manual smoke checks if app/runtime behavior changes.
+- Coverage decision: deterministic regression and intentional RED evidence, or the reason no safe deterministic seam
+  exists plus the exact manual/integration smoke boundary.
+- Never use a global coverage percentage or hard-coded passing-test total as the acceptance criterion.
+- Route changed paths through `docs/agent/subagent-review-matrix.md` and use explicit spawned reviewers.
+- Finish with a spawned `/review` including `verification_reviewer`; resolve all Critical/Important findings.
 
 ## Assumptions
 - Windows/.NET/packaging constraints.

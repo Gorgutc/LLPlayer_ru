@@ -11,7 +11,8 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v5
+    - name: Checkout source
+      uses: actions/checkout@v5
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -31,4 +32,4 @@ jobs:
       run: dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
 
     - name: Test
-      run: dotnet test --no-restore .\FlyleafLibTests
+      run: dotnet test --no-restore -warnaserror .\FlyleafLibTests

@@ -24,6 +24,7 @@ The fast gate includes:
 - `scripts/codex/verify-plugin.ps1`
 - `scripts/codex/verify-doc-coverage.ps1`
 - `scripts/codex/verify-frozen.ps1`
+- `scripts/codex/verify-full-gate.ps1`
 - `scripts/codex/verify-build-workflow.ps1`
 - `scripts/codex/verify-release-workflow.ps1`
 - `scripts/codex/check-dub-licenses.ps1`
@@ -110,8 +111,20 @@ Runs fast verification plus:
 dotnet restore -warnaserror
 dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
-dotnet test --no-restore .\FlyleafLibTests
+dotnet test --no-restore -warnaserror .\FlyleafLibTests
 ```
+
+## Risk-Based Coverage Policy
+
+Coverage decisions follow risk, not a target count. Every behavior change or bug fix must add or update a deterministic,
+non-vacuous regression test when a safe seam exists. Record intentional RED evidence where applicable, then restore the
+production implementation and prove the focused test plus the full unfiltered suite green.
+
+No global coverage percentage and no hard-coded passing-test total is a quality gate. If there is no safe deterministic
+seam because the boundary is WPF, native, GPU, network, or timing-dependent, document why and name the exact manual or
+integration smoke that carries the residual risk. CI structurally locks checkout provenance, the complete step sequence,
+and the exact unfiltered warning-clean test command through `verify-build-workflow.ps1`; `verify-full-gate.ps1` protects
+the executable local/full gate. Filtered, conditional, missing, reordered, or wrong-project Test steps are rejected.
 
 ## Ship Gate
 

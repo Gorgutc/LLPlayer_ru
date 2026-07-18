@@ -29,7 +29,7 @@ try {
 
     Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer"
     Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\Plugins\YoutubeDL"
-    Invoke-Checked dotnet "test" "--no-restore" ".\FlyleafLibTests"
+    Invoke-Checked dotnet "test" "--no-restore" "-warnaserror" ".\FlyleafLibTests"
 
     Write-Host "LLPlayer full verification completed."
 }

@@ -78,8 +78,13 @@ The current baseline commands are:
 dotnet restore -warnaserror
 dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
-dotnet test --no-restore .\FlyleafLibTests
+dotnet test --no-restore -warnaserror .\FlyleafLibTests
 ```
+
+Coverage is risk-based: behavior changes and bug fixes need a deterministic, non-vacuous regression test when a
+safe seam exists, with intentional RED evidence where applicable. If WPF, native, GPU, network, or timing boundaries
+make that unsafe, document the reason and the exact manual or integration smoke instead. Do not use a global coverage
+percentage or a hard-coded passing-test total as a quality gate; the full unfiltered suite remains mandatory.
 
 On this machine, sandboxed `dotnet` can fail when MSBuild reads the Windows SDK under AppData. If that happens, request the approved escalation and rerun the same command.
 

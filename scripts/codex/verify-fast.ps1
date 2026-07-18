@@ -7,6 +7,7 @@ try {
     & ".\scripts\codex\verify-plugin.ps1"
     & ".\scripts\codex\verify-doc-coverage.ps1"
     & ".\scripts\codex\verify-frozen.ps1"
+    & ".\scripts\codex\verify-full-gate.ps1"
     & ".\scripts\codex\verify-build-workflow.ps1"
     & ".\scripts\codex\verify-release-workflow.ps1"
     & ".\scripts\codex\check-dub-licenses.ps1"
