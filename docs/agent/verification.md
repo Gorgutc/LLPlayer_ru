@@ -9,6 +9,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.
 Checks environment basics, plugin/skills/docs structure, documentation coverage, hooks, frozen stack/product decisions,
 and release-workflow input/output safety.
 
+Hook verification requires the current Codex nested shape (`event -> matcher group -> hooks[] -> command handler`) and
+walks every configured Windows command handler. Each handler must use the single static form
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File <repo-relative .ps1>`; CMD expansion/metacharacters,
+dynamic targets, duplicate JSON keys or `-File` arguments, wildcard/traversal, missing or non-file targets, paths outside
+the repository, and reparse-point escapes fail closed. The gate also rejects a repository-root `powershell.exe` that
+could shadow the system launcher. System `PATH` and `COMSPEC` remain an operating-system/process trust boundary. The
+repository-relative command assumes Codex starts the hook from the repository root, so a subdirectory-start remains an
+explicit runtime limitation rather than something this structural gate can prove.
+
 The fast gate includes:
 
 - `scripts/codex/check-environment.ps1`
