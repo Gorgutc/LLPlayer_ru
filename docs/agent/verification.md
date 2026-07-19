@@ -93,11 +93,17 @@ tags, draft Releases, or assets; each real controlled run remains a separately a
 release evidence must prove the dispatched control ref, selected SHA, run SHA, tag target, draft state, exact asset
 name/size/SHA-256, `7z t`, and resolved yt-dlp version/size/SHA-256.
 
-GitHub's `Build & Test` workflow runs the fast gate after setting up .NET 10 and before its separate
-restore, app/plugin build, and test steps, so infrastructure or frozen-contract drift fails before compilation.
-`verify-build-workflow.ps1` validates .NET 10 setup and fast-gate placement relative to restore inside
-`jobs.build`, rejects conditional or continue-on-error bypasses, and exercises adversarial hierarchy,
-cross-job, block-scalar, setup, SDK, and ordering fixtures.
+GitHub's workflow label is `Build & Test`; its `jobs.build` emits the distinct check-context
+`LLPlayer Build & Test`. As of 2026-07-19, the active default-branch ruleset `Test` (`17995732`, version `43588410`)
+requires that exact context from
+GitHub Actions integration `15368`, with strict up-to-date checking enabled and no bypass actors. Pending or failing
+results block merge; a successful result on the current PR head permits merge when the other rules also pass.
+
+The workflow runs the fast gate after setting up .NET 10 and before its separate restore, app/plugin build, and test
+steps, so infrastructure or frozen-contract drift fails before compilation. `verify-build-workflow.ps1` validates the
+exact workflow/check identities, .NET 10 setup, fast-gate placement relative to restore, and the three-file workflow
+inventory. It rejects conditional or continue-on-error bypasses, additional workflows, non-build job display names,
+and adversarial hierarchy, expression/folded/escaped/over-indented, cross-job, setup, SDK, and ordering fixtures.
 
 Use this read-only helper before review when you need to map changed files to frozen contracts, agents, and gates:
 

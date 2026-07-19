@@ -103,6 +103,18 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Ear-test CosyVoice2 Russian on real content: voice is Russian, ducking is audible, and the original audio remains present.
 - Launch the published `.exe` on the target RTX 5090 machine with `GenerateDubbing=false`, then run one mock/real dubbing smoke if the local engine is provisioned.
 
+## GitHub Merge Governance
+
+- **T-13d required-check acceptance — ✅ PASS (2026-07-19):** active ruleset `Test` (`17995732`, version
+  `43588410`) targets `~DEFAULT_BRANCH`, preserves deletion/non-fast-forward protection, has no bypass actors, and
+  requires exact context `LLPlayer Build & Test` from GitHub Actions integration `15368` with strict policy enabled.
+  On exact feature head `df23af3`, [run 29695174848](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29695174848)
+  passed fast/restore/app/plugin/test and [PR #161](https://github.com/Gorgutc/LLPlayer_ru/pull/161) became `CLEAN`.
+  Intentional-red [PR #162](https://github.com/Gorgutc/LLPlayer_ru/pull/162) was `BLOCKED` while its required check
+  was still pending and remained `BLOCKED` after [run 29695396710](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29695396710) failed the expected
+  `plugin.json name must be llplayer-codex` marker in the fast gate; restore/build/test were skipped. The PR was
+  closed without merge and its temporary branch was removed.
+
 ## Packaging
 
 - Run `scripts/codex/ship.ps1`.

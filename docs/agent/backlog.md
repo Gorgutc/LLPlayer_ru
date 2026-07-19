@@ -51,8 +51,8 @@
 > `HC-27b` закрыт как **DONE WITH RESIDUAL RISK**: на exact unpublished Stable draft v0.3.61 candidate владелец принял
 > **5/5 выполненных локальных сценариев**, а writable slow SMB/UNC responsiveness с 5000+ cue явно пометил
 > `WAIVED / NOT RUN`. Waiver не считается `PASS`; итог — `ACCEPTED WITH OWNER WAIVER`.
-> Active **0**, unresolved **7**; `T-13` остаётся **6/7**. Следующей независимой agent-action нет:
-> `T-13d`, GPU-track и остальные живые задачи требуют owner decision/trigger.
+> Active **0**, unresolved **6**; пакет `T-13` закрыт **7/7**. Следующий owner-selected срез — `HC-22`:
+> начать после merge T-13d с повторного аудита host-level teardown, отдельной app-веткой и отдельным PR.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -998,7 +998,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 **но только с явным sign-off владельца** — эвристика «локальный ли endpoint» рискованна (ложно-облачные хосты). Идеально
 совмещать с принципиальным решением B-04 (streaming + скользящий read-timeout). Пока не трогать без запроса.
 
-### T-13 — Workflow / verification hardening 🟠 Ⓜ · IN-PROGRESS (6/7 срезов, 2026-07-19)
+### T-13 — Workflow / verification hardening 🟠 Ⓜ · ✅ DONE (7/7 срезов, 2026-07-19)
 > Общий пакет регистрирует infra-находки; `DOC-01` только даёт им ID и не меняет workflows/scripts/ruleset.
 
 - **T-13a — injection-safe Testing Release inputs/outputs 🟠 ⓢ · ✅ DONE (PR #144, 2026-07-11, infra-only).**
@@ -1034,9 +1034,18 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
   fast/full/ship PASS, **1376/1376**; feature-head [run 29604134291](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29604134291)
   и post-merge [run 29604405369](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29604405369) GREEN на точных SHA;
   профильные reviews и финальный `/review` — SHIP, 0 Critical/Important/Minor.
-- **T-13d — required `Build & Test` status check 🟡 ⓢ · BLOCKED (owner decision).** Ruleset защищает deletion/
-  non-fast-forward, но не требует CI check. **DoD:** владелец явно принимает или отклоняет required check;
-  при принятии ruleset блокирует merge без успешного `Build & Test`.
+- **T-13d — required `LLPlayer Build & Test` status check 🟡 ⓢ · ✅ DONE (PR #161, 2026-07-19, infra-only).**
+  Обычный workflow сохранил label `Build & Test` и job key `build`, но получил уникальный check-context
+  `LLPlayer Build & Test`; validator закрепляет exact workflow/job identity, ровно три разрешённых workflow-файла
+  и отсутствие любого job-level `name` в Stable/Testing, включая expression/folded/escaped/over-indented обходы.
+  Owner-approved ruleset `Test` (`17995732`, version `43588410`) теперь active на `~DEFAULT_BRANCH`, сохраняет
+  `deletion`/`non_fast_forward`, требует ровно этот context от GitHub Actions integration `15368`, использует
+  `strict_required_status_checks_policy=true` и не имеет bypass actors. Feature-head
+  [run 29695174848](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29695174848) GREEN на exact `df23af3`;
+  PR #161 получил `mergeStateStatus=CLEAN`. Отдельный intentional-red
+  [PR #162](https://github.com/Gorgutc/LLPlayer_ru/pull/162) / [run 29695396710](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29695396710)
+  упал на ожидаемом fast marker, пропустил restore/build/test и остался `BLOCKED`; PR закрыт без merge, временная
+  ветка удалена. Локальный full verify PASS, **1380/1380**; финальный `/review` — SHIP, 0 Critical/Important/Minor.
 - **T-13e — release preflight + controlled runs 🟡 Ⓜ · ✅ DONE (2026-07-19).** Preflight смёржен через
   [PR #150](https://github.com/Gorgutc/LLPlayer_ru/pull/150); четырёх-job release-tail, exact-SHA binding, package
   evidence и draft-only write boundary — через [PR #156](https://github.com/Gorgutc/LLPlayer_ru/pull/156).
@@ -1095,14 +1104,13 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-19 / v0.3.61)
 
-На этом срезе независимых agent-actionable задач нет. `HC-27b` удалён из активного ранжирования после
-`5/5` local PASS и owner-waiver сетевого responsiveness-сценария; это закрытие с residual risk, не `6/6 PASS`.
+Следующий owner-selected срез — `HC-22`: после merge T-13d повторно подтвердить безопасный host-level teardown
+и выполнять app-правку отдельно. `HC-27b` удалён из активного ранжирования после `5/5` local PASS и owner-waiver
+сетевого responsiveness-сценария; это закрытие с residual risk, не `6/6 PASS`.
 
-**Owner-gated / не брать без решения:** `T-13d` required status check ·
-GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
+**Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
-**Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу; `HC-22` — до появления настоящей
-точки уничтожения; `F-13` Avalonia — DEFERRED.
+**Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу; `F-13` Avalonia — DEFERRED.
 
 ### Исторический снимок важности до 2026-07-01 (не использовать для выбора новой работы)
 
@@ -1142,10 +1150,11 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
 ## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-19 / v0.3.61)
 
-На этом срезе независимых agent-actionable задач нет. Следующий выбор требует owner decision/trigger.
+Следующий owner-selected малый срез — `HC-22`; перед app-кодом повторно проверить lifetime seam и не использовать
+дочерний `WordPopup.Unloaded`, который срабатывает при обычном закрытии popup.
 
-**Вне actionable-очереди:** `T-13d` требует решения владельца; GPU ADR, `F-03` и остаток `F-16`
-крупные и заблокированы GPU-lease/координатором; `F-02-full` trigger-only; `HC-22` и `F-13` DEFERRED.
+**Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
+GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
 
 ### Исторический снимок сложности до 2026-07-01 (не использовать для выбора новой работы)
 
@@ -1206,15 +1215,17 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
    решению владельца — `WAIVED / NOT RUN`, не `PASS`; итог `ACCEPTED WITH OWNER WAIVER`, `HC-27b` —
    **DONE WITH RESIDUAL RISK**. Детали и сохранённый полный шестисценарный стандарт:
    [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md).
-4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e ✅; T-13f ✅; T-13 остаётся 6/7.**
-   `T-13d` required status check остаётся единственным owner-gated срезом пакета.
-5. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
+4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e ✅; T-13f ✅; T-13d ✅; пакет T-13 закрыт 7/7.**
+   Required `LLPlayer Build & Test` active в strict ruleset без bypass; GREEN и intentional-RED merge-block proof сохранены.
+5. **HC-22 — owner-selected next:** после merge T-13d повторно подтвердить parent/host teardown seam; app-код,
+   WPF-review и targeted manual smoke выполнять в отдельной ветке/PR, не через дочерний `WordPopup.Unloaded`.
+6. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
    coverage закреплено как risk-based policy, а T-03 удалён из активной очереди.
-6. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
+7. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
    subtitles; B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
-7. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
+8. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
 
-**Не берём сейчас:** `F-02-full` (trigger-only), `HC-22` (нет безопасной точки teardown) и `F-13` (DEFERRED).
+**Не берём сейчас:** `F-02-full` (trigger-only) и `F-13` (DEFERRED).
 Перед поведенческими правками сверяться с
 frozen-контрактами; для app-кода обязательны `scripts/codex/verify.ps1`, domain-reviewers и targeted smoke.
 
@@ -1402,11 +1413,12 @@ frozen-контрактами; для app-кода обязательны `scrip
     остаётся ~49.7 дней → перекрытие cue, вечное `Showing`, битый prev/next-интервал.
   - Решение: хранить `end_display_time` независимо от `useBitmap` и корректировать по нему; последний cue клампить.
   - Зачем: некорректные тайминги субтитров в bitmap-режиме без кэша.
-- **HC-22 — `WordPopup`: сервисы/`_cts` не освобождаются при уничтожении контрола 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:137`** · ⏸️ **DEFERRED (сессия #22, бандл B2)** — при попытке фикса adversarial-ревью выявил: `WordPopup` живёт внутри `NonTopmostPopup`, а WPF Popup поднимает `Unloaded` на КАЖДОЕ закрытие (video resume / Esc / Close), не только при уничтожении → teardown в `Unloaded` затирал бы translate/definition-кэши на каждом закрытии (регрессия cache-miss). Weak-event подписки (ctor) уже НЕ рутят контрол → сервисы/`_cts` GC-собираемы; детерминированной точки teardown нет (overlay-хост живёт всю сессию; sidebar-хост уже диспозится через `SubtitlesSidebar.Unloaded→VM.Dispose`). Оставлено как GC-ограниченная мягкая утечка; правка отклонена как net-negative. Переоткрыть только с настоящей точкой уничтожения.
+- **HC-22 — `WordPopup`: сервисы/`_cts` не освобождаются при уничтожении контрола 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:137`** · 🟡 **OWNER-SELECTED / QUEUED (re-audit first, 2026-07-19; сессия #22, бандл B2)** — при прежней попытке фикса adversarial-ревью выявил: `WordPopup` живёт внутри `NonTopmostPopup`, а WPF Popup поднимает `Unloaded` на КАЖДОЕ закрытие (video resume / Esc / Close), не только при уничтожении → teardown в дочернем `WordPopup.Unloaded` затирал бы translate/definition-кэши на каждом закрытии (регрессия cache-miss). Weak-event подписки (ctor) уже НЕ рутят контрол → сервисы/`_cts` GC-собираемы; прежняя правка была отклонена как net-negative. Владелец переоткрыл задачу после T-13d: перед app-реализацией заново доказать настоящую host-level точку уничтожения отдельно для sidebar/overlay.
   - Проблема: `_translateService`/`_wordDefinitionService` (каждый владеет HttpClient, для LLM — со своим handler вне
     общего пула) диспозятся только в `Clear()` при смене настроек; при уничтожении WordPopup (сайдбар пересоздаётся
     из DataTemplate на каждый toggle) — нет teardown → утечка соединений до GC.
-  - Решение: `Unloaded`-хендлер (или `Teardown`) с `Clear()` + `_cts?.Cancel()/Dispose()` + dispose `_pdicSender`.
+  - Безопасная гипотеза: идемпотентный host-level teardown только для owned-сервисов и `_cts`; дочерний
+    `WordPopup.Unloaded` запрещён, app-singleton `PDICSender` не трогать (он освобождается централизованно при выходе).
   - Зачем: повторные toggle сайдбара при LLM-переводе слов копят соединения.
 - **HC-23 — PDIC: pipe-процесс спавнится на каждый WordPopup и не убивается 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:349`** · ✅ **DONE (v0.3.43, 2026-07-03, сессия #22, бандл B2)** — `PDICSender` → DI-синглтон (один общий pipe-процесс вместо N per-WordPopup); диспоз ЯВНО в `App.OnExit` через `PDICSender.Current` (Prism/DryIoc НЕ диспозит контейнер на выходе — подтверждено декомпиляцией Prism 9.0.537 в adversarial-ревью), без bare-`Resolve` (не плодит pipe на выходе, если PDIC не использовался); `Dispose` синхронный+bounded, `PipeClient.SendMessage` +`ConfigureAwait(false)` (нет sync-over-async дедлока UI-треда на выходе). Ревью 2 раунда (5/5 проверок OK). **Известное ограничение (Minor):** синглтон кэширует первый exe-путь на сессию (смена `PDICPipeExecutablePath` в рантайме требует рестарта); hard-crash всё ещё может осиротить процесс — job-object hardening опциональный follow-up.
   - Проблема: `_pdicSender ??= Container.Resolve<PDICSender>()` (transient) в конструкторе запускает внешний exe
