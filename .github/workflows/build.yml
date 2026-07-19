@@ -8,6 +8,7 @@ on:
 
 jobs:
   build:
+    name: LLPlayer Build & Test
     runs-on: windows-latest
 
     steps:

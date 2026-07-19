@@ -256,17 +256,36 @@ function Assert-BuildWorkflowTriggers([string]$Text, [string]$Source) {
 function Assert-BuildWorkflowContract([string]$Text, [string]$Source) {
     $rootLines = @($Text -split '\r?\n')
     Assert-AllowedMappingKeys $rootLines 0 @("name", "on", "jobs") "workflow root" $Source
+
+    $workflowNameIndex = Get-UniqueLineIndex $rootLines '^name:\s*Build & Test\s*$' "stable workflow name 'Build & Test'" $Source
+    $onIndex = Get-UniqueBlockKeyIndex $rootLines 0 "on" "top-level on entry" $Source
+    if ($workflowNameIndex -ge $onIndex) {
+        throw "$Source must declare the stable workflow name 'Build & Test' before the top-level on entry."
+    }
+    for ($index = $workflowNameIndex + 1; $index -lt $onIndex; $index++) {
+        $trimmed = $rootLines[$index].Trim()
+        if ($trimmed -and -not $trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+            throw "$Source stable workflow name must not use multiline scalar continuation."
+        }
+    }
     Assert-BuildWorkflowTriggers $Text $Source
 
     $jobsLines = Get-JobsBlock $Text $Source
     Assert-AllowedMappingKeys $jobsLines 2 @("build") "top-level jobs" $Source
     $job = Get-BuildJobBlock $Text $Source
-    Assert-AllowedMappingKeys $job.Lines 4 @("runs-on", "steps") "jobs.build" $Source
+    Assert-AllowedMappingKeys $job.Lines 4 @("name", "runs-on", "steps") "jobs.build" $Source
 
+    $jobNameIndex = Get-UniqueLineIndex $job.Lines '^    name:\s*LLPlayer Build & Test\s*$' "jobs.build stable required-check name 'LLPlayer Build & Test'" $Source
     $runsOnIndex = Get-UniqueLineIndex $job.Lines '^    runs-on:\s*windows-latest\s*$' "jobs.build Windows runner" $Source
     $stepsEntryIndex = Get-UniqueLineIndex $job.Lines '^    steps:\s*$' "jobs.build.steps entry" $Source
-    if ($runsOnIndex -ge $stepsEntryIndex) {
-        throw "$Source must declare runs-on: windows-latest before jobs.build.steps."
+    if (-not ($jobNameIndex -lt $runsOnIndex -and $runsOnIndex -lt $stepsEntryIndex)) {
+        throw "$Source must declare the stable jobs.build name 'LLPlayer Build & Test', then runs-on: windows-latest, then jobs.build.steps."
+    }
+    for ($index = $jobNameIndex + 1; $index -lt $runsOnIndex; $index++) {
+        $trimmed = $job.Lines[$index].Trim()
+        if ($trimmed -and -not $trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+            throw "$Source jobs.build stable required-check name must not use multiline scalar continuation."
+        }
     }
     for ($index = $runsOnIndex + 1; $index -lt $stepsEntryIndex; $index++) {
         $trimmed = $job.Lines[$index].Trim()
@@ -346,6 +365,157 @@ function Assert-ContractRejected(
     }
 }
 
+function Assert-ExpectedWorkflowInventory(
+    [System.Collections.IDictionary]$WorkflowTexts,
+    [string]$Source
+) {
+    # This is intentionally a filename allowlist, not a semantic YAML parser. The exact build.yml
+    # contract is validated above; non-build workflow job structure is validated separately below.
+    $expectedWorkflowNames = @("build.yml", "stable-release.yml", "testing-release.yml")
+    $actualWorkflowNames = @($WorkflowTexts.Keys | ForEach-Object { [string]$_ })
+
+    if ($actualWorkflowNames.Count -ne $expectedWorkflowNames.Count) {
+        throw "$Source must contain exactly the three protected workflow files; found $($actualWorkflowNames.Count)."
+    }
+    foreach ($expectedWorkflowName in $expectedWorkflowNames) {
+        $matchCount = @($actualWorkflowNames | Where-Object {
+            [string]::Equals($_, $expectedWorkflowName, [System.StringComparison]::Ordinal)
+        }).Count
+        if ($matchCount -ne 1) {
+            throw "$Source must contain exactly one workflow named '$expectedWorkflowName'; found $matchCount."
+        }
+    }
+    foreach ($actualWorkflowName in $actualWorkflowNames) {
+        $allowed = @($expectedWorkflowNames | Where-Object {
+            [string]::Equals($_, $actualWorkflowName, [System.StringComparison]::Ordinal)
+        }).Count -eq 1
+        if (-not $allowed) {
+            throw "$Source contains unexpected workflow file '$actualWorkflowName'."
+        }
+    }
+}
+
+function Assert-NoJobDisplayNames(
+    [string]$Text,
+    [string]$Source
+) {
+    $lines = @($Text -split '\r?\n')
+    foreach ($line in $lines) {
+        $leadingWhitespace = [regex]::Match($line, '^[ \t]*').Value
+        if ($leadingWhitespace.Contains("`t")) {
+            throw "$Source must not use tab indentation."
+        }
+    }
+
+    $jobsLines = Get-JobsBlock $Text $Source
+    $seenJobs = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $currentJob = $null
+    $currentJobHasDirectProperty = $false
+    foreach ($line in $jobsLines) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+            continue
+        }
+
+        $indent = $line.Length - $line.TrimStart().Length
+        if ($indent -eq 2) {
+            if ($null -ne $currentJob -and -not $currentJobHasDirectProperty) {
+                throw "$Source jobs.$currentJob must contain at least one canonical direct property at four-space indentation."
+            }
+            $jobKey = Get-MappingKey $line 2
+            if ($null -eq $jobKey) {
+                throw "$Source jobs entries must use canonical unquoted block mapping keys."
+            }
+            $remainder = $trimmed.Substring($trimmed.IndexOf(':') + 1).Trim()
+            if ($remainder -and -not $remainder.StartsWith("#", [System.StringComparison]::Ordinal)) {
+                throw "$Source jobs.$jobKey must use a canonical block mapping without flow, alias, anchor, or merge syntax."
+            }
+            if (-not $seenJobs.Add($jobKey)) {
+                throw "$Source jobs contains duplicate job key '$jobKey'."
+            }
+            $currentJob = $jobKey
+            $currentJobHasDirectProperty = $false
+            continue
+        }
+
+        if ($indent -lt 4) {
+            throw "$Source jobs content must use canonical two-space job indentation."
+        }
+        if ($indent -gt 4) {
+            if (-not $currentJobHasDirectProperty) {
+                throw "$Source jobs.$currentJob must declare a canonical direct property at four-space indentation before nested content."
+            }
+            continue
+        }
+        if ($trimmed.StartsWith("- ", [System.StringComparison]::Ordinal)) {
+            # GitHub Actions permits indentless sequences under a job property such as steps:.
+            if (-not $currentJobHasDirectProperty) {
+                throw "$Source jobs.$currentJob first direct child must be a canonical property, not a sequence item."
+            }
+            continue
+        }
+        if ($null -eq $currentJob) {
+            throw "$Source job properties must follow a canonical block job entry."
+        }
+
+        $propertyKey = Get-MappingKey $line 4
+        if ($null -eq $propertyKey) {
+            throw "$Source jobs.$currentJob properties must use canonical unquoted mapping keys."
+        }
+        if ([string]::Equals($propertyKey, "name", [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "$Source jobs.$currentJob must not define a job-level 'name' property."
+        }
+        $currentJobHasDirectProperty = $true
+    }
+
+    if ($seenJobs.Count -eq 0) {
+        throw "$Source top-level jobs entry must contain at least one canonical block job."
+    }
+    if ($null -ne $currentJob -and -not $currentJobHasDirectProperty) {
+        throw "$Source jobs.$currentJob must contain at least one canonical direct property at four-space indentation."
+    }
+}
+
+function Assert-NoJobDisplayNamesRejected(
+    [string]$Text,
+    [string]$Description,
+    [string]$ExpectedMessagePattern
+) {
+    $rejected = $false
+    try {
+        Assert-NoJobDisplayNames $Text "adversarial non-build workflow ($Description)"
+    }
+    catch {
+        if ($ExpectedMessagePattern -and $_.Exception.Message -cnotmatch $ExpectedMessagePattern) {
+            throw "Non-build job-name guard rejected adversarial workflow '$Description' for the wrong reason: $($_.Exception.Message)"
+        }
+        $rejected = $true
+    }
+    if (-not $rejected) {
+        throw "Non-build job-name guard accepted adversarial workflow: $Description."
+    }
+}
+
+function Assert-WorkflowInventoryRejected(
+    [System.Collections.IDictionary]$WorkflowTexts,
+    [string]$Description,
+    [string]$ExpectedMessagePattern
+) {
+    $rejected = $false
+    try {
+        Assert-ExpectedWorkflowInventory $WorkflowTexts "adversarial workflow inventory ($Description)"
+    }
+    catch {
+        if ($ExpectedMessagePattern -and $_.Exception.Message -cnotmatch $ExpectedMessagePattern) {
+            throw "Workflow inventory guard rejected adversarial inventory '$Description' for the wrong reason: $($_.Exception.Message)"
+        }
+        $rejected = $true
+    }
+    if (-not $rejected) {
+        throw "Workflow inventory guard accepted adversarial inventory: $Description."
+    }
+}
+
 function Swap-AdjacentNamedSteps([string]$Text, [string]$FirstName, [string]$SecondName) {
     $lines = @($Text -split '\r?\n')
     $first = Get-UniqueLineIndex $lines ('^    - name:\s*' + [regex]::Escape($FirstName) + '\s*$') "'$FirstName' fixture step" "order fixture"
@@ -387,6 +557,7 @@ on:
     branches: [ "main" ]
 jobs:
   build:
+    name: LLPlayer Build & Test
     runs-on: windows-latest
     steps:
     - name: Checkout source
@@ -407,6 +578,191 @@ jobs:
       run: dotnet test --no-restore -warnaserror .\FlyleafLibTests
 '@
 Assert-BuildWorkflowContract $positiveFixture "positive fixture"
+
+$positiveWorkflowInventory = [ordered]@{
+    "build.yml" = $positiveFixture
+    "stable-release.yml" = "name: Stable Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "testing-release.yml" = "name: Testing Release`njobs:`n  build:`n    runs-on: windows-latest"
+}
+Assert-ExpectedWorkflowInventory $positiveWorkflowInventory "positive workflow inventory"
+
+$foldedScalarCollisionInventory = [ordered]@{
+    "build.yml" = $positiveFixture
+    "stable-release.yml" = "name: Stable Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "testing-release.yml" = "name: Testing Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "folded-collision.yml" = "name: Folded Collision`njobs:`n  build:`n    name: >-`n      LLPlayer Build &`n      Test"
+}
+Assert-WorkflowInventoryRejected $foldedScalarCollisionInventory "a fourth workflow composes the required check with a folded scalar" "exactly the three protected workflow files; found 4"
+
+$expressionComposedCollisionInventory = [ordered]@{
+    "build.yml" = $positiveFixture
+    "stable-release.yml" = "name: Stable Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "testing-release.yml" = "name: Testing Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "expression-collision.yaml" = 'name: Expression Collision' + "`n" + 'jobs:' + "`n" + '  build:' + "`n" + "    name: `${{ 'LLPlayer Build &' }}`${{ ' Test' }}"
+}
+Assert-WorkflowInventoryRejected $expressionComposedCollisionInventory "a fourth workflow composes the required check with expressions" "exactly the three protected workflow files; found 4"
+
+$unexpectedFourthWorkflowInventory = [ordered]@{
+    "build.yml" = $positiveFixture
+    "stable-release.yml" = "name: Stable Release"
+    "testing-release.yml" = "name: Testing Release"
+    "unexpected.yml" = "name: Unexpected Workflow"
+}
+Assert-WorkflowInventoryRejected $unexpectedFourthWorkflowInventory "an unrelated fourth workflow bypasses the protected inventory" "exactly the three protected workflow files; found 4"
+
+$positiveNonBuildWorkflow = @'
+name: Non-Build Workflow
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - name: Placeholder
+      run: Write-Output "ok"
+'@
+Assert-NoJobDisplayNames $positiveNonBuildWorkflow "positive non-build workflow"
+
+$literalNonBuildJobNameFixture = $positiveNonBuildWorkflow.Replace(
+    "    runs-on: windows-latest",
+    "    name: LLPlayer Build & Test`n    runs-on: windows-latest"
+)
+Assert-NoJobDisplayNamesRejected $literalNonBuildJobNameFixture "a testing job uses the literal required-check name" "must not define a job-level 'name' property"
+
+$expressionNonBuildJobNameFixture = $positiveNonBuildWorkflow.Replace(
+    "    runs-on: windows-latest",
+    '    name: LLPlayer ${{ ''Build'' }} & Test' + "`n    runs-on: windows-latest"
+)
+Assert-NoJobDisplayNamesRejected $expressionNonBuildJobNameFixture "a testing job composes the required-check name with an expression" "must not define a job-level 'name' property"
+
+$foldedNonBuildJobNameFixture = $positiveNonBuildWorkflow.Replace(
+    "    runs-on: windows-latest",
+    "    name: >-`n      LLPlayer Build &`n      Test`n    runs-on: windows-latest"
+)
+Assert-NoJobDisplayNamesRejected $foldedNonBuildJobNameFixture "a testing job composes the required-check name with a folded scalar" "must not define a job-level 'name' property"
+
+$overIndentedLiteralJobNameFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    "  build:`n      name: LLPlayer Build & Test`n      runs-on: windows-latest`n      steps:`n      - name: Placeholder`n        run: Write-Output `"ok`""
+)
+Assert-NoJobDisplayNamesRejected $overIndentedLiteralJobNameFixture "a testing job over-indents a literal display name before its first direct property" "before nested content"
+
+$overIndentedExpressionJobNameFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    '  build:' + "`n" + '      name: LLPlayer ${{ ''Build'' }} & Test' + "`n" + "      runs-on: windows-latest`n      steps:`n      - name: Placeholder`n        run: Write-Output `"ok`""
+)
+Assert-NoJobDisplayNamesRejected $overIndentedExpressionJobNameFixture "a testing job over-indents an expression-composed display name before its first direct property" "before nested content"
+
+$overIndentedFoldedJobNameFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    "  build:`n      name: >-`n        LLPlayer Build &`n        Test`n      runs-on: windows-latest`n      steps:`n      - name: Placeholder`n        run: Write-Output `"ok`""
+)
+Assert-NoJobDisplayNamesRejected $overIndentedFoldedJobNameFixture "a testing job over-indents a folded display name before its first direct property" "before nested content"
+
+$emptyJobFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    "  build:"
+)
+Assert-NoJobDisplayNamesRejected $emptyJobFixture "a non-build workflow defines an empty job" "must contain at least one canonical direct property"
+
+$sequenceOnlyJobFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    "  build:`n    - name: Sequence-only bypass`n      run: Write-Output `"bypass`""
+)
+Assert-NoJobDisplayNamesRejected $sequenceOnlyJobFixture "a non-build workflow defines a sequence-only job" "first direct child must be a canonical property"
+
+$escapedQuotedJobNameKeyFixture = $positiveNonBuildWorkflow.Replace(
+    "    runs-on: windows-latest",
+    '    "n\u0061me": LLPlayer Build & Test' + "`n    runs-on: windows-latest"
+)
+Assert-NoJobDisplayNamesRejected $escapedQuotedJobNameKeyFixture "a testing job hides name behind an escaped quoted key" "canonical unquoted syntax"
+
+$explicitJobNameKeyFixture = $positiveNonBuildWorkflow.Replace(
+    "    runs-on: windows-latest",
+    "    ? name`n    : LLPlayer Build & Test`n    runs-on: windows-latest"
+)
+Assert-NoJobDisplayNamesRejected $explicitJobNameKeyFixture "a testing job uses explicit mapping-key syntax for name" "canonical mapping syntax"
+
+$tabIndentedJobFixture = $positiveNonBuildWorkflow.Replace("  build:", "`tbuild:")
+Assert-NoJobDisplayNamesRejected $tabIndentedJobFixture "a non-build workflow uses tab-indented jobs" "must not use tab indentation"
+
+$quotedJobKeyFixture = $positiveNonBuildWorkflow.Replace("  build:", '  "build":')
+Assert-NoJobDisplayNamesRejected $quotedJobKeyFixture "a non-build workflow quotes a job key" "canonical unquoted syntax"
+
+$explicitJobKeyFixture = $positiveNonBuildWorkflow.Replace("  build:", "  ? build`n  :")
+Assert-NoJobDisplayNamesRejected $explicitJobKeyFixture "a non-build workflow uses explicit job-key syntax" "canonical mapping syntax"
+
+$flowJobDefinitionFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    "  build: { runs-on: windows-latest }"
+)
+Assert-NoJobDisplayNamesRejected $flowJobDefinitionFixture "a non-build workflow uses a flow job definition" "must use a canonical block mapping"
+
+$aliasJobDefinitionFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    "  build: *shared-job"
+)
+Assert-NoJobDisplayNamesRejected $aliasJobDefinitionFixture "a non-build workflow aliases a job definition" "must use a canonical block mapping"
+
+$anchorJobDefinitionFixture = $positiveNonBuildWorkflow.Replace(
+    "  build:`n    runs-on: windows-latest`n    steps:`n    - name: Placeholder`n      run: Write-Output `"ok`"",
+    "  build: &shared-job"
+)
+Assert-NoJobDisplayNamesRejected $anchorJobDefinitionFixture "a non-build workflow anchors a job definition" "must use a canonical block mapping"
+
+$mergeJobDefinitionFixture = $positiveNonBuildWorkflow.Replace("  build:", "  <<: *shared-job")
+Assert-NoJobDisplayNamesRejected $mergeJobDefinitionFixture "a non-build workflow merges a job definition" "canonical unquoted syntax"
+
+$missingWorkflowNameFixture = $positiveFixture.Replace("name: Build & Test", "# workflow name intentionally missing")
+Assert-ContractRejected $missingWorkflowNameFixture "stable workflow name is missing" "stable workflow name 'Build & Test'"
+
+$wrongWorkflowNameFixture = $positiveFixture.Replace("name: Build & Test", "name: CI")
+Assert-ContractRejected $wrongWorkflowNameFixture "stable workflow name drifts" "stable workflow name 'Build & Test'"
+
+$duplicateWorkflowNameFixture = $positiveFixture.Replace(
+    "name: Build & Test",
+    "name: Build & Test`nname: CI"
+)
+Assert-ContractRejected $duplicateWorkflowNameFixture "stable workflow name is overridden by a duplicate key" "duplicate key 'name'"
+
+$continuedWorkflowNameFixture = $positiveFixture.Replace(
+    "name: Build & Test",
+    "name: Build & Test`n  hidden-suffix"
+)
+Assert-ContractRejected $continuedWorkflowNameFixture "stable workflow name hides a multiline suffix" "workflow name must not use multiline scalar continuation"
+
+$missingRequiredCheckNameFixture = $positiveFixture.Replace("    name: LLPlayer Build & Test", "    # required-check name intentionally missing")
+Assert-ContractRejected $missingRequiredCheckNameFixture "required-check name is missing" "stable required-check name 'LLPlayer Build & Test'"
+
+$releaseStyleCheckNameFixture = $positiveFixture.Replace("    name: LLPlayer Build & Test", "    name: build")
+Assert-ContractRejected $releaseStyleCheckNameFixture "required-check name collides with release build jobs" "stable required-check name 'LLPlayer Build & Test'"
+
+$genericRequiredCheckNameFixture = $positiveFixture.Replace("    name: LLPlayer Build & Test", "    name: Build & Test")
+Assert-ContractRejected $genericRequiredCheckNameFixture "required-check name drifts to a generic value" "stable required-check name 'LLPlayer Build & Test'"
+
+$expressionRequiredCheckNameFixture = $positiveFixture.Replace(
+    "    name: LLPlayer Build & Test",
+    '    name: ${{ github.ref }}'
+)
+Assert-ContractRejected $expressionRequiredCheckNameFixture "required-check name becomes dynamic" "stable required-check name 'LLPlayer Build & Test'"
+
+$duplicateRequiredCheckNameFixture = $positiveFixture.Replace(
+    "    name: LLPlayer Build & Test",
+    "    name: LLPlayer Build & Test`n    name: build"
+)
+Assert-ContractRejected $duplicateRequiredCheckNameFixture "required-check name is overridden by a duplicate key" "duplicate key 'name'"
+
+$continuedRequiredCheckNameFixture = $positiveFixture.Replace(
+    "    name: LLPlayer Build & Test",
+    "    name: LLPlayer Build & Test`n      release-style-collision"
+)
+Assert-ContractRejected $continuedRequiredCheckNameFixture "required-check name hides a multiline suffix" "required-check name must not use multiline scalar continuation"
+
+$commentDecoyRequiredCheckNameFixture = $positiveFixture.Replace(
+    "    name: LLPlayer Build & Test",
+    "    # name: LLPlayer Build & Test`n    name: build"
+)
+Assert-ContractRejected $commentDecoyRequiredCheckNameFixture "required-check name exists only in a comment decoy" "stable required-check name 'LLPlayer Build & Test'"
 
 $missingRunnerFixture = $positiveFixture.Replace("    runs-on: windows-latest", "    # runs-on intentionally missing")
 Assert-ContractRejected $missingRunnerFixture "build runner is missing" "jobs\.build Windows runner"
@@ -773,5 +1129,16 @@ if (-not (Test-Path -LiteralPath $buildWorkflow)) {
     throw "Build workflow is missing: $buildWorkflow"
 }
 Assert-BuildWorkflowContract (Get-Content -LiteralPath $buildWorkflow -Raw) $buildWorkflow
+
+$workflowDirectory = Split-Path -Parent $buildWorkflow
+$workflowTexts = [ordered]@{}
+Get-ChildItem -LiteralPath $workflowDirectory -File |
+    Where-Object { $_.Extension -in @(".yml", ".yaml") } |
+    Sort-Object -Property FullName |
+    ForEach-Object { $workflowTexts[$_.Name] = Get-Content -LiteralPath $_.FullName -Raw }
+Assert-ExpectedWorkflowInventory $workflowTexts $workflowDirectory
+foreach ($nonBuildWorkflowName in @("stable-release.yml", "testing-release.yml")) {
+    Assert-NoJobDisplayNames $workflowTexts[$nonBuildWorkflowName] (Join-Path $workflowDirectory $nonBuildWorkflowName)
+}
 
 Write-Host "Build workflow build/test verification completed."
