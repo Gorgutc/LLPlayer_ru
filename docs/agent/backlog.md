@@ -48,8 +48,11 @@
 > post-merge [run 29646754522](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29646754522) зелёный на `067ddec`.
 > Полный локальный `verify.ps1` и `ship.ps1` — PASS: **1380/1380**, 0 warnings/errors, publish smoke green. Post-merge CI #143 выявил один
 > thread-pool-starvation timeout в HC-27b lock-тесте; в #144 тест переведён на dedicated workers и прошёл 20/20.
-> `HC-27b` остаётся `IN-PROGRESS` до targeted owner smoke; active **1**, unresolved **8**; `T-13` остаётся **6/7**.
-> Следующей независимой agent-action нет: дальнейшие шаги требуют owner smoke или owner decision.
+> `HC-27b` закрыт как **DONE WITH RESIDUAL RISK**: на exact unpublished Stable draft v0.3.61 candidate владелец принял
+> **5/5 выполненных локальных сценариев**, а writable slow SMB/UNC responsiveness с 5000+ cue явно пометил
+> `WAIVED / NOT RUN`. Waiver не считается `PASS`; итог — `ACCEPTED WITH OWNER WAIVER`.
+> Active **0**, unresolved **7**; `T-13` остаётся **6/7**. Следующей независимой agent-action нет:
+> `T-13d`, GPU-track и остальные живые задачи требуют owner decision/trigger.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -1007,7 +1010,8 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
   path/ref сценарии и запрещает возврат `${{ }}`-интерполяции в `run` blocks. На момент T-13a реальный Testing
   Release ещё не запускался и оставался owner-gated частью `T-13e`; позднее controlled
   [run 29680768395](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29680768395) прошёл полный dispatch/upload/readback.
-  Выполнено раньше owner smoke по прямой команде владельца; это не закрывает `HC-27b` acceptance. Evidence:
+  Выполнено раньше owner smoke по прямой команде владельца; само по себе это не закрывало `HC-27b` acceptance,
+  позднее закрытый владельцем 2026-07-19. Evidence:
   `verify-release-workflow`/fast/full/ship PASS, 1376/1376,
   CI-flake regression 20/20, три профильных `/review` — SHIP без Critical/Important.
 - **T-13b — `verify-fast.ps1` в Build & Test 🟠 ⓢ · ✅ DONE (PR #145, 2026-07-12, infra-only).**
@@ -1091,9 +1095,8 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-19 / v0.3.61)
 
-| # | ID | Следующий результат | Важн. | Сложн. | Статус |
-|---|----|---------------------|:---:|:---:|--------|
-| 1 | **HC-27b** | Targeted owner smoke: A/B, latest, OFF, clear, exit/restart, responsiveness | 🟠 | Ⓜ | IN-PROGRESS — automated slice merged via PR #142; owner acceptance pending |
+На этом срезе независимых agent-actionable задач нет. `HC-27b` удалён из активного ранжирования после
+`5/5` local PASS и owner-waiver сетевого responsiveness-сценария; это закрытие с residual risk, не `6/6 PASS`.
 
 **Owner-gated / не брать без решения:** `T-13d` required status check ·
 GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
@@ -1139,9 +1142,7 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
 ## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-19 / v0.3.61)
 
-| # | ID | Следующий результат | Сложн. | Важн. | Статус |
-|---|----|---------------------|:---:|:---:|--------|
-| 1 | **HC-27b** | Targeted owner smoke после автоматизированного app-среза | Ⓜ | 🟠 | IN-PROGRESS — automated slice merged; owner acceptance pending |
+На этом срезе независимых agent-actionable задач нет. Следующий выбор требует owner decision/trigger.
 
 **Вне actionable-очереди:** `T-13d` требует решения владельца; GPU ADR, `F-03` и остаток `F-16`
 крупные и заблокированы GPU-lease/координатором; `F-02-full` trigger-only; `HC-22` и `F-13` DEFERRED.
@@ -1200,9 +1201,11 @@ GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 2. **T-13a ✅ (выполнен вне очереди по прямой команде владельца)** — Testing Release больше не вставляет
    dispatch input/outputs в PowerShell; fail-closed validator и негативные injection fixtures входят в fast gate.
    Реальный controlled Testing tail позднее подтверждён при закрытии `T-13e`.
-3. **Targeted owner smoke (следующий owner-action)** — A/B, same-media latest, OFF, clear, app exit/restart и UI responsiveness по
-   [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md). Наблюдаемые end-to-end результаты проверяет владелец; внутренние race/save-lock
-   гарантии отдельно доказывают детерминированные unit-тесты — нужны оба слоя.
+3. **Targeted owner smoke ✅ (2026-07-19)** — A/B, same-media latest, OFF, clear и app exit/restart получили
+   `5/5 PASS` на exact unpublished Stable draft v0.3.61 candidate. Writable slow SMB/UNC responsiveness с 5000+ cue по прямому
+   решению владельца — `WAIVED / NOT RUN`, не `PASS`; итог `ACCEPTED WITH OWNER WAIVER`, `HC-27b` —
+   **DONE WITH RESIDUAL RISK**. Детали и сохранённый полный шестисценарный стандарт:
+   [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md).
 4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e ✅; T-13f ✅; T-13 остаётся 6/7.**
    `T-13d` required status check остаётся единственным owner-gated срезом пакета.
 5. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
@@ -1434,7 +1437,7 @@ frozen-контрактами; для app-кода обязательны `scrip
     + `PersistPerLineVoices=on` → фриз на каждый выбор голоса.
   - Решение: быстрый снимок только override-cue на UI, а `File.Exists`/сериализацию/запись — в `Task.Run` с debounce.
   - Зачем: назначение голоса замораживает UI на больших/сетевых файлах.
-- **HC-27b — Voice-save queue: OFF-race + UI capture 🟠 Ⓜ · IN-PROGRESS — automated slice merged (v0.3.61, PR #142, `f61780c`, 2026-07-11); owner acceptance pending**
+- **HC-27b — Voice-save queue: OFF-race + UI capture 🟠 Ⓜ · ✅ DONE WITH RESIDUAL RISK (v0.3.61; automated slice PR #142, `f61780c`, 2026-07-11; owner acceptance 2026-07-19)**
   - **Почему follow-up отдельный:** `HC-27` остаётся исторически закрытым срезом v0.3.45, но рефакторинг
     capture в `d83efa5` и последующий `DubbingVoiceAssignmentSaveQueue` в `4d80d39` изменили реализацию и выявили
     новые проверяемые границы: UI-I/O/сканы происходят из первого среза, повторный clone и поздний OFF race — из второго.
@@ -1450,11 +1453,21 @@ frozen-контрактами; для app-кода обязательны `scrip
   - **Evidence:** RED-before-fix для трёх исходных дефектов; +23 теста (race/alias/index/restore/reset), targeted
     49/49, full **1376/1376**, build 0 warnings/errors, `verify-fast`/`verify`/`ship` PASS; обязательные WPF,
     media-runtime, .NET, native и packaging review — SHIP, 0 Critical/Important.
+  - **Owner acceptance:** exact unpublished Stable draft run `29681166913`, ProductVersion
+    `0.3.61+66113e343537919c0e3e5208af2467264228c330`; package SHA-256
+    `AA64902C57F52B48D8577CEB9002BEDFFAC49AD9E8819C97ACD8FFAAB9076014`, executable SHA-256
+    `02C311D0A0B79E2B6250128CF8B9B96326C6B9177D825D319213AED6E10AA8AC`. Fresh full gate перед smoke:
+    **1380/1380**, 0 warnings/errors. A/B isolation, latest-wins, Persistence OFF, Clear и Exit/restart —
+    **5/5 PASS**; media/SRT hashes unchanged, foreign A/B companions unchanged, voice-save temp files absent.
+    Writable slow SMB/UNC responsiveness с 5000+ cue — **WAIVED / NOT RUN** по прямому решению владельца;
+    `Overall: ACCEPTED WITH OWNER WAIVER`, не `6/6 PASS`.
+  - **Residual risk:** живой WPF UI под медленным сетевым filesystem I/O и списком 5000+ cue не наблюдался.
+    При реальных input pauses/`Not Responding` переоткрыть `HC-27b` либо завести отдельный performance follow-up.
   - **DoD:** повторно проверить opt-in непосредственно под save-lock перед `_save`; убрать с dispatcher filesystem
     probes, повторный clone и полные O(n)-сканы обоих subtitle-треков на каждую правку (либо заменить их доказуемо
     ограниченным incremental capture), сохранив immutable capture-at-edit и корректность при смене media; добавить детерминированные race/latest-wins тесты;
-    full verify + targeted owner smoke из `manual-smoke-matrix.md`. Автоматизированная часть выполнена; наблюдаемый
-    owner smoke остаётся обязательным и не подменяется unit-тестами.
+    full verify + targeted owner smoke из `manual-smoke-matrix.md`. Автоматизированная часть и пересмотренный
+    owner-approved acceptance выполнены; waiver сетевого сценария сохранён как непроверенная граница.
 - **HC-28 — Bing/Microsoft: отменённая задача access-токена залипает в кэше 🟢 ⓢ · `FlyleafLib/MediaPlayer/Translation/Services/MicrosoftTranslateServiceBase.cs:177`** · ✅ **DONE (v0.3.42, 2026-07-03, сессия #22)** — **постоянный баг уже был закрыт ранее** (eviction-гарды: 401 compare-and-clear + faulted-task eviction в `catch`); остаточное упрочнение — общий fetch токена с `CancellationToken.None` (был токен вызывающего) снимает и разовый сбой + thrash после отмены. Каждый вызывающий бейлит через `WaitAsync(token)`. Network/abstract path → покрыт корректностью + ревью.
   - Проблема: `GetAccessTokenTask` кэширует Task с токеном первого вызывающего; если Cancel пришёл во время первого
     fetch, canceled-task остаётся в `_accessToken` → следующий перевод детерминированно фейлится «A task was canceled».
