@@ -9,7 +9,7 @@
 
 ## Что считается полным успехом
 
-`HC-27b` можно принять только когда все шесть сценариев имеют результат `PASS`:
+Полный стандартный протокол имеет результат `Overall: PASS` только когда все шесть сценариев имеют результат `PASS`:
 
 1. A/B isolation — два видео не смешивают назначения.
 2. Latest wins — быстрое повторное назначение сохраняет последний голос.
@@ -18,8 +18,47 @@
 5. Exit/restart — последняя разрешённая правка переживает штатный выход и перезапуск.
 6. Responsiveness — медленный/сетевой путь и большой список субтитров не замораживают UI.
 
-`BLOCKED` или `PARTIAL` не равны `PASS`. Если нет доступной writable SMB/UNC-папки, сценарий responsiveness нужно
-пометить `BLOCKED`, а `HC-27b` оставить открытым.
+`BLOCKED`, `PARTIAL` и `WAIVED / NOT RUN` не равны `PASS`. По стандартному протоколу, если нет доступной writable
+SMB/UNC-папки, сценарий responsiveness нужно пометить `BLOCKED`, а acceptance оставить открытым. Отступление допустимо
+только по прямому датированному решению владельца: тогда выполненные сценарии всё равно обязаны быть `PASS`, пропущенный
+сценарий фиксируется как `WAIVED / NOT RUN`, итог — `ACCEPTED WITH OWNER WAIVER`, а непроверенная граница остаётся
+явным residual risk.
+
+## Зафиксированный результат — 2026-07-19
+
+Владелец пересмотрел DoD именно для этого закрытия: выполнить пять локальных сценариев, а writable slow SMB/UNC
+responsiveness с 5000+ cue сознательно пропустить. Это исключение не превращает сценарий 6 в `PASS` и не отменяет его
+как стандартный будущий regression smoke.
+
+- Candidate: unpublished Stable draft v0.3.61, run `29681166913`.
+- ProductVersion: `0.3.61+66113e343537919c0e3e5208af2467264228c330`.
+- Package SHA-256: `AA64902C57F52B48D8577CEB9002BEDFFAC49AD9E8819C97ACD8FFAAB9076014`.
+- Executable SHA-256: `02C311D0A0B79E2B6250128CF8B9B96326C6B9177D825D319213AED6E10AA8AC`.
+- Windows: Windows 10 Pro, DisplayVersion 25H2, build `26200.8875`.
+- Fresh full gate перед smoke: `verify.ps1` PASS, 1380/1380, 0 warnings/errors.
+
+| Сценарий | Результат |
+|---|---|
+| A/B isolation | PASS |
+| Latest wins | PASS |
+| Persistence OFF | PASS |
+| Clear | PASS |
+| Exit/restart | PASS |
+| Responsiveness on writable slow SMB/UNC with 5000+ cue | WAIVED / NOT RUN — explicit owner decision |
+
+Финальный disk readback: A содержит только `1000–2500 / ru-preset-1`, B — только
+`1200–2700 / ru-preset-2`, C — только `1400–2900 / ru-preset-2`; A/B не изменились во время C exit/restart.
+Промежуточная вторая запись B была вызвана подтверждённым дополнительным кликом владельца, очищена через
+**Use default voice** и не является product-defect evidence. Все тестовые MKV/SRT сохранили исходные SHA-256,
+voice-save temp-файлов не осталось.
+
+**Overall: ACCEPTED WITH OWNER WAIVER.** Пять из пяти выполненных локальных сценариев имеют `PASS`; один сетевой
+сценарий не выполнялся и не считается пройденным. `HC-27b` закрыт как **DONE WITH RESIDUAL RISK**.
+
+Residual risk: этот прогон не доказывает, что реальный WPF UI остаётся без видимых пауз при медленном сетевом
+filesystem I/O и списке из 5000+ cue. Автоматические queue/UI-capture тесты снижают риск, но не заменяют живое
+наблюдение. Если на реальном сетевом пути появятся паузы ввода или `Not Responding`, нужно переоткрыть `HC-27b` либо
+создать отдельный performance follow-up.
 
 ## Что именно сохраняется
 
@@ -117,10 +156,10 @@ dotnet run --project .\LLPlayer\LLPlayer.csproj --no-restore
 
 1. Откройте Settings одним из доступных способов: `Ctrl+,`, кнопкой-шестерёнкой или правым кликом по видео →
    **Settings**.
-2. Перейдите **Subtitles → Dubbing → Persistence**.
+2. Перейдите **Subtitles → Dubbing** и прокрутите страницу до блока **Persistence**.
 3. Включите **Persist per-line voices**.
 4. Нажмите именно **Save & Close**. `Esc` или закрытие без сохранения не подходят.
-5. Откройте видео и sidebar субтитров (`Ctrl+B` или кнопка **Toggle Sub Sidebar**).
+5. Откройте видео и sidebar субтитров (`Ctrl+B` или кнопка **Toggle Sub Sidebar** / **Toggle Sidebar** в узком меню).
 6. Справа в каждой строке, рядом с кнопкой Sync, найдите иконку человека с голосом.
 7. Сделайте левый клик по ней. Меню должно содержать **Use default voice**, **Russian Narrator (M)** и
    **Russian Narrator (F)**, а также зарегистрированные custom voice IDs, если они есть.
@@ -206,7 +245,7 @@ if (Test-Path -LiteralPath $hc27VoicePath) {
 
 1. Пока persistence ещё включён, дождитесь стабильного companion C.
 2. Запишите его SHA-256, размер, `LastWriteTimeUtc` и содержимое. Если файла нет, запишите `ABSENT`.
-3. Откройте **Settings → Subtitles → Dubbing → Persistence**.
+3. Откройте **Settings → Subtitles → Dubbing** и прокрутите страницу до блока **Persistence**.
 4. Снимите **Persist per-line voices** и нажмите **Save & Close**.
 5. Повторно откройте Settings и убедитесь, что флаг остался выключенным.
 6. В sidebar C выберите другой голос. Для наглядности можно сначала выбрать **Use default voice**, затем M.
@@ -344,10 +383,11 @@ Latest wins: PASS / FAIL
 Persistence OFF: PASS / FAIL
 Clear: PASS / FAIL
 Exit/restart: PASS / FAIL
-Responsiveness: PASS / FAIL / BLOCKED
+Responsiveness: PASS / FAIL / BLOCKED / WAIVED / NOT RUN
 Видео и SRT SHA-256 неизменны: PASS / FAIL
 
-Overall: PASS / FAIL / BLOCKED
+Overall: PASS / FAIL / BLOCKED / ACCEPTED WITH OWNER WAIVER
+Residual risk:
 Комментарий и точный шаг ошибки:
 ```
 
@@ -355,4 +395,6 @@ Overall: PASS / FAIL / BLOCKED
 тусклой иконки в покое без hover/focus, JSON каждого companion, их SHA-256/время и короткая запись о поведении UI на
 сетевом пути.
 
-`Overall: PASS` допустим только при шести `PASS`. До этого `HC-27b` остаётся `IN-PROGRESS`.
+`Overall: PASS` допустим только при шести `PASS`. `ACCEPTED WITH OWNER WAIVER` допустим только при прямом датированном
+решении владельца, `PASS` для всех выполненных сценариев и явной записи residual risk; waiver никогда не считается
+`PASS`.
