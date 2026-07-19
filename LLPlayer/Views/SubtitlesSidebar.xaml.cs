@@ -21,6 +21,7 @@ public partial class SubtitlesSidebar : UserControl
 
         Unloaded += (sender, args) =>
         {
+            WordPopupControl.ReleaseOwnedResources();
             VM.RequestScrollToTop -= OnRequestScrollToTop;
             VM.Dispose();
         };
@@ -56,9 +57,18 @@ public partial class SubtitlesSidebar : UserControl
         }
     }
 
-    private void SelectableTextBox_OnWordClicked(object? sender, WordClickedEventArgs e)
+    private async void SelectableTextBox_OnWordClicked(object? sender, WordClickedEventArgs e)
     {
-        _ = WordPopupControl.OnWordClicked(e);
+        try
+        {
+            await WordPopupControl.OnWordClicked(e);
+        }
+        catch (Exception ex)
+        {
+            // async void: keep a provider/process failure on this frequent interaction path out of the global
+            // dispatcher exception handler, matching the overlay WordPopup host.
+            WordPopupControl.FL.MessageQueue.Enqueue($"Word lookup failed: {ex.Message}");
+        }
     }
 
     /// <summary>

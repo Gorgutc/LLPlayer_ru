@@ -32,6 +32,8 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
     private string _clickedText = string.Empty;
     private int _clickedSubIndex;
     private bool _clickedIsTranslated;
+    private string _wordMenuWords = string.Empty;
+    private string _wordMenuText = string.Empty;
     private readonly WordListStore _wordListStore;
 
     private CancellationTokenSource? _cts;
@@ -140,7 +142,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         // which runs on a ThreadPool worker (Subtitle.Load). A direct DependencyObject touch there throws
         // "The calling thread cannot access this object because a different thread owns it" and aborts the whole
         // subtitle load (so the subtitles never appear). Marshal to the Dispatcher; UI-thread callers (settings /
-        // chat-config changes, word-translate config-error) still run synchronously as before, while off-thread
+        // chat-config changes) still run synchronously as before, while off-thread
         // callers get an asynchronous reset (a future off-thread caller must not rely on Clear() finishing inline).
         if (!Dispatcher.CheckAccess())
         {
@@ -148,21 +150,82 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             return;
         }
 
-        _translateService?.Dispose();
-        _translateService = null;
+        CancelCurrentLookup();
+        DisposeLookupServices();
+
         // clear cache
         _translateCache.Clear();
 
         // F-11: re-resolve the definition provider after a settings/language change (a new LLM may now be
         // configured, the target language may differ) and drop cached lookups for the previous configuration.
-        _wordDefinitionService?.Dispose();
-        _wordDefinitionService = null;
         _definitionCache.Clear();
+        ResetPopupUi();
+    }
+
+    /// <summary>
+    /// Releases resources owned by this popup when its enclosing sidebar/overlay leaves the presentation tree.
+    /// This is intentionally reload-safe: WPF can unload and later reload the same parent instance. Ordinary
+    /// close/Esc/playback dismissal never calls this method, so per-instance lookup caches survive normal use.
+    /// </summary>
+    public void ReleaseOwnedResources()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(ReleaseOwnedResources));
+            return;
+        }
+
+        CancelCurrentLookup();
+        DisposeLookupServices();
+        ResetPopupUi();
+
+        // PDICSender is an application-owned singleton and is disposed only by App.OnExit.
+    }
+
+    private void ResetPopupUi()
+    {
+        IsOpen = false;
+        if (PopupContextMenu != null)
+            PopupContextMenu.IsOpen = false;
+        if (WordContextMenu != null)
+            WordContextMenu.IsOpen = false;
+
+        IsLoading = false;
         _lastDefinition = null;
-        _pendingDefinitionTask = null;
-        // Also drop a now-stale definition row from a still-open popup (the old config produced it).
-        DefinitionVisible = false;
+        PopupPlacementTarget = null;
+        SourceText.Text = "";
+        TranslationText.Text = "";
         DefinitionText.Text = "";
+        DefinitionVisible = false;
+
+        // Invalidate Save/menu snapshots together with the rendered result. A provider/language change must not
+        // let an old translation be stored under the new target language (the word list is first-wins).
+        _clickedWords = string.Empty;
+        _clickedText = string.Empty;
+        _clickedSubIndex = 0;
+        _clickedIsTranslated = false;
+        _wordMenuWords = string.Empty;
+        _wordMenuText = string.Empty;
+    }
+
+    private void CancelCurrentLookup()
+    {
+        CancellationTokenSource? cts = _cts;
+        _cts = null;
+        _pendingDefinitionTask = null;
+        cts?.Cancel();
+        // The async Popup operation owns and disposes its CTS after every task using the token has settled.
+    }
+
+    private void DisposeLookupServices()
+    {
+        ITranslateService? translateService = _translateService;
+        _translateService = null;
+        translateService?.Dispose();
+
+        WordDefinitionService? definitionService = _wordDefinitionService;
+        _wordDefinitionService = null;
+        definitionService?.Dispose();
     }
 
     private void InitializeContextMenu()
@@ -175,7 +238,7 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             Style = contextMenuStyle
         };
 
-        SetupContextMenu(popupMenu);
+        SetupContextMenu(popupMenu, isPopupMenu: true);
         PopupContextMenu = popupMenu;
 
         ContextMenu wordMenu = new()
@@ -184,11 +247,11 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             Style = contextMenuStyle
         };
 
-        SetupContextMenu(wordMenu);
+        SetupContextMenu(wordMenu, isPopupMenu: false);
         WordContextMenu = wordMenu;
     }
 
-    private void SetupContextMenu(ContextMenu contextMenu)
+    private void SetupContextMenu(ContextMenu contextMenu, bool isPopupMenu)
     {
         IEnumerable<IMenuAction> actions = FL.Config.Subs.WordMenuActions.Where(a => a.IsEnabled);
         foreach (IMenuAction action in actions)
@@ -208,6 +271,9 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
             menuItem.Click += (o, args) =>
             {
+                string words = isPopupMenu ? _clickedWords : _wordMenuWords;
+                string text = isPopupMenu ? _clickedText : _wordMenuText;
+
                 if (action is SearchMenuAction searchAction)
                 {
                     // Only word search available
@@ -216,15 +282,15 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
                         _lastSearchActionUrl = searchAction.Url;
                     }
 
-                    OpenWeb(searchAction.Url, _clickedWords, _clickedText);
+                    OpenWeb(searchAction.Url, words, text);
                 }
                 else if (action is ClipboardMenuAction clipboardAction)
                 {
-                    CopyToClipboard(_clickedWords, clipboardAction.ToLower);
+                    CopyToClipboard(words, clipboardAction.ToLower);
                 }
                 else if (action is ClipboardAllMenuAction clipboardAllAction)
                 {
-                    CopyToClipboard(_clickedText, clipboardAllAction.ToLower);
+                    CopyToClipboard(text, clipboardAllAction.ToLower);
                 }
             };
             contextMenu.Items.Add(menuItem);
@@ -267,14 +333,22 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         {
             try
             {
-                var service = _translateServiceFactory.GetService(FL.PlayerConfig.Subtitles.TranslateWordServiceType, true);
-                service.Initialize(srcLang, targetLang);
+                ITranslateService service =
+                    _translateServiceFactory.GetService(FL.PlayerConfig.Subtitles.TranslateWordServiceType, true);
+                try
+                {
+                    service.Initialize(srcLang, targetLang);
+                }
+                catch
+                {
+                    service.Dispose();
+                    throw;
+                }
+
                 _translateService = service;
             }
             catch (TranslationConfigException ex)
             {
-                Clear();
-
                 // Recoverable word-translation config error → actionable snackbar with a deep-link to the
                 // translation settings, instead of a topmost modal. Enqueue once until settings change:
                 // repeated word clicks keep re-entering this block (_translateService stays null), so an
@@ -290,15 +364,19 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             }
         }
 
+        ITranslateService translateService = _translateService;
         try
         {
-            string result = await _translateService.TranslateAsync(text, token);
+            string result = await translateService.TranslateAsync(text, token);
+            token.ThrowIfCancellationRequested();
             _translateCache.TryAdd(lower, result);
 
             return result;
         }
         catch (TranslationException ex)
         {
+            token.ThrowIfCancellationRequested();
+
             // A looping/degenerate or token-truncated reply is a recoverable per-word failure on this
             // high-frequency interactive path; fall back to the source word silently rather than popping a
             // modal. Keep the modal for genuine (config/transport/empty-response) failures.
@@ -309,15 +387,14 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
             return text;
         }
+        catch (Exception) when (token.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(token);
+        }
     }
 
     public async Task OnWordClicked(WordClickedEventArgs e)
     {
-        _clickedWords = e.Words;
-        _clickedText = e.Text;
-        _clickedSubIndex = e.SubIndex;
-        _clickedIsTranslated = e.IsTranslated;
-
         if (FL.Player.Status == Status.Playing)
         {
             FL.Player.Pause();
@@ -342,6 +419,10 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         }
         else if (e.Mouse == MouseClick.Right)
         {
+            // Context-menu actions have their own state. They must not overwrite the word/translation pair
+            // currently shown by an in-flight popup, otherwise Save could combine two different clicks.
+            _wordMenuWords = e.Words;
+            _wordMenuText = e.Text;
             WordContextMenu!.IsOpen = true;
         }
     }
@@ -368,103 +449,144 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
             return;
         }
 
-        if (_cts != null)
-        {
-            // Canceled if running ahead
-            _cts.Cancel();
-            _cts.Dispose();
-        }
-
-        _cts = new CancellationTokenSource();
-        CancellationTokenSource cts = _cts;
-
-        string source = e.Words;
-
-        IsLoading = true;
-
-        SourceText.Text = source;
-        TranslationText.Text = "";
-        // F-11: reset the definition row + stash so a previous word's definition can never linger or be saved.
-        DefinitionText.Text = "";
-        DefinitionVisible = false;
-        _lastDefinition = null;
-        _pendingDefinitionTask = null;
-
-        if (IsSidebar && e.Sender is SelectableTextBox)
-        {
-            var listBoxItem = UIHelper.FindParent<ListBoxItem>(e.Sender);
-            if (listBoxItem != null)
-            {
-                PopupPlacementTarget = listBoxItem;
-            }
-        }
-
-        if (FL.Config.Subs.WordLastSearchOnSelected)
-        {
-            if (Keyboard.Modifiers == FL.Config.Subs.WordLastSearchOnSelectedModifier)
-            {
-                if (_lastSearchActionUrl != null)
-                {
-                    OpenWeb(_lastSearchActionUrl, source);
-                }
-            }
-        }
-
-        IsOpen = true;
-
-        await UpdatePosition();
+        // A rapid re-click invalidates the old operation. The old Popup() keeps ownership of its CTS and
+        // disposes it only after its own translation/definition tasks have settled.
+        CancelCurrentLookup();
+        CancellationTokenSource cts = new();
+        _cts = cts;
+        Task<DictionaryEntry>? definitionTask = null;
+        bool definitionTaskObserved = false;
 
         try
         {
+            string source = e.Words;
+
+            // Commit Save/context-menu state only for a real popup lookup. Clipboard, PDIC and right-click
+            // actions must not replace the state belonging to an older lookup that is still visible.
+            _clickedWords = e.Words;
+            _clickedText = e.Text;
+            _clickedSubIndex = e.SubIndex;
+            _clickedIsTranslated = e.IsTranslated;
+            IsLoading = true;
+
+            SourceText.Text = source;
+            TranslationText.Text = "";
+            // F-11: reset the definition row + stash so a previous word's definition can never linger or be saved.
+            DefinitionText.Text = "";
+            DefinitionVisible = false;
+            _lastDefinition = null;
+            _pendingDefinitionTask = null;
+
+            if (IsSidebar && e.Sender is SelectableTextBox)
+            {
+                var listBoxItem = UIHelper.FindParent<ListBoxItem>(e.Sender);
+                if (listBoxItem != null)
+                {
+                    PopupPlacementTarget = listBoxItem;
+                }
+            }
+
+            if (FL.Config.Subs.WordLastSearchOnSelected)
+            {
+                if (Keyboard.Modifiers == FL.Config.Subs.WordLastSearchOnSelectedModifier)
+                {
+                    if (_lastSearchActionUrl != null)
+                    {
+                        OpenWeb(_lastSearchActionUrl, source);
+                    }
+                }
+            }
+
+            IsOpen = true;
+            await UpdatePosition();
+            if (!IsCurrentLookup(cts))
+                return;
+
             // F-11: start the (best-effort) definition lookup in parallel with the translation under the same
             // token, so a re-click cancels both. null when the feature is off / not applicable for this word.
-            Task<DictionaryEntry>? definitionTask = StartDefinitionLookup(source, e, cts.Token);
+            definitionTask = StartDefinitionLookup(source, e, cts.Token);
             _pendingDefinitionTask = definitionTask;
 
             string result = await TranslateWithCache(source, e, cts.Token);
+            cts.Token.ThrowIfCancellationRequested();
+            if (!IsCurrentLookup(cts))
+                return;
+
             TranslationText.Text = result;
             IsLoading = false;
 
             // The translation is the primary signal and is shown first; the definition fills in after it lands.
             if (definitionTask != null)
             {
+                definitionTaskObserved = true;
                 DictionaryEntry entry = await definitionTask;
+                cts.Token.ThrowIfCancellationRequested();
                 // Gate on the RENDERED text (not just IsEmpty) so a sense-with-blank-definition never shows an
                 // empty row; drop a late result for a superseded word via the cts==_cts guard.
                 string display = entry.IsEmpty ? string.Empty : entry.FlattenForDisplay();
-                if (cts == _cts && display.Length > 0)
+                if (IsCurrentLookup(cts) && display.Length > 0)
                 {
                     _lastDefinition = entry;
                     DefinitionText.Text = display;
                     DefinitionVisible = true;
                 }
             }
+
+            if (IsCurrentLookup(cts))
+                await UpdatePosition();
         }
         catch (OperationCanceledException)
         {
             // Only clear the spinner if this is still the active operation; a rapid re-trigger may have
             // started a new translation whose spinner must stay on.
-            if (cts == _cts)
+            if (ReferenceEquals(cts, _cts))
                 IsLoading = false;
-            // If the translation cancelled before the definition was awaited, the definition task is abandoned
-            // and shares the cancelled token; observe it so it is not an unobserved (faulted) task exception.
-            ObservePendingDefinition(definitionTask: _pendingDefinitionTask);
-            return;
         }
 
-        await UpdatePosition();
+        catch (Exception) when (cts.IsCancellationRequested || !ReferenceEquals(cts, _cts))
+        {
+            // A provider can surface ObjectDisposedException/transport errors while host teardown cancels and
+            // disposes its service. Once this operation is no longer current, it must not update UI or notify.
+        }
+        finally
+        {
+            if (!definitionTaskObserved && definitionTask != null)
+            {
+                try
+                {
+                    await definitionTask;
+                }
+                catch
+                {
+                    // The abandoned best-effort definition task is observed here; its result is intentionally
+                    // ignored because this request was cancelled or superseded.
+                }
+            }
 
-        return;
+            if (ReferenceEquals(_pendingDefinitionTask, definitionTask))
+                _pendingDefinitionTask = null;
+
+            if (ReferenceEquals(_cts, cts))
+            {
+                _cts = null;
+                IsLoading = false;
+            }
+
+            cts.Dispose();
+        }
 
         async Task UpdatePosition()
         {
             // ActualWidth is updated asynchronously, so it needs to be offloaded in the Dispatcher.
             await Dispatcher.BeginInvoke(() =>
             {
-                if (IsSidebar && PopupPlacementTarget != null)
+                if (!IsCurrentLookup(cts))
+                    return;
+
+                if (IsSidebar && PopupPlacementTarget is ListBoxItem listBoxItem)
                 {
                     // for sidebar
-                    PopupVerticalOffset = (((ListBoxItem)PopupPlacementTarget).ActualHeight - ActualHeight) / 2;
+                    PopupVerticalOffset = (listBoxItem.ActualHeight - ActualHeight) / 2;
                     PopupHorizontalOffset = -ActualWidth - 10;
                 }
                 else
@@ -513,10 +635,11 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
                 return Task.FromResult(cached!);
             }
 
-            _wordDefinitionService ??= WordDefinitionService.ForConfig(FL.PlayerConfig.Subtitles);
+            WordDefinitionService definitionService =
+                _wordDefinitionService ??= WordDefinitionService.ForConfig(FL.PlayerConfig.Subtitles);
 
             WordDefinitionProvider provider =
-                WordDefinitionSelector.Select(mode, srcLang.ISO6391, _wordDefinitionService.LlmAvailable);
+                WordDefinitionSelector.Select(mode, srcLang.ISO6391, definitionService.LlmAvailable);
             if (provider == WordDefinitionProvider.None)
             {
                 return null;
@@ -524,12 +647,13 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
 
             // Auto on an English word: fall back to the LLM when the free dictionary has no entry (pure rule).
             bool allowLlmFallback =
-                WordDefinitionSelector.AllowLlmFallback(mode, provider, _wordDefinitionService.LlmAvailable);
+                WordDefinitionSelector.AllowLlmFallback(mode, provider, definitionService.LlmAvailable);
 
             string? srcName = srcLang.TopEnglishName;
             string targetName = FL.PlayerConfig.Subtitles.TranslateLanguage.TopEnglishName;
 
-            return LookupAndCacheAsync(provider, allowLlmFallback, source, srcName, targetName, e.Text, key, token);
+            return LookupAndCacheAsync(
+                definitionService, provider, allowLlmFallback, source, srcName, targetName, e.Text, key, token);
         }
         catch
         {
@@ -538,31 +662,21 @@ public partial class WordPopup : UserControl, INotifyPropertyChanged
         }
     }
 
-    // Observe the exception of an abandoned definition task (cancelled by a re-click) so it does not surface as
-    // an unobserved task exception at GC time. No-op for a null/already-completed-and-awaited task.
-    private static void ObservePendingDefinition(Task<DictionaryEntry>? definitionTask)
-    {
-        if (definitionTask is { IsCompleted: false })
-        {
-            _ = definitionTask.ContinueWith(
-                static t => { _ = t.Exception; },
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-        }
-    }
-
     private async Task<DictionaryEntry> LookupAndCacheAsync(
-        WordDefinitionProvider provider, bool allowLlmFallback, string word,
+        WordDefinitionService definitionService, WordDefinitionProvider provider, bool allowLlmFallback, string word,
         string? sourceLangName, string targetLangName, string context, string cacheKey, CancellationToken token)
     {
-        DictionaryEntry entry = await _wordDefinitionService!.GetDefinitionAsync(
+        DictionaryEntry entry = await definitionService.GetDefinitionAsync(
             provider, allowLlmFallback, word, sourceLangName, targetLangName, context, token);
 
         // Cache the outcome (including Empty) so repeat clicks on the same word don't re-hit the network.
+        token.ThrowIfCancellationRequested();
         _definitionCache[cacheKey] = entry;
         return entry;
     }
+
+    private bool IsCurrentLookup(CancellationTokenSource cts) =>
+        ReferenceEquals(_cts, cts) && !cts.IsCancellationRequested;
 
     private void CloseButton_OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {

@@ -57,6 +57,8 @@ public partial class SubtitlesControl : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        WordPopupControl.ReleaseOwnedResources();
+
         // Flush a pending resize so the final size is not lost if the control unloads mid-gesture.
         if (_subsResizeTimer is { IsEnabled: true })
         {
