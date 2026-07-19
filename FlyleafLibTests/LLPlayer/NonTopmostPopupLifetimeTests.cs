@@ -50,8 +50,8 @@ public class NonTopmostPopupLifetimeTests
             app = new Application();
             app.MainWindow = new Window();
 
-            rootedControl = CreateAndAttach(release: false);
-            WeakReference[] releasedControls = Enumerable.Range(0, 20)
+            rootedControl = CreateMainWindowRootControl();
+            (WeakReference Popup, Border Child)[] releasedProbes = Enumerable.Range(0, 20)
                 .Select(_ => CreateAndAttach(release: true))
                 .ToArray();
 
@@ -59,11 +59,15 @@ public class NonTopmostPopupLifetimeTests
 
             rootedControl.IsAlive.Should().BeTrue(
                 "the control probe must detect the MainWindow event root when Unloaded is omitted");
-            foreach (WeakReference releasedControl in releasedControls)
+            foreach ((WeakReference releasedPopup, Border _) in releasedProbes)
             {
-                releasedControl.IsAlive.Should().BeFalse(
+                releasedPopup.IsAlive.Should().BeFalse(
                     "Unloaded must remove the child and MainWindow handlers that rooted discarded sidebar trees");
             }
+
+            // Keep every child externally rooted through the collection checks. Otherwise a leaked child-handler
+            // cycle could be collected together and the test would prove only MainWindow-handler removal.
+            GC.KeepAlive(releasedProbes);
         }
         finally
         {
@@ -81,18 +85,37 @@ public class NonTopmostPopupLifetimeTests
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static WeakReference CreateAndAttach(bool release)
+    private static WeakReference CreateMainWindowRootControl()
     {
         NonTopmostPopup popup = new() { Child = new Border() };
+        popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, popup));
+        WeakReference reference = new(popup);
+
+        // Remove the child-to-logical-parent path and let the child/handler cycle become unreachable. Because
+        // Unloaded was intentionally omitted, only the MainWindow event subscriptions should retain this popup.
+        popup.Child = null;
+        return reference;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static (WeakReference Popup, Border Child) CreateAndAttach(bool release)
+    {
+        Border child = new();
+        NonTopmostPopup popup = new() { Child = child };
         popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, popup));
         WeakReference reference = new(popup);
 
         if (release)
         {
             popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent, popup));
+            popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent, popup));
+            popup.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent, popup));
+            // Break the normal child->logical-parent link only in the probe. The externally rooted child will
+            // still keep the popup alive if OnPopupUnloaded failed to remove its routed-event handler.
+            popup.Child = null;
         }
 
-        return reference;
+        return (reference, child);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

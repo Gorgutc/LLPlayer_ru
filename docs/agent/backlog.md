@@ -51,8 +51,8 @@
 > `HC-27b` закрыт как **DONE WITH RESIDUAL RISK**: на exact unpublished Stable draft v0.3.61 candidate владелец принял
 > **5/5 выполненных локальных сценариев**, а writable slow SMB/UNC responsiveness с 5000+ cue явно пометил
 > `WAIVED / NOT RUN`. Waiver не считается `PASS`; итог — `ACCEPTED WITH OWNER WAIVER`.
-> Active **0**, unresolved **6**; пакет `T-13` закрыт **7/7**. Следующий owner-selected срез — `HC-22`:
-> начать после merge T-13d с повторного аудита host-level teardown, отдельной app-веткой и отдельным PR.
+> Active **1**, unresolved **6**; пакет `T-13` закрыт **7/7**. `HC-22` реализован в draft PR #163
+> как кандидат v0.3.62; до closure остаётся exact-final CI и расширенный owner-smoke либо явное принятие residual smoke.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -194,7 +194,7 @@ HttpClient.Timeout of 60 [seconds]». Владелец гоняет перево
 это учитывать. Сделать аккуратно (не сломать детект «cancel vs timeout», см. DeepLX/Microsoft `:101/:173`).
 
 ### B-05 — Cross-thread краш загрузки субтитров: `WordPopup.Clear()` трогает WPF UI на worker-потоке 🔴 ⓢ · ✅ **DONE (v0.3.56, 2026-07-04, сессия #32)** · был NEW (скриншот владельца, P0)
-> ✅ **Закрыт.** Гард `Dispatcher.CheckAccess()` в начале `WordPopup.Clear()` ([`LLPlayer/Controls/WordPopup.xaml.cs:135`](../../LLPlayer/Controls/WordPopup.xaml.cs)):
+> ✅ **Закрыт.** Гард `Dispatcher.CheckAccess()` в начале `WordPopup.Clear()` ([`LLPlayer/Controls/WordPopup.xaml.cs:137`](../../LLPlayer/Controls/WordPopup.xaml.cs)):
 > при вызове не с UI-потока — `Dispatcher.BeginInvoke(new Action(Clear))` + return; UI-поточные вызовы (settings/chat-config; config-error был историческим caller до HC-22)
 > идут синхронно как раньше. Защищает ВСЕ вызовы `Clear()` (и будущие). App-слой, FlyleafLib (frozen) НЕ тронут — в духе frozen
 > `media-runtime-contract` §«WPF Dispatcher Boundaries» (не удалять маршалинг, держать UI-thread границы).
@@ -1102,11 +1102,11 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-19 / v0.3.61)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-19 / v0.3.62 candidate)
 
-Следующий owner-selected срез — `HC-22`: после merge T-13d повторно подтвердить безопасный host-level teardown
-и выполнять app-правку отдельно. `HC-27b` удалён из активного ранжирования после `5/5` local PASS и owner-waiver
-сетевого responsiveness-сценария; это закрытие с residual risk, не `6/6 PASS`.
+Текущий owner-selected срез — `HC-22`: host-level lifetime повторно доказан, реализация и non-vacuous WPF
+WeakReference regression находятся в draft PR #163. До closure остаётся exact-final CI и расширенный owner-smoke
+либо явное принятие residual smoke; следующая задача не выбирается автоматически.
 
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
@@ -1148,10 +1148,10 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-19 / v0.3.61)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-19 / v0.3.62 candidate)
 
-Следующий owner-selected малый срез — `HC-22`; перед app-кодом повторно проверить lifetime seam и не использовать
-дочерний `WordPopup.Unloaded`, который срабатывает при обычном закрытии popup.
+Текущий малый срез `HC-22` реализован в draft PR #163. Дочерний `WordPopup.Unloaded` не используется;
+обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Closure ждёт owner-acceptance.
 
 **Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
 GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
@@ -1217,8 +1217,8 @@ GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
    [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md).
 4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e ✅; T-13f ✅; T-13d ✅; пакет T-13 закрыт 7/7.**
    Required `LLPlayer Build & Test` active в strict ruleset без bypass; GREEN и intentional-RED merge-block proof сохранены.
-5. **HC-22 — owner-selected next:** после merge T-13d повторно подтвердить parent/host teardown seam; app-код,
-   WPF-review и targeted manual smoke выполнять в отдельной ветке/PR, не через дочерний `WordPopup.Unloaded`.
+5. **HC-22 — IMPLEMENTED / OWNER-SMOKE PENDING:** draft PR #163, v0.3.62 candidate; host-level teardown,
+   handler detach и deterministic WPF lifetime regression готовы. Exact-final CI и owner-acceptance ещё обязательны.
 6. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
    coverage закреплено как risk-based policy, а T-03 удалён из активной очереди.
 7. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
@@ -1413,13 +1413,16 @@ frozen-контрактами; для app-кода обязательны `scrip
     остаётся ~49.7 дней → перекрытие cue, вечное `Showing`, битый prev/next-интервал.
   - Решение: хранить `end_display_time` независимо от `useBitmap` и корректировать по нему; последний cue клампить.
   - Зачем: некорректные тайминги субтитров в bitmap-режиме без кэша.
-- **HC-22 — `WordPopup`: сервисы/`_cts` не освобождаются при уничтожении контрола 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:137`** · 🟡 **OWNER-SELECTED / QUEUED (re-audit first, 2026-07-19; сессия #22, бандл B2)** — при прежней попытке фикса adversarial-ревью выявил: `WordPopup` живёт внутри `NonTopmostPopup`, а WPF Popup поднимает `Unloaded` на КАЖДОЕ закрытие (video resume / Esc / Close), не только при уничтожении → teardown в дочернем `WordPopup.Unloaded` затирал бы translate/definition-кэши на каждом закрытии (регрессия cache-miss). Weak-event подписки (ctor) уже НЕ рутят контрол → сервисы/`_cts` GC-собираемы; прежняя правка была отклонена как net-negative. Владелец переоткрыл задачу после T-13d: перед app-реализацией заново доказать настоящую host-level точку уничтожения отдельно для sidebar/overlay.
-  - Проблема: `_translateService`/`_wordDefinitionService` (каждый владеет HttpClient, для LLM — со своим handler вне
-    общего пула) диспозятся только в `Clear()` при смене настроек; при уничтожении WordPopup (сайдбар пересоздаётся
-    из DataTemplate на каждый toggle) — нет teardown → утечка соединений до GC.
-  - Безопасная гипотеза: идемпотентный host-level teardown только для owned-сервисов и `_cts`; дочерний
-    `WordPopup.Unloaded` запрещён, app-singleton `PDICSender` не трогать (он освобождается централизованно при выходе).
-  - Зачем: повторные toggle сайдбара при LLM-переводе слов копят соединения.
+- **HC-22 — `WordPopup`: host teardown owned-сервисов/CTS + root от `NonTopmostPopup` 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:165`** · 🟠 **IMPLEMENTED / OWNER-SMOKE PENDING (v0.3.62 candidate, PR #163, 2026-07-19; сессия #22, бандл B2)** — повторный аудит подтвердил две независимые причины. Дочерний `WordPopup.Unloaded` срабатывает при обычном Close/Esc/playback и поэтому непригоден для teardown: он разрушал бы live-cache. Одновременно `NonTopmostPopup` сильно подписывался на `MainWindow` и удерживал весь discarded sidebar tree, поэтому прежнее утверждение «weak events делают контрол collectable» было неверным.
+  - Решение: enclosing `SubtitlesSidebar`/`SubtitlesControl` вызывают reload-safe `ReleaseOwnedResources`; active lookup
+    инвалидируется/отменяется, owned translation/definition services освобождаются, а локальная async-операция
+    диспозит CTS только после завершения всех token consumers. Late cache/UI/spinner/Save writes запрещены.
+  - `NonTopmostPopup` симметрично снимает child + `MainWindow` handlers. `PDICSender` остаётся app-singleton и
+    освобождается только в `App.OnExit`. Обычные Close/Esc/playback/fullscreen/tray сохраняют live instance/cache.
+  - Доказательство: non-parallel STA WeakReference test содержит rooted negative control и 20 unload→reload→unload
+    экземпляров; локальный full verify — 1381/1381, 0 warnings/errors. Базовый UI-smoke Close/Esc/sidebar recreate — PASS.
+  - Остаток acceptance: расширенный observable-provider slow-race/settings/PDIC smoke из manual matrix не заявлен
+    как PASS. До явного owner-acceptance задача остаётся active/unresolved; следующую задачу не начинать.
 - **HC-23 — PDIC: pipe-процесс спавнится на каждый WordPopup и не убивается 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:349`** · ✅ **DONE (v0.3.43, 2026-07-03, сессия #22, бандл B2)** — `PDICSender` → DI-синглтон (один общий pipe-процесс вместо N per-WordPopup); диспоз ЯВНО в `App.OnExit` через `PDICSender.Current` (Prism/DryIoc НЕ диспозит контейнер на выходе — подтверждено декомпиляцией Prism 9.0.537 в adversarial-ревью), без bare-`Resolve` (не плодит pipe на выходе, если PDIC не использовался); `Dispose` синхронный+bounded, `PipeClient.SendMessage` +`ConfigureAwait(false)` (нет sync-over-async дедлока UI-треда на выходе). Ревью 2 раунда (5/5 проверок OK). **Известное ограничение (Minor):** синглтон кэширует первый exe-путь на сессию (смена `PDICPipeExecutablePath` в рантайме требует рестарта); hard-crash всё ещё может осиротить процесс — job-object hardening опциональный follow-up.
   - Проблема: `_pdicSender ??= Container.Resolve<PDICSender>()` (transient) в конструкторе запускает внешний exe
     PDIC-пайпа; `Dispose` не вызывается нигде, у `PipeClient` нет финализатора → процессы копятся; сам `Dispose` —
