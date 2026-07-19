@@ -13,7 +13,9 @@ namespace LLPlayer.Controls;
 public class NonTopmostPopup : Popup
 {
     private bool? _appliedTopMost;
-    private bool _alreadyLoaded;
+    private readonly MouseButtonEventHandler _childPreviewMouseLeftButtonDownHandler;
+    private UIElement? _subscribedChild;
+    private bool _lifetimeHandlersAttached;
     private Window? _parentWindow;
 
     public static readonly DependencyProperty IsTopmostProperty =
@@ -27,19 +29,22 @@ public class NonTopmostPopup : Popup
 
     public NonTopmostPopup()
     {
+        _childPreviewMouseLeftButtonDownHandler = OnChildPreviewMouseLeftButtonDown;
         Loaded += OnPopupLoaded;
+        Unloaded += OnPopupUnloaded;
     }
 
     void OnPopupLoaded(object sender, RoutedEventArgs e)
     {
-        if (_alreadyLoaded)
+        if (_lifetimeHandlersAttached)
             return;
 
-        _alreadyLoaded = true;
+        _lifetimeHandlersAttached = true;
 
-        if (Child != null)
+        _subscribedChild = Child;
+        if (_subscribedChild != null)
         {
-            Child.AddHandler(PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnChildPreviewMouseLeftButtonDown), true);
+            _subscribedChild.AddHandler(PreviewMouseLeftButtonDownEvent, _childPreviewMouseLeftButtonDownHandler, true);
         }
 
         //_parentWindow = Window.GetWindow(this);
@@ -51,6 +56,26 @@ public class NonTopmostPopup : Popup
         _parentWindow.Activated += OnParentWindowActivated;
         _parentWindow.Deactivated += OnParentWindowDeactivated;
         _parentWindow.LocationChanged += OnParentWindowLocationChanged;
+    }
+
+    private void OnPopupUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_subscribedChild != null)
+        {
+            _subscribedChild.RemoveHandler(PreviewMouseLeftButtonDownEvent, _childPreviewMouseLeftButtonDownHandler);
+        }
+
+        if (_parentWindow != null)
+        {
+            _parentWindow.Activated -= OnParentWindowActivated;
+            _parentWindow.Deactivated -= OnParentWindowDeactivated;
+            _parentWindow.LocationChanged -= OnParentWindowLocationChanged;
+        }
+
+        _subscribedChild = null;
+        _parentWindow = null;
+        _lifetimeHandlersAttached = false;
+        _appliedTopMost = null;
     }
 
     private void OnParentWindowLocationChanged(object? sender, EventArgs e)

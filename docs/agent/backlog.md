@@ -195,7 +195,7 @@ HttpClient.Timeout of 60 [seconds]». Владелец гоняет перево
 
 ### B-05 — Cross-thread краш загрузки субтитров: `WordPopup.Clear()` трогает WPF UI на worker-потоке 🔴 ⓢ · ✅ **DONE (v0.3.56, 2026-07-04, сессия #32)** · был NEW (скриншот владельца, P0)
 > ✅ **Закрыт.** Гард `Dispatcher.CheckAccess()` в начале `WordPopup.Clear()` ([`LLPlayer/Controls/WordPopup.xaml.cs:135`](../../LLPlayer/Controls/WordPopup.xaml.cs)):
-> при вызове не с UI-потока — `Dispatcher.BeginInvoke(new Action(Clear))` + return; UI-поточные вызовы (settings/chat-config/word-translate-config-error)
+> при вызове не с UI-потока — `Dispatcher.BeginInvoke(new Action(Clear))` + return; UI-поточные вызовы (settings/chat-config; config-error был историческим caller до HC-22)
 > идут синхронно как раньше. Защищает ВСЕ вызовы `Clear()` (и будущие). App-слой, FlyleafLib (frozen) НЕ тронут — в духе frozen
 > `media-runtime-contract` §«WPF Dispatcher Boundaries» (не удалять маршалинг, держать UI-thread границы).
 **Симптом (скриншот владельца, v0.3.55):** диалог «Subtitles Unknown Error → Cannot load all subtitles on worker thread:
