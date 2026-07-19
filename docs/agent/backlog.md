@@ -52,7 +52,8 @@
 > **5/5 выполненных локальных сценариев**, а writable slow SMB/UNC responsiveness с 5000+ cue явно пометил
 > `WAIVED / NOT RUN`. Waiver не считается `PASS`; итог — `ACCEPTED WITH OWNER WAIVER`.
 > Active **1**, unresolved **6**; пакет `T-13` закрыт **7/7**. `HC-22` реализован в draft PR #163
-> как кандидат v0.3.62; до closure остаётся exact-final CI и расширенный owner-smoke либо явное принятие residual smoke.
+> как кандидат v0.3.62; implementation/test head `ad78487` прошёл exact .NET 10 run `29700776745`. До closure
+> остаётся расширенный owner-smoke либо явное принятие residual smoke.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -1105,8 +1106,9 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 ## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-19 / v0.3.62 candidate)
 
 Текущий owner-selected срез — `HC-22`: host-level lifetime повторно доказан, реализация и non-vacuous WPF
-WeakReference regression находятся в draft PR #163. До closure остаётся exact-final CI и расширенный owner-smoke
-либо явное принятие residual smoke; следующая задача не выбирается автоматически.
+WeakReference regression находятся в draft PR #163; exact .NET 10 run `29700776745` на implementation/test head
+`ad78487` — PASS. До closure остаётся расширенный owner-smoke либо явное принятие residual smoke; следующая
+задача не выбирается автоматически.
 
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
@@ -1218,7 +1220,8 @@ GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
 4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e ✅; T-13f ✅; T-13d ✅; пакет T-13 закрыт 7/7.**
    Required `LLPlayer Build & Test` active в strict ruleset без bypass; GREEN и intentional-RED merge-block proof сохранены.
 5. **HC-22 — IMPLEMENTED / OWNER-SMOKE PENDING:** draft PR #163, v0.3.62 candidate; host-level teardown,
-   handler detach и deterministic WPF lifetime regression готовы. Exact-final CI и owner-acceptance ещё обязательны.
+   handler detach и deterministic WPF lifetime regression готовы; exact .NET 10 run `29700776745` на `ad78487`
+   прошёл. До closure остаётся owner-smoke либо явное принятие residual smoke.
 6. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
    coverage закреплено как risk-based policy, а T-03 удалён из активной очереди.
 7. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
@@ -1420,7 +1423,8 @@ frozen-контрактами; для app-кода обязательны `scrip
   - `NonTopmostPopup` симметрично снимает child + `MainWindow` handlers. `PDICSender` остаётся app-singleton и
     освобождается только в `App.OnExit`. Обычные Close/Esc/playback/fullscreen/tray сохраняют live instance/cache.
   - Доказательство: non-parallel STA WeakReference test содержит rooted negative control и 20 unload→reload→unload
-    экземпляров; локальный full verify — 1381/1381, 0 warnings/errors. Базовый UI-smoke Close/Esc/sidebar recreate — PASS.
+    экземпляров; локальный full verify — 1381/1381, 0 warnings/errors; exact .NET 10 run `29700776745` на
+    implementation/test head `ad78487` — PASS. Базовый UI-smoke Close/Esc/sidebar recreate — PASS.
   - Остаток acceptance: расширенный observable-provider slow-race/settings/PDIC smoke из manual matrix не заявлен
     как PASS. До явного owner-acceptance задача остаётся active/unresolved; следующую задачу не начинать.
 - **HC-23 — PDIC: pipe-процесс спавнится на каждый WordPopup и не убивается 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:349`** · ✅ **DONE (v0.3.43, 2026-07-03, сессия #22, бандл B2)** — `PDICSender` → DI-синглтон (один общий pipe-процесс вместо N per-WordPopup); диспоз ЯВНО в `App.OnExit` через `PDICSender.Current` (Prism/DryIoc НЕ диспозит контейнер на выходе — подтверждено декомпиляцией Prism 9.0.537 в adversarial-ревью), без bare-`Resolve` (не плодит pipe на выходе, если PDIC не использовался); `Dispose` синхронный+bounded, `PipeClient.SendMessage` +`ConfigureAwait(false)` (нет sync-over-async дедлока UI-треда на выходе). Ревью 2 раунда (5/5 проверок OK). **Известное ограничение (Minor):** синглтон кэширует первый exe-путь на сессию (смена `PDICPipeExecutablePath` в рантайме требует рестарта); hard-crash всё ещё может осиротить процесс — job-object hardening опциональный follow-up.
