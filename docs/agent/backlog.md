@@ -51,7 +51,7 @@
 > `HC-27b` закрыт как **DONE WITH RESIDUAL RISK**: на exact unpublished Stable draft v0.3.61 candidate владелец принял
 > **5/5 выполненных локальных сценариев**, а writable slow SMB/UNC responsiveness с 5000+ cue явно пометил
 > `WAIVED / NOT RUN`. Waiver не считается `PASS`; итог — `ACCEPTED WITH OWNER WAIVER`.
-> Active **1**, unresolved **6**; пакет `T-13` закрыт **7/7**. `HC-22` реализован в draft PR #163
+> Active **1**, unresolved **6**; пакет `T-13` закрыт **7/7**. Реализация `HC-22` смёржена через PR #163
 > как кандидат v0.3.62; implementation/test head `ad78487` прошёл exact .NET 10 run `29700776745`. До closure
 > остаётся расширенный owner-smoke либо явное принятие residual smoke.
 
@@ -1106,7 +1106,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 ## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-19 / v0.3.62 candidate)
 
 Текущий owner-selected срез — `HC-22`: host-level lifetime повторно доказан, реализация и non-vacuous WPF
-WeakReference regression находятся в draft PR #163; exact .NET 10 run `29700776745` на implementation/test head
+WeakReference regression смёржены через PR #163; exact .NET 10 run `29700776745` на implementation/test head
 `ad78487` — PASS. До closure остаётся расширенный owner-smoke либо явное принятие residual smoke; следующая
 задача не выбирается автоматически.
 
@@ -1152,7 +1152,7 @@ WeakReference regression находятся в draft PR #163; exact .NET 10 run 
 
 ## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-19 / v0.3.62 candidate)
 
-Текущий малый срез `HC-22` реализован в draft PR #163. Дочерний `WordPopup.Unloaded` не используется;
+Текущий малый срез `HC-22` реализован и смёржен через PR #163. Дочерний `WordPopup.Unloaded` не используется;
 обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Closure ждёт owner-acceptance.
 
 **Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
@@ -1219,7 +1219,7 @@ GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
    [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md).
 4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e ✅; T-13f ✅; T-13d ✅; пакет T-13 закрыт 7/7.**
    Required `LLPlayer Build & Test` active в strict ruleset без bypass; GREEN и intentional-RED merge-block proof сохранены.
-5. **HC-22 — IMPLEMENTED / OWNER-SMOKE PENDING:** draft PR #163, v0.3.62 candidate; host-level teardown,
+5. **HC-22 — IMPLEMENTED / OWNER-SMOKE PENDING:** PR #163 merged, v0.3.62 candidate; host-level teardown,
    handler detach и deterministic WPF lifetime regression готовы; exact .NET 10 run `29700776745` на `ad78487`
    прошёл. До closure остаётся owner-smoke либо явное принятие residual smoke.
 6. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
