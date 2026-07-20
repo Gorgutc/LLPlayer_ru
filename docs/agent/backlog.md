@@ -12,7 +12,7 @@
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
 >
-> **Актуальный рабочий срез (2026-07-19, v0.3.61):** app-срез `HC-27b` смёржен через
+> **Актуальный рабочий срез (2026-07-20, v0.3.62 candidate):** app-срез `HC-27b` смёржен через
 > [PR #142](https://github.com/Gorgutc/LLPlayer_ru/pull/142), post-merge truth sync — через
 > [PR #143](https://github.com/Gorgutc/LLPlayer_ru/pull/143). `T-13a` реализован и проверен в
 > [PR #144](https://github.com/Gorgutc/LLPlayer_ru/pull/144): Testing Release больше не интерполирует release
@@ -51,9 +51,10 @@
 > `HC-27b` закрыт как **DONE WITH RESIDUAL RISK**: на exact unpublished Stable draft v0.3.61 candidate владелец принял
 > **5/5 выполненных локальных сценариев**, а writable slow SMB/UNC responsiveness с 5000+ cue явно пометил
 > `WAIVED / NOT RUN`. Waiver не считается `PASS`; итог — `ACCEPTED WITH OWNER WAIVER`.
-> Active **1**, unresolved **6**; пакет `T-13` закрыт **7/7**. Реализация `HC-22` смёржена через PR #163
-> как кандидат v0.3.62; implementation/test head `ad78487` прошёл exact .NET 10 run `29700776745`. До closure
-> остаётся расширенный owner-smoke либо явное принятие residual smoke.
+> Active **0**, unresolved **5**; пакет `T-13` закрыт **7/7**. Реализация `HC-22` смёржена через PR #163
+> как кандидат v0.3.62; implementation/test head `ad78487` прошёл exact .NET 10 run `29700776745`. Владелец
+> 2026-07-20 явно принял остаточный риск без расширенного owner-smoke: сценарии `WAIVED / NOT RUN`, не `PASS`;
+> итог — `ACCEPTED WITH OWNER WAIVER`, `HC-22` закрыт как **DONE WITH RESIDUAL RISK**.
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -1103,12 +1104,11 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-19 / v0.3.62 candidate)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-20 / v0.3.62 candidate)
 
-Текущий owner-selected срез — `HC-22`: host-level lifetime повторно доказан, реализация и non-vacuous WPF
-WeakReference regression смёржены через PR #163; exact .NET 10 run `29700776745` на implementation/test head
-`ad78487` — PASS. До closure остаётся расширенный owner-smoke либо явное принятие residual smoke; следующая
-задача не выбирается автоматически.
+Текущего owner-selected среза нет. `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
+host-level lifetime и non-vacuous WPF WeakReference regression доказаны, а расширенный owner-smoke сознательно
+`WAIVED / NOT RUN` и не считается `PASS`. Следующая задача не выбирается автоматически.
 
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
@@ -1150,10 +1150,11 @@ WeakReference regression смёржены через PR #163; exact .NET 10 run 
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-19 / v0.3.62 candidate)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-20 / v0.3.62 candidate)
 
-Текущий малый срез `HC-22` реализован и смёржен через PR #163. Дочерний `WordPopup.Unloaded` не используется;
-обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Closure ждёт owner-acceptance.
+Активного малого среза нет. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
+используется, обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Владелец принял
+остаточный риск расширенного smoke; это `WAIVED / NOT RUN`, не `PASS`.
 
 **Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
 GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
@@ -1219,9 +1220,10 @@ GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
    [hc-27b-owner-smoke.md](hc-27b-owner-smoke.md).
 4. **T-13b ✅; T-13g ✅; T-13c ✅; T-13e ✅; T-13f ✅; T-13d ✅; пакет T-13 закрыт 7/7.**
    Required `LLPlayer Build & Test` active в strict ruleset без bypass; GREEN и intentional-RED merge-block proof сохранены.
-5. **HC-22 — IMPLEMENTED / OWNER-SMOKE PENDING:** PR #163 merged, v0.3.62 candidate; host-level teardown,
-   handler detach и deterministic WPF lifetime regression готовы; exact .NET 10 run `29700776745` на `ad78487`
-   прошёл. До closure остаётся owner-smoke либо явное принятие residual smoke.
+5. **HC-22 ✅ — DONE WITH RESIDUAL RISK:** PR #163 merged, v0.3.62 candidate; host-level teardown, handler detach
+   и deterministic WPF lifetime regression готовы; exact .NET 10 run `29700776745` на `ad78487` прошёл. Владелец
+   2026-07-20 явно закрыл задачу без расширенного owner-smoke: `WAIVED / NOT RUN`, не `PASS`; итог —
+   `ACCEPTED WITH OWNER WAIVER`. Следующая product-задача автоматически не выбрана.
 6. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
    coverage закреплено как risk-based policy, а T-03 удалён из активной очереди.
 7. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
@@ -1416,7 +1418,7 @@ frozen-контрактами; для app-кода обязательны `scrip
     остаётся ~49.7 дней → перекрытие cue, вечное `Showing`, битый prev/next-интервал.
   - Решение: хранить `end_display_time` независимо от `useBitmap` и корректировать по нему; последний cue клампить.
   - Зачем: некорректные тайминги субтитров в bitmap-режиме без кэша.
-- **HC-22 — `WordPopup`: host teardown owned-сервисов/CTS + root от `NonTopmostPopup` 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:165`** · 🟠 **IMPLEMENTED / OWNER-SMOKE PENDING (v0.3.62 candidate, PR #163, 2026-07-19; сессия #22, бандл B2)** — повторный аудит подтвердил две независимые причины. Дочерний `WordPopup.Unloaded` срабатывает при обычном Close/Esc/playback и поэтому непригоден для teardown: он разрушал бы live-cache. Одновременно `NonTopmostPopup` сильно подписывался на `MainWindow` и удерживал весь discarded sidebar tree, поэтому прежнее утверждение «weak events делают контрол collectable» было неверным.
+- **HC-22 — `WordPopup`: host teardown owned-сервисов/CTS + root от `NonTopmostPopup` 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:165`** · ✅ **DONE WITH RESIDUAL RISK (v0.3.62 candidate, PR #163; implementation 2026-07-19, owner waiver 2026-07-20; сессия #22, бандл B2)** — повторный аудит подтвердил две независимые причины. Дочерний `WordPopup.Unloaded` срабатывает при обычном Close/Esc/playback и поэтому непригоден для teardown: он разрушал бы live-cache. Одновременно `NonTopmostPopup` сильно подписывался на `MainWindow` и удерживал весь discarded sidebar tree, поэтому прежнее утверждение «weak events делают контрол collectable» было неверным.
   - Решение: enclosing `SubtitlesSidebar`/`SubtitlesControl` вызывают reload-safe `ReleaseOwnedResources`; active lookup
     инвалидируется/отменяется, owned translation/definition services освобождаются, а локальная async-операция
     диспозит CTS только после завершения всех token consumers. Late cache/UI/spinner/Save writes запрещены.
@@ -1425,8 +1427,9 @@ frozen-контрактами; для app-кода обязательны `scrip
   - Доказательство: non-parallel STA WeakReference test содержит rooted negative control и 20 unload→reload→unload
     экземпляров; локальный full verify — 1381/1381, 0 warnings/errors; exact .NET 10 run `29700776745` на
     implementation/test head `ad78487` — PASS. Базовый UI-smoke Close/Esc/sidebar recreate — PASS.
-  - Остаток acceptance: расширенный observable-provider slow-race/settings/PDIC smoke из manual matrix не заявлен
-    как PASS. До явного owner-acceptance задача остаётся active/unresolved; следующую задачу не начинать.
+  - Owner acceptance (2026-07-20): расширенный observable-provider slow-race/settings/PDIC smoke из manual matrix
+    сознательно `WAIVED / NOT RUN` и не заявлен как `PASS`. Владелец принял остаточный риск; итог —
+    `ACCEPTED WITH OWNER WAIVER`, задача удалена из active/unresolved. Следующая задача автоматически не выбрана.
 - **HC-23 — PDIC: pipe-процесс спавнится на каждый WordPopup и не убивается 🟢 ⓢ · `LLPlayer/Controls/WordPopup.xaml.cs:349`** · ✅ **DONE (v0.3.43, 2026-07-03, сессия #22, бандл B2)** — `PDICSender` → DI-синглтон (один общий pipe-процесс вместо N per-WordPopup); диспоз ЯВНО в `App.OnExit` через `PDICSender.Current` (Prism/DryIoc НЕ диспозит контейнер на выходе — подтверждено декомпиляцией Prism 9.0.537 в adversarial-ревью), без bare-`Resolve` (не плодит pipe на выходе, если PDIC не использовался); `Dispose` синхронный+bounded, `PipeClient.SendMessage` +`ConfigureAwait(false)` (нет sync-over-async дедлока UI-треда на выходе). Ревью 2 раунда (5/5 проверок OK). **Известное ограничение (Minor):** синглтон кэширует первый exe-путь на сессию (смена `PDICPipeExecutablePath` в рантайме требует рестарта); hard-crash всё ещё может осиротить процесс — job-object hardening опциональный follow-up.
   - Проблема: `_pdicSender ??= Container.Resolve<PDICSender>()` (transient) в конструкторе запускает внешний exe
     PDIC-пайпа; `Dispose` не вызывается нигде, у `PipeClient` нет финализатора → процессы копятся; сам `Dispose` —

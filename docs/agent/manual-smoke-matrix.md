@@ -33,6 +33,10 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Right-click a subtitle word and confirm configured word actions/search/copy menu.
 - Use the configured last-search modifier and confirm it opens the previous search action.
 - Resume playback and confirm open word popups close.
+- **HC-22 owner acceptance — ⚪ WAIVED / NOT RUN (explicit owner decision, 2026-07-20):** the expanded
+  observable-provider/UI scenarios below were not executed and are not `PASS`. They remain the standard protocol
+  for removing the residual risk in the future. Overall: `ACCEPTED WITH OWNER WAIVER`; task status:
+  **DONE WITH RESIDUAL RISK**.
 - HC-22 precondition: choose distinct source and target languages, enable an observable local translation provider and `Definition Source = LLM`, clear their request logs, and use unique uncached words. Record separate translation and definition request counts for overlay and sidebar; focus a text field inside the popup before pressing Esc.
 - HC-22 live-instance cache: in each host, look up one word and record one translation/definition request. Dismiss it separately through Close, Esc, and resumed playback. Reopen the same word after every dismissal; the displayed result must return without either request count increasing.
 - HC-22 host teardown: start slow translation and definition requests for a fresh sidebar word, then hide the sidebar before either completes. No old popup/result, cancellation snackbar, global dispatcher error, or stuck spinner may appear. Show the sidebar, retry the same word, and require both provider request counts to increase: the new host must perform a fresh lookup rather than inherit the discarded instance's cache.
