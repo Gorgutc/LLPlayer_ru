@@ -4,7 +4,7 @@ namespace FlyleafLib.MediaPlayer.Batch;
 
 #nullable enable
 
-public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
+public sealed class BatchAsrTranscriber : IBatchAsrTranscriber, IBatchAudioStreamResolver
 {
     private readonly Config _batchConfig;
     private readonly Func<bool>? _preferCpu;
@@ -52,13 +52,21 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         IProgress<BatchAsrProgress>? asrProgress = null)
         => Task.Run(() => Transcribe(mediaPath, token, asrProgress), token);
 
+    public Task<int> ResolveAudioStreamIndexAsync(string mediaPath, CancellationToken token)
+        => Task.Run(() => ProbeAudio(mediaPath, token).StreamIndex, token);
+
     private BatchAsrResult Transcribe(string mediaPath, CancellationToken token, IProgress<BatchAsrProgress>? asrProgress)
     {
-        int? forced = _forcedStreamIndexResolver?.Invoke(mediaPath);
-        MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig)
-            .Probe(mediaPath, token, forced, _preferRussianAudio);
+        MediaAudioProbeResult audio = ProbeAudio(mediaPath, token);
 
         return TranscribeInternal(_batchConfig, audio, token, asrProgress, _preferCpu);
+    }
+
+    private MediaAudioProbeResult ProbeAudio(string mediaPath, CancellationToken token)
+    {
+        int? forced = _forcedStreamIndexResolver?.Invoke(mediaPath);
+        return new MediaAudioProbe(_batchConfig)
+            .Probe(mediaPath, token, forced, _preferRussianAudio);
     }
 
     private static BatchAsrResult TranscribeInternal(
@@ -159,7 +167,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
             subtitles[i].Index = i;
         }
 
-        return new BatchAsrResult(subtitles, sourceLanguage);
+        return new BatchAsrResult(subtitles, sourceLanguage, audio.StreamIndex);
     }
 
     internal static Language ResolveInitialSourceLanguage(Config batchConfig, MediaAudioProbeResult audio)

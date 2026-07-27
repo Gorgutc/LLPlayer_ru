@@ -130,7 +130,10 @@ public sealed class BatchSubtitleJob : NotifyPropertyChanged
     }
 }
 
-public sealed record BatchAsrResult(IReadOnlyList<SubtitleData> Subtitles, Language SourceLanguage);
+public sealed record BatchAsrResult(
+    IReadOnlyList<SubtitleData> Subtitles,
+    Language SourceLanguage,
+    int ResolvedAudioStreamIndex);
 
 public static class BatchSubtitleScanPolicy
 {
@@ -174,6 +177,16 @@ public interface IBatchAsrTranscriber
         string mediaPath,
         CancellationToken token,
         IProgress<BatchAsrProgress>? asrProgress = null);
+}
+
+/// <summary>
+/// Resolves the concrete global FFmpeg <c>AVStream.index</c> selected for one batch media file. Implementations
+/// apply the same manual/Auto policy as batch ASR. Once returned, callers must carry this exact index through the
+/// run and fail closed if it is no longer an audio stream when the media is reopened.
+/// </summary>
+public interface IBatchAudioStreamResolver
+{
+    Task<int> ResolveAudioStreamIndexAsync(string mediaPath, CancellationToken token);
 }
 
 public interface IBatchSubtitleTranslator

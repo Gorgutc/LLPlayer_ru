@@ -22,6 +22,7 @@ public interface IDubbingRenderer : IAsyncDisposable
     Task RenderAsync(
         IReadOnlyList<SubtitleData> translatedSubtitles,
         string mediaPath,
+        int resolvedAudioStreamIndex,
         string outputPath,
         IProgress<DubbingProgress>? progress,
         CancellationToken token);

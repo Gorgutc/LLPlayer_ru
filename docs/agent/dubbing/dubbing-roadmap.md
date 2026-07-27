@@ -70,6 +70,15 @@ non-Russian target languages; bundling non-commercial models.
 > Interactive edits save it, opening the media restores it onto the cues (`Subtitles.Load`/`EnableASR`,
 > fill-empty), and batch dubbing layers a `DiskVoiceAssignmentProvider` under the current-session snapshot so any
 > file's saved voices apply. Default OFF → byte-identical; the file is git-ignored user runtime data.
+>
+> **Selected-audio correctness slice (F-16, 2026-07-23): IN IMPLEMENTATION / VERIFICATION PENDING.** A batch
+> manual/Auto choice now resolves one container-global FFmpeg audio stream for both fresh ASR and the
+> original/ducked dub bed; the existing-`.ru.srt` render-only path applies the same policy without ASR.
+> The resolved index is mandatory in the internal C#/sidecar assemble protocol, and a stream that
+> disappears after resolution fails closed without a first-track fallback. No UI/config was added.
+> Deterministic coverage and final repository-gate evidence remain pending final readback; owner real-media multi-audio smoke is
+> **PENDING / NOT RUN** until the planned evening 2026-07-23 check. This narrow correctness slice does
+> **not** close umbrella F-16: per-speaker work and the remaining phases 2–6 stay open.
 
 ## This session's sprint (Phase 0)
 

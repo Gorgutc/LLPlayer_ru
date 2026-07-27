@@ -41,6 +41,16 @@ user explicitly asks to change that product decision.
   `IDubbingVoiceAssignmentProvider?` can apply current-session sidebar `AssignedVoiceId` snapshots just
   before render; null preserves the single-voice behavior. ASR and translation results are never
   altered by the presence of dubbing.
+- **Selected source audio is one immutable identity for the run (F-16):** the manual/Auto batch policy
+  resolves a container-global FFmpeg `AVStream.index`; fresh ASR consumes that stream and the dub
+  assembly uses the exact same stream as its original/ducked bed. The value is carried through
+  `BatchAsrResult` → `IDubbingRenderer` → `AssembleRequest` → required JSON `audio_stream_index`.
+  The sidecar matches `stream.index` and decodes that stream object; it must never reinterpret the
+  global index as a zero-based audio ordinal or fall back to the first audio stream. Existing-`.ru.srt`
+  render-only jobs skip ASR but resolve audio with the same manual/Auto policy. A manual choice already
+  stale during initial resolution may fall through to Auto; once resolved, a later-missing stream fails
+  the job closed. The internal C#/sidecar protocol is versioned in lockstep: the field is mandatory and
+  mixed versions are unsupported.
 - **GPU-no-overlap invariant:** the GPU TTS render must **not** run in the concurrent pipelined
   translation worker. When `GenerateDubbing` is on, processing **forces serialize-mode** (ASR →
   translate → dub → save, one file at a time) so a GPU ASR engine, a local-LLM translator, and the
@@ -207,4 +217,7 @@ quality. See `manual-smoke-matrix.md` for: first-run provisioning UX; sidecar la
 crash-restart and **no-orphan-on-kill (VRAM freed)**; ear-test of CosyVoice2 Russian on real
 content; dub track appears in **Audio ▸ External**, is selectable, and plays in **sync at 0:00 /
 mid / near end**; ducking audible; cancellation mid-dub leaves no orphan or partial file; and the
-**published-.exe launch-test on the real RTX 5090**.
+**published-.exe launch-test on the real RTX 5090**. The F-16 selected-audio slice additionally
+requires the pending owner real-media multi-audio protocol: manual and Auto selection, fresh-ASR and
+existing-SRT render-only paths, same selected track in the ducked bed, and post-resolution missing-stream
+failure without first-track fallback.

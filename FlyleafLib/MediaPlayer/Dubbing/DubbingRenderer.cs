@@ -47,12 +47,20 @@ public sealed class DubbingRenderer : IDubbingRenderer
     public async Task RenderAsync(
         IReadOnlyList<SubtitleData> translatedSubtitles,
         string mediaPath,
+        int resolvedAudioStreamIndex,
         string outputPath,
         IProgress<DubbingProgress>? progress,
         CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(translatedSubtitles);
         ArgumentException.ThrowIfNullOrWhiteSpace(mediaPath);
+        if (resolvedAudioStreamIndex < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(resolvedAudioStreamIndex),
+                resolvedAudioStreamIndex,
+                "Resolved audio stream index must be non-negative.");
+        }
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
 
         // HC-43: if a prior render of this same target was canceled, an orphaned dub may have landed after the fact —
@@ -100,7 +108,14 @@ public sealed class DubbingRenderer : IDubbingRenderer
         try
         {
             await host.AssembleAsync(
-                new AssembleRequest(mediaPath, outputPath, _outputFormat, _duckingPercent, totalMs, clips),
+                new AssembleRequest(
+                    mediaPath,
+                    resolvedAudioStreamIndex,
+                    outputPath,
+                    _outputFormat,
+                    _duckingPercent,
+                    totalMs,
+                    clips),
                 token).ConfigureAwait(false);
         }
         catch

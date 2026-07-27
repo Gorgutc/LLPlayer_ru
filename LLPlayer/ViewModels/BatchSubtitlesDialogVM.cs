@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Collections.Frozen;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -617,6 +618,16 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
             return;
         }
 
+        // Capture the per-file picker state on the UI thread before any worker work starts. This snapshot is shared
+        // by ASR and dubbing for the entire run, so neither path reads dispatcher-bound job state in the background
+        // or observes a different track selection midway through processing.
+        FrozenDictionary<string, int?> audioStreamOverrides = toRun
+            .GroupBy(job => job.MediaPath, StringComparer.OrdinalIgnoreCase)
+            .ToFrozenDictionary(
+                group => group.Key,
+                group => group.First().AudioStreamIndexOverride,
+                StringComparer.OrdinalIgnoreCase);
+
         // VC++ preflight (T-02): whisper.cpp loads its native CRT in-process; without the redistributable that
         // load crashes the app. The transcriber's constructor also guards this, but the throw would surface as
         // a generic "unknown error" popup. Preflight here so a missing runtime is shown as a clean, actionable
@@ -741,14 +752,16 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 ? CreateCurrentDubbingVoiceAssignments()
                 : null;
 
+            BatchAsrTranscriber asrTranscriber = new(
+                FL.PlayerConfig,
+                monitor.IsUserActive,
+                FL.Config.BatchSubtitles.PreferRussianAudio,
+                mediaPath => audioStreamOverrides.TryGetValue(mediaPath, out int? streamIndex)
+                    ? streamIndex
+                    : null);
+
             BatchSubtitleProcessor processor = new(
-                new BatchAsrTranscriber(
-                    FL.PlayerConfig,
-                    monitor.IsUserActive,
-                    FL.Config.BatchSubtitles.PreferRussianAudio,
-                    mediaPath => uiJobs.TryGetValue(mediaPath, out BatchSubtitleJob? uiJob)
-                        ? uiJob.AudioStreamIndexOverride
-                        : null),
+                asrTranscriber,
                 new BatchSubtitleTranslator(FL.PlayerConfig.Subtitles),
                 new SrtSubtitleWriter(new UTF8Encoding(FL.Config.Subs.SubsExportUTF8WithBom)),
                 new BatchSubtitleOptions
@@ -762,7 +775,8 @@ public class BatchSubtitlesDialogVM : Bindable, IDialogAware
                 },
                 progress,
                 dubber,
-                voiceAssignments);
+                voiceAssignments,
+                audioStreamResolver: asrTranscriber);
 
             await processor.ProcessAsync(workerJobs, _cts.Token);
         }

@@ -15,6 +15,7 @@ public sealed class BatchSubtitleProcessor
     private readonly IProgress<BatchSubtitleProgress>? _progress;
     private readonly IDubbingRenderer? _dubber;
     private readonly IDubbingVoiceAssignmentProvider? _voiceAssignments;
+    private readonly IBatchAudioStreamResolver? _audioStreamResolver;
 
     public BatchSubtitleProcessor(
         IBatchAsrTranscriber asrTranscriber,
@@ -23,7 +24,8 @@ public sealed class BatchSubtitleProcessor
         BatchSubtitleOptions options,
         IProgress<BatchSubtitleProgress>? progress = null,
         IDubbingRenderer? dubber = null,
-        IDubbingVoiceAssignmentProvider? voiceAssignments = null)
+        IDubbingVoiceAssignmentProvider? voiceAssignments = null,
+        IBatchAudioStreamResolver? audioStreamResolver = null)
     {
         _asrTranscriber = asrTranscriber;
         _translator = translator;
@@ -32,6 +34,7 @@ public sealed class BatchSubtitleProcessor
         _progress = progress;
         _dubber = dubber;
         _voiceAssignments = voiceAssignments;
+        _audioStreamResolver = audioStreamResolver;
     }
 
     private bool DubbingEnabled => _options.GenerateDubbing && _dubber is not null;
@@ -240,7 +243,7 @@ public sealed class BatchSubtitleProcessor
         await _writer.WriteAsync(subtitles, job.OutputPath, _options.OverwriteExisting, token);
 
         _voiceAssignments?.Apply(job.MediaPath, subtitles);
-        await DubIfEnabledAsync(job, subtitles, token);
+        await DubIfEnabledAsync(job, subtitles, result.ResolvedAudioStreamIndex, token);
 
         Report(job, BatchSubtitleStatus.Completed, completedAt: DateTimeOffset.Now);
     }
@@ -263,7 +266,8 @@ public sealed class BatchSubtitleProcessor
                 if (existing.Count > 0)
                 {
                     _voiceAssignments?.Apply(job.MediaPath, existing);
-                    await DubIfEnabledAsync(job, existing, token);
+                    int resolvedAudioStreamIndex = await ResolveAudioStreamIndexForExistingDubAsync(job, token);
+                    await DubIfEnabledAsync(job, existing, resolvedAudioStreamIndex, token);
                 }
             }
         }
@@ -274,7 +278,11 @@ public sealed class BatchSubtitleProcessor
 
     // Optional dub render after the .ru.srt is written, gated on its OWN .ru.dub output (independent of the
     // .srt overwrite check). Throws on error/cancel; the caller maps that to Failed/Canceled.
-    private async Task DubIfEnabledAsync(BatchSubtitleJob job, IReadOnlyList<SubtitleData> subtitles, CancellationToken token)
+    private async Task DubIfEnabledAsync(
+        BatchSubtitleJob job,
+        IReadOnlyList<SubtitleData> subtitles,
+        int resolvedAudioStreamIndex,
+        CancellationToken token)
     {
         if (!DubbingEnabled)
             return;
@@ -285,13 +293,47 @@ public sealed class BatchSubtitleProcessor
         if (!_options.OverwriteExisting && DubbingOutputPathBuilder.DubExistsAnyFormat(job.MediaPath))
             return;
 
+        if (resolvedAudioStreamIndex < 0)
+        {
+            throw new InvalidOperationException(
+                $"Resolved audio stream index {resolvedAudioStreamIndex} is invalid for '{job.MediaPath}'.");
+        }
+
         Report(job, BatchSubtitleStatus.Dubbing);
 
         IProgress<DubbingProgress>? dubProgress = _progress is null
             ? null
             : new DubProgressForwarder(job, _progress);
 
-        await _dubber!.RenderAsync(subtitles, job.MediaPath, dubPath, dubProgress, token);
+        await _dubber!.RenderAsync(
+            subtitles,
+            job.MediaPath,
+            resolvedAudioStreamIndex,
+            dubPath,
+            dubProgress,
+            token);
+    }
+
+    private async Task<int> ResolveAudioStreamIndexForExistingDubAsync(
+        BatchSubtitleJob job,
+        CancellationToken token)
+    {
+        if (_audioStreamResolver is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot render a dub from the existing subtitle file for '{job.MediaPath}' because no audio stream resolver was provided.");
+        }
+
+        int resolvedAudioStreamIndex = await _audioStreamResolver
+            .ResolveAudioStreamIndexAsync(job.MediaPath, token);
+
+        if (resolvedAudioStreamIndex < 0)
+        {
+            throw new InvalidOperationException(
+                $"The audio stream resolver returned invalid global index {resolvedAudioStreamIndex} for '{job.MediaPath}'.");
+        }
+
+        return resolvedAudioStreamIndex;
     }
 
     private static string TargetLanguageRussianIso => "ru";

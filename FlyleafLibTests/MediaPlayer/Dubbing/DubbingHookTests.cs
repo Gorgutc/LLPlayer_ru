@@ -17,7 +17,7 @@ public class DubbingHookTests
             File.WriteAllText(video, "video");
 
             var asr = new FakeAsr(_ => Task.FromResult(
-                new BatchAsrResult([CreateSub("привет")], Language.Russian)));
+                new BatchAsrResult([CreateSub("привет")], Language.Russian, 7)));
             var renderer = new FakeDubbingRenderer();
 
             var processor = new BatchSubtitleProcessor(
@@ -32,6 +32,7 @@ public class DubbingHookTests
 
             renderer.Calls.Should().ContainSingle();
             renderer.Calls[0].Output.Should().Be(DubbingOutputPathBuilder.BuildRussianDubPath(video, "flac"));
+            renderer.Calls[0].AudioStreamIndex.Should().Be(7);
             renderer.Calls[0].Count.Should().Be(1);
         }
         finally
@@ -53,7 +54,7 @@ public class DubbingHookTests
 
             var renderer = new FakeDubbingRenderer();
             var processor = new BatchSubtitleProcessor(
-                new FakeAsr(_ => Task.FromResult(new BatchAsrResult([CreateSub("привет")], Language.Russian))),
+                new FakeAsr(_ => Task.FromResult(new BatchAsrResult([CreateSub("привет")], Language.Russian, 0))),
                 new NoopTranslator(),
                 new NoopWriter(),
                 new BatchSubtitleOptions { GenerateDubbing = true, DubbingOutputFormat = "flac", OverwriteExisting = false },
@@ -81,7 +82,7 @@ public class DubbingHookTests
             File.WriteAllText(video, "video");
 
             var processor = new BatchSubtitleProcessor(
-                new FakeAsr(_ => Task.FromResult(new BatchAsrResult([CreateSub("привет")], Language.Russian))),
+                new FakeAsr(_ => Task.FromResult(new BatchAsrResult([CreateSub("привет")], Language.Russian, 0))),
                 new NoopTranslator(),
                 new NoopWriter(),
                 new BatchSubtitleOptions { GenerateDubbing = true });
@@ -120,12 +121,14 @@ public class DubbingHookTests
                 new NoopWriter(),
                 new BatchSubtitleOptions { GenerateDubbing = true, DubbingOutputFormat = "flac", OverwriteExisting = false },
                 progress: null,
-                dubber: renderer);
+                dubber: renderer,
+                audioStreamResolver: new FakeAudioStreamResolver(4));
 
             BatchSubtitleJob job = new(video);
             await processor.ProcessAsync([job], TestContext.Current.CancellationToken);
 
             renderer.Calls.Should().ContainSingle();
+            renderer.Calls[0].AudioStreamIndex.Should().Be(4);
             renderer.Calls[0].Count.Should().Be(2); // both SRT lines parsed and dubbed
             job.Status.Should().Be(BatchSubtitleStatus.Completed);
         }
@@ -149,7 +152,7 @@ public class DubbingHookTests
 
             var renderer = new FakeDubbingRenderer();
             var processor = new BatchSubtitleProcessor(
-                new FakeAsr(path => Task.FromResult(new BatchAsrResult([CreateSub(Path.GetFileNameWithoutExtension(path))], Language.Russian))),
+                new FakeAsr(path => Task.FromResult(new BatchAsrResult([CreateSub(Path.GetFileNameWithoutExtension(path))], Language.Russian, 0))),
                 new NoopTranslator(),
                 new NoopWriter(),
                 new BatchSubtitleOptions { GenerateDubbing = true, DubbingOutputFormat = "flac" },
@@ -181,7 +184,7 @@ public class DubbingHookTests
 
             var renderer = new FakeDubbingRenderer { ThrowOnRender = true };
             var processor = new BatchSubtitleProcessor(
-                new FakeAsr(_ => Task.FromResult(new BatchAsrResult([CreateSub("привет")], Language.Russian))),
+                new FakeAsr(_ => Task.FromResult(new BatchAsrResult([CreateSub("привет")], Language.Russian, 0))),
                 new NoopTranslator(),
                 new NoopWriter(),
                 new BatchSubtitleOptions { GenerateDubbing = true, DubbingOutputFormat = "flac" },
@@ -218,6 +221,12 @@ public class DubbingHookTests
         public Task TranslateAsync(IList<SubtitleData> subtitles, Language sourceLanguage, CancellationToken token) => Task.CompletedTask;
     }
 
+    private sealed class FakeAudioStreamResolver(int streamIndex) : IBatchAudioStreamResolver
+    {
+        public Task<int> ResolveAudioStreamIndexAsync(string mediaPath, CancellationToken token)
+            => Task.FromResult(streamIndex);
+    }
+
     private sealed class NoopWriter : IBatchSubtitleWriter
     {
         public Task WriteAsync(IReadOnlyList<SubtitleData> subtitles, string outputPath, bool overwrite, CancellationToken token) => Task.CompletedTask;
@@ -225,13 +234,14 @@ public class DubbingHookTests
 
     private sealed class FakeDubbingRenderer : IDubbingRenderer
     {
-        public List<(string Media, string Output, int Count)> Calls { get; } = [];
+        public List<(string Media, int AudioStreamIndex, string Output, int Count)> Calls { get; } = [];
         public int DisposeCount { get; private set; }
         public bool ThrowOnRender { get; init; }
 
         public Task RenderAsync(
             IReadOnlyList<SubtitleData> translatedSubtitles,
             string mediaPath,
+            int resolvedAudioStreamIndex,
             string outputPath,
             IProgress<DubbingProgress>? progress,
             CancellationToken token)
@@ -239,7 +249,7 @@ public class DubbingHookTests
             if (ThrowOnRender)
                 throw new InvalidOperationException("dub failed");
 
-            Calls.Add((mediaPath, outputPath, translatedSubtitles.Count));
+            Calls.Add((mediaPath, resolvedAudioStreamIndex, outputPath, translatedSubtitles.Count));
             return Task.CompletedTask;
         }
 

@@ -277,20 +277,39 @@ public sealed class DubSidecarHost : ITtsService
     /// </summary>
     public async Task AssembleAsync(AssembleRequest request, CancellationToken token)
     {
-        ArgumentNullException.ThrowIfNull(request);
         if (_http is null)
             throw new InvalidOperationException("Sidecar is not started.");
 
-        AssembleRequestDto dto = new(
+        AssembleRequestDto dto = BuildAssembleRequestDto(request);
+
+        using HttpResponseMessage resp = await _http.PostAsJsonAsync("/assemble", dto, token).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            string detail = await resp.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            throw new InvalidOperationException(
+                $"Dubbing sidecar assembly failed with HTTP {(int)resp.StatusCode}: {detail}");
+        }
+    }
+
+    internal static AssembleRequestDto BuildAssembleRequestDto(AssembleRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.AudioStreamIndex < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(request.AudioStreamIndex),
+                request.AudioStreamIndex,
+                "Resolved audio stream index must be non-negative.");
+        }
+
+        return new AssembleRequestDto(
             request.MediaPath,
+            request.AudioStreamIndex,
             request.OutputPath,
             request.OutputFormat,
             request.DuckingPercent,
             request.TotalMs,
             request.Clips.Select(c => new ClipDto(c.WavPath, c.StartMs, c.Atempo)).ToList());
-
-        using HttpResponseMessage resp = await _http.PostAsJsonAsync("/assemble", dto, token).ConfigureAwait(false);
-        resp.EnsureSuccessStatusCode();
     }
 
     public async ValueTask DisposeAsync()
@@ -374,13 +393,14 @@ public sealed class DubSidecarHost : ITtsService
         [property: JsonPropertyName("gender")] string? Gender,
         [property: JsonPropertyName("language")] string? Language);
 
-    private sealed record ClipDto(
+    internal sealed record ClipDto(
         [property: JsonPropertyName("wav_path")] string WavPath,
         [property: JsonPropertyName("start_ms")] double StartMs,
         [property: JsonPropertyName("atempo")] double Atempo);
 
-    private sealed record AssembleRequestDto(
+    internal sealed record AssembleRequestDto(
         [property: JsonPropertyName("media_path")] string MediaPath,
+        [property: JsonPropertyName("audio_stream_index")] int AudioStreamIndex,
         [property: JsonPropertyName("output_path")] string OutputPath,
         [property: JsonPropertyName("output_format")] string OutputFormat,
         [property: JsonPropertyName("ducking_percent")] int DuckingPercent,

@@ -39,7 +39,8 @@ public class BatchSubtitleProcessorTests
 
                 return Task.FromResult(new BatchAsrResult(
                     [CreateSub("hello")],
-                    Language.Russian));
+                    Language.Russian,
+                    0));
             });
 
             var writer = new MemorySubtitleWriter();
@@ -89,7 +90,8 @@ public class BatchSubtitleProcessorTests
 
                 return Task.FromResult(new BatchAsrResult(
                     [CreateSub(Path.GetFileNameWithoutExtension(path))],
-                    Language.English));
+                    Language.English,
+                    0));
             });
 
             var translator = new FakeBatchTranslator(async (subtitles, _, token) =>
@@ -181,7 +183,7 @@ public class BatchSubtitleProcessorTests
             var asr = new FakeAsrTranscriber(_ =>
             {
                 cts.Cancel();
-                return Task.FromResult(new BatchAsrResult([], Language.Unknown));
+                return Task.FromResult(new BatchAsrResult([], Language.Unknown, 0));
             });
 
             BatchSubtitleJob job = new(video);
@@ -214,7 +216,7 @@ public class BatchSubtitleProcessorTests
 
             // Valid media that produced no subtitles (no speech), without cancellation.
             var asr = new FakeAsrTranscriber(_ =>
-                Task.FromResult(new BatchAsrResult([], Language.English)));
+                Task.FromResult(new BatchAsrResult([], Language.English, 0)));
 
             BatchSubtitleJob job = new(video);
             var writer = new MemorySubtitleWriter();
@@ -252,7 +254,8 @@ public class BatchSubtitleProcessorTests
 
                 return Task.FromResult(new BatchAsrResult(
                     [CreateSub("hello"), CreateSub("world")],
-                    Language.English));
+                    Language.English,
+                    0));
             });
 
             var collected = new CollectingProgress();
@@ -300,7 +303,8 @@ public class BatchSubtitleProcessorTests
 
                 return Task.FromResult(new BatchAsrResult(
                     [CreateSub(Path.GetFileNameWithoutExtension(path))],
-                    Language.English));
+                    Language.English,
+                    0));
             });
 
             var translator = new FakeBatchTranslator(async (subtitles, _, token) =>
@@ -355,7 +359,8 @@ public class BatchSubtitleProcessorTests
             var asr = new FakeAsrTranscriber(_ =>
                 Task.FromResult(new BatchAsrResult(
                     [CreateSub("hello")],
-                    Language.Russian)));
+                    Language.Russian,
+                    0)));
             var dubber = new RecordingDubbingRenderer();
             IDubbingVoiceAssignmentProvider assignments = DubbingVoiceAssignmentMap.FromCurrentSubtitles(
                 video,
@@ -411,7 +416,8 @@ public class BatchSubtitleProcessorTests
                 new BatchSubtitleOptions { GenerateDubbing = true, OverwriteExisting = false },
                 progress: null,
                 dubber,
-                assignments);
+                assignments,
+                new FakeAudioStreamResolver(0));
 
             await processor.ProcessAsync([new BatchSubtitleJob(video)], CancellationToken.None);
 
@@ -454,6 +460,12 @@ public class BatchSubtitleProcessorTests
             => transcribe(mediaPath, asrProgress);
     }
 
+    private sealed class FakeAudioStreamResolver(int streamIndex) : IBatchAudioStreamResolver
+    {
+        public Task<int> ResolveAudioStreamIndexAsync(string mediaPath, CancellationToken token)
+            => Task.FromResult(streamIndex);
+    }
+
     private sealed class CollectingProgress : IProgress<BatchSubtitleProgress>
     {
         public ConcurrentQueue<BatchSubtitleProgress> Items { get; } = new();
@@ -485,16 +497,21 @@ public class BatchSubtitleProcessorTests
 
     private sealed class RecordingDubbingRenderer : IDubbingRenderer
     {
-        public List<(string MediaPath, string OutputPath, List<SubtitleData> Subtitles)> Rendered { get; } = [];
+        public List<(string MediaPath, int AudioStreamIndex, string OutputPath, List<SubtitleData> Subtitles)> Rendered { get; } = [];
 
         public Task RenderAsync(
             IReadOnlyList<SubtitleData> translatedSubtitles,
             string mediaPath,
+            int resolvedAudioStreamIndex,
             string outputPath,
             IProgress<DubbingProgress>? progress,
             CancellationToken token)
         {
-            Rendered.Add((mediaPath, outputPath, translatedSubtitles.Select(s => s.Clone()).ToList()));
+            Rendered.Add((
+                mediaPath,
+                resolvedAudioStreamIndex,
+                outputPath,
+                translatedSubtitles.Select(s => s.Clone()).ToList()));
             return Task.CompletedTask;
         }
 

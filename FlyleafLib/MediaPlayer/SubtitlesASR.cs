@@ -496,7 +496,7 @@ public class AudioReader : IDisposable
             throw new InvalidOperationException($"demuxer open error: {error}");
         }
 
-        _stream = (AudioStream)_demuxer.Demuxer.AVStreamToStream[streamIndex];
+        _stream = RequireResolvedAudioStream(_demuxer.Demuxer.AVStreamToStream, streamIndex, url);
 
         _decoder = new AudioDecoder(_config, _subIndex + 1);
         _decoder.Log.Prefix = _decoder.Log.Prefix.Replace("Decoder: ", "DecoderA:");
@@ -510,6 +510,28 @@ public class AudioReader : IDisposable
         }
 
         _isFile = File.Exists(url);
+    }
+
+    internal static AudioStream RequireResolvedAudioStream(
+        IReadOnlyDictionary<int, StreamBase> streams,
+        int streamIndex,
+        string mediaPath)
+    {
+        ArgumentNullException.ThrowIfNull(streams);
+
+        if (!streams.TryGetValue(streamIndex, out StreamBase? stream))
+        {
+            throw new InvalidOperationException(
+                $"Resolved audio stream #{streamIndex} is no longer available in '{mediaPath}'.");
+        }
+
+        if (stream is not AudioStream audioStream)
+        {
+            throw new InvalidOperationException(
+                $"Resolved stream #{streamIndex} is not an audio stream in '{mediaPath}'.");
+        }
+
+        return audioStream;
     }
 
     private record struct AudioChunk(MemoryStream Stream, int ChunkNumber, TimeSpan Start, TimeSpan End);

@@ -12,7 +12,16 @@
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
 >
-> **Актуальный рабочий срез (2026-07-20, v0.3.62 candidate):** app-срез `HC-27b` смёржен через
+> **Актуальный owner-selected срез (2026-07-23): F-16 selected-audio correctness — IN IMPLEMENTATION /
+> VERIFICATION PENDING.** Это узкий correctness-срез внутри существующего F-16, без нового ID: одна manual/Auto
+> политика должна разрешать container-global FFmpeg `AVStream.index` и передавать тот же поток в fresh ASR и
+> original/ducked bed дубляжа; existing-`.ru.srt` render-only path применяет ту же политику без ASR. Внутренний
+> C#/sidecar `/assemble` требует `audio_stream_index`; если уже разрешённый поток позже исчез, job fail-closed без
+> fallback на первый audio stream. Новых UI/config нет. Реализация, automated verification и финальные repo-gates
+> пока не объявляются завершёнными. Owner real-media multi-audio smoke — **PENDING / NOT RUN**, запланирован на вечер
+> 2026-07-23. Umbrella F-16 остаётся открытым: per-speaker и остальные фазы 2–6 не закрыты этим срезом.
+>
+> **Предыдущий закрытый рабочий срез (2026-07-20, v0.3.62 candidate):** app-срез `HC-27b` смёржен через
 > [PR #142](https://github.com/Gorgutc/LLPlayer_ru/pull/142), post-merge truth sync — через
 > [PR #143](https://github.com/Gorgutc/LLPlayer_ru/pull/143). `T-13a` реализован и проверен в
 > [PR #144](https://github.com/Gorgutc/LLPlayer_ru/pull/144): Testing Release больше не интерполирует release
@@ -661,7 +670,7 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > браузерное расширение — заводить отдельной крупной задачей.
 Сейчас словарь — через попап перевода слова (F-11) и буфер обмена (FAQ).
 
-### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · IN-PROGRESS (фаза 1 voice-bank ✅ PR #93 v0.3.30; фаза 2 custom voice-ID ✅ PR #96 v0.3.31; фаза 2a per-line voice ✅ PR #106 v0.3.35; остаток фаз 2-6 TODO)
+### F-16 — Дубляж: расширение голосов/качества (фазы 1-6) 🟢 Ⓛ · IN-PROGRESS (selected-audio correctness — current implementation/verification pending; фаза 1 voice-bank ✅ PR #93 v0.3.30; фаза 2 custom voice-ID ✅ PR #96 v0.3.31; фаза 2a per-line voice ✅ PR #106 v0.3.35; остаток фаз 2-6 TODO)
 > ⚙️ **Фаза 1 (voice-bank) — срез отгружен (PR #93, merge `526a1a3`, v0.3.30, 2026-06-28).** Пользователь
 > выбирает **голос дубляжа** (банк пресетов). Аддитивно/opt-in; default (`DefaultVoiceId=ru-preset-1`, дубляж
 > выкл.) **byte-identical**. **Pure GPU-free `FlyleafLib/MediaPlayer/Dubbing/VoiceBankResolver.cs`**: `BuiltIn`
@@ -709,6 +718,16 @@ SE5 и Buzz уже кросс-платформенны → наш Windows-only =
 > ⚙️ **Фаза 2a persistence (companion-json) — отгружена (v0.3.37, 2026-07-01).** Opt-in `Subtitles.PersistPerLineVoices` (default OFF → byte-identical): per-line назначения голоса сохраняются в файл-компаньон `video.ru.voices.json` рядом с медиа и **переживают рестарт / dub re-render**. Pure `DubbingVoiceAssignmentStore` (path-builder + tolerant JSON `ToJson`/`FromJson` + atomic `SaveAtomic` + `LoadMap`) + `DiskVoiceAssignmentProvider`/`CompositeVoiceAssignmentProvider` + `DubbingVoiceAssignmentMap.FromEntries`/`ToTimingMilliseconds`. **Решения владельца (AskUserQuestion ×2):** B1 restore-в-сайдбар + C1 явный тумблер (+ A1+A2 write-timing по рекомендации). A1 запись в `SubtitlesSidebarVM.CmdSubSetVoice`; B1 restore в `Subtitles.Load`/`EnableASR` (fill-empty, gated); batch читает диск через композит. **Грабли:** имя `.ru.dub.voices.json` (предложенное синтезом) коллизировало бы с glob `{name}.ru.dub.*` (`DubbingOutputPathBuilder`) → батч не рендерил бы дубляж → имя `.ru.voices.json` + отдельное исключение gitignore/ship/action. Тесты +20 → **1101** (после мёржа PR #109 F-05-gap), версия v0.3.37. **Остаток:** per-speaker
 > (нужен F-03 диаризация), AAC-энкод, pre-render голосов — GPU/follow-up. Детали: второй мозг
 > `Sessions/2026-06-30-handoff-f16-perline-voice.md` + `2026-07-01-session-LIVE-tracker-14.md`.
+> ⚙️ **Selected-audio correctness (текущий узкий срез F-16, без нового ID) — IN IMPLEMENTATION /
+> VERIFICATION PENDING (2026-07-23).** Manual override или Auto разрешает один container-global FFmpeg
+> `AVStream.index`; fresh path использует его и для ASR, и для original/ducked bed дубляжа. Existing-`.ru.srt`
+> render-only path не запускает ASR/translation, но разрешает поток той же manual/Auto политикой. Индекс проходит
+> через `BatchAsrResult` → `IDubbingRenderer` → `AssembleRequest` → обязательный JSON `audio_stream_index`; Python
+> сопоставляет `stream.index`, а не audio ordinal. Stale manual override при начальном probe может перейти в Auto,
+> но после разрешения исчезнувший/не-audio stream обязан fail-closed без first-track fallback. Новых UI/config нет;
+> C# и committed sidecar обновляются lockstep, mixed versions unsupported. Deterministic coverage и repo-gates пока
+> ожидают финального readback; owner real-media multi-audio smoke — **PENDING / NOT RUN** до вечера 2026-07-23.
+> Umbrella F-16 остаётся **IN-PROGRESS**: per-speaker, AAC, pre-render/live discovery и фазы 3–6 остаются открыты.
 Дубляж — Phase 0 (PR #35 влит, CosyVoice2 в `dub_sidecar/`). SE предлагает много TTS (Edge/Kokoro/OmniVoice
 voice-cloning). **Решение:** фазы 1-6 из [[2026-06-23-handoff-dubbing-mvp]] (мульти-голос, качество,
 diarization-aware). **Рассуждение:** крупно; держать как продолжение существующей фичи.
@@ -1104,13 +1123,13 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-20 / v0.3.62 candidate)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-23)
 
-Текущего owner-selected среза нет. `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
-host-level lifetime и non-vacuous WPF WeakReference regression доказаны, а расширенный owner-smoke сознательно
-`WAIVED / NOT RUN` и не считается `PASS`. Следующая задача не выбирается автоматически.
+Текущий owner-selected срез — **F-16 selected-audio correctness** (узкий, без нового ID): implementation и
+verification пока pending; owner real-media smoke с non-first multi-audio track запланирован на вечер 2026-07-23
+и до выполнения остаётся `PENDING / NOT RUN`, не `PASS`. Umbrella F-16 после этого среза не закрывается.
 
-**Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
+**Owner-gated / не расширять текущий срез без решения:** GPU coordinator ADR → `F-03` → остальной `F-16`/F-19 tier 3.
 
 **Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу; `F-13` Avalonia — DEFERRED.
 
@@ -1150,13 +1169,13 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-20 / v0.3.62 candidate)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-23)
 
-Активного малого среза нет. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
-используется, обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Владелец принял
-остаточный риск расширенного smoke; это `WAIVED / NOT RUN`, не `PASS`.
+Активный малый срез — **F-16 selected-audio correctness**: один resolved global audio index для ASR и dub bed,
+плюс та же resolver policy для existing-SRT. Срез остаётся `IN IMPLEMENTATION / VERIFICATION PENDING`; owner
+real-media smoke также `PENDING / NOT RUN` до вечера 2026-07-23.
 
-**Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
+**Вне текущего узкого среза:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
 GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
 
 ### Исторический снимок сложности до 2026-07-01 (не использовать для выбора новой работы)
@@ -1226,9 +1245,14 @@ GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
    `ACCEPTED WITH OWNER WAIVER`. Следующая product-задача автоматически не выбрана.
 6. **T-03 closure audit ✅** — deterministic `forceCpu` seam и `T-03-CI-GUARD` смёржены через PR #154;
    coverage закреплено как risk-based policy, а T-03 удалён из активной очереди.
-7. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
-   subtitles; B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
-8. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
+7. **F-16 selected-audio correctness — CURRENT / PENDING:** завершить узкую реализацию и deterministic verification
+   без нового UI/config и без расширения в StressNormalization, GPU ADR или прочую инфраструктуру. Umbrella F-16
+   остаётся открытым.
+8. **Owner real-media multi-audio smoke (вечер 2026-07-23, PENDING / NOT RUN):** manual + Auto non-first track,
+   fresh ASR + same ducked bed, existing-SRT render-only parity и fail-closed после исчезновения resolved stream.
+   Параллельный accumulated owner-track остаётся: F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external subtitles;
+   B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
+9. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
 
 **Не берём сейчас:** `F-02-full` (trigger-only) и `F-13` (DEFERRED).
 Перед поведенческими правками сверяться с

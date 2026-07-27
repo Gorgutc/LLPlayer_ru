@@ -15,7 +15,8 @@
 #   GET  /health     -> {"ready": true}
 #   POST /synthesize {"text","voice_id","target_duration_ms"} -> {"wav_path","duration_ms"}
 #   GET  /voices     -> [{"id","name","gender","language"}]
-#   POST /assemble   {"media_path","output_path","output_format","ducking_percent","total_ms","clips":[...]}
+#   POST /assemble   {"media_path","audio_stream_index","output_path","output_format","ducking_percent",
+#                     "total_ms","clips":[...]}
 #   POST /shutdown   -> {"ok": true}
 #
 # Licensing: bundle-safe local models only (CosyVoice2-0.5B Apache-2.0). Never import non-commercial
@@ -174,10 +175,57 @@ def _timeline_len(original_n, total_ms, rate):
     return max(int(original_n), math.ceil(rate * float(total_ms or 0) / 1000.0))
 
 
+def _require_audio_stream_index(req):
+    """Return the required non-negative global container stream index.
+
+    JSON booleans need an explicit rejection because ``bool`` is an ``int`` subclass in Python. Keeping the
+    validation here, before the mock/real branch, makes the HTTP contract identical in both modes and prevents a
+    mock-only success from hiding a malformed production request.
+    """
+    if "audio_stream_index" not in req:
+        raise ValueError("audio_stream_index is required")
+
+    stream_index = req["audio_stream_index"]
+    if isinstance(stream_index, bool) or not isinstance(stream_index, int) or stream_index < 0:
+        raise ValueError("audio_stream_index must be a non-negative integer")
+    return stream_index
+
+
+def _select_audio_stream(streams, stream_index):
+    """Select one audio stream by its global container ``stream.index`` (never by audio ordinal)."""
+    stream = next((candidate for candidate in streams if getattr(candidate, "index", None) == stream_index), None)
+    if stream is None:
+        raise RuntimeError(f"audio stream index {stream_index} was not found")
+    if getattr(stream, "type", None) != "audio":
+        raise RuntimeError(f"stream index {stream_index} is not an audio stream")
+    return stream
+
+
+def _decode_selected_audio(container, stream_index, resampler_factory):
+    """Decode exactly one global-indexed audio stream and always close its owning container.
+
+    ``container.decode(audio=N)`` interprets ``N`` as an audio-stream ordinal. LLPlayer sends FFmpeg's global
+    stream index, so pass the selected stream object itself to PyAV instead.
+    """
+    try:
+        stream = _select_audio_stream(container.streams, stream_index)
+        rate = stream.codec_context.sample_rate or 48000
+        channels = stream.codec_context.channels or 2
+        resampler = resampler_factory(format="fltp", layout=f"{channels}c", rate=rate)
+        chunks = []
+        for frame in container.decode(stream):
+            for resampled_frame in resampler.resample(frame):
+                chunks.append(resampled_frame.to_ndarray())
+        return rate, channels, chunks
+    finally:
+        container.close()
+
+
 def assemble(req):
+    audio_stream_index = _require_audio_stream_index(req)
     if ARGS.mock:
         return assemble_mock(req)
-    return assemble_real(req)
+    return assemble_real(req, audio_stream_index)
 
 
 def assemble_mock(req):
@@ -222,7 +270,7 @@ def assemble_mock(req):
     return {"output_path": out}
 
 
-def assemble_real(req):
+def assemble_real(req, audio_stream_index):
     """Real assembly via PyAV (decode original) + numpy/librosa/soundfile (stretch/mix/encode)."""
     import numpy as np  # type: ignore
     import soundfile as sf  # type: ignore
@@ -235,17 +283,11 @@ def assemble_real(req):
 
     # Decode the original audio to float32 [-1,1], keep its sample rate + channel count.
     container = av.open(media_path)
-    astream = next((s for s in container.streams if s.type == "audio"), None)
-    if astream is None:
-        raise RuntimeError("no audio stream in source")
-    rate = astream.codec_context.sample_rate or 48000
-    chans = astream.codec_context.channels or 2
-    chunks = []
-    resampler = av.audio.resampler.AudioResampler(format="fltp", layout=f"{chans}c", rate=rate)
-    for frame in container.decode(audio=0):
-        for rf in resampler.resample(frame):
-            chunks.append(rf.to_ndarray())
-    container.close()
+    rate, chans, chunks = _decode_selected_audio(
+        container,
+        audio_stream_index,
+        av.audio.resampler.AudioResampler,
+    )
     original = np.concatenate(chunks, axis=1).T if chunks else np.zeros((rate, chans), dtype="float32")
 
     # Size the dub timeline to the LONGER of the decoded original and the C# placement end (total_ms), then

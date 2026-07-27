@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using AwesomeAssertions;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer.Batch;
@@ -39,6 +39,15 @@ public class MediaAudioProbeTests
     {
         var tracks = new List<MediaAudioTrack> { Track(0, "en"), Track(1, "ru") };
         MediaAudioProbe.SelectTrackIndex(tracks, forcedStreamIndex: 0, preferRussian: true, PreferNone).Should().Be(0);
+    }
+
+    [Fact]
+    public void NonContiguousGlobalIndexes_AutoAndManualReturnAvStreamIndex()
+    {
+        var tracks = new List<MediaAudioTrack> { Track(1, "en"), Track(3, "ru") };
+
+        MediaAudioProbe.SelectTrackIndex(tracks, null, preferRussian: true, PreferEnglish).Should().Be(3);
+        MediaAudioProbe.SelectTrackIndex(tracks, forcedStreamIndex: 3, preferRussian: false, PreferEnglish).Should().Be(3);
     }
 
     [Fact]

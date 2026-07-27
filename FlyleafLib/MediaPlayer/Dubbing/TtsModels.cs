@@ -42,6 +42,7 @@ public sealed record DubClip(string WavPath, double StartMs, double Atempo);
 /// </summary>
 public sealed record AssembleRequest(
     string MediaPath,
+    int AudioStreamIndex,
     string OutputPath,
     string OutputFormat,
     int DuckingPercent,

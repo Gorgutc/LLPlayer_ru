@@ -7,6 +7,11 @@ adversarially verified) — see [`research-summary.md`](research-summary.md). Ph
 [`dubbing-roadmap.md`](dubbing-roadmap.md). Frozen behavior boundaries:
 [`../dubbing-contract.md`](../dubbing-contract.md).
 
+> **F-16 selected-audio correctness slice (2026-07-23): IN IMPLEMENTATION / VERIFICATION PENDING.**
+> Deterministic contract coverage is part of the slice, but no implementation or gate result is claimed
+> here before final readback. Owner real-media multi-audio smoke remains **PENDING / NOT RUN** until the
+> planned evening check, so this status does not close umbrella F-16.
+
 > **Design-review note (load-bearing):** LLPlayer is licensed **GPLv3** (`LICENSE`) and already
 > ships a **full GPL FFmpeg** build (`avcodec-62`/`avfilter-11`/`avutil-60`, with
 > librubberband/x264/x265/vidstab linked). This re-frames the licensing logic below: the test is
@@ -91,6 +96,18 @@ escape hatch). Smoke-test sync at 0:00, mid-file, and near the end.
   source sample rate/channel count for the original bed, and writes the final track atomically via
   `soundfile`.
 
+#### 4.2.1 Selected source-audio identity (F-16, load-bearing)
+
+The batch manual/Auto resolver returns a container-global FFmpeg `AVStream.index`, not an ordinal
+within the audio-only subset. Fresh ASR consumes that resolved stream, and the same value must travel
+through `BatchAsrResult` → `IDubbingRenderer` → `AssembleRequest` → required sidecar field
+`audio_stream_index`. Python locates the audio stream with the matching `stream.index` and decodes that
+stream object for the original/ducked bed. It never decodes `audio=0` as a fallback and never treats the
+global index as an audio ordinal. Existing-`.ru.srt` render-only jobs resolve the same policy without ASR.
+An override already stale during initial resolution may fall through to Auto; once a concrete index is
+resolved, absence of that exact stream at assembly is a hard job failure. C# and the committed sidecar
+ship this internal protocol in lockstep; mixed versions are unsupported.
+
 ### 4.3 Isochrony — MVP behavior (I7)
 
 Russian runs ~10–30 % longer; a 1.15× atempo cap cannot absorb that alone. MVP isochrony is
@@ -158,6 +175,9 @@ FlyleafLib/MediaPlayer/Dubbing/
   When `GenerateDubbing` is on, the processor **forces serialize-mode** (ASR → translate → dub →
   save, one file at a time). Idle-gating (the existing Win32 active-user check) also brackets the
   sidecar.
+- `BatchAsrResult` carries the resolved container-global audio stream index into `IDubbingRenderer`.
+  The existing-SRT branch has no ASR result, so it invokes the same resolver policy directly before
+  rendering. Both branches build an `AssembleRequest` with mandatory `audio_stream_index`.
 
 ### 6.2 LLPlayer (app)
 
@@ -193,7 +213,10 @@ dub_sidecar/                    // OUR GPLv3 code — committed; heavy deps prov
 ```
 
 Endpoints (MVP): `GET /health` → `{ready:true}`; `POST /synthesize {text, voice_id,
-target_duration_ms}` → `{wav_path}` (temp WAV path, not base64). The sidecar self-terminates if its
+target_duration_ms}` → `{wav_path}` (temp WAV path, not base64); `POST /assemble {media_path,
+audio_stream_index, output_path, output_format, ducking_percent, total_ms, clips}` assembles against exactly the
+requested container-global audio stream. `audio_stream_index` is mandatory; callers/sidecars from mixed
+versions are unsupported. The sidecar self-terminates if its
 parent PID disappears. A **`--mock`** flag (tone/silence of the requested duration, pure-stdlib)
 exists so the **entire C# pipeline + sidecar assembly can be validated deterministically off-GPU**
 (in tests / dev), while the real CosyVoice2 is a drop-in on the same HTTP contract.
@@ -252,6 +275,7 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
 | RTX 5090 sm_120 / cu128; faster-whisper INT8 crashes on sm_120 | High | Pin `torch>=2.7.0+cu128` (stable); force ASR `compute_type=float16`; **launch-test on the real 5090** (owner first-run). |
 | Orphan multi-GB GPU python process on crash/kill | High | Job Object `KILL_ON_JOB_CLOSE` + parent-PID self-terminate + run-finally teardown. |
 | A/V desync of a separately-rendered track | High | One continuous sidecar-assembled stream (not concat); FLAC (no priming); sync smoke at 0/mid/end. |
+| ASR and dub bed use different embedded audio tracks | High | Carry one resolved container-global index end-to-end; sidecar matches `stream.index`, never audio ordinal/first track; missing resolved stream fails closed; owner multi-audio smoke covers manual, Auto, and existing-SRT paths. |
 | Assembly/mix operation scales with many cues | High | Sidecar assembly uses array operations instead of generating a per-cue ffmpeg filtergraph. |
 | Batch GPU contention regression | High | `GenerateDubbing` forces serialize-mode; dub never in the pipelined translation worker; idle-gate sidecar. |
 | Non-redistributable weights | High | Bundle only Apache/CC-BY/MIT; separation weights first-run + opt-in notice; user-install XTTS/F5; lockfile gate. |
@@ -263,7 +287,9 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
 
 - **Unit (xUnit, off-GPU, deterministic):** `DubbingOutputPathBuilder`; `DubbingIsochrony`
   (atempo clamp, drift-reset-at-pause); `DubbingConfig` defaults; `DubbedAudioAutoLoader` path
-  logic. The `--mock` sidecar enables an optional end-to-end sidecar-assembly smoke with a generated tone.
+  logic; selected-audio propagation for fresh-ASR and existing-SRT paths; required
+  `audio_stream_index` serialization; global-index stream matching and missing-stream rejection. The
+  `--mock` sidecar enables an optional end-to-end sidecar-assembly smoke with a generated tone.
 - **Gates:** `dotnet build --no-restore -warnaserror .\LLPlayer`;
   `dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL`;
   `dotnet test --no-restore -warnaserror .\FlyleafLibTests`; `verify-fast`/`verify` (frozen)
@@ -272,6 +298,9 @@ nor forgotten then. All keys absent-defaulting; any future default change is ver
 - **Owner first-run acceptance (NOT a merge gate):** provisioning download; sidecar boot; CosyVoice2
   Russian **ear-test** on real content; dub track appears in Audio ▸ External, plays, ducking
   audible; cancellation mid-dub leaves no orphan/partial; published-.exe launch-test on the 5090.
+  The F-16 selected-audio real-media smoke is **PENDING / NOT RUN** until the planned evening
+  2026-07-23 check; it must prove manual and Auto selection of a non-first track, matching ASR/ducked
+  bed, existing-SRT parity, and fail-closed behavior after the resolved stream disappears.
 
 ## 12. Open decisions for the owner
 
