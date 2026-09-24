@@ -342,6 +342,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void ToggleTheme() => SetTheme(IsDarkTheme ? "Light" : "Dark");
 
+    /// <summary>Reflects a theme chosen for this run only (command line) without saving it as the preference.</summary>
+    public void ShowSessionTheme(string theme) => IsDarkTheme = !string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase);
+
     [RelayCommand]
     public void DismissToast(ToastItem? toast)
     {
@@ -689,7 +692,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     void SyncDuration()
     {
         TimeSpan d = TimeSpan.FromTicks(Math.Max(0, player.Duration));
-        SeekMaximum = Math.Max(0.001, d.TotalSeconds);
+        // A shorter new duration makes the bound slider coerce its value and write it back: that write-back must not
+        // be taken for a user seek (it would jump the new media to its end).
+        updatingFromPlayer = true;
+        try
+        {
+            SeekMaximum = Math.Max(0.001, d.TotalSeconds);
+        }
+        finally
+        {
+            updatingFromPlayer = false;
+        }
         DurationText = TimeFormat.Clock(d);
     }
 

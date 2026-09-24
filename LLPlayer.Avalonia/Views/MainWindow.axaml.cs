@@ -62,6 +62,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.PointerWheelChanged += OnVideoWheel;
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
         CueList.Tapped += OnCueTapped;
+        SidebarSplitter.DragCompleted += (_, _) =>
+        {
+            double width = ContentGrid.ColumnDefinitions[2].ActualWidth;
+            if (vm != null && vm.SidebarVisible && width > 0)
+                vm.SidebarWidth = width;
+        };
         SubtitlesMenu.SubmenuOpened += (_, e) =>
         {
             // SubmenuOpened bubbles from the nested track submenus too: rebuild only when "Subtitles" itself opens.
@@ -91,6 +97,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
         Video.Renderer = renderer;
         UpdateSubtitleMargin();
+        UpdateSidebarColumn();
         idleTimer.Start();
     }
 
@@ -205,6 +212,25 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         UpdateSubtitleMargin();
     }
 
+    /// <summary>The sidebar column gets the remembered width (the splitter resizes it); hidden = collapsed.</summary>
+    void UpdateSidebarColumn()
+    {
+        if (vm == null)
+            return;
+
+        ColumnDefinition column = ContentGrid.ColumnDefinitions[2];
+        if (vm.SidebarVisible)
+        {
+            column.MinWidth = 220;
+            column.Width = new GridLength(vm.SidebarWidth, GridUnitType.Pixel);
+        }
+        else
+        {
+            column.MinWidth = 0;
+            column.Width = GridLength.Auto;
+        }
+    }
+
     void UpdateSubtitleMargin()
     {
         if (vm == null)
@@ -227,6 +253,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
                 break;
             case nameof(MainWindowViewModel.IsPlaying):
                 UpdateSleepInhibition(vm!.IsPlaying);
+                break;
+            case nameof(MainWindowViewModel.SidebarVisible):
+                UpdateSidebarColumn();
                 break;
         }
     }

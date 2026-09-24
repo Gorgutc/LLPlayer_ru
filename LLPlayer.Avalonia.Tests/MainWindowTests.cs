@@ -19,12 +19,12 @@ namespace LLPlayer.Avalonia.Tests;
 
 public class MainWindowTests
 {
-    static (MainWindow Window, MainWindowViewModel Vm, FakePlaybackController Player, FakeShell Shell) Build(string theme = "Dark")
+    static (MainWindow Window, MainWindowViewModel Vm, FakePlaybackController Player, FakeShell Shell) Build(string theme = "Dark", TimeProvider? time = null)
     {
         Application.Current!.RequestedThemeVariant = theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
         FakePlaybackController player = new();
         MainWindow window = new(new KeyMapper(), null) { Width = 1000, Height = 600 };
-        MainWindowViewModel vm = new(player, new AppPrefs().Normalize(), _ => { }, new FakeTranslator(), window);
+        MainWindowViewModel vm = new(player, new AppPrefs().Normalize(), _ => { }, new FakeTranslator(), window, time);
         window.Attach(vm, renderer: null);
         window.Show();
         Dispatcher.UIThread.RunJobs();
@@ -210,6 +210,79 @@ public class MainWindowTests
     }
 
     [AvaloniaFact]
+    public void SeekBar_FollowsPlayback_WithoutSeeking_EvenWhenANewShorterMediaOpens()
+    {
+        var (window, vm, player, _) = Build();
+        try
+        {
+            Slider seek = window.FindControl<Slider>("SeekSlider")!;
+            player.IsOpened = true;
+            player.Duration = TimeSpan.FromSeconds(100).Ticks;
+            player.CurTime = TimeSpan.FromSeconds(90).Ticks;
+            Dispatcher.UIThread.RunJobs();
+            seek.Maximum.Should().Be(100);
+            seek.Value.Should().Be(90);
+
+            // next file: 12 s long -> the slider coerces 90 to 12 and writes it back; that is not a user seek
+            player.Duration = TimeSpan.FromSeconds(12).Ticks;
+            Dispatcher.UIThread.RunJobs();
+            player.CurTime = 0;
+            Dispatcher.UIThread.RunJobs();
+            seek.Value.Should().Be(0);
+            player.Seeks.Should().BeEmpty();
+            window.FindControl<TextBlock>("DurationTime")!.Text.Should().Be("0:12");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void FullScreen_OverlaysTheBar_AndHidesBarAndCursorWhenIdle()
+    {
+        ManualTimeProvider time = new();
+        var (window, vm, player, _) = Build(time: time);
+        try
+        {
+            Border bar = window.FindControl<Border>("TransportBar")!;
+            player.IsOpened = true;
+            player.IsPlaying = true;
+
+            vm.ToggleFullScreen();   // F / double-click in the real app
+            Dispatcher.UIThread.RunJobs();
+            window.WindowState.Should().Be(WindowState.FullScreen);
+            vm.IsFullScreen.Should().BeTrue();
+            window.FindControl<Border>("MenuBar")!.IsVisible.Should().BeFalse();
+            bar.Classes.Should().Contain("overlay");
+            Grid.GetRow(bar).Should().Be(0);
+
+            time.Advance(MainWindowViewModel.IdleTimeout + TimeSpan.FromSeconds(1));
+            vm.UpdateIdle();
+            Dispatcher.UIThread.RunJobs();
+            bar.IsHitTestVisible.Should().BeFalse();
+            vm.ControlsVisible.Should().BeFalse();
+            // (the bar's Opacity animates to 0 through a 0.2 s transition; not asserted: no timing-bound checks)
+            window.FindControl<Panel>("VideoHost")!.Cursor.Should().NotBe(Cursor.Default);
+
+            window.MouseMove(new Point(200, 200));
+            Dispatcher.UIThread.RunJobs();
+            vm.ControlsVisible.Should().BeTrue();
+            bar.IsHitTestVisible.Should().BeTrue();
+
+            vm.ToggleFullScreen();
+            Dispatcher.UIThread.RunJobs();
+            window.WindowState.Should().NotBe(WindowState.FullScreen);
+            bar.Classes.Should().NotContain("overlay");
+            Grid.GetRow(bar).Should().Be(1);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void CheatSheetWindow_ShowsKeyCaps_AndFilters()
     {
         FlyleafLib.MediaPlayer.KeysConfig engine = new();
@@ -264,6 +337,9 @@ public class MainWindowTests
 
             ListBox list = window.FindControl<ListBox>("CueList")!;
             list.ItemCount.Should().Be(3);
+            Grid content = window.FindControl<Grid>("ContentGrid")!;
+            content.ColumnDefinitions[2].Width.Should().Be(new GridLength(vm.SidebarWidth));
+            window.FindControl<Border>("Sidebar")!.Bounds.Width.Should().BeApproximately(vm.SidebarWidth, 0.5);
             vm.Sidebar.CurrentCue!.Index.Should().Be(1);
             vm.Sidebar.Cues[1].IsCurrent.Should().BeTrue();
 
@@ -274,6 +350,11 @@ public class MainWindowTests
             window.MouseUp(p, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
             player.Seeks.Should().Equal(TimeSpan.FromSeconds(7));
+
+            vm.ToggleSidebar();
+            Dispatcher.UIThread.RunJobs();
+            content.ColumnDefinitions[2].Width.Should().Be(GridLength.Auto);
+            window.FindControl<Border>("Sidebar")!.IsVisible.Should().BeFalse();
         }
         finally
         {

@@ -349,7 +349,7 @@
                     Background="{DynamicResource Shadcn.SidebarBorderBrush}" ResizeDirection="Columns" />
 
       <!-- ============ subtitles sidebar ============ -->
-      <Border Name="Sidebar" Grid.Column="2" Width="{Binding SidebarWidth}" IsVisible="{Binding SidebarVisible}"
+      <Border Name="Sidebar" Grid.Column="2" IsVisible="{Binding SidebarVisible}"
               Background="{DynamicResource Shadcn.SidebarBrush}">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Margin="12,12,12,8" Spacing="10">

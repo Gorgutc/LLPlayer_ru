@@ -86,6 +86,8 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         if (prefsStore.LoadWarning is { } warning)
             viewModel.ShowToast("Preferences reset", warning, ToastVariant.Destructive);
 
+        if (options.Theme != null)
+            viewModel.ShowSessionTheme(options.Theme);
         if (options.ShowSidebar && !viewModel.SidebarVisible)
             viewModel.ToggleSidebar();
 
