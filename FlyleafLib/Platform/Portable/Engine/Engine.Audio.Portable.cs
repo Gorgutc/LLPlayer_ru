@@ -14,6 +14,15 @@ public class AudioEngine : INotifyPropertyChanged
     /// <summary>
     /// Audio output backend used by every player. Must be set before <see cref="Engine.Start"/>;
     /// defaults to <see cref="NullAudioBackend"/> (no sound device, real-time consumption for A/V sync).
+    /// <para>
+    /// Hosts that want sound set it from <see cref="AudioBackendFactory.CreateDefault(Action{string})"/>
+    /// (<see cref="OpenAlAudioBackend"/> when OpenAL Soft and an output device are available, Null otherwise;
+    /// <c>LLPLAYER_AUDIO_BACKEND=null|openal|auto</c> overrides the choice):
+    /// <code>
+    /// AudioEngine.Backend = AudioBackendFactory.CreateDefault();
+    /// Engine.Start(engineConfig);
+    /// </code>
+    /// </para>
     /// </summary>
     public static IAudioBackend Backend { get; set; } = NullAudioBackend.Instance;
 
