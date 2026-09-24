@@ -4,7 +4,8 @@
 # the WPF product.
 #
 # Usage: scripts/linux/verify.sh [--fast] [--skip-restore]
-#   (default)       validators + restore + Windows WPF/plugin compile check + portable builds + all Linux tests
+#   (default)       validators + restore + Windows WPF/plugin compile check + portable builds (FlyleafLib net10.0,
+#                   LLPlayer.Avalonia, LLPlayer.Avalonia.Tests) + FlyleafLibTests net10.0 + LLPlayer.Avalonia.Tests
 #   --fast          validators + restore + portable builds + tests (skips the Windows WPF/plugin compile check)
 #   --skip-restore  do not run dotnet restore (the restore must already be current)
 # Environment:
@@ -39,20 +40,15 @@ llp_require_cmd dotnet git
 step() { llp_log "==> $*"; }
 run() { llp_log "+ $*"; "$@"; }
 
-# Required projects fail closed; the Avalonia app/test projects are built and tested when present.
-for required in LLPlayer.slnx LLPlayer/LLPlayer.csproj Plugins/YoutubeDL/YoutubeDL.csproj \
-    FlyleafLib/FlyleafLib.csproj FlyleafLibTests/FlyleafLibTests.csproj; do
-    [[ -f "$required" ]] || llp_die "required project file is missing: $required"
-done
+# Required projects fail closed (the Linux app and its tests included).
 app_proj="LLPlayer.Avalonia/LLPlayer.Avalonia.csproj"
 app_tests_proj="LLPlayer.Avalonia.Tests/LLPlayer.Avalonia.Tests.csproj"
-optional_projects=()
+for required in LLPlayer.slnx LLPlayer/LLPlayer.csproj Plugins/YoutubeDL/YoutubeDL.csproj \
+    FlyleafLib/FlyleafLib.csproj FlyleafLibTests/FlyleafLibTests.csproj "$app_proj" "$app_tests_proj"; do
+    [[ -f "$required" ]] || llp_die "required project file is missing: $required"
+done
 for proj in "$app_proj" "$app_tests_proj"; do
-    if [[ -f "$proj" ]]; then
-        optional_projects+=("$proj")
-    else
-        llp_log "note: $proj is not in this checkout; it is skipped."
-    fi
+    grep -qF "$proj" LLPlayer.slnx || llp_die "$proj is not listed in LLPlayer.slnx"
 done
 
 step "Linux script syntax and offline self-tests"
@@ -114,12 +110,6 @@ llp_log "LLPLAYER_FFMPEG_CLI=${LLPLAYER_FFMPEG_CLI:-<unset>} LLPLAYER_AUDIO_BACK
 if [[ $skip_restore -eq 0 ]]; then
     step "Restore"
     run dotnet restore -warnaserror LLPlayer.slnx
-    for proj in "${optional_projects[@]}"; do
-        # Restore separately only if the solution does not list the project yet.
-        if ! grep -qF "${proj}" LLPlayer.slnx; then
-            run dotnet restore -warnaserror "$proj"
-        fi
-    done
 fi
 
 if [[ $fast -eq 0 ]]; then
@@ -130,15 +120,12 @@ fi
 
 step "Portable builds"
 run dotnet build --no-restore -warnaserror FlyleafLib -f net10.0
-for proj in "${optional_projects[@]}"; do
-    run dotnet build --no-restore -warnaserror "$proj"
-done
+run dotnet build --no-restore -warnaserror "$app_proj"
+run dotnet build --no-restore -warnaserror "$app_tests_proj"
 
 step "Tests"
 run dotnet test --no-restore -warnaserror FlyleafLibTests -f net10.0
-if [[ -f "$app_tests_proj" ]]; then
-    run dotnet test --no-restore -warnaserror "$app_tests_proj"
-fi
+run dotnet test --no-restore -warnaserror "$app_tests_proj"
 
 if [[ $fast -eq 1 ]]; then
     llp_log "LLPlayer Linux fast verification completed."

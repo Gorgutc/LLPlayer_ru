@@ -374,11 +374,89 @@ public class SubtitleTextTests
         => LLPlayer.Avalonia.Controls.SubtitleText.WordAt(text, index).Should().Be(expected);
 }
 
+/// <summary>
+/// The app takes its audio output from FlyleafLib's AudioBackendFactory (OpenAL Soft, Null fallback) and honours
+/// LLPLAYER_AUDIO_BACKEND. Process-wide state (environment, AudioEngine.Backend): runs in the non-parallel collection.
+/// </summary>
+[Collection(FlyleafGlobalsCollection.Name)]
+public class AudioBackendSelectorTests
+{
+    static T WithBackendVariable<T>(string? value, Func<T> action)
+    {
+        string? previous = Environment.GetEnvironmentVariable(AudioBackendFactory.BackendVariable);
+        Environment.SetEnvironmentVariable(AudioBackendFactory.BackendVariable, value);
+        try
+        {
+            return action();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(AudioBackendFactory.BackendVariable, previous);
+        }
+    }
+
+    [Fact]
+    public void ForcedNull_SelectsTheSilentBackend_AndSaysWhy()
+    {
+        List<string> log = [];
+        IAudioBackend backend = WithBackendVariable("null", () => AudioBackendSelector.Select(log.Add));
+
+        backend.Should().BeSameAs(NullAudioBackend.Instance);
+        log.Should().ContainSingle().Which.Should().Contain("LLPLAYER_AUDIO_BACKEND=null");
+        AudioBackendSelector.IsWarning(log[0]).Should().BeFalse("the user asked for silence");
+    }
+
+    [Fact]
+    public void ForcedOpenAl_SelectsTheOpenAlBackend_WhenTheLibraryIsInstalled()
+    {
+        Assert.SkipUnless(System.Runtime.InteropServices.NativeLibrary.TryLoad("libopenal.so.1", out _)
+                          || System.Runtime.InteropServices.NativeLibrary.TryLoad("libopenal.so", out _),
+            "OpenAL Soft (libopenal.so.1) is not installed.");
+
+        List<string> log = [];
+        IAudioBackend backend = WithBackendVariable("openal", () => AudioBackendSelector.Select(log.Add));
+
+        backend.Should().BeOfType<OpenAlAudioBackend>();
+        backend.Name.Should().Be("OpenAL");
+    }
+
+    [Fact]
+    public void Apply_AssignsTheSelectedBackend_ToTheAudioEngine_AndReturnsTheMessages()
+    {
+        IAudioBackend previous = AudioEngine.Backend;
+        try
+        {
+            AudioEngine.Backend = new FakeAudioBackend();
+            IReadOnlyList<string> messages = WithBackendVariable("null", AudioBackendSelector.Apply);
+
+            AudioEngine.Backend.Should().BeSameAs(NullAudioBackend.Instance);
+            messages.Should().ContainSingle().Which.Should().StartWith("Audio backend: Null");
+        }
+        finally
+        {
+            AudioEngine.Backend = previous;
+        }
+    }
+
+    [Theory]
+    [InlineData("Audio backend: OpenAL", false)]
+    [InlineData("Audio backend: Null (LLPLAYER_AUDIO_BACKEND=null)", false)]
+    [InlineData("Audio backend: Null (no sound output) because OpenAL is unavailable: x", true)]
+    [InlineData("Audio backend: unknown LLPLAYER_AUDIO_BACKEND value 'x' (expected null, openal or auto); using auto", true)]
+    public void FallbacksAreWarnings(string message, bool warning)
+        => AudioBackendSelector.IsWarning(message).Should().Be(warning);
+
+    sealed class FakeAudioBackend : IAudioBackend
+    {
+        public string Name => "Fake";
+        public IReadOnlyList<AudioEngine.AudioEndpoint> EnumerateDevices() => [];
+        public AudioEngine.AudioEndpoint? GetDefaultDevice() => null;
+        public IAudioSink CreateSink(string? deviceId, int sampleRate, int channels) => throw new NotSupportedException();
+    }
+}
+
 public class EngineConfigTests
 {
-    [Fact]
-    public void AudioBackend_DefaultsToNull_UntilTheOpenAlBackendIsWired()
-        => AudioBackendSelector.Select().Should().BeSameAs(NullAudioBackend.Instance);
 
     [Fact]
     public void EngineConfig_UsesGivenFFmpegFolder_AndStateLog()

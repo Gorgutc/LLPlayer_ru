@@ -51,10 +51,14 @@ shared FlyleafLib files only gained `#if WINDOWS` / `#if !WINDOWS` guards and `p
 - **Seams the host implements** (all in the portable target):
   - `IUIDispatcher` (`Utils.UIDispatcher`) — UI-thread marshalling for `Utils.UI*`; `IHostServices`
     (`Utils.HostServices`) — clipboard, file dialog, completion sound.
-  - `IVideoSurface` (`Renderer.Surface`) — receives each frame as cropped BGRA32 from the software `sws_scale` path;
-    the host scales it into `Renderer.Viewport` and applies `Rotation`/`HFlip`/`VFlip`.
+  - `IVideoSurface` (`Renderer.Surface`) — receives each frame ready to show as BGRA32 from the software path
+    (deinterlaced, HDR tone-mapped, cropped, rotated/mirrored and colour-filtered by the renderer) at
+    min(native, viewport) size per axis; the host only scales it into `Renderer.Viewport`. `Rotation`/`HFlip`/`VFlip`
+    are informational and must not be applied again.
   - `IAudioBackend` / `IAudioSink` (`AudioEngine.Backend`, set before `Engine.Start`) — OpenAL Soft on a desktop,
-    `NullAudioSink` (real-time clock, silent) for headless runs and CI; `LLPLAYER_AUDIO_BACKEND` selects.
+    `NullAudioSink` (real-time clock, silent) for headless runs and CI; `AudioBackendFactory.CreateDefault()` picks
+    one and `LLPLAYER_AUDIO_BACKEND=null|openal|auto` forces the choice (the app calls it through
+    `AudioBackendSelector` before `Engine.Start`).
   - `Player.KeyStateProvider`, `BindingOperations.CollectionSynchronizationHandler`,
     `CollectionViewSource.RefreshHandler`, `SubtitlesOCR.ServiceFactory` — WPF-free hooks for modifier keys,
     collection sync, filtered views, and OCR engines.

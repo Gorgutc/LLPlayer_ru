@@ -112,7 +112,19 @@ The Linux build is additive; nothing above changes for Windows.
 | `LLPlayer.Avalonia` | `Avalonia.Themes.Fluent` | `12.1.3` |
 | `LLPlayer.Avalonia` | `Avalonia.Fonts.Inter` | `12.1.3` |
 | `LLPlayer.Avalonia` | `CommunityToolkit.Mvvm` | `8.4.2` |
+| `LLPlayer.Avalonia` | `Avalonia.BuildServices` | `11.3.2` (`ExcludeAssets="all"`, `PrivateAssets="all"`: only switches off Avalonia's build-time telemetry task) |
 | `LLPlayer.Avalonia.Tests` | `Avalonia.Headless.XUnit` | `12.1.3` |
+| `LLPlayer.Avalonia.Tests` | `Avalonia.Skia` | `12.1.3` |
+| `LLPlayer.Avalonia.Tests` | `Avalonia.BuildServices` | `11.3.2` (`ExcludeAssets="all"`, `PrivateAssets="all"`, telemetry opt-out) |
+| `LLPlayer.Avalonia.Tests` | `AwesomeAssertions` | `9.4.0` |
+| `LLPlayer.Avalonia.Tests` | `Microsoft.NET.Test.Sdk` | `18.4.0` |
+| `LLPlayer.Avalonia.Tests` | `xunit.v3` | `3.2.2` |
+| `LLPlayer.Avalonia.Tests` | `xunit.runner.visualstudio` | `3.1.5` |
+
+The portable `net10.0` TFM of `FlyleafLib` adds no package: the OpenAL Soft output binds `libopenal.so.1` at run time
+with `NativeLibrary.TryLoad` + `GetExport` (no `DllImport` resolver, so it cannot collide with another resolver in
+the assembly), and the software renderer uses the FFmpeg libraries already bound by `Flyleaf.FFmpeg.Bindings`
+(`swscale`, `avfilter`: `bwdif`/`yadif`/`estdif`, `zscale`+`tonemap`).
 
 Test infrastructure packages in `LLPlayer.Avalonia.Tests` use the same versions as `FlyleafLibTests`. Versions are
 pinned exactly in each `.csproj` (no ranges, no `Directory.Packages.props`); the `.csproj` files are the source of

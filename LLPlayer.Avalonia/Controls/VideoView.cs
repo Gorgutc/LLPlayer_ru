@@ -15,9 +15,9 @@ namespace LLPlayer.Avalonia.Controls;
 /// <see cref="PresentFrame"/> (renderer threads) copies the BGRA frame into the back buffer of two
 /// <see cref="WriteableBitmap"/>s (re-created only when the frame size changes: no per-frame allocation), swaps the
 /// buffers and posts one coalesced <see cref="Visual.InvalidateVisual"/> to the UI thread. <see cref="Render"/> fills
-/// the control with the background colour (letterbox) and draws the front buffer into
-/// <see cref="Renderer.Viewport"/> (control device pixels, converted to DIPs), applying the renderer's rotation and
-/// flips. The control reports its size in device pixels with <see cref="Renderer.SetControlSize"/> on resize / DPI
+/// the control with the background colour (letterbox) and scales the front buffer into
+/// <see cref="Renderer.Viewport"/> (control device pixels, converted to DIPs). Frames arrive ready to show (upright,
+/// already rotated / mirrored / filtered, at most viewport-sized), so no transform is applied here. The control reports its size in device pixels with <see cref="Renderer.SetControlSize"/> on resize / DPI
 /// change.
 /// </para>
 /// </summary>
@@ -173,21 +173,19 @@ public sealed class VideoView : Control, IVideoSurface
         if (dest.Width <= 0 || dest.Height <= 0)
             return;
 
-        uint rotation = renderer?.Rotation ?? 0;
-        bool hflip = renderer?.HFlip ?? false;
-        bool vflip = renderer?.VFlip ?? false;
-        bool swapped = rotation is 90 or 270;
-        Rect drawRect = swapped
-            ? new Rect(dest.Center.X - dest.Height / 2, dest.Center.Y - dest.Width / 2, dest.Height, dest.Width)
-            : dest;
+        // The portable renderer hands over upright frames: rotation, flips, crop, deinterlace, tone mapping and colour
+        // filters are already applied (Renderer.Rotation/HFlip/VFlip are informational). Only scale into the viewport.
+        context.DrawImage(frame, new Rect(0, 0, frame.PixelSize.Width, frame.PixelSize.Height), dest);
+    }
 
-        Matrix transform = Matrix.CreateTranslation(-dest.Center.X, -dest.Center.Y)
-                           * Matrix.CreateScale(hflip ? -1 : 1, vflip ? -1 : 1)
-                           * Matrix.CreateRotation(Math.PI * rotation / 180.0)
-                           * Matrix.CreateTranslation(dest.Center.X, dest.Center.Y);
-
-        using (context.PushTransform(transform))
-            context.DrawImage(frame, new Rect(0, 0, frame.PixelSize.Width, frame.PixelSize.Height), drawRect);
+    /// <summary>The frame currently shown (diagnostics / tests; null when cleared). Read it on the UI thread.</summary>
+    internal WriteableBitmap? CurrentFrame
+    {
+        get
+        {
+            lock (swapLock)
+                return hasFrame ? front : null;
+        }
     }
 
     /// <summary>

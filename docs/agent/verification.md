@@ -159,7 +159,7 @@ stub tarballs, input errors), checks that no Linux `*.so` is tracked, runs the p
 validators under PowerShell 7 (`verify-doc-coverage`, `verify-frozen`, `verify-full-gate`, `verify-build-workflow`,
 `verify-release-workflow`, `check-dub-licenses`, `audit-frozen`; a missing `pwsh` fails in CI), restores
 `LLPlayer.slnx` with `-warnaserror`, compile-checks the WPF app and YoutubeDL plugin, builds FlyleafLib `net10.0` and
-the Avalonia projects when present, and runs the portable FlyleafLib suite plus `LLPlayer.Avalonia.Tests` with
+the Avalonia projects (both required and listed in `LLPlayer.slnx`), and runs the portable FlyleafLib suite plus `LLPlayer.Avalonia.Tests` with
 `LLPLAYER_FFMPEG_DIR`, a generated `LLPLAYER_TEST_MEDIA`, and `LLPLAYER_AUDIO_BACKEND=null`. `--fast` skips the
 WPF/plugin compile check. Skipped on Linux, by design: `check-environment.ps1` (Windows OS check) and
 `verify-plugin.ps1` (NTFS junction fixture), and therefore the `verify-fast.ps1`/`verify.ps1`/`ship.ps1` wrappers.

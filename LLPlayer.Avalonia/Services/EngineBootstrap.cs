@@ -37,12 +37,23 @@ public static class EngineBootstrap
         FFmpegLogLevel = Flyleaf.FFmpeg.LogLevel.Warn,
     };
 
-    /// <summary>Starts the engine (FFmpeg load). Throws when FFmpeg cannot be loaded.</summary>
+    /// <summary>
+    /// Selects the audio backend (<see cref="AudioBackendSelector"/>, before the engine enumerates its devices) and
+    /// starts the engine (FFmpeg load). Throws when FFmpeg cannot be loaded.
+    /// </summary>
     public static void Start(EngineConfig config)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(config.LogOutput) ?? ".");
-        AudioBackendSelector.Apply();
+        IReadOnlyList<string> audioMessages = AudioBackendSelector.Apply();
         Engine.Start(config);
+        LogHandler log = new("[LLPlayer      ] ");
+        foreach (string message in audioMessages)
+        {
+            if (AudioBackendSelector.IsWarning(message))
+                log.Warn(message);
+            else
+                log.Info(message);
+        }
     }
 
     /// <summary>Default player config of the Linux app (the WPF app's DefaultConfig plus a smoother time bar).</summary>

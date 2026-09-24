@@ -666,6 +666,9 @@ WPF выводится из эксплуатации только после own
   **app** — `LLPlayer.Avalonia` + `LLPlayer.Avalonia.Tests` (главное окно, плеер, dual subtitles, базовый WordPopup,
   тема из shadcn-токенов, XDG-конфиг `~/.config/LLPlayer`); **infra** — `scripts/linux/` (fetch-ffmpeg,
   make-test-media, verify, publish), `.github/workflows/build-linux.yml`, контракты/доки, валидаторы знают про Linux.
+  **Интеграция (2026-09-24):** четыре среза слиты в ветку PR #166; приложение берёт звук из
+  `AudioBackendFactory` (OpenAL Soft / Null), `VideoView` больше не поворачивает кадр повторно (рендерер отдаёт
+  готовый кадр); `verify.sh` полный зелёный, E2E под Xvfb + OpenAL wave (440 Гц) и запуск опубликованного tar.gz.
 - **Дальше — паритет (по одному срезу, каждый со своим тестом/смоуком):**
   1. ASR/Whisper на Linux: Linux-runtime Whisper.net (natives `linux-x64`), пути Linux-бинарника faster-whisper
      (дефолт сейчас `faster-whisper-xxl.exe`).
@@ -681,6 +684,11 @@ WPF выводится из эксплуатации только после own
   11. Интеграция Linux-пакета в release workflows (Testing/Stable) — отдельное owner-решение; включает
       GPL source-offer для FFmpeg.
   12. Tray icon.
+  13. Первое определение языка субтитров (Lingua `FromAllLanguages`, общий код FlyleafLib, на Windows так же)
+      грузит все языковые модели: ~9–11 с на 4-ядерном Xeon. При локальном поиске это «Opening…» до старта; при
+      открытии `.srt` во время воспроизведения (`--sub`, drag&drop) — паузы/ребуферинг ~каждую секунду, пока модели
+      не загрузятся. Нужен отдельный срез (ограничить набор языков / прогрев в фоне / отложенная детекция) с
+      проверкой на Windows.
   Также: v4l2 capture devices; cursor-hide/screensaver-inhibit на стороне хоста; вынос общего `LLPlayer.Core`.
 
 **Гейты:** `scripts/linux/verify.sh` (+ неизменные Windows-гейты); ручной smoke —

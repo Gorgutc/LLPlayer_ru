@@ -47,7 +47,9 @@ scripts/linux/publish.sh             # artifacts/linux/LLPlayer-<version>-linux-
 Environment variables: `LLPLAYER_FFMPEG_DIR` (FFmpeg library folder; the packaged app defaults to its own `FFmpeg/`),
 `LLPLAYER_TEST_MEDIA` (clip for the env-gated integration tests, which skip when it is unset),
 `LLPLAYER_AUDIO_BACKEND` (`null`, `openal`, or `auto`; `verify.sh` forces `null`), `LLPLAYER_CONFIG_DIR`
-(overrides the XDG config folder `~/.config/LLPlayer`), and `LLPLAYER_FFMPEG_URL` / `LLPLAYER_FFMPEG_SHA256`
+(overrides the XDG config folder `~/.config/LLPlayer`), `LLPLAYER_LOG_LEVEL` (engine log level, default `Warn`;
+the log is `$XDG_STATE_HOME/LLPlayer/flyleaf.log`), `LLPLAYER_MANAGED_DIALOGS=1` (Avalonia's built-in file chooser
+when neither xdg-desktop-portal nor GTK 3 is available), and `LLPLAYER_FFMPEG_URL` / `LLPLAYER_FFMPEG_SHA256`
 (pin a specific FFmpeg build for reproducibility; the default BtbN `latest` asset is a rolling build).
 
 Install the unpacked package for the current user (the `.desktop` file expects `llplayer` on `PATH`):

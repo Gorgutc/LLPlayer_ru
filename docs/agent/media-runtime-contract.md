@@ -39,10 +39,13 @@ Additive: everything above still applies to the Windows target unchanged. These 
   (tests only). The WPF Dispatcher Boundaries above apply to the Avalonia dispatcher too: do not remove marshalling.
   `BindingOperations.EnableCollectionSynchronization` only forwards to a host handler, so the host must itself move
   collection change notifications onto its UI thread.
-- **Video: software decode + `sws_scale` BGRA path.** No hardware decoding (`ConfigHWFrames` returns false). The
-  renderer converts each frame to cropped BGRA32 with `sws_scale` (correct colour matrix) on the playback thread and
-  hands it to `IVideoSurface.PresentFrame(span, width, height, stride)`; snapshots are encoded by FFmpeg. The host
-  scales the frame into `Renderer.Viewport` and applies `Rotation`, `HFlip`, and `VFlip`.
+- **Video: software decode + `sws_scale` BGRA path.** No hardware decoding (`ConfigHWFrames` returns false). On the
+  playback thread the renderer deinterlaces (`bwdif`, `yadif` fallback, `estdif` for a lone paused frame), tone-maps
+  PQ/HLG to SDR (`zscale`+`tonemap` when the FFmpeg build has them), crops, converts to BGRA32 with `sws_scale` at
+  min(native, viewport) size per axis, applies rotation/mirroring and the brightness/contrast/hue/saturation filters,
+  and hands the ready-to-show frame to `IVideoSurface.PresentFrame(span, width, height, stride)`; snapshots go through
+  the same pipeline at native size and are encoded by FFmpeg. The host only scales the frame into
+  `Renderer.Viewport`; `Rotation`, `HFlip`, and `VFlip` are informational and must not be applied again.
 - **`IVideoSurface` threading.** `PresentFrame` and `ClearFrame` run on the playback thread or on the thread that
   stops/disposes the player, sometimes while a renderer lock is held. The span is valid only during the call. An
   implementation must copy the pixels and `Post` to the UI thread — never block on or `Invoke` into the UI thread

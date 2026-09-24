@@ -5,9 +5,12 @@ The Windows product is still the WPF app in `../LLPlayer` (unchanged).
 
 - UI: Avalonia 12.1.3 with the built-in FluentTheme plus the "LLPlayer shadcn" theme (shadcn/ui neutral tokens,
   `Themes/`), CommunityToolkit.Mvvm view models, plain constructor wiring (`AppHost`).
-- Video: FlyleafLib's software renderer (FFmpeg `sws_scale` → BGRA) presented by `Controls/VideoView`.
-- Audio: `Services/AudioBackendSelector.Select()` — the OpenAL backend plugs in there; until then audio is the silent
-  real-time `NullAudioBackend`.
+- Video: FlyleafLib's software renderer (deinterlace, HDR tone mapping, `sws_scale` → BGRA, rotation/flips, colour
+  filters) presented by `Controls/VideoView`, which only scales the ready-to-show frame into the renderer's viewport.
+- Audio: `Services/AudioBackendSelector` → FlyleafLib's `AudioBackendFactory.CreateDefault()`, assigned to
+  `AudioEngine.Backend` before `Engine.Start`: OpenAL Soft (system `libopenal.so.1`, package `libopenal1`) when its
+  default device opens, otherwise the silent real-time `NullAudioBackend` with a warning in `flyleaf.log`.
+  `LLPLAYER_AUDIO_BACKEND=null|openal|auto` forces the choice.
 - Windowing: X11 (or XWayland) via `UsePlatformDetect()`. Native Wayland (`Avalonia.Wayland`) is a possible future
   opt-in and is intentionally not referenced yet.
 

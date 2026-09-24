@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media.Imaging;
@@ -6,7 +7,9 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using AwesomeAssertions;
 using FlyleafLib;
+using FlyleafLib.MediaFramework.MediaRenderer;
 using FlyleafLib.MediaPlayer;
+using LLPlayer.Avalonia.Controls;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
 using LLPlayer.Avalonia.Views;
@@ -33,6 +36,42 @@ public class EndToEndTests
             await Task.Delay(25);
         }
         return true;
+    }
+
+    /// <summary>
+    /// Samples a grid inside the renderer's viewport and checks that the captured window shows the VideoView's current
+    /// frame at the same relative positions (scaled only: no extra rotation or mirroring).
+    /// </summary>
+    static void AssertScreenShowsPresentedFrame(MainWindow window)
+    {
+        VideoView view = window.VideoSurface;
+        WriteableBitmap presented = view.CurrentFrame!;
+        presented.Should().NotBeNull();
+        Viewport vp = view.Renderer!.Viewport;
+        Point origin = view.TranslatePoint(new Point(0, 0), window)!.Value;
+        WriteableBitmap screen = window.CaptureRenderedFrame()!;
+
+        int matches = 0, total = 0;
+        using ILockedFramebuffer src = presented.Lock();
+        using ILockedFramebuffer dst = screen.Lock();
+        for (double v = 0.12; v < 0.72; v += 0.06)          // stay above the subtitle overlay
+            for (double u = 0.12; u < 0.90; u += 0.06)
+            {
+                int fx = (int)(u * src.Size.Width), fy = (int)(v * src.Size.Height);
+                int sx = (int)(origin.X + vp.X + u * vp.Width), sy = (int)(origin.Y + vp.Y + v * vp.Height);
+                unsafe
+                {
+                    byte* a = (byte*)src.Address + fy * src.RowBytes + fx * 4;
+                    byte* b = (byte*)dst.Address + sy * dst.RowBytes + sx * 4;
+                    int diff = Math.Max(Math.Abs(a[0] - b[0]), Math.Max(Math.Abs(a[1] - b[1]), Math.Abs(a[2] - b[2])));
+                    if (diff <= 48)
+                        matches++;
+                }
+                total++;
+            }
+
+        matches.Should().BeGreaterThanOrEqualTo(total * 8 / 10,
+            $"the screen must show the presented frame untransformed ({matches}/{total} grid samples matched)");
     }
 
     static string LogTail(AppPaths paths)
@@ -103,7 +142,12 @@ public class EndToEndTests
             window.PrimarySubtitle.IsVisible.Should().BeTrue();
 
             (await WaitUntil(() => window.VideoSurface.FramesPresented >= 15, TimeSpan.FromSeconds(20))).Should().BeTrue("decoded frames reach the VideoView");
-            window.VideoSurface.FrameSize.Width.Should().Be(1280);
+            // Portable renderer contract: frames arrive at min(native, viewport) per axis (the 960x600 window's
+            // viewport is smaller than the 1280x720 clip) and the VideoView shows exactly what the renderer presented.
+            Viewport viewport = player.Renderer.Viewport;
+            window.VideoSurface.FrameSize.Should().Be(new PixelSize(player.Renderer.PresentedWidth, player.Renderer.PresentedHeight));
+            window.VideoSurface.FrameSize.Width.Should().BeLessThanOrEqualTo(Math.Min(1280, (int)Math.Ceiling(viewport.Width)));
+            window.VideoSurface.FrameSize.Height.Should().BeLessThanOrEqualTo(Math.Min(720, (int)Math.Ceiling(viewport.Height)));
 
             // the video area is not black any more (testsrc2 colour bars)
             WriteableBitmap frame = window.CaptureRenderedFrame()!;
@@ -129,6 +173,17 @@ public class EndToEndTests
 
             player.Pause();
             (await WaitUntil(() => !vm.IsPlaying, TimeSpan.FromSeconds(10))).Should().BeTrue();
+
+            // Rotation / mirroring are applied by the renderer; the VideoView must draw the presented (already
+            // upright) frame as is. Drawing it rotated / flipped again would put other pixels on screen.
+            player.Config.Video.Rotation = 90;
+            player.Config.Video.HFlip = true;
+            (await WaitUntil(() => window.VideoSurface.FrameSize.Height > window.VideoSurface.FrameSize.Width
+                                   && player.Renderer.Viewport.Height > player.Renderer.Viewport.Width, TimeSpan.FromSeconds(10)))
+                .Should().BeTrue($"the rotated frame is presented while paused (frame {window.VideoSurface.FrameSize}, viewport {player.Renderer.Viewport.Width}x{player.Renderer.Viewport.Height})");
+            await Task.Delay(200);
+            Dispatcher.UIThread.RunJobs();
+            AssertScreenShowsPresentedFrame(window);
         }
         finally
         {
