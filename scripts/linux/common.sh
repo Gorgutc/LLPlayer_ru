@@ -1,5 +1,8 @@
 # Shared helpers for the Linux (F-13) build scripts. Source it; do not execute it.
 # shellcheck shell=bash
+# The LLP_* defaults below are read by the scripts that source this file, which shellcheck cannot see
+# when it checks common.sh on its own.
+# shellcheck disable=SC2034
 
 # Repository root = two levels above this file (scripts/linux/common.sh).
 LLP_REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)"

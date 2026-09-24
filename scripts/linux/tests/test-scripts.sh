@@ -4,6 +4,8 @@
 #  - fetch-ffmpeg.sh: soname-major, license, dest-safety and input checks on tiny pinned tarballs from a pre-seeded
 #    cache (no network); the happy path needs a C compiler to build stub ELF libraries and is skipped without one.
 #  - make-test-media.sh: fails clearly without an ffmpeg CLI.
+# ok() only increments a counter and always succeeds, so `check && ok || bad msg` is a safe if/else here.
+# shellcheck disable=SC2015
 set -euo pipefail
 
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -113,6 +115,7 @@ fake_tarball() {
     tar -cJf "$cache/$name.tar.xz" -C "$src" fake
     printf '%s %s\n' "$cache" "$(sha256sum "$cache/$name.tar.xz" | cut -d' ' -f1)"
 }
+# shellcheck disable=SC2016  # single quotes are intentional: this text is a script run later by bash -c
 stub_libs='for so in '"${sonames[*]}"'; do echo x > "lib/$so.1.100"; ln -s "$so.1.100" "lib/$so"; done; echo GPL > LICENSE.txt'
 run_fetch() { # name cache sha dest [args...]
     local name="$1" cache="$2" sha="$3" dest="$4"
@@ -155,6 +158,7 @@ expect_fail "fetch: unknown argument" "unknown argument" bash "$linux_dir/fetch-
 
 if command -v cc >/dev/null 2>&1 && command -v readelf >/dev/null 2>&1; then
     # Happy path with stub ELF libraries that carry the right SONAMEs and a stub CLI.
+    # shellcheck disable=SC2016  # single quotes are intentional: this text is a script run later by bash -c
     elf_setup='printf "int llp_stub;\n" > stub.c
         for so in '"${sonames[*]}"'; do cc -shared -fPIC -Wl,-soname,"$so" -o "lib/$so.1.100" stub.c; ln -s "$so.1.100" "lib/$so"; done
         rm stub.c
