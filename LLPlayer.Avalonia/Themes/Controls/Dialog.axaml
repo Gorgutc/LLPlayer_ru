@@ -1,0 +1,32 @@
+<!--
+  shadcn/ui Dialog as a window style: Window.dialog = background surface, 24px padding, fixed size-to-content;
+  TextBlock.dialog-title (text-lg semibold), TextBlock.dialog-description (muted text-sm, wrapping) and a
+  StackPanel.dialog-footer that right-aligns its buttons with gap-2.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Window.dialog">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.BackgroundBrush}" />
+    <Setter Property="SizeToContent" Value="WidthAndHeight" />
+    <Setter Property="CanResize" Value="False" />
+    <Setter Property="WindowStartupLocation" Value="CenterOwner" />
+    <Setter Property="ShowInTaskbar" Value="False" />
+    <Setter Property="Padding" Value="24" />
+  </Style>
+  <Style Selector="TextBlock.dialog-title">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextLg}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.dialog-description">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+    <Setter Property="Foreground" Value="{DynamicResource Shadcn.MutedForegroundBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="StackPanel.dialog-footer">
+    <Setter Property="Orientation" Value="Horizontal" />
+    <Setter Property="HorizontalAlignment" Value="Right" />
+    <Setter Property="Spacing" Value="8" />
+  </Style>
+
+</Styles>

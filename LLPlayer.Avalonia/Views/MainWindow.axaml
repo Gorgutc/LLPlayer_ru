@@ -1,0 +1,387 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+        xmlns:c="using:LLPlayer.Avalonia.Controls"
+        x:Class="LLPlayer.Avalonia.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding WindowTitle}"
+        Width="1280" Height="760" MinWidth="640" MinHeight="420"
+        WindowStartupLocation="CenterScreen"
+        DragDrop.AllowDrop="True">
+
+  <Window.Styles>
+    <!-- transport bar: card-like strip under the video; overlays the video (translucent) in fullscreen -->
+    <Style Selector="Border#TransportBar">
+      <Setter Property="Background" Value="{DynamicResource Shadcn.BackgroundBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.BorderBrush}" />
+      <Setter Property="BorderThickness" Value="0,1,0,0" />
+      <Setter Property="Padding" Value="12,2,12,6" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border#TransportBar.overlay">
+      <Setter Property="Background" Value="#CC0A0A0A" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="VerticalAlignment" Value="Bottom" />
+    </Style>
+    <Style Selector="TextBlock.time">
+      <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextXs}" />
+      <Setter Property="FontFeatures" Value="+tnum" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- sidebar cue rows -->
+    <Style Selector="Border.cue">
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+      <Setter Property="BorderThickness" Value="2,0,0,0" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.cue.current">
+      <Setter Property="Background" Value="{DynamicResource Shadcn.SidebarAccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.PrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#CueList ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+    <Style Selector="ListBox#CueList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#CueList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource Shadcn.SidebarAccentBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel>
+    <!-- ============ menu bar ============ -->
+    <Border Name="MenuBar" DockPanel.Dock="Top" IsVisible="{Binding !IsFullScreen}"
+            BorderBrush="{DynamicResource Shadcn.BorderBrush}" BorderThickness="0,0,0,1" Padding="4,2">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Menu Name="MainMenu">
+          <MenuItem Header="_Media">
+            <MenuItem Header="_Open media…" InputGesture="Ctrl+O" Command="{Binding OpenMediaCommand}">
+              <MenuItem.Icon><c:LucideIcon Data="{StaticResource Icon.FolderOpen}" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Header="Open _subtitles…" InputGesture="Ctrl+Shift+O" Command="{Binding OpenSubtitlesCommand}">
+              <MenuItem.Icon><c:LucideIcon Data="{StaticResource Icon.Captions}" /></MenuItem.Icon>
+            </MenuItem>
+            <MenuItem Name="RecentMenu" Header="_Recent" ItemsSource="{Binding RecentFiles}"
+                      IsEnabled="{Binding HasRecentFiles}">
+              <MenuItem.Styles>
+                <Style Selector="MenuItem#RecentMenu > MenuItem" x:DataType="x:String">
+                  <Setter Property="Header" Value="{Binding}" />
+                  <Setter Property="Command" Value="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenRecentCommand}" />
+                  <Setter Property="CommandParameter" Value="{Binding}" />
+                </Style>
+              </MenuItem.Styles>
+            </MenuItem>
+            <MenuItem Header="Clear recent" Command="{Binding ClearRecentCommand}" IsEnabled="{Binding HasRecentFiles}" />
+            <Separator />
+            <MenuItem Header="E_xit" Command="{Binding ExitCommand}" />
+          </MenuItem>
+
+          <MenuItem Header="_Playback">
+            <MenuItem Header="Play / Pause" InputGesture="Space" Command="{Binding TogglePlayPauseCommand}" />
+            <MenuItem Header="Mute" InputGesture="M" Command="{Binding ToggleMuteCommand}"
+                      ToggleType="CheckBox" IsChecked="{Binding IsMuted, Mode=OneWay}" />
+            <MenuItem Header="Speed" ItemsSource="{Binding SpeedItems}">
+              <MenuItem.Styles>
+                <Style Selector="MenuItem > MenuItem" x:DataType="vm:SpeedMenuItem">
+                  <Setter Property="Header" Value="{Binding Label}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
+                  <Setter Property="ToggleType" Value="Radio" />
+                  <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                </Style>
+              </MenuItem.Styles>
+            </MenuItem>
+          </MenuItem>
+
+          <MenuItem Name="SubtitlesMenu" Header="_Subtitles">
+            <MenuItem Header="Primary track" ItemsSource="{Binding PrimaryTracks}">
+              <MenuItem.Styles>
+                <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                  <Setter Property="Header" Value="{Binding Label}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
+                  <Setter Property="ToggleType" Value="Radio" />
+                  <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                </Style>
+              </MenuItem.Styles>
+            </MenuItem>
+            <MenuItem Header="Secondary track" ItemsSource="{Binding SecondaryTracks}">
+              <MenuItem.Styles>
+                <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                  <Setter Property="Header" Value="{Binding Label}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
+                  <Setter Property="ToggleType" Value="Radio" />
+                  <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                </Style>
+              </MenuItem.Styles>
+            </MenuItem>
+            <MenuItem Header="Open subtitles file…" InputGesture="Ctrl+Shift+O" Command="{Binding OpenSubtitlesCommand}" />
+            <Separator />
+            <MenuItem Header="Show subtitles" InputGesture="V" Command="{Binding ToggleSubtitlesCommand}"
+                      ToggleType="CheckBox" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}" />
+            <MenuItem Header="Larger text" InputGesture="Shift+Right" Command="{Binding IncreaseSubtitleSizeCommand}" />
+            <MenuItem Header="Smaller text" InputGesture="Shift+Left" Command="{Binding DecreaseSubtitleSizeCommand}" />
+            <MenuItem Header="Move up" InputGesture="Shift+Up" Command="{Binding SubtitlesUpCommand}" />
+            <MenuItem Header="Move down" InputGesture="Shift+Down" Command="{Binding SubtitlesDownCommand}" />
+            <MenuItem Header="Copy primary text" InputGesture="Ctrl+C" Command="{Binding CopyPrimaryTextCommand}" />
+          </MenuItem>
+
+          <MenuItem Header="_View">
+            <MenuItem Header="Subtitles sidebar" InputGesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}"
+                      ToggleType="CheckBox" IsChecked="{Binding SidebarVisible, Mode=OneWay}" />
+            <MenuItem Header="Search subtitles" InputGesture="Ctrl+F" Command="{Binding ActivateSubsSearchCommand}" />
+            <MenuItem Header="Fullscreen" InputGesture="F" Command="{Binding ToggleFullScreenCommand}" />
+            <Separator />
+            <MenuItem Header="Dark theme" ToggleType="Radio" IsChecked="{Binding IsDarkTheme, Mode=OneWay}"
+                      Command="{Binding SetThemeCommand}" CommandParameter="Dark" />
+            <MenuItem Header="Light theme" ToggleType="Radio" IsChecked="{Binding !IsDarkTheme, Mode=OneWay}"
+                      Command="{Binding SetThemeCommand}" CommandParameter="Light" />
+          </MenuItem>
+
+          <MenuItem Header="_Help">
+            <MenuItem Header="Keyboard shortcuts" InputGesture="F1" Command="{Binding ShowCheatSheetCommand}">
+              <MenuItem.Icon><c:LucideIcon Data="{StaticResource Icon.Keyboard}" /></MenuItem.Icon>
+            </MenuItem>
+          </MenuItem>
+        </Menu>
+
+        <TextBlock Grid.Column="1" Text="{Binding MediaTitle}" Classes="muted xs" HorizontalAlignment="Center"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0" />
+
+        <Button Grid.Column="2" Classes="ghost icon-sm" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="Toggle theme (Ctrl+Shift+T)">
+          <Panel>
+            <c:LucideIcon Data="{StaticResource Icon.Sun}" IsVisible="{Binding IsDarkTheme}" />
+            <c:LucideIcon Data="{StaticResource Icon.Moon}" IsVisible="{Binding !IsDarkTheme}" />
+          </Panel>
+        </Button>
+      </Grid>
+    </Border>
+
+    <!-- ============ content: video column | splitter | sidebar ============ -->
+    <Grid Name="ContentGrid" ColumnDefinitions="*,Auto,Auto">
+
+      <Grid Name="VideoColumn" RowDefinitions="*,Auto">
+        <Panel Name="VideoHost" Background="Black" ClipToBounds="True">
+          <c:VideoView Name="Video" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+          <c:SubtitleImageView Name="PrimaryImageView" Image="{Binding PrimaryImage}" Video="{Binding #Video}" />
+          <c:SubtitleImageView Name="SecondaryImageView" Image="{Binding SecondaryImage}" Video="{Binding #Video}" />
+
+          <!-- dual subtitle overlay: secondary above primary -->
+          <StackPanel Name="SubtitleOverlay" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Spacing="2"
+                      Margin="48,0,48,24">
+            <c:SubtitleText Name="SecondarySubtitle" Slot="1" Text="{Binding SecondaryText}" IsVisible="{Binding SecondaryVisible}"
+                            FontSize="{Binding SecondaryFontSize}" Fill="#FFE8E8E8" OutlineThickness="2.5" />
+            <c:SubtitleText Name="PrimarySubtitle" Slot="0" Text="{Binding PrimaryText}" IsVisible="{Binding PrimaryVisible}"
+                            FontSize="{Binding SubtitleFontSize}" Fill="White" OutlineThickness="3" />
+          </StackPanel>
+
+          <!-- empty state -->
+          <Border Classes="card" IsVisible="{Binding ShowEmptyState}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Width="420">
+            <StackPanel Spacing="16">
+              <StackPanel Spacing="6">
+                <TextBlock Text="LLPlayer" Classes="h3" />
+                <TextBlock Classes="muted" TextWrapping="Wrap"
+                           Text="A video player for language learning: dual subtitles, word lookup and a subtitle sidebar." />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Command="{Binding OpenMediaCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <c:LucideIcon Data="{StaticResource Icon.FolderOpen}" />
+                    <TextBlock Text="Open file" />
+                  </StackPanel>
+                </Button>
+                <Button Classes="outline" Command="{Binding ShowCheatSheetCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <c:LucideIcon Data="{StaticResource Icon.Keyboard}" />
+                    <TextBlock Text="Shortcuts" />
+                  </StackPanel>
+                </Button>
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Classes="muted xs" Text="Drop a video or subtitle file here, or press" VerticalAlignment="Center" />
+                <Border Classes="kbd"><TextBlock Text="Ctrl" /></Border>
+                <Border Classes="kbd"><TextBlock Text="O" /></Border>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- opening indicator -->
+          <Border Classes="popover" IsVisible="{Binding IsOpening}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Padding="16,10" IsHitTestVisible="False">
+            <TextBlock Text="Opening…" Classes="muted" />
+          </Border>
+
+          <!-- word popup -->
+          <Canvas Name="PopupLayer">
+            <Border Name="WordPopupCard" Classes="popover" Width="300" Padding="14,12"
+                    IsVisible="{Binding WordPopup.IsOpen}">
+              <StackPanel Spacing="8">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                  <SelectableTextBlock Text="{Binding WordPopup.Word}" Classes="large" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                  <Button Grid.Column="1" Classes="ghost icon-sm" Command="{Binding WordPopup.CopyCommand}" ToolTip.Tip="Copy word">
+                    <c:LucideIcon Data="{StaticResource Icon.Copy}" Size="14" />
+                  </Button>
+                  <Button Grid.Column="2" Classes="ghost icon-sm" Command="{Binding WordPopup.CloseCommand}" ToolTip.Tip="Close (Esc)">
+                    <c:LucideIcon Data="{StaticResource Icon.X}" Size="14" />
+                  </Button>
+                </Grid>
+                <Separator />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <c:LucideIcon Data="{StaticResource Icon.Languages}" Size="14" Foreground="{DynamicResource Shadcn.MutedForegroundBrush}" />
+                  <TextBlock Text="Translation" Classes="muted xs" VerticalAlignment="Center" />
+                </StackPanel>
+                <SelectableTextBlock Text="{Binding WordPopup.Translation}" TextWrapping="Wrap" FontSize="15"
+                                     IsVisible="{Binding WordPopup.Translation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{Binding WordPopup.Status}" Classes="muted xs" TextWrapping="Wrap"
+                           IsVisible="{Binding WordPopup.Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{Binding WordPopup.Context}" Classes="muted xs" FontStyle="Italic" TextWrapping="Wrap" MaxLines="3"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+          </Canvas>
+
+          <!-- toasts -->
+          <ItemsControl Name="ToastHost" ItemsSource="{Binding Toasts}" HorizontalAlignment="Center" VerticalAlignment="Top"
+                        Margin="0,16,0,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Spacing="8" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:ToastItem">
+                <c:Toast Title="{Binding Title}" Message="{Binding Message}" Variant="{Binding Variant}"
+                         CloseCommand="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DismissToastCommand}"
+                         CloseCommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <!-- drop hint -->
+          <Border IsVisible="{Binding IsDragOver}" Background="#99000000" IsHitTestVisible="False">
+            <Panel Margin="24">
+              <Rectangle Stroke="{DynamicResource Shadcn.RingBrush}" StrokeThickness="2" StrokeDashArray="6,4" RadiusX="14" RadiusY="14" />
+              <TextBlock Text="Drop to open" Classes="h3" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Panel>
+          </Border>
+        </Panel>
+
+        <!-- ============ transport bar ============ -->
+        <Border Name="TransportBar" Grid.Row="1" Opacity="{Binding ControlsVisible, Converter={x:Static c:ViewConverters.BoolToOpacity}}"
+                IsHitTestVisible="{Binding ControlsVisible}">
+          <StackPanel Spacing="0">
+            <Slider Name="SeekSlider" Classes="thin" Minimum="0" Maximum="{Binding SeekMaximum}" Value="{Binding SeekValue}"
+                    Focusable="False" IsEnabled="{Binding IsOpened}" Margin="0,0,0,-4">
+              <Slider.Resources>
+                <x:Double x:Key="SliderTrackThemeHeight">4</x:Double>
+                <x:Double x:Key="SliderHorizontalThumbWidth">12</x:Double>
+                <x:Double x:Key="SliderHorizontalThumbHeight">12</x:Double>
+                <CornerRadius x:Key="SliderThumbCornerRadius">6</CornerRadius>
+                <x:Double x:Key="SliderHorizontalHeight">20</x:Double>
+              </Slider.Resources>
+            </Slider>
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+              <Button Name="PlayPauseButton" Classes="ghost icon" Command="{Binding TogglePlayPauseCommand}"
+                      IsEnabled="{Binding IsOpened}" ToolTip.Tip="Play / Pause (Space)">
+                <Panel>
+                  <c:LucideIcon Data="{StaticResource Icon.Play}" Size="18" Fill="True" IsVisible="{Binding !IsPlaying}" />
+                  <c:LucideIcon Data="{StaticResource Icon.Pause}" Size="18" Fill="True" IsVisible="{Binding IsPlaying}" />
+                </Panel>
+              </Button>
+              <Button Grid.Column="1" Classes="ghost icon" Command="{Binding OpenMediaCommand}" ToolTip.Tip="Open media (Ctrl+O)">
+                <c:LucideIcon Data="{StaticResource Icon.FolderOpen}" Size="18" />
+              </Button>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
+                <TextBlock Name="CurrentTime" Classes="time" Text="{Binding CurrentTimeText}" />
+                <TextBlock Classes="time muted" Text="/" />
+                <TextBlock Name="DurationTime" Classes="time muted" Text="{Binding DurationText}" />
+              </StackPanel>
+
+              <Button Grid.Column="4" Classes="ghost sm" Content="{Binding SpeedText}" ToolTip.Tip="Playback speed (+ / -)"
+                      MinWidth="52" FontSize="12">
+                <Button.Flyout>
+                  <MenuFlyout ItemsSource="{Binding SpeedItems}" Placement="Top">
+                    <MenuFlyout.ItemContainerTheme>
+                      <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}" x:DataType="vm:SpeedMenuItem">
+                        <Setter Property="Header" Value="{Binding Label}" />
+                        <Setter Property="Command" Value="{Binding Command}" />
+                        <Setter Property="ToggleType" Value="Radio" />
+                        <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                      </ControlTheme>
+                    </MenuFlyout.ItemContainerTheme>
+                  </MenuFlyout>
+                </Button.Flyout>
+              </Button>
+              <Button Grid.Column="5" Classes="ghost icon" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="Mute (M)">
+                <Panel>
+                  <c:LucideIcon Data="{StaticResource Icon.Volume2}" Size="18" IsVisible="{Binding !IsMuted}" />
+                  <c:LucideIcon Data="{StaticResource Icon.VolumeX}" Size="18" IsVisible="{Binding IsMuted}" />
+                </Panel>
+              </Button>
+              <Slider Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="{Binding VolumeMax}"
+                      Value="{Binding Volume}" Focusable="False" VerticalAlignment="Center" Margin="0,0,8,0"
+                      ToolTip.Tip="{Binding Volume, StringFormat='Volume {0}%'}" />
+              <ToggleButton Grid.Column="7" Classes="icon" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}"
+                            Command="{Binding ToggleSubtitlesCommand}" ToolTip.Tip="Show subtitles (V)">
+                <c:LucideIcon Data="{StaticResource Icon.Captions}" Size="18" />
+              </ToggleButton>
+              <ToggleButton Grid.Column="8" Classes="icon" IsChecked="{Binding SidebarVisible, Mode=OneWay}"
+                            Command="{Binding ToggleSidebarCommand}" ToolTip.Tip="Subtitles sidebar (Ctrl+B)">
+                <c:LucideIcon Data="{StaticResource Icon.PanelRight}" Size="18" />
+              </ToggleButton>
+              <Button Grid.Column="9" Classes="ghost icon" Command="{Binding ToggleFullScreenCommand}" ToolTip.Tip="Fullscreen (F)">
+                <Panel>
+                  <c:LucideIcon Data="{StaticResource Icon.Maximize}" Size="18" IsVisible="{Binding !IsFullScreen}" />
+                  <c:LucideIcon Data="{StaticResource Icon.Minimize}" Size="18" IsVisible="{Binding IsFullScreen}" />
+                </Panel>
+              </Button>
+            </Grid>
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <GridSplitter Name="SidebarSplitter" Grid.Column="1" Width="1" IsVisible="{Binding SidebarVisible}"
+                    Background="{DynamicResource Shadcn.SidebarBorderBrush}" ResizeDirection="Columns" />
+
+      <!-- ============ subtitles sidebar ============ -->
+      <Border Name="Sidebar" Grid.Column="2" IsVisible="{Binding SidebarVisible}"
+              Background="{DynamicResource Shadcn.SidebarBrush}">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Margin="12,12,12,8" Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="Subtitles" Classes="h4" />
+              <TextBlock Grid.Column="1" Text="{Binding Sidebar.CountText}" Classes="muted xs" VerticalAlignment="Center" />
+            </Grid>
+            <TextBox Name="FilterBox" PlaceholderText="Search subtitles…" Text="{Binding Sidebar.FilterText}">
+              <TextBox.InnerLeftContent>
+                <c:LucideIcon Data="{StaticResource Icon.Search}" Size="14" Margin="10,0,0,0"
+                              Foreground="{DynamicResource Shadcn.MutedForegroundBrush}" />
+              </TextBox.InnerLeftContent>
+            </TextBox>
+          </StackPanel>
+          <Panel>
+            <ListBox Name="CueList" ItemsSource="{Binding Sidebar.Cues}" Margin="6,0,6,6">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:CueItemViewModel">
+                  <Border Classes="cue" Classes.current="{Binding IsCurrent}">
+                    <Grid ColumnDefinitions="Auto,*">
+                      <TextBlock Text="{Binding StartText}" Classes="muted xs mono" Margin="0,2,10,0" VerticalAlignment="Top" />
+                      <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="No subtitles loaded" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding !Sidebar.HasCues}" />
+          </Panel>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</Window>

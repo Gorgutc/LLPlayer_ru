@@ -1,0 +1,355 @@
+{
+  "source": {
+    "repository": "https://github.com/shadcn-ui/ui",
+    "file": "apps/v4/registry/themes.ts",
+    "theme": "neutral",
+    "commit": "98a1fe67b439324ddc857f47fbdce056600a4329"
+  },
+  "rounding": "channel = floor(v * 255 + 0.5) after clip to [0,1]",
+  "tokens": {
+    "background": {
+      "Dark": {
+        "oklch": "oklch(0.145 0 0)",
+        "hex": "#FF0A0A0A"
+      },
+      "Light": {
+        "oklch": "oklch(1 0 0)",
+        "hex": "#FFFFFFFF"
+      }
+    },
+    "foreground": {
+      "Dark": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      },
+      "Light": {
+        "oklch": "oklch(0.145 0 0)",
+        "hex": "#FF0A0A0A"
+      }
+    },
+    "card": {
+      "Dark": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      },
+      "Light": {
+        "oklch": "oklch(1 0 0)",
+        "hex": "#FFFFFFFF"
+      }
+    },
+    "card-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      },
+      "Light": {
+        "oklch": "oklch(0.145 0 0)",
+        "hex": "#FF0A0A0A"
+      }
+    },
+    "popover": {
+      "Dark": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      },
+      "Light": {
+        "oklch": "oklch(1 0 0)",
+        "hex": "#FFFFFFFF"
+      }
+    },
+    "popover-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      },
+      "Light": {
+        "oklch": "oklch(0.145 0 0)",
+        "hex": "#FF0A0A0A"
+      }
+    },
+    "primary": {
+      "Dark": {
+        "oklch": "oklch(0.922 0 0)",
+        "hex": "#FFE5E5E5"
+      },
+      "Light": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      }
+    },
+    "primary-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      },
+      "Light": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      }
+    },
+    "secondary": {
+      "Dark": {
+        "oklch": "oklch(0.269 0 0)",
+        "hex": "#FF262626"
+      },
+      "Light": {
+        "oklch": "oklch(0.97 0 0)",
+        "hex": "#FFF5F5F5"
+      }
+    },
+    "secondary-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      },
+      "Light": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      }
+    },
+    "muted": {
+      "Dark": {
+        "oklch": "oklch(0.269 0 0)",
+        "hex": "#FF262626"
+      },
+      "Light": {
+        "oklch": "oklch(0.97 0 0)",
+        "hex": "#FFF5F5F5"
+      }
+    },
+    "muted-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.708 0 0)",
+        "hex": "#FFA1A1A1"
+      },
+      "Light": {
+        "oklch": "oklch(0.556 0 0)",
+        "hex": "#FF737373"
+      }
+    },
+    "accent": {
+      "Dark": {
+        "oklch": "oklch(0.269 0 0)",
+        "hex": "#FF262626"
+      },
+      "Light": {
+        "oklch": "oklch(0.97 0 0)",
+        "hex": "#FFF5F5F5"
+      }
+    },
+    "accent-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      },
+      "Light": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      }
+    },
+    "destructive": {
+      "Dark": {
+        "oklch": "oklch(0.704 0.191 22.216)",
+        "hex": "#FFFF6467"
+      },
+      "Light": {
+        "oklch": "oklch(0.577 0.245 27.325)",
+        "hex": "#FFE7000B"
+      }
+    },
+    "destructive-foreground": {
+      "Dark": {
+        "oklch": "oklch(1 0 0)",
+        "hex": "#FFFFFFFF"
+      },
+      "Light": {
+        "oklch": "oklch(1 0 0)",
+        "hex": "#FFFFFFFF"
+      }
+    },
+    "border": {
+      "Dark": {
+        "oklch": "oklch(1 0 0 / 10%)",
+        "hex": "#1AFFFFFF"
+      },
+      "Light": {
+        "oklch": "oklch(0.922 0 0)",
+        "hex": "#FFE5E5E5"
+      }
+    },
+    "input": {
+      "Dark": {
+        "oklch": "oklch(1 0 0 / 15%)",
+        "hex": "#26FFFFFF"
+      },
+      "Light": {
+        "oklch": "oklch(0.922 0 0)",
+        "hex": "#FFE5E5E5"
+      }
+    },
+    "ring": {
+      "Dark": {
+        "oklch": "oklch(0.556 0 0)",
+        "hex": "#FF737373"
+      },
+      "Light": {
+        "oklch": "oklch(0.708 0 0)",
+        "hex": "#FFA1A1A1"
+      }
+    },
+    "sidebar": {
+      "Dark": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      },
+      "Light": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      }
+    },
+    "sidebar-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      },
+      "Light": {
+        "oklch": "oklch(0.145 0 0)",
+        "hex": "#FF0A0A0A"
+      }
+    },
+    "sidebar-accent": {
+      "Dark": {
+        "oklch": "oklch(0.269 0 0)",
+        "hex": "#FF262626"
+      },
+      "Light": {
+        "oklch": "oklch(0.97 0 0)",
+        "hex": "#FFF5F5F5"
+      }
+    },
+    "sidebar-accent-foreground": {
+      "Dark": {
+        "oklch": "oklch(0.985 0 0)",
+        "hex": "#FFFAFAFA"
+      },
+      "Light": {
+        "oklch": "oklch(0.205 0 0)",
+        "hex": "#FF171717"
+      }
+    },
+    "sidebar-border": {
+      "Dark": {
+        "oklch": "oklch(1 0 0 / 10%)",
+        "hex": "#1AFFFFFF"
+      },
+      "Light": {
+        "oklch": "oklch(0.922 0 0)",
+        "hex": "#FFE5E5E5"
+      }
+    }
+  },
+  "derived": {
+    "primary-hover": {
+      "Dark": {
+        "base": "primary",
+        "alpha": 0.9,
+        "hex": "#E6E5E5E5"
+      },
+      "Light": {
+        "base": "primary",
+        "alpha": 0.9,
+        "hex": "#E6171717"
+      }
+    },
+    "secondary-hover": {
+      "Dark": {
+        "base": "secondary",
+        "alpha": 0.8,
+        "hex": "#CC262626"
+      },
+      "Light": {
+        "base": "secondary",
+        "alpha": 0.8,
+        "hex": "#CCF5F5F5"
+      }
+    },
+    "destructive-fill": {
+      "Dark": {
+        "base": "destructive",
+        "alpha": 0.6,
+        "hex": "#99FF6467"
+      },
+      "Light": {
+        "base": "destructive",
+        "alpha": 1.0,
+        "hex": "#FFE7000B"
+      }
+    },
+    "destructive-hover": {
+      "Dark": {
+        "base": "destructive",
+        "alpha": 0.5,
+        "hex": "#80FF6467"
+      },
+      "Light": {
+        "base": "destructive",
+        "alpha": 0.9,
+        "hex": "#E6E7000B"
+      }
+    },
+    "ghost-hover": {
+      "Dark": {
+        "base": "accent",
+        "alpha": 0.5,
+        "hex": "#80262626"
+      },
+      "Light": {
+        "base": "accent",
+        "alpha": 1.0,
+        "hex": "#FFF5F5F5"
+      }
+    },
+    "input-fill": {
+      "Dark": {
+        "base": "input",
+        "alpha": 0.3,
+        "hex": "#0BFFFFFF"
+      },
+      "Light": {
+        "base": "input",
+        "alpha": 0.0,
+        "hex": "#00E5E5E5"
+      }
+    },
+    "input-hover": {
+      "Dark": {
+        "base": "input",
+        "alpha": 0.5,
+        "hex": "#13FFFFFF"
+      },
+      "Light": {
+        "base": "accent",
+        "alpha": 1.0,
+        "hex": "#FFF5F5F5"
+      }
+    },
+    "ring-focus": {
+      "Dark": {
+        "base": "ring",
+        "alpha": 0.5,
+        "hex": "#80737373"
+      },
+      "Light": {
+        "base": "ring",
+        "alpha": 0.5,
+        "hex": "#80A1A1A1"
+      }
+    }
+  },
+  "radius": {
+    "sm": 6.0,
+    "md": 8.0,
+    "lg": 10.0,
+    "xl": 14.0
+  }
+}
