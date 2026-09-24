@@ -5,14 +5,18 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Windows;
+#if WINDOWS
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+#endif
 
 namespace FlyleafLib.MediaPlayer;
 
-public class SubsBitmap
+public partial class SubsBitmap
 {
+#if WINDOWS
     public WriteableBitmap Source { get; set; }
+#endif
     // retain for recreating WritableBitmap when dpi change
     internal byte[] Data { get; set; }
     public int X { get; set; }
@@ -20,6 +24,7 @@ public class SubsBitmap
     public int Width { get; set; }
     public int Height { get; set; }
 
+#if WINDOWS
     internal static WriteableBitmap CreateWritableBitmap(byte[] data, int width, int height)
     {
         WriteableBitmap wb = new(
@@ -34,6 +39,7 @@ public class SubsBitmap
 
         return wb;
     }
+#endif
 }
 
 public class SubsBitmapPosition : NotifyPropertyChanged

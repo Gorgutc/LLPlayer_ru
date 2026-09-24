@@ -150,8 +150,10 @@ public static class Engine
 
     private static void StartInternal(EngineConfig config = null, bool async = false)
     {
+#if WINDOWS
         if (Application.Current == null)
             _ = new Application();
+#endif
 
         UIInvokeIfRequired(() =>
         {
@@ -176,7 +178,12 @@ public static class Engine
 
     private static void StartInternalUI()
     {
+#if WINDOWS
         Application.Current.Exit += (o, e) =>
+#else
+        // Portable build: no WPF Application; dispose the players when the host process exits.
+        AppDomain.CurrentDomain.ProcessExit += (o, e) =>
+#endif
         {
             Config.UIRefresh = false;
             Config.UIRefreshInterval = 1;

@@ -1,4 +1,6 @@
-﻿using Vortice.Direct3D11;
+﻿#if WINDOWS
+using Vortice.Direct3D11;
+#endif
 
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;

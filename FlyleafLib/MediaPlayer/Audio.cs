@@ -1,7 +1,9 @@
-﻿using Vortice.Multimedia;
+﻿#if WINDOWS
+using Vortice.Multimedia;
 using Vortice.XAudio2;
 
 using static Vortice.XAudio2.XAudio2;
+#endif
 
 using FlyleafLib.MediaFramework.MediaContext;
 using FlyleafLib.MediaFramework.MediaFrame;
@@ -9,7 +11,7 @@ using FlyleafLib.MediaFramework.MediaStream;
 
 namespace FlyleafLib.MediaPlayer;
 
-public class Audio : NotifyPropertyChanged
+public partial class Audio : NotifyPropertyChanged
 {
     // TODO: Add Volume/Mute to Config.Audio (consider allowing saving and separate config field (flags) whether to load those?)
 
@@ -72,6 +74,7 @@ public class Audio : NotifyPropertyChanged
     public int      SampleRate      { get => sampleRate;        internal set => Set(ref _SampleRate, value); }
     internal int    _SampleRate, sampleRate;
 
+#if WINDOWS
     /// <summary>
     /// Audio player's volume / amplifier (valid values 0 - no upper limit)
     /// </summary>
@@ -125,6 +128,7 @@ public class Audio : NotifyPropertyChanged
         }
     }
     private bool mute = false;
+#endif
 
     /// <summary>
     /// <para>Audio player's current device (available devices can be found on <see cref="Engine.Audio"/>)/></para>
@@ -156,6 +160,7 @@ public class Audio : NotifyPropertyChanged
     internal readonly object
                             locker = new();
 
+#if WINDOWS
     IXAudio2                xaudio2;
     internal IXAudio2MasteringVoice
                             masteringVoice;
@@ -163,6 +168,7 @@ public class Audio : NotifyPropertyChanged
                             sourceVoice;
     WaveFormat              waveFormat  = new(48000, 16, 2); // Output Audio Device
     AudioBuffer             audioBuffer = new();
+#endif
     internal double         Timebase;
     internal ulong          submittedSamples;
     int                     curSampleRate = -1;
@@ -192,6 +198,7 @@ public class Audio : NotifyPropertyChanged
         Volume = Math.Min(Config.Audio.VolumeDefault, Config.Audio.VolumeMax);
     }
 
+#if WINDOWS
     internal void Initialize()
     {
         lock (locker)
@@ -320,6 +327,7 @@ public class Audio : NotifyPropertyChanged
             submittedSamples = sourceVoice.State.SamplesPlayed;
         }
     }
+#endif
 
     internal void Reset()
     {

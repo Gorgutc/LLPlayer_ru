@@ -1,8 +1,10 @@
 ﻿using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaStream;
+#if WINDOWS
 using System.Windows.Controls;
 using Vortice.Direct3D11;
+#endif
 
 namespace FlyleafLib.MediaPlayer;
 

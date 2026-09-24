@@ -63,6 +63,7 @@ public class SafeDirectoryTests : IDisposable
         string locked = Path.Combine(dir, "held.bin");
         File.WriteAllText(locked, "data");
 
+#if WINDOWS
         using (var _ = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
         {
             bool ok = SafeDirectory.TryDelete(dir);
@@ -70,6 +71,36 @@ public class SafeDirectoryTests : IDisposable
             ok.Should().BeFalse("a locked file prevents deletion");
             Directory.Exists(dir).Should().BeTrue("nothing should be forcibly removed");
         }
+#else
+        // Unix has no mandatory file locks (an open file can always be unlinked), so the equivalent "entry that
+        // cannot be removed" is a read-only parent directory: unlinking held.bin fails with EACCES (IOException /
+        // UnauthorizedAccessException), which TryDelete must swallow the same way.
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The portable (net10.0) test set runs on Unix hosts only.");
+
+        if (!OperatingSystem.IsWindows())
+        {
+            UnixFileMode mode = File.GetUnixFileMode(dir);
+            File.SetUnixFileMode(dir, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            try
+            {
+                string probe = Path.Combine(dir, "probe");
+                bool enforced;
+                try { File.WriteAllText(probe, ""); File.Delete(probe); enforced = false; }
+                catch (UnauthorizedAccessException) { enforced = true; }
+                catch (IOException) { enforced = true; }
+                Assert.SkipUnless(enforced, "Directory permissions are not enforced for this user (running as root): cannot create an undeletable entry on Unix.");
+
+                bool ok = SafeDirectory.TryDelete(dir);
+
+                ok.Should().BeFalse("a locked file prevents deletion");
+                Directory.Exists(dir).Should().BeTrue("nothing should be forcibly removed");
+            }
+            finally
+            {
+                File.SetUnixFileMode(dir, mode);
+            }
+        }
+#endif
 
         // Once the lock is released the directory can be cleaned up normally (no lingering handle from TryDelete).
         SafeDirectory.TryDelete(dir).Should().BeTrue();

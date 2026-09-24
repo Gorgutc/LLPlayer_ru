@@ -1,7 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Windows hosts (incl. the required windows-latest CI job): the Windows TFM only, exactly as before.
+       Other hosts (F-13 Linux port): the Windows TFM is compile-checked and the portable net10.0 TFM is run. -->
   <PropertyGroup>
-    <TargetFramework>net10.0-windows10.0.18362.0</TargetFramework>
+    <TargetFramework Condition="$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows10.0.18362.0</TargetFramework>
+    <TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('Windows'))">net10.0-windows10.0.18362.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <OutputType>Exe</OutputType>
@@ -28,7 +31,29 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlyleafLib\FlyleafLib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0'">
     <ProjectReference Include="..\LLPlayer\LLPlayer.csproj" />
+  </ItemGroup>
+
+  <!-- The WindowsDesktop runtime does not exist off Windows: the Windows TFM is built there but not executed. -->
+  <PropertyGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0' and !$([MSBuild]::IsOSPlatform('Windows'))">
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <!-- Portable (net10.0) test set: files that need WPF / WinForms / GDI+ (Windows-only APIs) are excluded.
+       Platform/ holds portable-only tests (excluded from the Windows TFM). -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net10.0'">
+    <!-- WPF Application/Popup lifetime of the LLPlayer app (WPF) -->
+    <Compile Remove="LLPlayer\**" />
+    <!-- WPF (System.Windows.Media.Color) / Vortice color converters that exist only in the Windows build of Utils -->
+    <Compile Remove="Utils\UtilsColorConversionTests.cs" />
+    <!-- GDI+ ImageProcessor (System.Drawing.Common is Windows-only since .NET 7); portable counterpart: OcrImageProcessor -->
+    <Compile Remove="MediaPlayer\ImageProcessorTests.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)'!='net10.0'">
+    <Compile Remove="Platform\**" />
   </ItemGroup>
 
 </Project>
