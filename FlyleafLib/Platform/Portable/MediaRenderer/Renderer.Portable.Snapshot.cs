@@ -2,14 +2,16 @@ using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
-// F-13 portable snapshots: encodes the renderer's current frame with FFmpeg's image encoders (png / bmp / mjpeg)
-// instead of GDI+ (Windows Renderer.Snapshot.cs).
+// F-13 portable snapshots: renders the renderer's current frame through the same software pipeline as the presented
+// frames (deinterlace, HDR to SDR, crop, rotation / mirroring, colour filters — like the Windows snapshot, which renders
+// through the Flyleaf pixel shader) but at native resolution, and encodes it with FFmpeg's image encoders
+// (png / bmp / mjpeg) instead of GDI+ (Windows Renderer.Snapshot.cs).
 public unsafe partial class Renderer
 {
     /// <summary>
     /// Encodes the current (or the given) frame to <paramref name="filename"/>; the format follows the extension
-    /// (.png, .bmp, .jpg/.jpeg). Width/height 0 keep the original size (one of them keeps the ratio).
-    /// Returns false when there is no frame to save.
+    /// (.png, .bmp, .jpg/.jpeg). Width/height 0 keep the original (visible, upright) size, one of them 0 keeps the
+    /// ratio. Returns false when there is no frame to save.
     /// </summary>
     public bool TakeSnapshotToFile(string filename, uint width = 0, uint height = 0, VideoFrame frame = null)
     {
@@ -30,60 +32,69 @@ public unsafe partial class Renderer
             if (src == null || src->width <= 0 || src->height <= 0)
                 return false;
 
-            // Crop (stream/codec + user), same as the presented frame
-            uint left   = Math.Min(crop.Left,   (uint)src->width  - 1);
-            uint top    = Math.Min(crop.Top,    (uint)src->height - 1);
-            uint right  = Math.Min(crop.Right,  (uint)src->width  - 1 - left);
-            uint bottom = Math.Min(crop.Bottom, (uint)src->height - 1 - top);
-            int srcW    = src->width  - (int)(left + right);
-            int srcH    = src->height - (int)(top + bottom);
+            var stream  = scfg;
+            var tb      = stream != null ? stream.AVStream->time_base : new AVRational { Num = 1, Den = 90000 };
 
-            if (width == 0 && height == 0)
-                { width = (uint)srcW; height = (uint)srcH; }
-            else if (width == 0)
-                width  = (uint)(srcW * (height / (double)srcH));
-            else if (height == 0)
-                height = (uint)(srcH * (width  / (double)srcW));
+            if (FieldType != VideoFrameFormat.Progressive && VideoDecoder.Demuxer?.IsReversePlayback != true)
+            {   // Same picture as presented (cached for the current frame)
+                var d = preprocessor.Deinterlace(frame, false, Frames, FieldType == VideoFrameFormat.InterlacedTopFieldFirst, ucfg.DoubleRate, tb);
+                if (d != null)
+                    src = d;
+            }
 
-            width   = Math.Max(2, width  & ~1u);
-            height  = Math.Max(2, height & ~1u);
+            var cropped = SoftwareVideoGeometry.ClampCrop(crop, src->width, src->height);
+            var t       = transform;
+            var (uprightW, uprightH) = t.OutputSize(src->width - (int)cropped.Width, src->height - (int)cropped.Height);
+            var (outW, outH) = SoftwareVideoGeometry.SnapshotSize(uprightW, uprightH, width, height);
 
             AVCodec*        codec   = avcodec_find_encoder(codecId);
             AVCodecContext* ctx     = null;
-            AVFrame*        cropped = null;
+            AVFrame*        hdrFrame= null;
             AVFrame*        dst     = null;
             AVPacket*       pkt     = null;
             SwsContext*     sws     = null;
+            SoftwareFrameConverter conv = new();
 
             try
             {
                 if (codec == null)
                     throw new($"Snapshot encoder {codecId} not found");
 
-                cropped = av_frame_clone(src);
-                cropped->crop_left  = left;
-                cropped->crop_top   = top;
-                cropped->crop_right = right;
-                cropped->crop_bottom= bottom;
-                if (av_frame_apply_cropping(cropped, 1 /* AV_FRAME_CROP_UNALIGNED */) < 0)
-                    throw new("Snapshot cropping failed");
+                if (stream != null && stream.HDRFormat != HDRFormat.None && SoftwareFramePreprocessor.CanToneMap)
+                {
+                    var (preW, preH) = t.OutputSize(outW, outH);
+                    string filters = SoftwareFramePreprocessor.ToneMapFilters(cropped, src->width, src->height, preW, preH, stream.HDRFormat, stream.ColorRange, ucfg.HDRtoSDRMethod, ucfg.SDRDisplayNits);
+                    hdrFrame = SoftwareFramePreprocessor.ToneMapOnce(src, filters, tb, out string error);
+                    if (hdrFrame != null)
+                    {
+                        src     = hdrFrame;
+                        cropped = CropRect.Empty;
+                    }
+                    else
+                        Log.Warn($"[Snapshot] HDR to SDR failed ({error})");
+                }
+
+                if (!conv.Convert(src, cropped, t, outW, outH,
+                    stream != null ? stream.ColorSpace : ColorSpace.None, stream != null ? stream.ColorRange : ColorRange.Limited,
+                    colorFilter, highQuality: true))
+                    throw new($"Snapshot conversion failed ({conv.LastError})");
 
                 dst = av_frame_alloc();
                 dst->format = (int)pixFmt;
-                dst->width  = (int)width;
-                dst->height = (int)height;
+                dst->width  = outW;
+                dst->height = outH;
                 if (av_frame_get_buffer(dst, 0) < 0)
                     throw new("Snapshot frame allocation failed");
 
-                sws = sws_getContext(cropped->width, cropped->height, (AVPixelFormat)cropped->format, (int)width, (int)height, pixFmt, SwsFlags.Bicubic, null, null, null);
+                sws = sws_getContext(outW, outH, AVPixelFormat.Bgra, outW, outH, pixFmt, SwsFlags.Bicubic, null, null, null);
                 if (sws == null)
                     throw new("Snapshot SwsContext allocation failed");
 
-                _ = sws_scale(sws, cropped->data.ToRawArray(), cropped->linesize.ToArray(), 0, cropped->height, dst->data.ToRawArray(), dst->linesize.ToArray());
+                _ = sws_scale(sws, [conv.Output, null, null, null], [conv.OutputStride, 0, 0, 0], 0, outH, dst->data.ToRawArray(), dst->linesize.ToArray());
 
                 ctx = avcodec_alloc_context3(codec);
-                ctx->width      = (int)width;
-                ctx->height     = (int)height;
+                ctx->width      = outW;
+                ctx->height     = outH;
                 ctx->pix_fmt    = pixFmt;
                 ctx->time_base  = new() { Num = 1, Den = 25 };
                 if (avcodec_open2(ctx, codec, null) < 0)
@@ -100,11 +111,12 @@ public unsafe partial class Renderer
             }
             finally
             {
+                conv.Dispose();
                 if (pkt     != null) av_packet_free(&pkt);
                 if (ctx     != null) avcodec_free_context(&ctx);
                 if (sws     != null) sws_freeContext(sws);
                 if (dst     != null) av_frame_free(&dst);
-                if (cropped != null) av_frame_free(&cropped);
+                if (hdrFrame!= null) av_frame_free(&hdrFrame);
             }
         }
     }

@@ -21,13 +21,18 @@ public unsafe partial class Renderer
     public uint             VisibleHeight   { get; private set; }
     public AspectRatio      DAR             { get; private set; }
 
-    /// <summary>No software deinterlacing: always progressive (DoubleRate is never used).</summary>
+    /// <summary>
+    /// Field order the software deinterlacer (bwdif) works with: <see cref="VideoConfig.DeInterlace"/> (Auto = the
+    /// stream's field order), Progressive = no deinterlacing. With <see cref="VideoConfig.DoubleRate"/> the player
+    /// presents both fields of every frame (as with the Windows D3D11 video processor).
+    /// </summary>
     public VideoFrameFormat FieldType       { get; private set; } = VideoFrameFormat.Progressive;
 
     VideoStream     scfg;
 
     CropRect        crop;
     uint            rotation;
+    VideoTransform  transform = VideoTransform.Identity;
 
     public int      SideXPixels     => sideXPixels;
     public int      SideYPixels     => sideYPixels;
@@ -79,9 +84,15 @@ public unsafe partial class Renderer
 
         if (CanDebug) Log.Debug($"Prepared {scfg.PixelFormatStr} for software conversion (BGRA)");
 
+        // New stream / format: drop filter graphs of the previous one, colour filters follow the new colour type
+        lock (lockRenderLoops)
+            preprocessor.Reset();
+
+        UpdateColorFilter();
+
         // Software path: the requests need no device/surface, so apply them now (visible size, DAR, viewport are
         // then valid even while no surface is attached, e.g. headless or before the host control is created).
-        vpRequestsIn |= vpRequests;
+        vpRequestsIn |= vpRequests | VPRequestType.Deinterlace;
         lock (lockRenderLoops)
             ProcessRequests();
 
@@ -117,7 +128,11 @@ public unsafe partial class Renderer
             if (vpRequests.HasFlag(VPRequestType.Viewport))
                 SetViewport(ControlWidth, ControlHeight);
 
-            // Deinterlace / HDRtoSDR / UpdatePS / UpdateVS: shader-only requests, not applicable to the software path
+            if (vpRequests.HasFlag(VPRequestType.Deinterlace) && scfg != null)
+                SetFieldType();
+
+            // HDRtoSDR / UpdatePS: read by the next conversion (the render request re-renders the current frame)
+            // UpdateVS: shader-only request, not applicable to the software path
         }
     }
 
@@ -184,6 +199,7 @@ public unsafe partial class Renderer
         bool was0_180   = rotation == 0 || rotation == 180;
         rotation        = (ucfg.rotation + scfg.Rotation) % 360;
         bool is0_180    = rotation == 0 || rotation == 180;
+        transform       = VideoTransform.From(rotation, ucfg.hflip, ucfg.vflip);
 
         if (was0_180 != is0_180 && !vpRequests.HasFlag(VPRequestType.Crop)) // TBR: Crop / AspectRatio will check too
         {
@@ -213,6 +229,27 @@ public unsafe partial class Renderer
 
         vpRequests &= ~VPRequestType.AspectRatio;
         vpRequests |=  VPRequestType.Viewport;
+    }
+    void SetFieldType()
+    {
+        var fieldType = ucfg.DeInterlace == DeInterlace.Auto ? scfg.FieldOrder : (VideoFrameFormat)ucfg.DeInterlace;
+
+        if (fieldType != VideoFrameFormat.Progressive && string.IsNullOrEmpty(SoftwareFramePreprocessor.DeinterlaceFilter))
+        {
+            Log.Warn("Interlaced video but this FFmpeg build has no deinterlace filter (bwdif / yadif)");
+            fieldType = VideoFrameFormat.Progressive;
+        }
+
+        vpRequests &= ~VPRequestType.Deinterlace;
+
+        if (fieldType == FieldType)
+            return;
+
+        if (fieldType == VideoFrameFormat.Progressive)
+            preprocessor.ResetDeinterlace();
+
+        FieldType = fieldType;
+        RaiseUI(nameof(FieldType));
     }
     void SetBackColor()
     {   // The host paints Config.Video.BackColor around the viewport / on ClearFrame
@@ -282,23 +319,53 @@ public unsafe partial class Renderer
                     ucfg.hasFLFilters = true;
             }
         }
+
+        UpdateColorFilter();
     }
 
     /// <summary>
-    /// Called when a Flyleaf filter value changes. The software conversion does not apply color filters yet
-    /// (TODO(F-13 video): map to swscale colorspace details or an FFmpeg filter graph); the value is kept in config.
+    /// Called when a Flyleaf filter value changes (any thread). Rebuilds the software colour filter (applied by the
+    /// conversion, see <see cref="SoftwareColorFilter"/>) and re-renders the current frame.
     /// </summary>
     internal void FLSetFilter(FLFilter cfgFilter, bool request = false)
     {
-        bool hasFilters = false;
-        foreach (var filter in ucfg.FLFilters.Values)
-            if (filter.Value != filter.Default)
-                { hasFilters = true; break; }
-
-        ucfg.hasFLFilters = hasFilters;
+        UpdateColorFilter();
 
         if (request)
             VPRequest(VPRequestType.UpdatePS);
+    }
+
+    void UpdateColorFilter()
+    {   // Any thread (UI: filter value, decoder: new stream); serialized so the last update wins with the latest values
+        lock (ucfg.lockFLFilters)
+        {
+            float brightness = 0, contrast = 1, hue = 0, saturation = 1;
+            bool hasFilters = false;
+
+            foreach (var filter in ucfg.FLFilters.Values)
+            {
+                if (filter.Value == filter.Default)
+                    continue;
+
+                hasFilters = true;
+                float value = Scale(filter.Value, filter.Minimum, filter.Maximum, filter.MinimumPS, filter.MaximumPS);
+                switch (filter.Filter)
+                {
+                    case FLFilters.Brightness:  brightness  = value; break;
+                    case FLFilters.Contrast:    contrast    = value; break;
+                    case FLFilters.Hue:         hue         = value; break;
+                    case FLFilters.Saturation:  saturation  = value; break;
+                }
+            }
+
+            ucfg.hasFLFilters = hasFilters;
+
+            var stream  = scfg;
+            colorFilter = hasFilters
+                ? SoftwareColorFilter.Create(brightness, contrast, hue, saturation,
+                    stream?.ColorType ?? ColorType.YUV, stream?.ColorSpace ?? ColorSpace.None, stream?.ColorRange ?? ColorRange.Limited)
+                : null;
+        }
     }
     #endregion
 }

@@ -136,7 +136,8 @@ public class VPConfig : NotifyPropertyChanged
     internal double panYOffset;
 
     /// <summary>
-    /// Pan rotation angle (0, 90, 180, 270). The host applies the rotation when drawing (see <see cref="Renderer.Rotation"/>).
+    /// Pan rotation angle (0, 90, 180, 270), clockwise. Applied by the software renderer (the host receives upright frames,
+    /// see <see cref="Renderer.Rotation"/>).
     /// </summary>
     [JsonIgnore]
     public uint             Rotation                { get => rotation;              set { if (Set(ref rotation,     value)) vp?.VPRequest(VPRequestType.RotationFlip); } }
