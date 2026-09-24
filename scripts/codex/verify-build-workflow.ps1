@@ -371,11 +371,12 @@ function Assert-ExpectedWorkflowInventory(
 ) {
     # This is intentionally a filename allowlist, not a semantic YAML parser. The exact build.yml
     # contract is validated above; non-build workflow job structure is validated separately below.
-    $expectedWorkflowNames = @("build.yml", "stable-release.yml", "testing-release.yml")
+    # F-13: build-linux.yml is the additive Linux check; its exact contract is Assert-LinuxBuildWorkflowContract.
+    $expectedWorkflowNames = @("build.yml", "stable-release.yml", "testing-release.yml", "build-linux.yml")
     $actualWorkflowNames = @($WorkflowTexts.Keys | ForEach-Object { [string]$_ })
 
     if ($actualWorkflowNames.Count -ne $expectedWorkflowNames.Count) {
-        throw "$Source must contain exactly the three protected workflow files; found $($actualWorkflowNames.Count)."
+        throw "$Source must contain exactly the four protected workflow files; found $($actualWorkflowNames.Count)."
     }
     foreach ($expectedWorkflowName in $expectedWorkflowNames) {
         $matchCount = @($actualWorkflowNames | Where-Object {
@@ -516,6 +517,160 @@ function Assert-WorkflowInventoryRejected(
     }
 }
 
+# F-13: build-linux.yml is an additive Linux check. It must never shadow or compose the protected Windows
+# required-check name, must stay read-only, and may use only the reviewed action references below. checkout,
+# setup-dotnet and upload-artifact reuse the SHAs pinned by the release workflows; actions/cache is not pinned
+# anywhere else in the repository yet, so it uses its major tag like build.yml does for its actions.
+$linuxAllowedUsesLines = @(
+    "      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1",
+    "      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0",
+    "      uses: actions/cache@v6",
+    "      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1"
+)
+$linuxStepNames = @(
+    "Checkout source",
+    "Setup .NET",
+    "Install system packages",
+    "Cache FFmpeg tarball",
+    "Fetch FFmpeg",
+    "Verify",
+    "Publish",
+    "Upload package"
+)
+
+function Assert-LinuxBuildWorkflowContract([string]$Text, [string]$Source) {
+    $lines = @($Text -split '\r?\n')
+    foreach ($line in $lines) {
+        $leadingWhitespace = [regex]::Match($line, '^[ \t]*').Value
+        if ($leadingWhitespace.Contains("`t")) {
+            throw "$Source must not use tab indentation."
+        }
+        $trimmed = $line.Trim()
+        if ($trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+            continue
+        }
+        if ($trimmed -cmatch '^(-\s+)?["''?]' -or $trimmed -cmatch '^(-\s+)?<<\s*:' -or $trimmed -cmatch ':\s*[&*][A-Za-z0-9_-]') {
+            throw "$Source must use canonical unquoted block mapping keys without explicit keys, anchors, aliases, or merges: '$trimmed'."
+        }
+        if ($trimmed -cmatch '^(-\s+)?(continue-on-error|if)\s*:') {
+            throw "$Source must not make any step conditional or non-fatal: '$trimmed'."
+        }
+    }
+    if ($Text.Contains("LLPlayer Build & Test")) {
+        throw "$Source must not use the protected Windows required-check name 'LLPlayer Build & Test'."
+    }
+    foreach ($forbiddenToken in @("pull_request_target", "secrets.", "GITHUB_TOKEN", "github.token")) {
+        if ($Text.Contains($forbiddenToken)) {
+            throw "$Source must not reference '$forbiddenToken'."
+        }
+    }
+
+    Assert-AllowedMappingKeys $lines 0 @("name", "on", "permissions", "jobs") "workflow root" $Source
+    $workflowNameIndex = Get-UniqueLineIndex $lines '^name:\s*Linux Build & Test\s*$' "workflow name 'Linux Build & Test'" $Source
+    $onIndex = Get-UniqueBlockKeyIndex $lines 0 "on" "top-level on entry" $Source
+    if ($workflowNameIndex -ge $onIndex) {
+        throw "$Source must declare the workflow name before the top-level on entry."
+    }
+    for ($index = $workflowNameIndex + 1; $index -lt $onIndex; $index++) {
+        $trimmed = $lines[$index].Trim()
+        if ($trimmed -and -not $trimmed.StartsWith("#", [System.StringComparison]::Ordinal)) {
+            throw "$Source workflow name must not use multiline scalar continuation."
+        }
+    }
+
+    $onLines = Get-ChildMappingBlock $lines 0 "on" "top-level on entry" $Source
+    Assert-AllowedMappingKeys $onLines 2 @("push", "pull_request", "workflow_dispatch") "workflow triggers" $Source
+    foreach ($trigger in @("push", "pull_request")) {
+        $triggerLines = Get-ChildMappingBlock $onLines 2 $trigger "$trigger trigger" $Source
+        Assert-AllowedMappingKeys $triggerLines 4 @("branches") "$trigger trigger" $Source
+        Assert-NoNestedContent $triggerLines 4 "$trigger trigger" $Source
+        Require-StepLine $triggerLines '^    branches:\s*\[ "main" \]\s*$' "$trigger trigger must target only main" $Source
+    }
+    Require-StepLine $onLines '^  workflow_dispatch:\s*$' "workflow_dispatch must be a plain manual trigger" $Source
+    Assert-NoNestedContent $onLines 4 "workflow triggers" $Source
+
+    $permissionLines = Get-ChildMappingBlock $lines 0 "permissions" "top-level permissions entry" $Source
+    Assert-AllowedMappingKeys $permissionLines 2 @("contents") "top-level permissions" $Source
+    Assert-NoNestedContent $permissionLines 2 "top-level permissions" $Source
+    Require-StepLine $permissionLines '^  contents:\s*read\s*$' "permissions must be exactly contents: read" $Source
+
+    $jobsLines = Get-JobsBlock $Text $Source
+    Assert-AllowedMappingKeys $jobsLines 2 @("linux") "top-level jobs" $Source
+    $jobLines = Get-ChildMappingBlock $jobsLines 2 "linux" "jobs.linux entry" $Source
+    Assert-AllowedMappingKeys $jobLines 4 @("name", "runs-on", "timeout-minutes", "env", "steps") "jobs.linux" $Source
+    $jobNameIndex = Get-UniqueLineIndex $jobLines '^    name:\s*LLPlayer Linux Build & Test\s*$' "jobs.linux name 'LLPlayer Linux Build & Test'" $Source
+    $runsOnIndex = Get-UniqueLineIndex $jobLines '^    runs-on:\s*ubuntu-24\.04\s*$' "jobs.linux runner 'ubuntu-24.04'" $Source
+    if ($runsOnIndex -ne $jobNameIndex + 1) {
+        throw "$Source must declare jobs.linux runs-on: ubuntu-24.04 directly after its name (no scalar continuation)."
+    }
+    $envLines = Get-ChildMappingBlock $jobLines 4 "env" "jobs.linux env" $Source
+    Assert-AllowedMappingKeys $envLines 6 @("DOTNET_CLI_TELEMETRY_OPTOUT", "DOTNET_NOLOGO") "jobs.linux env" $Source
+    Assert-NoNestedContent $envLines 6 "jobs.linux env" $Source
+
+    $usesLines = @($lines | Where-Object { $_ -match 'u(ses|\\u0073es)' })
+    foreach ($usesLine in $usesLines) {
+        if ($linuxAllowedUsesLines -cnotcontains $usesLine.TrimEnd()) {
+            throw "$Source uses an unapproved or unpinned action reference: '$($usesLine.Trim())'."
+        }
+    }
+    foreach ($allowedUses in $linuxAllowedUsesLines) {
+        $count = @($usesLines | Where-Object { $_.TrimEnd() -ceq $allowedUses }).Count
+        if ($count -ne 1) {
+            throw "$Source must use '$($allowedUses.Trim())' exactly once; found $count."
+        }
+    }
+
+    $stepsIndex = Get-UniqueLineIndex $jobLines '^    steps:\s*$' "jobs.linux.steps entry" $Source
+    if ($stepsIndex -ge $jobLines.Count - 1) {
+        throw "$Source jobs.linux.steps must not be empty."
+    }
+    $stepLines = @($jobLines[($stepsIndex + 1)..($jobLines.Count - 1)])
+    $stepCount = @($stepLines | Where-Object { $_ -cmatch '^    - ' }).Count
+    if ($stepCount -ne $linuxStepNames.Count) {
+        throw "$Source jobs.linux.steps must contain exactly the $($linuxStepNames.Count) reviewed steps; found $stepCount."
+    }
+    $previousStart = -1
+    $steps = @{}
+    foreach ($stepName in $linuxStepNames) {
+        $step = Get-NamedStep $stepLines $stepName $Source
+        if ($step.Start -le $previousStart) {
+            throw "$Source must order jobs.linux.steps as: $($linuxStepNames -join ', ')."
+        }
+        $previousStart = $step.Start
+        $steps[$stepName] = $step
+    }
+    foreach ($runOnlyStep in @("Fetch FFmpeg", "Verify", "Publish")) {
+        Assert-AllowedMappingKeys $steps[$runOnlyStep].Lines 6 @("run") "$runOnlyStep step" $Source
+        Assert-NoNestedContent $steps[$runOnlyStep].Lines 6 "$runOnlyStep step" $Source
+    }
+    Require-StepLine $steps["Fetch FFmpeg"].Lines '^      run:\s*bash scripts/linux/fetch-ffmpeg\.sh\s*$' "Fetch FFmpeg must run scripts/linux/fetch-ffmpeg.sh" $Source
+    Require-StepLine $steps["Verify"].Lines '^      run:\s*xvfb-run -a bash scripts/linux/verify\.sh\s*$' "Verify must run the full scripts/linux/verify.sh gate" $Source
+    Require-StepLine $steps["Publish"].Lines '^      run:\s*bash scripts/linux/publish\.sh --out "\$RUNNER_TEMP/linux-package"\s*$' "Publish must run scripts/linux/publish.sh" $Source
+    Require-StepLine $steps["Setup .NET"].Lines '^        dotnet-version:\s*10\.0\.x\s*$' "Setup .NET must install the frozen .NET 10.0.x SDK" $Source
+    Require-StepLine $steps["Cache FFmpeg tarball"].Lines '^        key:\s*linux-ffmpeg-n8\.1-latest-linux64-gpl-shared-8\.1\.tar\.xz\s*$' "Cache FFmpeg tarball must be keyed on the FFmpeg asset name" $Source
+    Require-StepLine $steps["Upload package"].Lines '^        if-no-files-found:\s*error\s*$' "Upload package must fail when the package is missing" $Source
+}
+
+function Assert-LinuxContractRejected(
+    [string]$Text,
+    [string]$Description,
+    [string]$ExpectedMessagePattern
+) {
+    $rejected = $false
+    try {
+        Assert-LinuxBuildWorkflowContract $Text "adversarial Linux fixture ($Description)"
+    }
+    catch {
+        if ($ExpectedMessagePattern -and $_.Exception.Message -cnotmatch $ExpectedMessagePattern) {
+            throw "Linux workflow validator rejected adversarial fixture '$Description' for the wrong reason: $($_.Exception.Message)"
+        }
+        $rejected = $true
+    }
+    if (-not $rejected) {
+        throw "Linux workflow validator accepted adversarial fixture: $Description."
+    }
+}
+
 function Swap-AdjacentNamedSteps([string]$Text, [string]$FirstName, [string]$SecondName) {
     $lines = @($Text -split '\r?\n')
     $first = Get-UniqueLineIndex $lines ('^    - name:\s*' + [regex]::Escape($FirstName) + '\s*$') "'$FirstName' fixture step" "order fixture"
@@ -579,10 +734,74 @@ jobs:
 '@
 Assert-BuildWorkflowContract $positiveFixture "positive fixture"
 
+$positiveLinuxFixture = @'
+name: Linux Build & Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: LLPlayer Linux Build & Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      with:
+        persist-credentials: false
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Install system packages
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends libopenal1 xvfb
+
+    - name: Cache FFmpeg tarball
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cache/llplayer/ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz
+        key: linux-ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz
+
+    - name: Fetch FFmpeg
+      run: bash scripts/linux/fetch-ffmpeg.sh
+
+    - name: Verify
+      run: xvfb-run -a bash scripts/linux/verify.sh
+
+    - name: Publish
+      run: bash scripts/linux/publish.sh --out "$RUNNER_TEMP/linux-package"
+
+    - name: Upload package
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: LLPlayer-linux-x64
+        path: ${{ runner.temp }}/linux-package/*.tar.gz
+        if-no-files-found: error
+'@
+Assert-LinuxBuildWorkflowContract $positiveLinuxFixture "positive Linux fixture"
+
 $positiveWorkflowInventory = [ordered]@{
     "build.yml" = $positiveFixture
     "stable-release.yml" = "name: Stable Release`njobs:`n  build:`n    runs-on: windows-latest"
     "testing-release.yml" = "name: Testing Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "build-linux.yml" = $positiveLinuxFixture
 }
 Assert-ExpectedWorkflowInventory $positiveWorkflowInventory "positive workflow inventory"
 
@@ -590,25 +809,83 @@ $foldedScalarCollisionInventory = [ordered]@{
     "build.yml" = $positiveFixture
     "stable-release.yml" = "name: Stable Release`njobs:`n  build:`n    runs-on: windows-latest"
     "testing-release.yml" = "name: Testing Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "build-linux.yml" = $positiveLinuxFixture
     "folded-collision.yml" = "name: Folded Collision`njobs:`n  build:`n    name: >-`n      LLPlayer Build &`n      Test"
 }
-Assert-WorkflowInventoryRejected $foldedScalarCollisionInventory "a fourth workflow composes the required check with a folded scalar" "exactly the three protected workflow files; found 4"
+Assert-WorkflowInventoryRejected $foldedScalarCollisionInventory "a fifth workflow composes the required check with a folded scalar" "exactly the four protected workflow files; found 5"
 
 $expressionComposedCollisionInventory = [ordered]@{
     "build.yml" = $positiveFixture
     "stable-release.yml" = "name: Stable Release`njobs:`n  build:`n    runs-on: windows-latest"
     "testing-release.yml" = "name: Testing Release`njobs:`n  build:`n    runs-on: windows-latest"
+    "build-linux.yml" = $positiveLinuxFixture
     "expression-collision.yaml" = 'name: Expression Collision' + "`n" + 'jobs:' + "`n" + '  build:' + "`n" + "    name: `${{ 'LLPlayer Build &' }}`${{ ' Test' }}"
 }
-Assert-WorkflowInventoryRejected $expressionComposedCollisionInventory "a fourth workflow composes the required check with expressions" "exactly the three protected workflow files; found 4"
+Assert-WorkflowInventoryRejected $expressionComposedCollisionInventory "a fifth workflow composes the required check with expressions" "exactly the four protected workflow files; found 5"
 
 $unexpectedFourthWorkflowInventory = [ordered]@{
     "build.yml" = $positiveFixture
     "stable-release.yml" = "name: Stable Release"
     "testing-release.yml" = "name: Testing Release"
+    "build-linux.yml" = "name: Linux Build & Test"
     "unexpected.yml" = "name: Unexpected Workflow"
 }
-Assert-WorkflowInventoryRejected $unexpectedFourthWorkflowInventory "an unrelated fourth workflow bypasses the protected inventory" "exactly the three protected workflow files; found 4"
+Assert-WorkflowInventoryRejected $unexpectedFourthWorkflowInventory "an unrelated fifth workflow bypasses the protected inventory" "exactly the four protected workflow files; found 5"
+
+$missingLinuxWorkflowInventory = [ordered]@{
+    "build.yml" = $positiveFixture
+    "stable-release.yml" = "name: Stable Release"
+    "testing-release.yml" = "name: Testing Release"
+}
+Assert-WorkflowInventoryRejected $missingLinuxWorkflowInventory "the Linux workflow is removed" "exactly the four protected workflow files; found 3"
+
+$renamedLinuxWorkflowInventory = [ordered]@{
+    "build.yml" = $positiveFixture
+    "stable-release.yml" = "name: Stable Release"
+    "testing-release.yml" = "name: Testing Release"
+    "build-linux.yaml" = $positiveLinuxFixture
+}
+Assert-WorkflowInventoryRejected $renamedLinuxWorkflowInventory "the Linux workflow is renamed to escape its contract" "exactly one workflow named 'build-linux.yml'; found 0"
+
+$linuxRequiredCheckCollisionFixture = $positiveLinuxFixture.Replace("    name: LLPlayer Linux Build & Test", "    name: LLPlayer Build & Test")
+Assert-LinuxContractRejected $linuxRequiredCheckCollisionFixture "the Linux job reuses the Windows required-check name" "protected Windows required-check name"
+
+$linuxExpressionNameFixture = $positiveLinuxFixture.Replace("    name: LLPlayer Linux Build & Test", "    name: `${{ 'LLPlayer Build &' }}`${{ ' Test' }}")
+Assert-LinuxContractRejected $linuxExpressionNameFixture "the Linux job composes the required-check name with expressions" "jobs.linux name 'LLPlayer Linux Build & Test'"
+
+$linuxContinuedNameFixture = $positiveLinuxFixture.Replace("    name: LLPlayer Linux Build & Test", "    name: LLPlayer Linux Build & Test`n      shadow-suffix")
+Assert-LinuxContractRejected $linuxContinuedNameFixture "the Linux job name uses a multiline continuation" "directly after its name"
+
+$linuxMutableCheckoutFixture = $positiveLinuxFixture.Replace("actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1", "actions/checkout@v5")
+Assert-LinuxContractRejected $linuxMutableCheckoutFixture "the Linux workflow uses a mutable checkout reference" "unapproved or unpinned action reference"
+
+$linuxUnapprovedActionFixture = $positiveLinuxFixture.Replace("    - name: Fetch FFmpeg", "    - name: Extra`n      uses: example/unapproved@main`n`n    - name: Fetch FFmpeg")
+Assert-LinuxContractRejected $linuxUnapprovedActionFixture "the Linux workflow adds an unapproved action" "unapproved or unpinned action reference"
+
+$linuxQuotedUsesFixture = $positiveLinuxFixture.Replace("      uses: actions/cache@v6", '      "u\u0073es": example/unapproved@main')
+Assert-LinuxContractRejected $linuxQuotedUsesFixture "the Linux workflow hides an action behind an escaped quoted key" "canonical unquoted block mapping keys"
+
+$linuxWritePermissionFixture = $positiveLinuxFixture.Replace("  contents: read", "  contents: write")
+Assert-LinuxContractRejected $linuxWritePermissionFixture "the Linux workflow requests write access" "permissions must be exactly contents: read"
+
+$linuxExtraPermissionFixture = $positiveLinuxFixture.Replace("  contents: read", "  contents: read`n  actions: write")
+Assert-LinuxContractRejected $linuxExtraPermissionFixture "the Linux workflow adds a permission" "forbidden or unexpected key 'actions'"
+
+$linuxNonFatalVerifyFixture = $positiveLinuxFixture.Replace("      run: xvfb-run -a bash scripts/linux/verify.sh", "      continue-on-error: true`n      run: xvfb-run -a bash scripts/linux/verify.sh")
+Assert-LinuxContractRejected $linuxNonFatalVerifyFixture "the Linux verify step is non-fatal" "conditional or non-fatal"
+
+$linuxFastOnlyVerifyFixture = $positiveLinuxFixture.Replace("bash scripts/linux/verify.sh", "bash scripts/linux/verify.sh --fast")
+Assert-LinuxContractRejected $linuxFastOnlyVerifyFixture "the Linux verify step runs only the fast gate" "Verify must run the full scripts/linux/verify.sh gate"
+
+$linuxSecondJobFixture = $positiveLinuxFixture.TrimEnd() + "`n  extra:`n    runs-on: ubuntu-24.04`n    steps:`n    - run: echo extra"
+Assert-LinuxContractRejected $linuxSecondJobFixture "the Linux workflow adds a second job" "forbidden or unexpected key 'extra'"
+
+$linuxTargetTriggerFixture = $positiveLinuxFixture.Replace("  workflow_dispatch:", "  workflow_dispatch:`n  pull_request_target:")
+Assert-LinuxContractRejected $linuxTargetTriggerFixture "the Linux workflow runs on pull_request_target" "pull_request_target"
+
+$linuxSecretFixture = $positiveLinuxFixture.Replace('      DOTNET_NOLOGO: "1"', '      DOTNET_NOLOGO: "1"' + "`n" + '      TOKEN: ${{ secrets.RELEASE_TOKEN }}')
+Assert-LinuxContractRejected $linuxSecretFixture "the Linux workflow reads a secret" "must not reference 'secrets.'"
+
 
 $positiveNonBuildWorkflow = @'
 name: Non-Build Workflow
@@ -1137,6 +1414,7 @@ Get-ChildItem -LiteralPath $workflowDirectory -File |
     Sort-Object -Property FullName |
     ForEach-Object { $workflowTexts[$_.Name] = Get-Content -LiteralPath $_.FullName -Raw }
 Assert-ExpectedWorkflowInventory $workflowTexts $workflowDirectory
+Assert-LinuxBuildWorkflowContract $workflowTexts["build-linux.yml"] (Join-Path $workflowDirectory "build-linux.yml")
 foreach ($nonBuildWorkflowName in @("stable-release.yml", "testing-release.yml")) {
     Assert-NoJobDisplayNames $workflowTexts[$nonBuildWorkflowName] (Join-Path $workflowDirectory $nonBuildWorkflowName)
 }

@@ -55,6 +55,9 @@
 > как кандидат v0.3.62; implementation/test head `ad78487` прошёл exact .NET 10 run `29700776745`. Владелец
 > 2026-07-20 явно принял остаточный риск без расширенного owner-smoke: сценарии `WAIVED / NOT RUN`, не `PASS`;
 > итог — `ACCEPTED WITH OWNER WAIVER`, `HC-22` закрыт как **DONE WITH RESIDUAL RISK**.
+>
+> **2026-09-24:** владелец активировал `F-13` (Linux-порт): Avalonia 12.1.3 + FluentTheme + своя тема из
+> shadcn-токенов; Windows WPF-продукт не меняется. Этап 1 — draft PR #166; этап 2 — в работе (см. F-13).
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -635,10 +638,54 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Идея от SubtitleEdit.** **Остаток (waveform):** рендер waveform из аудио FlyleafLib для визуального sync.
 **Рассуждение:** A-B повтор — заметный single-session UX-win для изучения языка; waveform — крупный effort, не топ.
 
-### F-13 — Кросс-платформенность (Avalonia, Linux/Mac) 🟢 ⓍⓁ · DEFERRED · (upstream «Future»)
-SE5 и Buzz уже кросс-платформенны → наш Windows-only = конкурентный минус. **Решение:** порт UI на Avalonia
-(движок FlyleafLib + WPF-слой). **Рассуждение:** огромная работа (фактически переписывание UI), стратегическая
-цель; не трогать инцидентно.
+### F-13 — Кросс-платформенность (Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (решение владельца 2026-09-24)** · (upstream «Future»)
+SE5 и Buzz уже кросс-платформенны → Windows-only был конкурентным минусом. Владелец явно запросил Linux-порт;
+трек переведён из DEFERRED в IN PROGRESS.
+
+**Решение по UI (владелец, 2026-09-24):** Avalonia **12.1.3** + встроенная **FluentTheme** + собственная тема из
+дизайн-токенов **shadcn/ui** (MIT; только как источник дизайна — цвета/радиусы/отступы, без кода и пакетов);
+MVVM — CommunityToolkit.Mvvm 8.4.2 (у Prism.Avalonia нет релиза под Avalonia 12). **Отклонено:** ShadUI
+(0.x-зависимость одного мейнтейнера; другие пакеты тем — SukiUI, Semi — тоже не берём) и web-UI с настоящим
+shadcn/ui (не может эффективно передавать видеокадры FlyleafLib и нарушает «What Not To Port» в `AGENTS.md`).
+
+**Архитектура:** Windows = существующий WPF `LLPlayer` на `net10.0-windows10.0.18362.0` — код и поведение не
+меняются; Linux = новый `LLPlayer.Avalonia` на новом portable `net10.0` TFM FlyleafLib (швы в
+`FlyleafLib/Platform/Portable/`). Целевое направление — «одно ядро + один UI»: после паритета вынести логику
+приложения в общий `LLPlayer.Core`, затем Avalonia-UI становится единым для обеих ОС (с GPU-рендером на Windows);
+WPF выводится из эксплуатации только после owner smoke на Windows. Один репозиторий, одна ветка, CI обеих платформ
+на каждом PR (`build.yml` + `build-linux.yml`).
+
+**Этапы:**
+- **Этап 1 ✅** (commit `b82cde0`, draft [PR #166](https://github.com/Gorgutc/LLPlayer_ru/pull/166)): FlyleafLib
+  multi-target `net10.0`; швы `IUIDispatcher`/`IHostServices`/`IVideoSurface`/`IAudioSink`/`IAudioBackend`,
+  `Player.KeyStateProvider`, `BindingOperations`/`CollectionViewSource`-хуки, `SubtitlesOCR.ServiceFactory`;
+  software `sws_scale` → BGRA рендер, `NullAudioSink`, WPF-заглушки; `PortableEngineSmokeTests`. Windows-сборка
+  проверена декомпиляцией (отличия только в именах сгенерированных regex-классов).
+- **Этап 2 🚧** (четыре параллельных среза, интегрируются вместе): **video** — полировка software-рендера
+  (rotation/flip/фильтры, даунскейл); **audio** — OpenAL Soft backend + фабрика (`LLPLAYER_AUDIO_BACKEND=null|openal|auto`);
+  **app** — `LLPlayer.Avalonia` + `LLPlayer.Avalonia.Tests` (главное окно, плеер, dual subtitles, базовый WordPopup,
+  тема из shadcn-токенов, XDG-конфиг `~/.config/LLPlayer`); **infra** — `scripts/linux/` (fetch-ffmpeg,
+  make-test-media, verify, publish), `.github/workflows/build-linux.yml`, контракты/доки, валидаторы знают про Linux.
+- **Дальше — паритет (по одному срезу, каждый со своим тестом/смоуком):**
+  1. ASR/Whisper на Linux: Linux-runtime Whisper.net (natives `linux-x64`), пути Linux-бинарника faster-whisper
+     (дефолт сейчас `faster-whisper-xxl.exe`).
+  2. OCR через системный Tesseract (`SubtitlesOCR.ServiceFactory`; пакет TesseractOCR несёт только Windows-natives).
+  3. Паритет перевода/WordPopup (провайдеры, словари, Anki-экспорт).
+  4. Паритет диалогов настроек (Settings, Keys, Subtitles, ASR, Translation, Dubbing).
+  5. Плагин YoutubeDL с Linux-бинарником `yt-dlp` (плагин сейчас `net10.0-windows`).
+  6. Дубляж-сайдкар на Linux + эквивалент JobObject (process group / `prctl(PR_SET_PDEATHSIG)`), venv `bin/python`.
+  7. VAAPI hw-decode.
+  8. OpenGL-путь рендера (вместо CPU-копии BGRA).
+  9. Wayland opt-in (сейчас XWayland).
+  10. Пакеты AppImage/Flatpak (сейчас tar.gz).
+  11. Интеграция Linux-пакета в release workflows (Testing/Stable) — отдельное owner-решение; включает
+      GPL source-offer для FFmpeg.
+  12. Tray icon.
+  Также: v4l2 capture devices; cursor-hide/screensaver-inhibit на стороне хоста; вынос общего `LLPlayer.Core`.
+
+**Гейты:** `scripts/linux/verify.sh` (+ неизменные Windows-гейты); ручной smoke —
+`manual-smoke-matrix.md` → «Linux (F-13)». **Рассуждение:** огромная работа, но швы этапа 1 позволяют вести её
+срезами без риска для Windows-продукта; каждый срез обязан оставлять Windows-сборку неизменной.
 
 ### F-14 — Расширенный локальный поиск субтитров 🟢 ⓢ-Ⓜ · ✅ **DONE (PR #71, merge `3c4107d`, v0.3.20, 2026-06-27)**
 > ✅ **Закрыт.** Поиск сайдбара получил 3 тумблера: **match case / whole word / regex** (next/prev/clear/hit-count
@@ -1104,15 +1151,18 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-07-20 / v0.3.62 candidate)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-09-24 / F-13 active)
 
-Текущего owner-selected среза нет. `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
+Owner-selected трек с 2026-09-24 — `F-13` (Linux-порт, см. ниже). `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
 host-level lifetime и non-vacuous WPF WeakReference regression доказаны, а расширенный owner-smoke сознательно
-`WAIVED / NOT RUN` и не считается `PASS`. Следующая задача не выбирается автоматически.
+`WAIVED / NOT RUN` и не считается `PASS`. Прочие задачи автоматически не выбираются.
 
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
-**Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу; `F-13` Avalonia — DEFERRED.
+**Активный трек (решение владельца 2026-09-24):** `F-13` Linux-порт — 🚧 IN PROGRESS: этап 2 (video/audio/app/infra)
+интегрируется; дальше — паритет-срезы по списку в F-13.
+
+**Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу.
 
 ### Исторический снимок важности до 2026-07-01 (не использовать для выбора новой работы)
 
@@ -1150,14 +1200,15 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-07-20 / v0.3.62 candidate)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-09-24 / F-13 active)
 
-Активного малого среза нет. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
+Активного малого среза нет (активный крупный трек — `F-13`). `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
 используется, обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Владелец принял
 остаточный риск расширенного smoke; это `WAIVED / NOT RUN`, не `PASS`.
 
 **Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
-GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
+GPU-lease/координатором; `F-02-full` trigger-only. `F-13` (ⓍⓁ) — 🚧 IN PROGRESS: ведётся срезами (этап 2 →
+паритет-лист в F-13), каждый срез отдельно оценивается по сложности.
 
 ### Исторический снимок сложности до 2026-07-01 (не использовать для выбора новой работы)
 
@@ -1230,7 +1281,10 @@ GPU-lease/координатором; `F-02-full` trigger-only; `F-13` DEFERRED.
    subtitles; B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
 8. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
 
-**Не берём сейчас:** `F-02-full` (trigger-only) и `F-13` (DEFERRED).
+9. **F-13 Linux-порт 🚧 (решение владельца 2026-09-24)** — этап 1 в draft PR #166; этап 2 (video/audio/app/infra)
+   интегрируется и проходит `scripts/linux/verify.sh` + Windows-гейты; затем паритет-срезы по списку в F-13.
+
+**Не берём сейчас:** `F-02-full` (trigger-only).
 Перед поведенческими правками сверяться с
 frozen-контрактами; для app-кода обязательны `scripts/codex/verify.ps1`, domain-reviewers и targeted smoke.
 
