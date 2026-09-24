@@ -1,0 +1,133 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:LLPlayer.Avalonia.Controls"
+             xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+             x:Class="LLPlayer.Avalonia.Views.ThemeGalleryPanel"
+             Background="{DynamicResource Shadcn.BackgroundBrush}"
+             Foreground="{DynamicResource Shadcn.ForegroundBrush}">
+  <!-- Every "LLPlayer shadcn" styled control once, for visual review (developer window, command-line option "theme-gallery"). -->
+  <StackPanel Margin="24" Spacing="18">
+    <StackPanel Spacing="4">
+      <TextBlock Name="HeaderText" Classes="h3" Text="Theme" />
+      <TextBlock Classes="muted" Text="shadcn/ui neutral tokens on Avalonia FluentTheme" />
+    </StackPanel>
+
+    <!-- Buttons: variants -->
+    <StackPanel Spacing="8">
+      <TextBlock Classes="small muted" Text="Button" />
+      <WrapPanel ItemSpacing="8" LineSpacing="8">
+        <Button Content="Default" />
+        <Button Classes="secondary" Content="Secondary" />
+        <Button Classes="outline" Content="Outline" />
+        <Button Classes="ghost" Content="Ghost" />
+        <Button Classes="destructive" Content="Destructive" />
+        <Button Classes="link" Content="Link" />
+      </WrapPanel>
+      <WrapPanel ItemSpacing="8" LineSpacing="8">
+        <Button Classes="sm" Content="Small" />
+        <Button Content="Default" />
+        <Button Classes="lg" Content="Large" />
+        <Button Classes="outline icon"><c:LucideIcon Data="{StaticResource Icon.Play}" /></Button>
+        <Button Classes="ghost icon"><c:LucideIcon Data="{StaticResource Icon.Volume2}" /></Button>
+        <Button Content="Disabled" IsEnabled="False" />
+        <Button Classes="outline" Content="Disabled" IsEnabled="False" />
+      </WrapPanel>
+    </StackPanel>
+
+    <!-- Toggle / inputs -->
+    <Grid ColumnDefinitions="*,16,*">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="small muted" Text="Toggle · Checkbox · Switch" />
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <ToggleButton Classes="icon" IsChecked="True"><c:LucideIcon Data="{StaticResource Icon.Captions}" /></ToggleButton>
+          <ToggleButton Classes="icon"><c:LucideIcon Data="{StaticResource Icon.PanelRight}" /></ToggleButton>
+          <ToggleButton Classes="outline" Content="Toggle" />
+        </StackPanel>
+        <CheckBox Content="Checked" IsChecked="True" />
+        <CheckBox Content="Unchecked" />
+        <ToggleSwitch OnContent="On" OffContent="Off" IsChecked="True" />
+        <ToggleSwitch OnContent="On" OffContent="Off" />
+      </StackPanel>
+      <StackPanel Grid.Column="2" Spacing="8">
+        <TextBlock Classes="small muted" Text="Input · Select · Slider" />
+        <TextBox PlaceholderText="Search subtitles…" />
+        <TextBox Text="Hello world" />
+        <ComboBox SelectedIndex="1" HorizontalAlignment="Stretch">
+          <ComboBoxItem Content="0.75×" />
+          <ComboBoxItem Content="1×" />
+          <ComboBoxItem Content="1.25×" />
+        </ComboBox>
+        <Slider Value="40" />
+        <Slider Classes="thin" Value="65" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Card, badges, kbd, separator, tooltip look-alike -->
+    <Grid ColumnDefinitions="*,16,*">
+      <Border Classes="card">
+        <StackPanel Spacing="8">
+          <TextBlock Classes="h4" Text="Card" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="Card surface, 1px border and rounded-xl corners." />
+          <Separator />
+          <WrapPanel ItemSpacing="6" LineSpacing="6">
+            <Border Classes="badge"><TextBlock Text="Badge" /></Border>
+            <Border Classes="badge secondary"><TextBlock Text="Secondary" /></Border>
+            <Border Classes="badge outline"><TextBlock Text="Outline" /></Border>
+            <Border Classes="badge destructive"><TextBlock Text="Destructive" /></Border>
+          </WrapPanel>
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <Border Classes="kbd"><TextBlock Text="Ctrl" /></Border>
+            <Border Classes="kbd"><TextBlock Text="Shift" /></Border>
+            <Border Classes="kbd"><TextBlock Text="→" /></Border>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+      <StackPanel Grid.Column="2" Spacing="8">
+        <TextBlock Classes="small muted" Text="List" />
+        <ListBox SelectedIndex="1" Height="112">
+          <ListBoxItem Content="00:00.5  Hello world, this is a test." />
+          <ListBoxItem Content="00:03.5  The quick brown fox…" />
+          <ListBoxItem Content="00:07.0  Language learning" />
+        </ListBox>
+        <Border Classes="popover" Padding="10,6" HorizontalAlignment="Left" Background="{DynamicResource Shadcn.PrimaryBrush}">
+          <TextBlock Text="Tooltip look (primary)" FontSize="12" Foreground="{DynamicResource Shadcn.PrimaryForegroundBrush}" />
+        </Border>
+      </StackPanel>
+    </Grid>
+
+    <!-- Menu (open popover look) + toast -->
+    <Grid ColumnDefinitions="*,16,*">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="small muted" Text="Menu" />
+        <Menu>
+          <MenuItem Header="Media" />
+          <MenuItem Header="Playback" />
+          <MenuItem Header="Subtitles" />
+        </Menu>
+        <Border Classes="popover" Padding="4" Width="220" HorizontalAlignment="Left">
+          <StackPanel>
+            <Border Padding="8,6" CornerRadius="6" Background="{DynamicResource Shadcn.AccentBrush}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Open media…" />
+                <TextBlock Grid.Column="1" Text="Ctrl+O" Classes="muted xs" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <Border Padding="8,6"><TextBlock Text="Open subtitles…" /></Border>
+            <Separator Margin="-4,4" />
+            <Border Padding="8,6"><TextBlock Text="Exit" /></Border>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Spacing="8">
+        <TextBlock Classes="small muted" Text="Toast" />
+        <c:Toast Title="Subtitles loaded" Message="test-720p.srt" Variant="Success" />
+        <c:Toast Title="Could not open media" Message="File not found" Variant="Destructive" />
+      </StackPanel>
+    </Grid>
+
+    <!-- Subtitle overlay sample -->
+    <Border Background="#FF1E293B" CornerRadius="10" Height="96" ClipToBounds="True">
+      <c:SubtitleText Text="The quick brown fox jumps over the lazy dog." FontSize="26" VerticalAlignment="Center" />
+    </Border>
+  </StackPanel>
+</UserControl>

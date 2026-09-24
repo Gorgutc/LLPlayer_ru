@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="using:LLPlayer.Avalonia.Views"
+        x:Class="LLPlayer.Avalonia.Views.ThemeGalleryWindow"
+        Title="Theme gallery — LLPlayer (developer)"
+        Width="1500" Height="880" WindowStartupLocation="CenterScreen">
+  <!-- Developer window (command-line option "theme-gallery"): every styled control in the Dark and the Light theme side by side. -->
+  <ScrollViewer>
+    <Grid Name="GalleryGrid" ColumnDefinitions="*,*">
+      <ThemeVariantScope RequestedThemeVariant="Dark">
+        <views:ThemeGalleryPanel Name="DarkPanel" Header="Dark (default)" />
+      </ThemeVariantScope>
+      <ThemeVariantScope Grid.Column="1" RequestedThemeVariant="Light">
+        <views:ThemeGalleryPanel Name="LightPanel" Header="Light" />
+      </ThemeVariantScope>
+    </Grid>
+  </ScrollViewer>
+</Window>

@@ -1,0 +1,24 @@
+<!-- shadcn/ui Select: input-look trigger with chevron, popover dropdown, accent item highlight. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="ComboBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Shadcn.ControlHeight}" />
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+    <Setter Property="Padding" Value="12,4,8,4" />
+  </Style>
+  <Style Selector="ComboBox /template/ Border#PopupBorder">
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+    <Setter Property="Padding" Value="4" />
+  </Style>
+  <Style Selector="ComboBoxItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusSm}" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+  </Style>
+  <Style Selector="ComboBox:disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+
+</Styles>

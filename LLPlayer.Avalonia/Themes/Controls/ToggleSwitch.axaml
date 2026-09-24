@@ -1,0 +1,28 @@
+<!-- shadcn/ui Switch: pill track (input colour when off, primary when on), knob nearly fills the track height. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="ToggleSwitch">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+  </Style>
+  <Style Selector="ToggleSwitch /template/ Ellipse#SwitchKnobOff">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+  <Style Selector="ToggleSwitch /template/ Ellipse#SwitchKnobOn">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+  <Style Selector="ToggleSwitch:pointerover /template/ Ellipse">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+  <Style Selector="ToggleSwitch:pressed /template/ Ellipse">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+  </Style>
+  <Style Selector="ToggleSwitch:disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+
+</Styles>

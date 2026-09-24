@@ -5,5 +5,7 @@
   <Project Path="FlyleafLib/FlyleafLib.csproj" />
   <Project Path="FlyleafLibTests/FlyleafLibTests.csproj" />
   <Project Path="LLPlayer/LLPlayer.csproj" />
+  <Project Path="LLPlayer.Avalonia/LLPlayer.Avalonia.csproj" />
+  <Project Path="LLPlayer.Avalonia.Tests/LLPlayer.Avalonia.Tests.csproj" />
   <Project Path="WpfColorFontDialog/WpfColorFontDialog.csproj" />
 </Solution>

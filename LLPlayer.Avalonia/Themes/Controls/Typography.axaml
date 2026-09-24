@@ -1,0 +1,51 @@
+<!-- shadcn typography helpers: TextBlock classes h2/h3/h4/lead/large/small/muted/mono + Window defaults. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.BackgroundBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource Shadcn.ForegroundBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+  </Style>
+
+  <Style Selector="TextBlock.h2">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.Text2xl}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.4" />
+  </Style>
+  <Style Selector="TextBlock.h3">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextXl}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.3" />
+  </Style>
+  <Style Selector="TextBlock.h4">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextLg}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.lead">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextXl}" />
+    <Setter Property="Foreground" Value="{DynamicResource Shadcn.MutedForegroundBrush}" />
+  </Style>
+  <Style Selector="TextBlock.large">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextLg}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.small">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+    <Setter Property="FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="TextBlock.xs">
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextXs}" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="Foreground" Value="{DynamicResource Shadcn.MutedForegroundBrush}" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="DejaVu Sans Mono, Liberation Mono, monospace" />
+    <Setter Property="FontFeatures" Value="+tnum" />
+  </Style>
+  <Style Selector="TextBlock.tabular">
+    <Setter Property="FontFeatures" Value="+tnum" />
+  </Style>
+
+</Styles>
