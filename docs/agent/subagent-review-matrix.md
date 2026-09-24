@@ -25,6 +25,9 @@ new files; narrower product/runtime rows add domain reviewers and never replace 
 - `Plugins/YoutubeDL/**`: `media_runtime_mapper`, `packaging_release_reviewer`, `verification_reviewer`, plus the extension/project minimums.
 - `FFmpeg/**`, `LLPlayer/lib/**`, `LLPlayer/Assets/**`, publish profiles, `.github/actions/build-package/action.yml`: `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer`.
 - `.github/workflows/**`: `dotnet_quality_guardian`, `packaging_release_reviewer`, `verification_reviewer`.
+- `FlyleafLib/Platform/**` (F-13 portable seams): `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`; gates `verify`, `scripts/linux/verify.sh`, playback smoke.
+- `LLPlayer.Avalonia/**`, `LLPlayer.Avalonia.Tests/**` (F-13 Linux app): `dotnet_quality_guardian`, `media_runtime_mapper`, `verification_reviewer`, plus `wpf_xaml_reviewer` for `*.axaml`; gates `scripts/linux/verify.sh` and the Linux rows of the manual smoke matrix.
+- `scripts/linux/**`, `.github/workflows/build-linux.yml` (F-13 Linux build/package): `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer` (the workflow also gets the `.github/workflows/**` reviewers); gate `scripts/linux/verify.sh`.
 - `docs/agent/product-behavior-contract.md`: `wpf_xaml_reviewer`, `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`.
 - `docs/agent/wpf-design-contract.md`: `wpf_xaml_reviewer`, `verification_reviewer`.
 - `docs/agent/media-runtime-contract.md`: `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`.

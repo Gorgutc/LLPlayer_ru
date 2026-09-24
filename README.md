@@ -23,6 +23,21 @@ This repository is a fork of [umlx5h/LLPlayer](https://github.com/umlx5h/LLPlaye
 
 For the agent-facing version of this note, see [`docs/agent/architecture.md`](docs/agent/architecture.md) ("Fork Relationship").
 
+### Linux build (fork, work in progress)
+
+This fork is porting the player to Linux (backlog F-13). The Windows WPF app is unchanged; Linux gets a separate
+Avalonia 12 app, `LLPlayer.Avalonia`, on the same FlyleafLib engine (portable `net10.0` target, software video path,
+OpenAL audio). It is not feature-complete yet: ASR, OCR, dubbing, the YoutubeDL plugin, and full settings parity are not
+ported or verified on Linux. On Ubuntu 24.04 (`sudo apt install dotnet-sdk-10.0 libopenal1`):
+
+```bash
+scripts/linux/fetch-ffmpeg.sh   # downloads and verifies the FFmpeg 8.1 shared libraries
+scripts/linux/verify.sh         # builds and tests
+scripts/linux/publish.sh        # creates LLPlayer-<version>-linux-x64.tar.gz
+```
+
+See [`RUN_INSTRUCTIONS.md`](RUN_INSTRUCTIONS.md#linux) for details.
+
 ## 🎬 Demo
 
 https://github.com/user-attachments/assets/05a7b451-ee3b-489f-aac9-f1670ed76e71

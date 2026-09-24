@@ -9,6 +9,9 @@ Do not commit these files unless a user explicitly requests and reviews the chan
 - Runtime config and local state: `LLPlayer.Config.json`, `LLPlayer.Engine.json`, `LLPlayer.PlayerConfig.json`, `LLPlayer.WordList.json`, `crash.log`, logs, dumps.
 - Secrets, API keys, translator credentials, `.env*`, local Codex memories, local machine paths.
 - Screenshots, videos, benchmark artifacts, or generated reports unless the task explicitly asks for evidence artifacts.
+- Linux (F-13): the fetched FFmpeg shared libraries (`FFmpeg/linux-x64/`, any `*.so`/`*.so.*`), the downloaded FFmpeg
+  tarball/CLI, generated test media, Linux packages (`LLPlayer-*-linux-x64.tar.gz`, `artifacts/`), and Linux smoke
+  evidence (keep it under `~/.cache/llplayer/evidence/`).
 
 Allowed tracked native assets:
 
@@ -18,4 +21,5 @@ Allowed tracked native assets:
 - `LLPlayer/Assets/silero_vad.onnx`
 - `Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
 
-Treat any new binary as suspicious until its role in the Windows release package is documented.
+Treat any new binary as suspicious until its role in the Windows release package (or, for Linux, in
+`scripts/linux/publish.sh` and `docs/agent/dependency-baseline.md`) is documented.
