@@ -135,3 +135,33 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Do not require network download of `yt-dlp.exe` for local smoke unless explicitly shipping a release.
 - **T-13e Testing controlled run — ✅ DONE (2026-07-19):** owner-approved [run 29680768395](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29680768395) bound remote `main`, workflow control, dispatch input, run `head_sha` and selected commit to exact `66113e343537919c0e3e5208af2467264228c330`. All four jobs succeeded with .NET SDK 10.0.302, full `verify.ps1` (**1380/1380**), `7z t`, and yt-dlp `2026.07.04` (`18226085` bytes, SHA-256 `52fe3c26dcf71fbdc85b528589020bb0b8e383155cfa81b64dd447bbe35e24b8`). Direct tag `testing-66113e343537` maps to that commit; draft prerelease `356299722` remains unpublished with exactly `LLPlayer-testing-66113e343537-x64.7z` (`218743845` bytes, SHA-256 `56e6efaa5675b27022972533bf611e73c45fc60db754f949b7e14d1d10a48fb6`). Remote digest and a local control download matched. The earlier partial M2 tag/draft remains unchanged and assetless as audit evidence. The run executed the real `gh release upload --clobber` command and all post-upload readbacks on a new exact tag. A duplicate run that would replace an already existing same-tag asset was not part of this controlled-run DoD and was not executed; future reruns remain separately owner-gated, while their exact-tag/exact-SHA/draft-only constraints remain validator-covered.
 - **T-13e Stable controlled run — ✅ DONE, DRAFT ONLY (2026-07-19):** only after the successful Testing readback, owner-approved [run 29681166913](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/29681166913) used the same exact commit and `v0.3.61`. All four jobs succeeded with a fresh .NET 10 full preflight, **1380/1380**, package verification, `7z t`, and the same yt-dlp evidence. Direct tag `v0.3.61` maps to exact M3; Release `356301697` remains `draft=true`, `prerelease=false`, `published_at=null` with exactly `LLPlayer-v0.3.61-x64.7z` (`218743831` bytes, SHA-256 `aa64902c57f52b48d8577ceb9002bedffac49ad9e8819c97acd8ffaab9076014`). Remote digest and a local control download matched. The Stable draft was not published; publication remains a separate owner-only action.
+
+## Linux (F-13)
+
+Automated coverage: `scripts/linux/verify.sh` (portable engine smoke on the generated clip, headless Avalonia tests,
+null audio). These checks cover what the headless suite cannot.
+
+- **Xvfb run (agent-runnable):** `scripts/linux/publish.sh`, unpack the tar.gz, then
+  `LLPLAYER_AUDIO_BACKEND=null xvfb-run -a -s "-screen 0 1280x800x24" <pkg>/llplayer ~/.cache/llplayer/media/test-720p.mp4`
+  with `LLPLAYER_FFMPEG_DIR` unset. Confirm the window opens, duration reads 0:12 (FFmpeg loaded from the bundled
+  `FFmpeg/`), frames play, the cue "Hello world, this is a test." shows at 0.5 s, and playback reaches the end.
+  Capture a screenshot (`ffmpeg -f x11grab`) into `~/.cache/llplayer/evidence/`, never into the repository.
+- **OpenAL wave backend (agent-runnable, no sound card):** write an `alsoft.conf` with `[general]` `drivers = wave`
+  and `[wave]` `file = /tmp/llplayer.wav`, then run the app with `ALSOFT_CONF=<that file>` and
+  `LLPLAYER_AUDIO_BACKEND=openal` on the test clip. Confirm the WAV holds a 440 Hz tone for roughly the played
+  duration (`ffprobe` duration; `ffmpeg -af astats` shows non-silent RMS), and that pause/seek/volume/mute change it.
+- **Real desktop (owner):** on a Linux desktop with the .NET 10 runtime and `libopenal1`, install the package as in
+  `RUN_INSTRUCTIONS.md`, start it from the application menu (`llplayer.desktop`), and check open file, drag & drop,
+  play/pause/seek/stop, volume/mute, fullscreen, dual subtitles, word click popup, and real sound output. Repeat on
+  X11 and on a Wayland session (Avalonia runs through XWayland; native Wayland is a later opt-in) and at 100 % and
+  200 % scaling.
+- **IME (owner):** with fcitx5 or ibus, type Japanese/Chinese/Korean into the app's text fields (search, settings);
+  confirm the pre-edit text appears at the caret and commits correctly.
+- **Missing prerequisites:** without `libopenal1` the app still plays video silently and logs the fallback; without
+  the .NET 10 runtime the launcher fails with the runtime's install hint.
+- **Packaging:** `scripts/linux/publish.sh` passes its positive/negative content validation; the tar.gz contains no
+  `LLPlayer.*.json`, logs, dub runtime data, or models, `FFmpeg/` holds exactly the seven 8.1 sonames plus
+  `LICENSE.txt` and `SOURCE.txt` (build asset + sha256), and `THIRD-PARTY-NOTICES.md` is at the package root.
+- **Audio hot-plug (owner, known gap):** unplug the USB/Bluetooth output during playback. Today audio stays silent
+  until the file is reopened (the app does not call `AudioEngine.RefreshDevices()`; backlog F-13 parity item 14);
+  record the result until that item lands.

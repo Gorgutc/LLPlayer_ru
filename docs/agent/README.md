@@ -10,7 +10,7 @@ Start with:
 - `docs/agent/frozen-decisions.md`
 - The relevant `llplayer-*` skill under `Plugins/llplayer-codex/skills`
 
-This repository is a Windows C#/.NET 10 WPF desktop app. Do not import PL_RU/codex web gates unless a future task explicitly adds a web surface.
+This repository is a C#/.NET 10 desktop app: the shipped Windows WPF app plus the in-progress Linux Avalonia app (F-13, see `architecture.md`). Do not import PL_RU/codex web gates unless a future task explicitly adds a web surface.
 
 Frozen product contracts:
 

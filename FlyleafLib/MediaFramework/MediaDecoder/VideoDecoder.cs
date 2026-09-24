@@ -1,4 +1,6 @@
-﻿using SharpGen.Runtime;
+﻿#if WINDOWS
+using SharpGen.Runtime;
+#endif
 
 using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaFrame;
@@ -678,11 +680,13 @@ public unsafe class VideoDecoder : DecoderBase
         {
             mFrame = Renderer.FillPlanes(ref frame);
         }
+#if WINDOWS
         catch(SharpGenException e)
         {
             Log.Error($"FillAVFrame failed ({e.ResultCode.NativeApiCode} | {Renderer.Device.DeviceRemovedReason.NativeApiCode} | {e.Message})");
             ResetLocal();
         }
+#endif
         catch (Exception ex)
         {
             Log.Error($"FillAVFrame failed ({ex.Message})");

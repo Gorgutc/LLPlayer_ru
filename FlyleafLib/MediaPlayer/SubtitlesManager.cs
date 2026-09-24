@@ -5,7 +5,9 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Windows.Data;
+#if WINDOWS
 using System.Windows.Media.Imaging;
+#endif
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaFrame;
@@ -1209,11 +1211,13 @@ public class SubtitleBitmapData : IDisposable
 
     public AVSubtitle Sub;
 
+#if WINDOWS
     public WriteableBitmap SubToWritableBitmap(bool isGrey)
     {
         (byte[] data, AVSubtitleRect rect) = SubToBitmap(isGrey);
         return SubsBitmap.CreateWritableBitmap(data, rect.w, rect.h);
     }
+#endif
 
     public unsafe (byte[] data, AVSubtitleRect rect) SubToBitmap(bool isGrey)
     {

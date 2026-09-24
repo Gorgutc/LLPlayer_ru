@@ -1,9 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net10.0-windows10.0.18362.0</TargetFrameworks>
-    <UseWindowsForms>true</UseWindowsForms>
-    <UseWPF>true</UseWPF>
+    <TargetFrameworks>net10.0-windows10.0.18362.0;net10.0</TargetFrameworks>
     <RepositoryUrl></RepositoryUrl>
     <Description>Media Player .NET Library for WinUI 3/WPF/WinForms (based on FFmpeg/DirectX)</Description>
     <Version>3.10.4</Version>
@@ -14,6 +12,12 @@
     <PackageTags>flyleaf flyleaflib video audio media player engine framework download extract ffmpeg vortice directx</PackageTags>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Windows TFM: WPF/WinForms host + D3D11/XAudio2/MediaFoundation media stack (unchanged). -->
+  <PropertyGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0'">
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
@@ -34,6 +38,17 @@
     <NoWarn>1701;1702;WFO1000</NoWarn>
   </PropertyGroup>
 
+  <!-- F-13 portable (Linux) TFM: same compiler settings as the Windows TFM. -->
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net10.0|AnyCPU'">
+    <WarningLevel>6</WarningLevel>
+    <NoWarn>1701;1702;WFO1000</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Release|net10.0|AnyCPU'">
+    <WarningLevel>6</WarningLevel>
+    <NoWarn>1701;1702;WFO1000</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CliWrap" Version="3.10.1" />
     <PackageReference Include="DeepL.net" Version="1.21.0" />
@@ -45,13 +60,46 @@
     <PackageReference Include="SearchPioneer.Lingua" Version="1.0.5" />
     <PackageReference Include="TesseractOCR" Version="5.5.2" />
     <PackageReference Include="UTF.Unknown" Version="2.6.0" />
+    <PackageReference Include="Whisper.net" Version="1.9.0" />
+  </ItemGroup>
+
+  <!-- DirectX / MediaFoundation / XAudio2 bindings: Windows TFM only. -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0'">
     <PackageReference Include="Vortice.D3DCompiler" Version="3.7.6-beta" />
     <PackageReference Include="Vortice.Direct3D11" Version="3.7.6-beta" />
     <PackageReference Include="Vortice.DirectComposition" Version="3.7.6-beta" />
     <PackageReference Include="Vortice.Mathematics" Version="1.9.3" />
     <PackageReference Include="Vortice.MediaFoundation" Version="3.7.6-beta" />
     <PackageReference Include="Vortice.XAudio2" Version="3.7.6-beta" />
-    <PackageReference Include="Whisper.net" Version="1.9.0" />
+  </ItemGroup>
+
+  <!-- Portable replacements live under Platform/Portable and are compiled only for the portable TFM. -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0'">
+    <Compile Remove="Platform\Portable\**" />
+  </ItemGroup>
+
+  <!-- F-13 portable (Linux) TFM: Windows-only sources (WPF/WinForms host, Direct3D11 renderer, MediaFoundation
+       capture devices, XAudio2 output, Win32 interop) are excluded; files under Platform/Portable replace them. -->
+  <ItemGroup Condition="'$(TargetFramework)'=='net10.0'">
+    <!-- WPF theme info / WPF controls (FlyleafHost, PlayerDebug, converters, CommandManager-based RelayCommand) -->
+    <Compile Remove="AssemblyInfo.cs" />
+    <Compile Remove="Controls\WPF\**" />
+    <Compile Include="Controls\WPF\RelayCommandSimple.cs" />
+    <None Remove="Controls\WPF\**" />
+    <None Remove="Themes\**" />
+    <!-- Direct3D11 / DXGI / DirectComposition renderer, HLSL shader compiler, D3D11 textures in VideoFrame -->
+    <Compile Remove="MediaFramework\MediaRenderer\Renderer.*.cs" />
+    <Compile Remove="MediaFramework\MediaRenderer\ShaderCompiler*.cs" />
+    <Compile Remove="MediaFramework\MediaRenderer\SwapChain.cs" />
+    <Compile Remove="MediaFramework\MediaFrame\VideoFrame.cs" />
+    <!-- MediaFoundation capture-device enumeration, MMDevice/XAudio2 audio endpoints, DXGI adapters -->
+    <Compile Remove="MediaFramework\MediaDevice\VideoDeviceStream.cs" />
+    <Compile Remove="Engine\Engine.Audio.cs" />
+    <Compile Remove="Engine\Engine.Video.cs" />
+    <!-- Win32 P/Invoke (user32/gdi32/winmm/shlwapi/kernel32) -->
+    <Compile Remove="Utils\NativeMethods.cs" />
+    <!-- GDI+ (System.Drawing.Common) bitmaps + WinRT Windows.Media.Ocr -->
+    <Compile Remove="MediaPlayer\SubtitlesOCR.cs" />
   </ItemGroup>
 
 </Project>

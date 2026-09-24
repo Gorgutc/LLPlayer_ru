@@ -13,16 +13,25 @@ If `CLAUDE.md`, `GEMINI.md`, or other legacy files disagree with this file, foll
 
 ## Project Snapshot
 
-LLPlayer is a Windows-only C#/.NET 10 WPF media player for language learning. The repository contains:
+LLPlayer is a C#/.NET 10 media player for language learning with two desktop front-ends over one engine:
+**Windows (WPF)** — the shipped product, unchanged — and **Linux (Avalonia)** — the F-13 port, in progress. The repository contains:
 
 - `LLPlayer/`: WPF `WinExe`, Prism/DryIoc, MaterialDesignThemes, app configuration, views, view models, controls, and dialogs.
 - `FlyleafLib/`: media engine library based on FFmpeg, DirectX/Vortice, MediaFoundation, XAudio2, subtitles, translation, ASR, OCR, and plugins.
+  It multi-targets `net10.0-windows10.0.18362.0` (Windows, compiled exactly as before) and portable `net10.0` (Linux); the
+  portable-only seams (software renderer, `IVideoSurface`, `IAudioSink`/`IAudioBackend`, `IUIDispatcher`, `IHostServices`,
+  WPF type stand-ins) live in `FlyleafLib/Platform/Portable/` and are not compiled into the Windows target.
+- `LLPlayer.Avalonia/`: Linux desktop app (Avalonia 12.1.3 + built-in FluentTheme + our own theme built from shadcn/ui
+  design tokens, CommunityToolkit.Mvvm) on FlyleafLib's `net10.0` target. `LLPlayer.Avalonia.Tests/`: headless UI tests.
 - `Plugins/YoutubeDL/`: .NET plugin that integrates `yt-dlp.exe`.
 - `WpfColorFontDialog/`: WPF color/font dialog dependency.
-- `FlyleafLibTests/`: xUnit v3 tests.
+- `FlyleafLibTests/`: xUnit v3 tests (Windows target on Windows; the portable `net10.0` target on Linux).
 - `FFmpeg/`, `LLPlayer/lib/7z.dll`, and `LLPlayer/Assets/silero_vad.onnx`: tracked native/runtime assets required by packaging.
+  The Linux FFmpeg shared libraries are fetched into the gitignored `FFmpeg/linux-x64/` by `scripts/linux/fetch-ffmpeg.sh`.
 
-The application targets `net10.0-windows10.0.18362.0`, `win-x64`, and publishes as a framework-dependent single-file Windows exe. Do not assume this is a web, Node, React, or Playwright project.
+The Windows application targets `net10.0-windows10.0.18362.0`, `win-x64`, and publishes as a framework-dependent single-file Windows exe.
+The Linux application targets `net10.0`, `linux-x64`, framework-dependent, packaged as `LLPlayer-<version>-linux-x64.tar.gz`.
+Do not assume this is a web, Node, React, or Playwright project.
 
 This is a fork of upstream `umlx5h/LLPlayer`; the `_ru` suffix denotes the Russified agent/automation infrastructure layer (this `AGENTS.md`, `docs/agent/`, `scripts/codex/`, `Plugins/llplayer-codex/`, Russian commit messages), **not** a Russian-localized build — the player UI/code tracks upstream and is not localized. See `docs/agent/architecture.md` ("Fork Relationship") and the local developer-environment notes in `docs/agent/technical-stack.md` ("Local Development Environment").
 
@@ -86,6 +95,20 @@ safe seam exists, with intentional RED evidence where applicable. If WPF, native
 make that unsafe, document the reason and the exact manual or integration smoke instead. Do not use a global coverage
 percentage or a hard-coded passing-test total as a quality gate; the full unfiltered suite remains mandatory.
 
+Linux gates (F-13; they add to the Windows gates above, which stay unchanged and remain required for the WPF product):
+
+```bash
+scripts/linux/fetch-ffmpeg.sh   # FFmpeg 8.1 shared libs -> FFmpeg/linux-x64 (gitignored), sha256-verified
+scripts/linux/verify.sh         # full Linux gate; --fast = validators + portable builds + tests
+scripts/linux/publish.sh        # LLPlayer-<version>-linux-x64.tar.gz with positive/negative content validation
+```
+
+`verify.sh` runs restore, the Windows WPF app/plugin compile check (via `EnableWindowsTargeting`), the portable
+FlyleafLib/Avalonia builds, the Linux test suites, and the platform-neutral `scripts/codex` validators. On Linux, agents
+run those validators with PowerShell 7 installed by `dotnet tool install -g PowerShell`; `check-environment.ps1` and
+`verify-plugin.ps1` are Windows-only (Windows OS check, NTFS junction fixture) and are skipped there. CI runs the same
+scripts in `.github/workflows/build-linux.yml` (job `LLPlayer Linux Build & Test`).
+
 On this machine, sandboxed `dotnet` can fail when MSBuild reads the Windows SDK under AppData. If that happens, request the approved escalation and rerun the same command.
 
 ## What Not To Port
@@ -102,6 +125,8 @@ Do not copy PL_RU/codex web gates as-is. The following are not LLPlayer quality 
 - Keep `.github/actions/build-package/action.yml` as the source of truth for release packaging.
 - Preserve the separate app publish and `Plugins/YoutubeDL` publish flow.
 - Keep tracked native/runtime assets intentional: `FFmpeg/*.dll`, `LLPlayer/lib/7z.dll`, and `LLPlayer/Assets/silero_vad.onnx`.
+- Linux: never commit the fetched FFmpeg `*.so*` libraries or the Linux package; `scripts/linux/publish.sh` (CI:
+  `.github/workflows/build-linux.yml`) builds the tar.gz and does not change the Windows release packaging.
 - Do not commit publish output, downloaded `yt-dlp.exe`, Whisper/Tesseract models, logs, dumps, local runtime config JSON, secrets, or Codex memories.
 
 ## GitHub Flow

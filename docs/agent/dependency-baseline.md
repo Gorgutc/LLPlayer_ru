@@ -5,10 +5,11 @@ This document freezes current dependency decisions from `main`.
 ## Project Targets
 
 - `LLPlayer`: `net10.0-windows10.0.18362.0`, `WinExe`, WPF, `win-x64`.
-- `FlyleafLib`: `net10.0-windows10.0.18362.0`, WPF and Windows Forms enabled.
+- `FlyleafLib`: `net10.0-windows10.0.18362.0`, WPF and Windows Forms enabled; plus portable `net10.0` for Linux (F-13) without WPF, Windows Forms, or Vortice.
 - `WpfColorFontDialog`: `net10.0-windows10.0.18362.0`, WPF.
 - `Plugins/YoutubeDL`: `net10.0-windows10.0.18362.0`, `win-x64`.
-- `FlyleafLibTests`: xUnit test project targeting `net10.0-windows10.0.18362.0`.
+- `FlyleafLibTests`: xUnit test project targeting `net10.0-windows10.0.18362.0` (on Linux build hosts it also builds and runs `net10.0`).
+- `LLPlayer.Avalonia` (F-13): `net10.0`, `linux-x64`, framework-dependent Avalonia app. `LLPlayer.Avalonia.Tests`: `net10.0`.
 
 ## NuGet Baseline
 
@@ -99,6 +100,74 @@ Whisper/ASR diagnostics already ask users whether Microsoft Visual C++ Redistrib
 - Do not upgrade framework target, runtime identifiers, native bindings, Whisper/Tesseract runtime packages, Vortice packages, or FFmpeg assets as incidental cleanup.
 - Dependency upgrades require a focused task, verification with `scripts/codex/verify.ps1`, and relevant manual smoke checks.
 - Release packaging remains tied to `.github/actions/build-package/action.yml`.
+
+## Linux Baseline (F-13)
+
+The Linux build is additive; nothing above changes for Windows.
+
+| Project | Package | Version |
+| --- | --- | --- |
+| `LLPlayer.Avalonia` | `Avalonia` | `12.1.3` |
+| `LLPlayer.Avalonia` | `Avalonia.Desktop` | `12.1.3` |
+| `LLPlayer.Avalonia` | `Avalonia.Themes.Fluent` | `12.1.3` |
+| `LLPlayer.Avalonia` | `Avalonia.Fonts.Inter` | `12.1.3` |
+| `LLPlayer.Avalonia` | `CommunityToolkit.Mvvm` | `8.4.2` |
+| `LLPlayer.Avalonia` | `Avalonia.BuildServices` | `11.3.2` (`ExcludeAssets="all"`, `PrivateAssets="all"`: only switches off Avalonia's build-time telemetry task) |
+| `LLPlayer.Avalonia.Tests` | `Avalonia.Headless.XUnit` | `12.1.3` |
+| `LLPlayer.Avalonia.Tests` | `Avalonia.Skia` | `12.1.3` |
+| `LLPlayer.Avalonia.Tests` | `Avalonia.BuildServices` | `11.3.2` (`ExcludeAssets="all"`, `PrivateAssets="all"`, telemetry opt-out) |
+| `LLPlayer.Avalonia.Tests` | `AwesomeAssertions` | `9.4.0` |
+| `LLPlayer.Avalonia.Tests` | `Microsoft.NET.Test.Sdk` | `18.4.0` |
+| `LLPlayer.Avalonia.Tests` | `xunit.v3` | `3.2.2` |
+| `LLPlayer.Avalonia.Tests` | `xunit.runner.visualstudio` | `3.1.5` |
+
+The portable `net10.0` TFM of `FlyleafLib` adds no package: the OpenAL Soft output binds `libopenal.so.1` at run time
+with `NativeLibrary.TryLoad` + `GetExport` (no `DllImport` resolver, so it cannot collide with another resolver in
+the assembly), and the software renderer uses the FFmpeg libraries already bound by `Flyleaf.FFmpeg.Bindings`
+(`swscale`, `avfilter`: `bwdif`/`yadif`/`estdif`, `zscale`+`tonemap`).
+
+Test infrastructure packages in `LLPlayer.Avalonia.Tests` use the same versions as `FlyleafLibTests`. Versions are
+pinned exactly in each `.csproj` (no ranges, no `Directory.Packages.props`); the `.csproj` files are the source of
+truth, and adding or upgrading any Linux package is the same focused dependency work as on Windows.
+
+- **UI decision (owner, 2026-09-24):** Avalonia 12.1.3 with the built-in FluentTheme plus our own theme built from
+  shadcn/ui design tokens (shadcn/ui is MIT and is used only as a design source: colours, radii, spacing — no code or
+  package). ShadUI was rejected as a dependency (0.x, single maintainer), and no other theme package (SukiUI, Semi) is
+  used either, so an Avalonia upgrade never waits on a third-party theme; a web UI with real shadcn/ui was rejected because it cannot carry FlyleafLib video frames
+  efficiently and would reintroduce the web stack listed under "What Not To Port" in `AGENTS.md`.
+- **FFmpeg:** BtbN/FFmpeg-Builds `ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz` (release tag `latest`), verified
+  against the release's `checksums.sha256` by `scripts/linux/fetch-ffmpeg.sh`, which also fails unless the sonames
+  are exactly `libavcodec.so.62`, `libavformat.so.62`, `libavutil.so.60`, `libswscale.so.9`, `libswresample.so.6`,
+  `libavfilter.so.11`, and `libavdevice.so.62` — the same majors as the tracked Windows DLLs, matching
+  `Flyleaf.FFmpeg.Bindings` `8.0.1`. The libraries are fetched into the gitignored `FFmpeg/linux-x64/` and are
+  never committed (~210 MB). `latest` is a rolling build: the checksum proves integrity, not reproducibility; pin
+  `LLPLAYER_FFMPEG_URL` + `LLPLAYER_FFMPEG_SHA256` to a dated BtbN release for a reproducible build. It is a GPL
+  build, so the Linux package ships its `LICENSE.txt` as `FFmpeg/LICENSE.txt` plus `FFmpeg/SOURCE.txt` (asset name,
+  sha256 from the fetch marker, build-recipe and FFmpeg source URLs); a formal GPL source offer is part of the
+  Linux release integration (backlog F-13). Windows packaging copies `FFmpeg/`
+  recursively, so do not build a Windows package from a checkout that has `FFmpeg/linux-x64/` (release jobs use
+  fresh checkouts).
+- **OpenAL Soft:** the system `libopenal.so.1` (Ubuntu `libopenal1`, LGPL-2.1) is a runtime prerequisite and is not
+  bundled. Without it, audio falls back to the silent null sink.
+- **Bundled NuGet natives in the Linux package:** `libSkiaSharp.so`, `libHarfBuzzSharp.so` (Avalonia rendering) and
+  `libonnxruntime.so`, `libonnxruntime_providers_shared.so` (Silero VAD). The Windows-only `x64/`/`x86/` Tesseract
+  DLLs that the TesseractOCR build targets copy are removed from the Linux package.
+- **Prerequisites for end users:** .NET 10 runtime (Ubuntu: `apt install dotnet-runtime-10.0`) and `libopenal1`.
+
+### Linux package rules
+
+`scripts/linux/publish.sh` publishes `LLPlayer.Avalonia` (`-c Release -r linux-x64 --self-contained false
+-warnaserror`) and archives `LLPlayer-<version>-linux-x64.tar.gz` (version from `LLPlayer.Avalonia.csproj`, else
+`LLPlayer.csproj`). Mirroring the Windows ship rules, it must:
+
+- positively validate the required contents: the `LLPlayer.Avalonia` apphost, `.dll`, `.deps.json`,
+  `.runtimeconfig.json`, `FlyleafLib.dll`, `libSkiaSharp.so`, `libHarfBuzzSharp.so`, all seven FFmpeg sonames and
+  `FFmpeg/LICENSE.txt` + `FFmpeg/SOURCE.txt`, the committed `dub_sidecar` source (`server.py`, `pyproject.toml`,
+  `uv.lock`, `README.md`), `LICENSE`, `THIRD-PARTY-NOTICES.md` (shadcn/ui MIT, Lucide ISC/MIT, FFmpeg), the `llplayer` launcher, `llplayer.desktop`, and `LLPlayer.png` — each a non-empty file inside the package;
+- reject runtime config JSON (`LLPlayer.*.json`), logs, dumps, `.env*`, dubbing runtime data (`DubEngine`,
+  `dubmodels`, `*.ru.dub.*`, `*.ru.voices.json`), Python venvs, downloaded models (`ggml-*.bin`, `*.traineddata`),
+  user media folders, any `*.so` outside `FFmpeg/` other than the four NuGet natives above, FFmpeg libraries with
+  other majors, Windows native payload folders, and symlinks that escape the package.
 
 ## Release Packaging Tail
 

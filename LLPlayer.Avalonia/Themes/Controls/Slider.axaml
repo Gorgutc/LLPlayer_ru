@@ -1,0 +1,18 @@
+<!--
+  shadcn/ui Slider (seek / volume): 6px muted track, primary range, 16px round primary thumb. Colours come from the
+  Fluent Slider* keys in ShadcnTokens (generated), sizes from the metric overrides there.
+  Class "thin": the seek bar variant (compact height); its 4px track / 12px thumb come from instance resources.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Slider:disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+  <!-- "thin" (seek bar): 4px track; the 12px thumb is set through instance resources (see MainWindow SeekSlider),
+       because the Fluent template reads the thumb size as a dynamic resource of the control. -->
+  <Style Selector="Slider.thin">
+    <Setter Property="MinHeight" Value="20" />
+  </Style>
+
+</Styles>

@@ -101,9 +101,15 @@ results block merge; a successful result on the current PR head permits merge wh
 
 The workflow runs the fast gate after setting up .NET 10 and before its separate restore, app/plugin build, and test
 steps, so infrastructure or frozen-contract drift fails before compilation. `verify-build-workflow.ps1` validates the
-exact workflow/check identities, .NET 10 setup, fast-gate placement relative to restore, and the three-file workflow
+exact workflow/check identities, .NET 10 setup, fast-gate placement relative to restore, and the four-file workflow
 inventory. It rejects conditional or continue-on-error bypasses, additional workflows, non-build job display names,
 and adversarial hierarchy, expression/folded/escaped/over-indented, cross-job, setup, SDK, and ordering fixtures.
+The fourth file, `build-linux.yml` (F-13), has its own exact contract: workflow `Linux Build & Test`, one job
+`LLPlayer Linux Build & Test` on `ubuntu-24.04`, `contents: read`, only the reviewed action references (the release
+workflows' pinned checkout/setup-dotnet/upload-artifact SHAs and `actions/cache` pinned to the v6.1.0 commit SHA), the ordered
+fetch-ffmpeg → verify → publish → upload steps, and never the Windows required-check name. Adversarial fixtures cover
+name collision/composition, mutable or unapproved actions, escaped keys, write or extra permissions, non-fatal or
+fast-only verification, extra jobs, `pull_request_target`, and secrets.
 
 Use this read-only helper before review when you need to map changed files to frozen contracts, agents, and gates:
 
@@ -137,6 +143,33 @@ dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
 dotnet test --no-restore -warnaserror .\FlyleafLibTests
 ```
+
+## Linux Gate (F-13)
+
+```bash
+scripts/linux/fetch-ffmpeg.sh
+scripts/linux/verify.sh
+scripts/linux/publish.sh
+```
+
+`verify.sh` is the Linux counterpart of `verify.ps1` and adds to the Windows gates; it never replaces them for the
+WPF product. It checks the `scripts/linux` syntax, runs the offline self-tests in
+`scripts/linux/tests/test-scripts.sh` (every package validation rule, FFmpeg soname/licence/destination checks on
+stub tarballs, input errors), checks that no Linux `*.so` is tracked, runs the platform-neutral
+validators under PowerShell 7 (`verify-doc-coverage`, `verify-frozen`, `verify-full-gate`, `verify-build-workflow`,
+`verify-release-workflow`, `check-dub-licenses`; a missing `pwsh` fails in CI), prints the informational
+`audit-frozen.ps1` review routing for the branch diff against `origin/main` when that ref is present (a routing helper,
+not a pass/fail gate; a shallow CI checkout skips it), restores
+`LLPlayer.slnx` with `-warnaserror`, compile-checks the WPF app and YoutubeDL plugin, builds FlyleafLib `net10.0` and
+the Avalonia projects (both required and listed in `LLPlayer.slnx`), and runs the portable FlyleafLib suite plus `LLPlayer.Avalonia.Tests` with
+`LLPLAYER_FFMPEG_DIR`, a generated `LLPLAYER_TEST_MEDIA`, and `LLPLAYER_AUDIO_BACKEND=null`. `--fast` skips the
+WPF/plugin compile check. Skipped on Linux, by design: `check-environment.ps1` (Windows OS check) and
+`verify-plugin.ps1` (NTFS junction fixture), and therefore the `verify-fast.ps1`/`verify.ps1`/`ship.ps1` wrappers.
+
+`publish.sh` builds `LLPlayer-<version>-linux-x64.tar.gz` with the positive/negative content validation described in
+`dependency-baseline.md` ("Linux package rules"), an integrity listing, and a `.sha256` file. FFmpeg/media-dependent
+tests skip (never fail) when `LLPLAYER_FFMPEG_DIR` or `LLPLAYER_TEST_MEDIA` is unset, so a green run without them is
+not evidence for the playback path; `verify.sh` refuses to run without the FFmpeg libraries for that reason.
 
 ## Risk-Based Coverage Policy
 

@@ -18,6 +18,7 @@ partial class Player
 
     Tuple<KeyBinding,long> onKeyUpBinding;
 
+#if WINDOWS
     /// <summary>
     /// Can be used to route KeyDown events (WPF)
     /// </summary>
@@ -57,6 +58,7 @@ partial class Player
     /// <param name="e"></param>
     public static void KeyUp(Player player, System.Windows.Forms.KeyEventArgs e)
         => e.Handled = KeyUp(player, KeyInterop.KeyFromVirtualKey((int)e.KeyCode));
+#endif
 
     public static bool KeyDown(Player player, Key key)
     {

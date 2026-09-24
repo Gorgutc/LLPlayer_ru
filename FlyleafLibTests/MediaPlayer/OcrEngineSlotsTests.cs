@@ -1,4 +1,6 @@
+#if WINDOWS
 using System.Drawing;
+#endif
 using System.Threading.Tasks;
 using AwesomeAssertions;
 
@@ -68,7 +70,11 @@ public class OcrEngineSlotsTests
             return true;
         }
 
+#if WINDOWS
         public Task<string> RecognizeTextAsync(Bitmap bitmap) => Task.FromResult("");
+#else
+        public Task<string> RecognizeTextAsync(BgraBitmap bitmap) => Task.FromResult("");
+#endif
 
         public string PostProcess(string text) => text;
 

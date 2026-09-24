@@ -3,9 +3,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Data;
 
+#if WINDOWS
 using Vortice.Direct3D11;
 
 using ID2D1DeviceContext = Vortice.Direct2D1.ID2D1DeviceContext;
+#endif
 
 using FlyleafLib.Controls.WPF;
 using FlyleafLib.MediaFramework.MediaFrame;
@@ -943,6 +945,7 @@ public class Config : NotifyPropertyChanged
         /// </summary>
         public SwsFlags         BitmapSubsScaleQuality      { get; set; } = SwsFlags.Bilinear | SwsFlags.Bitexact;
 
+#if WINDOWS
         public event EventHandler<ID2D1DeviceContext> D2DInitialized;
         public event EventHandler<ID2D1DeviceContext> D2DDisposing;
         public event EventHandler<ID2D1DeviceContext> D2DDraw;
@@ -955,6 +958,7 @@ public class Config : NotifyPropertyChanged
 
         internal void OnD2DDraw(Renderer renderer, ID2D1DeviceContext context)
             => D2DDraw?.Invoke(renderer, context);
+#endif
 
         /// <summary>
         /// When you change a filter value from one VP will update also the other if exists (however might not exact same picture output)
@@ -1013,7 +1017,11 @@ public class Config : NotifyPropertyChanged
         /// <summary>
         /// The upper limit of the volume amplifier
         /// </summary>
+#if WINDOWS
         public int              VolumeMax           { get => _VolumeMax; set { Set(ref _VolumeMax, value); if (player != null && player.Audio.masteringVoice != null) player.Audio.masteringVoice.Volume = value / 100f;  } }
+#else
+        public int              VolumeMax           { get => _VolumeMax; set { Set(ref _VolumeMax, value); player?.Audio.SetMasterVolume(value / 100f); } }
+#endif
         int _VolumeMax = 150;
 
         /// <summary>

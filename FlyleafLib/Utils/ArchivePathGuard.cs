@@ -30,6 +30,14 @@ public static class ArchivePathGuard
         if (string.IsNullOrEmpty(entryName))
             return true;
 
+#if !WINDOWS
+        // Archive entries may use Windows separators / drive-qualified names: interpret them as Windows would ('\\' is
+        // a separator, "X:..." is rooted) so an entry that would escape on Windows is refused on every platform.
+        entryName = entryName.Replace('\\', '/');
+        if (entryName.Length >= 2 && entryName[1] == ':' && char.IsAsciiLetter(entryName[0]))
+            return false;
+#endif
+
         string baseFull = Path.GetFullPath(baseDirectory);
         string baseWithSep = baseFull.EndsWith(Path.DirectorySeparatorChar)
             ? baseFull
@@ -39,8 +47,14 @@ public static class ArchivePathGuard
         // absolute/rooted entry escapes here and is rejected by the containment check below.
         string candidate = Path.GetFullPath(Path.Combine(baseFull, entryName));
 
+#if WINDOWS
         return candidate.Equals(baseFull, StringComparison.OrdinalIgnoreCase)
             || candidate.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase);
+#else
+        // Case-sensitive file systems: "../foo" next to base "Foo" is a different directory, so compare ordinally.
+        return candidate.Equals(baseFull, StringComparison.Ordinal)
+            || candidate.StartsWith(baseWithSep, StringComparison.Ordinal);
+#endif
     }
 
     /// <summary>

@@ -24,6 +24,47 @@ This document freezes runtime boundaries and high-risk invariants from `main`.
 - A-B repeat (F-12, since 0.3.27) checks on the playback thread inside `UpdateCurTime` — after the `lock(seeks)` block, so no nested locking — whether the playhead reached the user's B point and, if so, issues the existing `SeekAccurate` back to A. It adds no new lock and routes through the same queued-seek/resync path as a slider seek; the A/B points are two `long` fields read/written via `Volatile.Read/Write`. The check is inert when no points are set (byte-identical), during reverse playback, and for HLS-live; the points reset on open via `ResetMe`.
 - The seek-bar waveform (F-12, since 0.3.28) decodes the whole audio stream once on a background worker via a dedicated `WaveformReader` that opens its OWN isolated `Demuxer` + `AudioDecoder` + `SwrContext` (the same sanctioned "second `avformat_open_input`" pattern the ASR `AudioReader` uses — a second decode must never share the playing `AVFormatContext`); it never touches the playing decoder/demuxer/seek path and adds no lock. The pass resamples to S16 mono 16 kHz and folds peaks into the pure `WaveformPeakBuilder` (`FlyleafLib/Utils/WaveformPeaks.cs`); it carries none of the ASR denoise/silence/chunking state. The build is cancellable (the reader's Interrupter is wired to the token), is started/cancelled by `Player.Waveform.cs` (on audio-open when enabled, on toggle, and reset in `ResetMe`), publishes peaks to the UI through the existing `UI(...)` marshaller, fails soft on a decode error, and is skipped for live/HLS, no-audio, or unknown-duration media. Off by default → no decode runs.
 
+## Portable Runtime Boundaries (Linux, F-13)
+
+Additive: everything above still applies to the Windows target unchanged. These rules cover FlyleafLib's portable
+`net10.0` target (`FlyleafLib/Platform/Portable/`) and its host, `LLPlayer.Avalonia`.
+
+- **Windows stays identical.** Shared FlyleafLib files change only inside `#if !WINDOWS` blocks or portable `partial`
+  files; the Windows target must compile the same code with the same behaviour.
+- **Engine start/stop.** The host installs `Utils.UIDispatcher`, `Utils.HostServices`, and `AudioEngine.Backend`
+  before `Engine.Start`, and passes an explicit FFmpeg folder (`--ffmpeg-dir`, `LLPLAYER_FFMPEG_DIR`, else
+  `<app>/FFmpeg`) holding the FFmpeg 8 sonames (`libavcodec.so.62`, `libavutil.so.60`, ...). The Windows `:FFmpeg` / `:Plugins` resolution rule is unchanged. Without a
+  WPF `Application`, engine shutdown hangs off `AppDomain.ProcessExit` (disposes players, flushes the log).
+- **UI dispatcher hook.** `Utils.UI*` marshal through `IUIDispatcher`; with no dispatcher installed they run inline
+  (tests only). The WPF Dispatcher Boundaries above apply to the Avalonia dispatcher too: do not remove marshalling.
+  `BindingOperations.EnableCollectionSynchronization` only forwards to a host handler, so the host must itself move
+  collection change notifications onto its UI thread.
+- **Video: software decode + `sws_scale` BGRA path.** No hardware decoding (`ConfigHWFrames` returns false). On the
+  playback thread the renderer deinterlaces (`bwdif`, `yadif` fallback, `estdif` for a lone paused frame), tone-maps
+  PQ/HLG to SDR (`zscale`+`tonemap` when the FFmpeg build has them), crops, converts to BGRA32 with `sws_scale` at
+  min(native, viewport) size per axis, applies rotation/mirroring and the brightness/contrast/hue/saturation filters,
+  and hands the ready-to-show frame to `IVideoSurface.PresentFrame(span, width, height, stride)`; snapshots go through
+  the same pipeline at native size and are encoded by FFmpeg. The host only scales the frame into
+  `Renderer.Viewport`; `Rotation`, `HFlip`, and `VFlip` are informational and must not be applied again.
+- **`IVideoSurface` threading.** `PresentFrame` and `ClearFrame` run on the playback thread or on the thread that
+  stops/disposes the player, sometimes while a renderer lock is held. The span is valid only during the call. An
+  implementation must copy the pixels and `Post` to the UI thread — never block on or `Invoke` into the UI thread
+  from these calls (deadlock). `Renderer.Surface` may be set from any thread; setting it repaints the current frame.
+- **Audio sinks.** The player always asks the backend for a 2-channel S16 sink. `IAudioSink.Submit` copies before it
+  returns; `SamplesPlayed` is monotonic and never exceeds what was submitted; `Flush` drops queued audio without
+  counting it as played. If `CreateSink` throws, audio is disabled for that player, as on Windows. `NullAudioSink`
+  consumes at wall-clock speed, so A/V sync works without a sound device; OpenAL Soft (system `libopenal.so.1`) is the
+  desktop backend; `LLPLAYER_AUDIO_BACKEND=null|openal|auto` selects, and CI/headless runs use `null`.
+  `AudioEngine.RefreshDevices()` re-enumerates the devices and moves players whose explicitly selected device
+  disappeared to the default device, but only when the host calls it: there is no OpenAL hot-plug notification and
+  the Linux app does not call it yet. A disconnected OpenAL device (also the one behind "default") makes every
+  `Submit` throw, and `Audio.AddSamples` turns that into `ClearBuffer`, so audio stays silent until the stream is
+  re-initialised (reopen, or a device change). Known gap, tracked in backlog F-13 (parity list).
+- **Other hooks.** Modifier keys come from `Player.KeyStateProvider`; filtered views refresh through
+  `CollectionViewSource.RefreshHandler`; bitmap-subtitle OCR needs `SubtitlesOCR.ServiceFactory` (without it OCR
+  initialisation fails with a message). Cursor hiding, screen-saver inhibition, and timer resolution are no-ops in
+  the engine and belong to the host.
+
 ## Media Framework
 
 - Demuxers and decoders inherit thread lifecycle from `RunThreadBase`.
