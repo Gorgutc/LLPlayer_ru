@@ -28,6 +28,10 @@ internal static class PortableVideoTestMedia
             if (Engine.IsLoaded)
                 return;
 
+            // Engine.Start runs through UIInvokeIfRequired, which is a no-op while Utils.IsTesting is set (other test
+            // classes set it process-wide). Clear it first, otherwise the engine silently stays unloaded and the
+            // first `new Config()` fails on Engine.Plugins == null depending on test order.
+            Utils.IsTesting = false;
             Engine.Start(new EngineConfig
             {
                 FFmpegPath      = ffmpegDir,
@@ -36,6 +40,9 @@ internal static class PortableVideoTestMedia
                 LogLevel        = LogLevel.Quiet,
                 FFmpegLogLevel  = Flyleaf.FFmpeg.LogLevel.Quiet
             });
+
+            if (!Engine.IsLoaded)
+                throw new InvalidOperationException("Engine.Start returned without loading the engine.");
         }
     }
 

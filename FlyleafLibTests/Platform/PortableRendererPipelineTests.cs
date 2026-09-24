@@ -46,8 +46,8 @@ public class PortableRendererPipelineTests
 
         public Session(string media, int controlWidth, int controlHeight, Action<Config>? configure = null)
         {
-            PortableVideoTestMedia.RequireEngine();
             Utils.IsTesting = false; // UI actions must run inline (see PortableEngineSmokeTests)
+            PortableVideoTestMedia.RequireEngine();
 
             Config config = new();
             config.Player.AutoPlay = false;

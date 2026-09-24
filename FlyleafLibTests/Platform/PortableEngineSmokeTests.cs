@@ -52,6 +52,9 @@ public class PortableEngineSmokeTests
                 LogLevel        = LogLevel.Quiet,
                 FFmpegLogLevel  = Flyleaf.FFmpeg.LogLevel.Quiet
             });
+
+            if (!Engine.IsLoaded)
+                throw new InvalidOperationException("Engine.Start returned without loading the engine (is Utils.IsTesting set?).");
         }
     }
 
