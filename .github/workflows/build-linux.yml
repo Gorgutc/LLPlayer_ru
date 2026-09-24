@@ -1,0 +1,67 @@
+name: Linux Build & Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: LLPlayer Linux Build & Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      with:
+        persist-credentials: false
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Install system packages
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends libopenal1 xvfb
+        pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+    # Static key: the sha256-verified tarball (and its recorded hash) is reused until this key changes, which pins the
+    # rolling BtbN "latest" build for CI. Bump the key to pick up a newer 8.1 build.
+    - name: Cache FFmpeg tarball
+      uses: actions/cache@v6
+      with:
+        path: |
+          ~/.cache/llplayer/ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz
+          ~/.cache/llplayer/ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz.sha256
+        key: linux-ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz
+
+    - name: Fetch FFmpeg
+      run: bash scripts/linux/fetch-ffmpeg.sh
+
+    - name: Verify
+      run: xvfb-run -a bash scripts/linux/verify.sh
+
+    - name: Publish
+      run: bash scripts/linux/publish.sh --out "$RUNNER_TEMP/linux-package"
+
+    - name: Upload package
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: LLPlayer-linux-x64
+        path: |
+          ${{ runner.temp }}/linux-package/*.tar.gz
+          ${{ runner.temp }}/linux-package/*.tar.gz.sha256
+        if-no-files-found: error
+        compression-level: 0
+        retention-days: 14

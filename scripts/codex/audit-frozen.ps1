@@ -194,6 +194,35 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
         }
+        # F-13 Linux port: portable engine seams, the Avalonia app, and the Linux build/package tooling.
+        if ($normalized -match '^FlyleafLib/Platform/') {
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+            $gates.Add("linux verify")
+            $gates.Add("playback smoke")
+        }
+        if ($normalized -match '^LLPlayer\.Avalonia(\.Tests)?/') {
+            $contracts.Add("product-behavior-contract.md")
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("verification_reviewer")
+            $gates.Add("linux verify")
+            $gates.Add("manual Linux smoke")
+            if ($normalized -match '(?i)\.axaml$') {
+                $agents.Add("wpf_xaml_reviewer")
+            }
+        }
+        if ($normalized -match '^(scripts/linux/|\.github/workflows/build-linux\.yml$)') {
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("native_dependency_auditor")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("linux verify")
+        }
         if ($normalized -match '^FlyleafLibTests/') {
             $contracts.Add("test coverage")
             $agents.Add("dotnet_quality_guardian")
