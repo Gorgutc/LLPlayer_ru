@@ -258,8 +258,16 @@ public class PortableRendererPipelineTests
         diff.Should().BeGreaterThan(1, "the second field is a different point in time");
         Combing(second, 320, 240).Should().BeLessThan(combedRaw * 0.5);
 
-        // Sequential playback keeps one running graph (one push per frame) instead of rebuilding it
+        // Toggling double rate on the same (paused) frame must not reuse the other mode's cached fields
         s.Config.Video.DoubleRate = false;
+        s.Renderer.RenderPlay(frame, false).Should().BeTrue();
+        s.Renderer.PresentPlay();
+        var single = s.Surface.Snapshot().Pixels;
+        s.Renderer.RenderPlay(frame, true).Should().BeTrue();
+        s.Renderer.PresentPlay();
+        s.Surface.Snapshot().Pixels.Should().Equal(single, "single rate has one picture per frame");
+
+        // Sequential playback keeps one running graph (one push per frame) instead of rebuilding it
         int graphsBefore = s.Renderer.Preprocessor.DeinterlaceGraphsCreated;
         n = s.Surface.Frames;
         s.Player.Play();

@@ -35,7 +35,7 @@ public unsafe partial class Renderer
             var stream  = scfg;
             var tb      = stream != null ? stream.AVStream->time_base : new AVRational { Num = 1, Den = 90000 };
 
-            if (FieldType != VideoFrameFormat.Progressive && !VideoDecoder.Demuxer.IsReversePlayback)
+            if (FieldType != VideoFrameFormat.Progressive && VideoDecoder.Demuxer?.IsReversePlayback != true)
             {   // Same picture as presented (cached for the current frame)
                 var d = preprocessor.Deinterlace(frame, false, Frames, FieldType == VideoFrameFormat.InterlacedTopFieldFirst, ucfg.DoubleRate, tb);
                 if (d != null)

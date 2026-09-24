@@ -55,7 +55,7 @@ public unsafe partial class Renderer
         AVFrame* src= f;
 
         // 1. Deinterlace (full frame, before crop: field parity)
-        if (FieldType != VideoFrameFormat.Progressive && !VideoDecoder.Demuxer.IsReversePlayback)
+        if (FieldType != VideoFrameFormat.Progressive && VideoDecoder.Demuxer?.IsReversePlayback != true)
         {
             var d = preprocessor.Deinterlace(frame, secondField, Frames, FieldType == VideoFrameFormat.InterlacedTopFieldFirst, ucfg.DoubleRate, tb);
             if (d != null)

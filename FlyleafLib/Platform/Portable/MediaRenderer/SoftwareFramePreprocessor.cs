@@ -29,11 +29,12 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
 
     readonly long[]         pushed      = new long[8];  // ids whose outputs are still pending (FIFO)
     int                     pushedHead, pushedCount, outputsForHead;
-    long                    lastPushedId = -1;
+    long                    lastPushedId = -1, firstPushedId = -1; // of the running graph
 
-    AVFrame*                field0, field1;             // outputs of frame 'outId'
+    AVFrame*                field0, field1;             // outputs of frame 'outId' (made with outTff / outDoubleRate)
     long                    outId       = -1;
     int                     outCount;
+    bool                    outTff, outDoubleRate;
     AVFrame*                scratch;                    // look-ahead / warm-up reference and pulled outputs
 
     /// <summary>The deinterlace filter this FFmpeg build provides (bwdif preferred), or null.</summary>
@@ -57,7 +58,7 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
         if (f == null || f->width <= 0 || f->height <= 0)
             return null;
 
-        if (frame.Id == outId && outCount > 0)
+        if (frame.Id == outId && outCount > 0 && outTff == topFieldFirst && outDoubleRate == doubleRate)
             return Pick(secondField);
 
         string? filter = DeinterlaceFilter;
@@ -98,7 +99,7 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
                 return Fail();
         }
 
-        bool hasHistory = lastPushedId != -1 && lastPushedId != frame.Id; // a previous frame is in the filter
+        bool hasHistory = firstPushedId != -1 && firstPushedId < frame.Id; // an earlier frame went through this graph
 
         if (!IsPushed(frame.Id) && Push(f, frame.Id) < 0)
             return Fail();
@@ -116,7 +117,7 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
             {
                 // A lone frame (no cached neighbours, e.g. after a paused seek): with prev == cur == next the temporal
                 // deinterlacer sees no motion and weaves the fields, so use a spatial (intra-field) one instead.
-                if (!hasHistory && !IsPushed(frame.Id + 1))
+                if (!hasHistory)
                     return DeinterlaceSpatial(frame, secondField, topFieldFirst, doubleRate, timeBase);
 
                 if (deint!.PushEof() < 0 || Drain() < 0)
@@ -156,7 +157,9 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
         if (outCount == 0)
             return Error("spatial deinterlacer produced no output");
 
-        outId = frame.Id;
+        outId           = frame.Id;
+        outTff          = topFieldFirst;
+        outDoubleRate   = doubleRate;
         return Pick(secondField);
     }
 
@@ -202,6 +205,8 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
         pushed[(pushedHead + pushedCount) % pushed.Length] = id;
         pushedCount++;
         lastPushedId = id;
+        if (firstPushedId == -1)
+            firstPushedId = id;
 
         return 0;
     }
@@ -238,10 +243,12 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
             }
 
             long id = pushed[pushedHead];
-            if (id != outId)
+            if (id != outId || outTff != deintTff || outDoubleRate != deintDoubleRate)
             {
                 ClearOutputs();
-                outId = id;
+                outId           = id;
+                outTff          = deintTff;
+                outDoubleRate   = deintDoubleRate;
             }
 
             AVFrame* dst = outputsForHead == 0 ? field0 : field1;
@@ -299,7 +306,7 @@ internal sealed unsafe class SoftwareFramePreprocessor : IDisposable
         deint?.Dispose();
         deint           = null;
         pushedHead      = pushedCount = outputsForHead = 0;
-        lastPushedId    = -1;
+        lastPushedId    = firstPushedId = -1;
         ClearOutputs();
     }
     #endregion
