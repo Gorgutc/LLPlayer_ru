@@ -99,7 +99,7 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         {
             if (options.SeekSeconds is { } seek)
                 controller.OpenCompleted += SeekOnce(seek);
-            viewModel.Open(options.MediaPath, options.SubtitlesPath is { } sub ? [sub] : null);
+            viewModel.Open(FullPathIfFile(options.MediaPath), options.SubtitlesPath is { } sub ? [FullPathIfFile(sub)] : null);
         }
 
         ScheduleScreenshot(window, viewModel);
@@ -118,6 +118,9 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
             e.Handled = true;
         }
     }
+
+    /// <summary>Relative command-line file paths become absolute (recent files, "open folder"); URLs pass through.</summary>
+    static string FullPathIfFile(string path) => File.Exists(path) ? Path.GetFullPath(path) : path;
 
     Action<string?, bool, string?> SeekOnce(double seconds)
     {
