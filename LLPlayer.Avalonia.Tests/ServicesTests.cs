@@ -109,22 +109,75 @@ public class StartupTests
     [Fact]
     public void Paths_FollowXdg_WithOverride()
     {
-        AppPaths defaults = AppPaths.FromEnvironment(Env([]), "/home/u");
+        AppPaths defaults = AppPaths.FromEnvironment(Env([]), "/home/u", isWindows: false);
         defaults.ConfigDir.Should().Be("/home/u/.config/LLPlayer");
         defaults.StateDir.Should().Be("/home/u/.local/state/LLPlayer");
         defaults.CrashLogFile.Should().Be("/home/u/.local/state/LLPlayer/crash.log");
         defaults.PrefsFile.Should().Be("/home/u/.config/LLPlayer/LLPlayer.Avalonia.json");
 
-        AppPaths xdg = AppPaths.FromEnvironment(Env(new() { ["XDG_CONFIG_HOME"] = "/cfg", ["XDG_STATE_HOME"] = "/st" }), "/home/u");
+        AppPaths xdg = AppPaths.FromEnvironment(Env(new() { ["XDG_CONFIG_HOME"] = "/cfg", ["XDG_STATE_HOME"] = "/st" }), "/home/u", isWindows: false);
         xdg.ConfigDir.Should().Be("/cfg/LLPlayer");
         xdg.StateDir.Should().Be("/st/LLPlayer");
 
-        AppPaths relative = AppPaths.FromEnvironment(Env(new() { ["XDG_CONFIG_HOME"] = "rel", ["XDG_STATE_HOME"] = "rel" }), "/home/u");
+        AppPaths relative = AppPaths.FromEnvironment(Env(new() { ["XDG_CONFIG_HOME"] = "rel", ["XDG_STATE_HOME"] = "rel" }), "/home/u", isWindows: false);
         relative.ConfigDir.Should().Be("/home/u/.config/LLPlayer", "relative XDG paths are invalid and ignored");
         relative.StateDir.Should().Be("/home/u/.local/state/LLPlayer");
 
-        AppPaths overridden = AppPaths.FromEnvironment(Env(new() { ["LLPLAYER_CONFIG_DIR"] = "/tmp/llp", ["XDG_CONFIG_HOME"] = "/cfg" }), "/home/u");
+        AppPaths overridden = AppPaths.FromEnvironment(Env(new() { ["LLPLAYER_CONFIG_DIR"] = "/tmp/llp", ["XDG_CONFIG_HOME"] = "/cfg" }), "/home/u", isWindows: false);
         overridden.ConfigDir.Should().Be("/tmp/llp");
+    }
+
+    [Fact]
+    public void Paths_OnWindows_UseAppData_NotXdg()
+    {
+        // Owner decision (F-13 "one core + one UI"): the Avalonia app is platform-neutral — %APPDATA%\LLPlayer on Windows.
+        // Rooted "/..." values keep the test host-independent (Path.IsPathRooted("C:\\x") is false on Linux).
+        var env = new Dictionary<string, string>
+        {
+            ["APPDATA"] = "/Users/u/AppData/Roaming",
+            ["LOCALAPPDATA"] = "/Users/u/AppData/Local",
+            ["XDG_CONFIG_HOME"] = "/cfg",
+            ["XDG_STATE_HOME"] = "/st",
+        };
+        AppPaths win = AppPaths.FromEnvironment(Env(env), "/Users/u", isWindows: true);
+        win.ConfigDir.Should().Be(Path.Combine("/Users/u/AppData/Roaming", "LLPlayer"), "XDG variables do not apply on Windows");
+        win.StateDir.Should().Be(Path.Combine("/Users/u/AppData/Local", "LLPlayer"));
+        win.PrefsFile.Should().Be(Path.Combine("/Users/u/AppData/Roaming", "LLPlayer", "LLPlayer.Avalonia.json"));
+
+        AppPaths fallback = AppPaths.FromEnvironment(Env([]), "/Users/u", isWindows: true);
+        fallback.ConfigDir.Should().Be(Path.Combine("/Users/u", "AppData", "Roaming", "LLPlayer"));
+        fallback.StateDir.Should().Be(Path.Combine("/Users/u", "AppData", "Local", "LLPlayer"));
+
+        AppPaths overridden = AppPaths.FromEnvironment(Env(new(env) { ["LLPLAYER_CONFIG_DIR"] = "/tmp/llp" }), "/Users/u", isWindows: true);
+        overridden.ConfigDir.Should().Be(Path.GetFullPath("/tmp/llp"));
+    }
+
+    [Fact]
+    public void FFmpeg_RequiredLibraries_MatchPlatform()
+    {
+        FFmpegLocator.RequiredLibrariesFor(isWindows: false).Should().OnlyContain(l => l.StartsWith("lib") && l.Contains(".so."));
+        FFmpegLocator.RequiredLibrariesFor(isWindows: true).Should().OnlyContain(l => l.EndsWith(".dll"));
+        FFmpegLocator.RequiredLibrariesFor(isWindows: true).Should().HaveCount(FFmpegLocator.RequiredLibrariesFor(isWindows: false).Count);
+        FFmpegLocator.RequiredLibraries.Should().Equal(FFmpegLocator.RequiredLibrariesFor(OperatingSystem.IsWindows()));
+
+        // The Windows set is exactly the tracked FFmpeg/*.dll files (minus the optional avdevice).
+        string repoFFmpeg = Path.Combine(RepoRoot(), "FFmpeg");
+        foreach (string dll in FFmpegLocator.WindowsLibraries)
+            File.Exists(Path.Combine(repoFFmpeg, dll)).Should().BeTrue($"{dll} is a tracked Windows FFmpeg library");
+
+        using TempDir dir = new();
+        foreach (string dll in FFmpegLocator.WindowsLibraries)
+            File.WriteAllText(Path.Combine(dir.Path, dll), "");
+        FFmpegLocator.Locate(dir.Path, Env([]), isWindows: true).IsValid.Should().BeTrue();
+        FFmpegLocator.Locate(dir.Path, Env([]), isWindows: false).MissingLibraries.Should().BeEquivalentTo(FFmpegLocator.LinuxLibraries);
+    }
+
+    static string RepoRoot()
+    {
+        for (DirectoryInfo? d = new(AppContext.BaseDirectory); d != null; d = d.Parent)
+            if (File.Exists(Path.Combine(d.FullName, "LLPlayer.slnx")))
+                return d.FullName;
+        throw new InvalidOperationException("repository root (LLPlayer.slnx) not found");
     }
 
     [Fact]
@@ -151,11 +204,11 @@ public class StartupTests
     {
         using TempDir dir = new();
         File.WriteAllText(Path.Combine(dir.Path, "libavutil.so.60"), "");
-        FFmpegLocation loc = FFmpegLocator.Locate(dir.Path, Env([]));
+        FFmpegLocation loc = FFmpegLocator.Locate(dir.Path, Env([]), isWindows: false);
         loc.IsValid.Should().BeFalse();
         loc.MissingLibraries.Should().Contain("libavcodec.so.62").And.NotContain("libavutil.so.60");
 
-        FFmpegLocator.Locate(Path.Combine(dir.Path, "nope"), Env([])).MissingLibraries.Should().BeEquivalentTo(FFmpegLocator.RequiredLibraries);
+        FFmpegLocator.Locate(Path.Combine(dir.Path, "nope"), Env([]), isWindows: false).MissingLibraries.Should().BeEquivalentTo(FFmpegLocator.LinuxLibraries);
     }
 
     [Fact]

@@ -37,6 +37,9 @@ Command line: `LLPlayer.Avalonia [--sub <file>] [--theme dark|light] [--ffmpeg-d
 | Crash log | `$XDG_STATE_HOME/LLPlayer/crash.log` (default `~/.local/state/LLPlayer/crash.log`) |
 | Engine log (warnings; `LLPLAYER_LOG_LEVEL=Debug` for more) | `$XDG_STATE_HOME/LLPlayer/flyleaf.log` |
 
+These are the Linux locations. The app code is platform-neutral (`Services/AppPaths.cs`): on Windows the preferences
+go to `%APPDATA%\LLPlayer` (or `$LLPLAYER_CONFIG_DIR`) and the logs to `%LOCALAPPDATA%\LLPlayer`.
+
 `WordTranslationService` in the preferences file selects the word-click translator (a FlyleafLib `TranslateServiceType`
 name, default `GoogleV1` as in the WPF app; `Off` disables online lookups). `TranslateTargetLanguage` optionally
 overrides the target language (FlyleafLib `TargetLanguage` name, default: system language).

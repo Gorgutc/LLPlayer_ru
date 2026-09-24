@@ -75,9 +75,25 @@ if [[ -n "$pwsh_bin" ]]; then
     #  - verify-plugin.ps1 self-tests an NTFS junction fixture that cannot be created on Linux;
     #  - verify-fast.ps1 / verify.ps1 / ship.ps1 wrap the two above plus the Windows publish smoke.
     for validator in verify-doc-coverage verify-frozen verify-full-gate verify-build-workflow \
-        verify-release-workflow check-dub-licenses audit-frozen; do
+        verify-release-workflow check-dub-licenses; do
         run "$pwsh_bin" -NoProfile -NonInteractive -File "scripts/codex/$validator.ps1"
     done
+    # audit-frozen.ps1 is the review-routing helper, not a pass/fail gate. Without -ChangedPath it only sees the
+    # working tree (empty on a clean CI checkout), so route the branch diff against origin/main when that ref exists.
+    if base="$(git merge-base origin/main HEAD 2>/dev/null)" && [[ -n "$base" ]]; then
+        changed_list="$(mktemp "${TMPDIR:-/tmp}/llplayer-changed.XXXXXX")"
+        git diff --name-only "$base" HEAD > "$changed_list"
+        if [[ -s "$changed_list" ]]; then
+            llp_log "review routing for $(wc -l < "$changed_list") path(s) changed since origin/main (informational):"
+            # -File cannot bind a string[] from several arguments; read the list inside PowerShell instead.
+            # shellcheck disable=SC2016  # $env:... is PowerShell syntax, expanded by pwsh
+            LLP_CHANGED_LIST="$changed_list" run "$pwsh_bin" -NoProfile -NonInteractive -Command \
+                '& ./scripts/codex/audit-frozen.ps1 -ChangedPath @(Get-Content -LiteralPath $env:LLP_CHANGED_LIST) | Out-String -Width 250'
+        fi
+        rm -f "$changed_list"
+    else
+        llp_log "audit-frozen.ps1 (review routing helper) skipped: no origin/main merge base in this checkout."
+    fi
     llp_log "skipped Windows-only gates: check-environment.ps1, verify-plugin.ps1 (and the verify-fast/verify/ship wrappers)."
 elif [[ "${CI:-}" == "true" ]]; then
     llp_die "pwsh is required in CI to run the repository validators."

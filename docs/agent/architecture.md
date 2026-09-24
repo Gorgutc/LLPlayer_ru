@@ -63,10 +63,40 @@ shared FlyleafLib files only gained `#if WINDOWS` / `#if !WINDOWS` guards and `p
     `CollectionViewSource.RefreshHandler`, `SubtitlesOCR.ServiceFactory` — WPF-free hooks for modifier keys,
     collection sync, filtered views, and OCR engines.
   - Small WPF stand-ins (`Point`, `Thickness`, the `Key` enum with WPF values) keep shared engine code unchanged.
-- **`LLPlayer.Avalonia`** — the Linux app: implements the seams above, locates FFmpeg (`--ffmpeg-dir`,
-  `LLPLAYER_FFMPEG_DIR`, else `<app>/FFmpeg`), stores preferences under XDG (`~/.config/LLPlayer`,
-  `LLPLAYER_CONFIG_DIR` override) and must stay platform-neutral.
+- **`LLPlayer.Avalonia`** — the Linux app today: implements the seams above, locates FFmpeg (`--ffmpeg-dir`,
+  `LLPLAYER_FFMPEG_DIR`, else `<app>/FFmpeg`; Linux sonames or the Windows `*.dll` names by OS) and stores
+  preferences per OS (`AppPaths`: XDG `~/.config/LLPlayer` + `~/.local/state/LLPlayer` on Linux,
+  `%APPDATA%\LLPlayer` + `%LOCALAPPDATA%\LLPlayer` on Windows; `LLPLAYER_CONFIG_DIR` overrides the config folder).
+  It must stay platform-neutral: no Linux-only assumptions in app code. Known Windows gaps, left for the
+  "Avalonia on Windows" stage: `RuntimeIdentifiers` is `linux-x64` only, `publish.sh` builds only the Linux package,
+  the software (CPU BGRA) renderer is the only video path, and OpenAL Soft is not bundled on Windows.
 - **Tooling** — `scripts/linux/` (fetch FFmpeg, test media, verify, publish) and `.github/workflows/build-linux.yml`.
 
-Planned direction (backlog F-13): extract shared app logic into a common core, reach feature parity in the Avalonia
-UI, and only then consider it for Windows; the WPF app is retired only after an owner smoke on Windows.
+### Current vs Target ("one core + one UI", owner decision 2026-09-24)
+
+Current (F-13 stages 1-2):
+
+```text
+Windows:  LLPlayer (WPF, Prism) ──────────────┐
+                                              ├─> FlyleafLib net10.0-windows10.0.18362.0 (D3D11, XAudio2) ─> FFmpeg *.dll
+Linux:    LLPlayer.Avalonia (Avalonia 12) ────┴─> FlyleafLib net10.0 (software renderer, OpenAL) ────────> FFmpeg *.so
+          (app logic lives in each UI project; the WPF project holds most of it)
+```
+
+Target:
+
+```text
+Windows + Linux:  LLPlayer.Avalonia (single UI) ─> LLPlayer.Core (config, actions, services, view-model logic)
+                                                   └─> FlyleafLib (one engine; GPU renderer path on Windows)
+                  WPF LLPlayer retired
+```
+
+Staged roadmap (backlog F-13; each stage keeps the Windows WPF product shippable until the last one):
+
+1. Extract app logic from the WPF project into a shared `LLPlayer.Core` (config, actions, services, VM logic).
+2. Avalonia UI reaches feature parity with WPF (parity list in backlog F-13).
+3. GPU renderer path for Avalonia on Windows (no CPU BGRA copy).
+4. Owner smoke of the Avalonia app on Windows.
+5. Retire the WPF app — only after that owner smoke.
+
+One repository and one branch (no Linux fork); CI for both platforms on every PR (`build.yml` + `build-linux.yml`).

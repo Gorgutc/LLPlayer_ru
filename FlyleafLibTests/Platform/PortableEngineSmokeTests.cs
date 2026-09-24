@@ -44,6 +44,7 @@ public class PortableEngineSmokeTests
             if (Engine.IsLoaded)
                 return;
 
+            Utils.IsTesting = false; // Engine.Start runs through UIInvokeIfRequired (no-op while IsTesting is set)
             Engine.Start(new EngineConfig
             {
                 FFmpegPath      = ffmpegDir,

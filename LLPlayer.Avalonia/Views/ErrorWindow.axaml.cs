@@ -23,8 +23,9 @@ public partial class ErrorWindow : Window
     public string Details => DetailsText.Text ?? "";
 
     /// <summary>The window shown when the FFmpeg shared libraries cannot be found.</summary>
-    public static ErrorWindow ForMissingFFmpeg(FFmpegLocation location)
+    public static ErrorWindow ForMissingFFmpeg(FFmpegLocation location, bool? isWindows = null)
     {
+        IReadOnlyList<string> examples = FFmpegLocator.RequiredLibrariesFor(isWindows ?? OperatingSystem.IsWindows());
         string source = location.Source switch
         {
             FFmpegDirSource.CommandLine => "--ffmpeg-dir",
@@ -35,7 +36,7 @@ public partial class ErrorWindow : Window
         string details =
             $"Folder ({source}): {location.Directory}\n" +
             $"Missing: {string.Join(", ", location.MissingLibraries)}\n\n" +
-            "Fix: put the FFmpeg 8.x shared libraries (libavcodec.so.62, libavformat.so.62, libavutil.so.60, ...) in\n" +
+            $"Fix: put the FFmpeg 8.x shared libraries ({examples[1]}, {examples[2]}, {examples[0]}, ...) in\n" +
             "<app folder>/FFmpeg, or start with --ffmpeg-dir <dir> / set LLPLAYER_FFMPEG_DIR=<dir>.";
 
         return new ErrorWindow(

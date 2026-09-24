@@ -655,6 +655,23 @@ shadcn/ui (не может эффективно передавать видео�
 WPF выводится из эксплуатации только после owner smoke на Windows. Один репозиторий, одна ветка, CI обеих платформ
 на каждом PR (`build.yml` + `build-linux.yml`).
 
+**Решение владельца «одно ядро + один UI» (2026-09-24) — запись и поэтапная дорожная карта.** Сейчас (этапы 1–2):
+общее ядро FlyleafLib (два TFM) + WPF на Windows (без изменений) + Avalonia на Linux. Цель: один UI (Avalonia) на
+обеих ОС поверх общего `LLPlayer.Core` и FlyleafLib. Порядок (каждая ступень оставляет WPF-продукт выпускаемым до
+последней; схема «текущее vs целевое» — `architecture.md` → «Current vs Target»):
+  1. **Вынос `LLPlayer.Core`** — логика приложения из WPF-проекта (конфиг, actions, сервисы, логика VM) в общий проект.
+  2. **Паритет Avalonia** — Avalonia-UI догоняет WPF (паритет-лист ниже).
+  3. **GPU-рендер для Avalonia на Windows** — без CPU-копии BGRA.
+  4. **Owner smoke на Windows** — Avalonia-приложение на Windows.
+  5. **Вывод WPF из эксплуатации** — только после owner smoke.
+
+Avalonia-приложение обязано оставаться платформенно-нейтральным (без Linux-only допущений): конфиг — XDG
+`~/.config/LLPlayer` на Linux и `%APPDATA%\LLPlayer` на Windows (состояние/логи — `~/.local/state/LLPlayer` /
+`%LOCALAPPDATA%\LLPlayer`), список FFmpeg-библиотек — `*.so` / `*.dll` по ОС (`AppPaths`, `FFmpegLocator`, покрыто
+`LLPlayer.Avalonia.Tests`). Известные пробелы для ступени «Avalonia на Windows»: `RuntimeIdentifiers` только
+`linux-x64`, упаковка только Linux (`publish.sh`), единственный путь видео — software-рендер, OpenAL Soft на
+Windows не поставляется.
+
 **Этапы:**
 - **Этап 1 ✅** (commit `b82cde0`, draft [PR #166](https://github.com/Gorgutc/LLPlayer_ru/pull/166)): FlyleafLib
   multi-target `net10.0`; швы `IUIDispatcher`/`IHostServices`/`IVideoSurface`/`IAudioSink`/`IAudioBackend`,
@@ -668,7 +685,10 @@ WPF выводится из эксплуатации только после own
   make-test-media, verify, publish), `.github/workflows/build-linux.yml`, контракты/доки, валидаторы знают про Linux.
   **Интеграция (2026-09-24):** четыре среза слиты в ветку PR #166; приложение берёт звук из
   `AudioBackendFactory` (OpenAL Soft / Null), `VideoView` больше не поворачивает кадр повторно (рендерер отдаёт
-  готовый кадр); `verify.sh` полный зелёный, E2E под Xvfb + OpenAL wave (440 Гц) и запуск опубликованного tar.gz.
+  готовый кадр); локально `verify.sh` полный зелёный, E2E под Xvfb + OpenAL wave (440 Гц) и запуск
+  опубликованного tar.gz. **Поправка (ревью):** Linux CI на `e0d8403` был красным — тест рендера зависел от порядка
+  тестов (`Utils.IsTesting` оставался `true` у `Engine.Start`); исправлено в `dd9f4af`. Зелёный статус CI
+  подтверждается только прогоном `build-linux.yml` на новом head.
 - **Дальше — паритет (по одному срезу, каждый со своим тестом/смоуком):**
   1. ASR/Whisper на Linux: Linux-runtime Whisper.net (natives `linux-x64`), пути Linux-бинарника faster-whisper
      (дефолт сейчас `faster-whisper-xxl.exe`).
@@ -689,7 +709,10 @@ WPF выводится из эксплуатации только после own
       открытии `.srt` во время воспроизведения (`--sub`, drag&drop) — паузы/ребуферинг ~каждую секунду, пока модели
       не загрузятся. Нужен отдельный срез (ограничить набор языков / прогрев в фоне / отложенная детекция) с
       проверкой на Windows.
-  Также: v4l2 capture devices; cursor-hide/screensaver-inhibit на стороне хоста; вынос общего `LLPlayer.Core`.
+  14. Hot-plug звука на Linux: у OpenAL нет уведомления, приложение не вызывает `AudioEngine.RefreshDevices()`;
+      после отключения устройства (в том числе стоящего за «default») звук молчит до переоткрытия потока. Нужен
+      периодический или по-ошибке refresh + переинициализация синка и строка в `manual-smoke-matrix.md`.
+  Также: v4l2 capture devices; cursor-hide/screensaver-inhibit на стороне хоста. Вынос `LLPlayer.Core` — ступень 1 дорожной карты выше.
 
 **Гейты:** `scripts/linux/verify.sh` (+ неизменные Windows-гейты); ручной smoke —
 `manual-smoke-matrix.md` → «Linux (F-13)». **Рассуждение:** огромная работа, но швы этапа 1 позволяют вести её

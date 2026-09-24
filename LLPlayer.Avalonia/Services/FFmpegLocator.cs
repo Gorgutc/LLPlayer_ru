@@ -21,8 +21,8 @@ public static class FFmpegLocator
 {
     public const string EnvironmentVariable = "LLPLAYER_FFMPEG_DIR";
 
-    /// <summary>FFmpeg 8.x sonames loaded by FlyleafLib (libavdevice is optional).</summary>
-    public static readonly IReadOnlyList<string> RequiredLibraries =
+    /// <summary>FFmpeg 8.x sonames loaded by FlyleafLib on Linux (libavdevice is optional).</summary>
+    public static readonly IReadOnlyList<string> LinuxLibraries =
     [
         "libavutil.so.60",
         "libavcodec.so.62",
@@ -32,7 +32,23 @@ public static class FFmpegLocator
         "libswresample.so.6",
     ];
 
-    public static FFmpegLocation Locate(string? commandLineDir, Func<string, string?>? getEnvironmentVariable = null, string? baseDirectory = null)
+    /// <summary>The same FFmpeg 8.x libraries as Windows DLL names (the tracked <c>FFmpeg/*.dll</c> set).</summary>
+    public static readonly IReadOnlyList<string> WindowsLibraries =
+    [
+        "avutil-60.dll",
+        "avcodec-62.dll",
+        "avformat-62.dll",
+        "avfilter-11.dll",
+        "swscale-9.dll",
+        "swresample-6.dll",
+    ];
+
+    /// <summary>Required libraries for the current OS.</summary>
+    public static IReadOnlyList<string> RequiredLibraries => RequiredLibrariesFor(OperatingSystem.IsWindows());
+
+    public static IReadOnlyList<string> RequiredLibrariesFor(bool isWindows) => isWindows ? WindowsLibraries : LinuxLibraries;
+
+    public static FFmpegLocation Locate(string? commandLineDir, Func<string, string?>? getEnvironmentVariable = null, string? baseDirectory = null, bool? isWindows = null)
     {
         getEnvironmentVariable ??= Environment.GetEnvironmentVariable;
 
@@ -55,14 +71,15 @@ public static class FFmpegLocator
         }
 
         dir = Path.GetFullPath(dir);
-        return new FFmpegLocation(dir, source, FindMissing(dir));
+        return new FFmpegLocation(dir, source, FindMissing(dir, isWindows));
     }
 
-    public static IReadOnlyList<string> FindMissing(string directory)
+    public static IReadOnlyList<string> FindMissing(string directory, bool? isWindows = null)
     {
+        IReadOnlyList<string> required = RequiredLibrariesFor(isWindows ?? OperatingSystem.IsWindows());
         if (!Directory.Exists(directory))
-            return RequiredLibraries;
+            return required;
 
-        return RequiredLibraries.Where(lib => !File.Exists(Path.Combine(directory, lib))).ToList();
+        return required.Where(lib => !File.Exists(Path.Combine(directory, lib))).ToList();
     }
 }

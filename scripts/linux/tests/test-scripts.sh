@@ -45,7 +45,7 @@ make_package() { # dir
     mkdir -p "$p/FFmpeg" "$p/dub_sidecar"
     for f in LLPlayer.Avalonia LLPlayer.Avalonia.dll LLPlayer.Avalonia.deps.json LLPlayer.Avalonia.runtimeconfig.json \
         FlyleafLib.dll libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so llplayer llplayer.desktop LLPlayer.png \
-        LICENSE FFmpeg/LICENSE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
+        LICENSE THIRD-PARTY-NOTICES.md FFmpeg/LICENSE.txt FFmpeg/SOURCE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
         dub_sidecar/README.md; do
         printf 'x\n' > "$p/$f"
     done
@@ -74,6 +74,10 @@ expect_fail "empty LICENSE" "LICENSE must be a non-empty regular file" \
     check_pkg "$(mutate empty-license ': > LICENSE')"
 expect_fail "required file links outside" "LICENSE must be a non-empty regular file inside the package" \
     check_pkg "$(mutate outside-license 'rm LICENSE; ln -s /etc/hostname LICENSE')"
+expect_fail "missing third-party notices" "missing required file THIRD-PARTY-NOTICES.md" \
+    check_pkg "$(mutate no-notices 'rm THIRD-PARTY-NOTICES.md')"
+expect_fail "missing FFmpeg provenance" "missing required file FFmpeg/SOURCE.txt" \
+    check_pkg "$(mutate no-ffmpeg-source 'rm FFmpeg/SOURCE.txt')"
 expect_fail "launcher not executable" "llplayer must be executable" \
     check_pkg "$(mutate noexec 'chmod 644 llplayer')"
 expect_fail "runtime config JSON" "runtime config" \

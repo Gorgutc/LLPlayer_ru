@@ -518,13 +518,13 @@ function Assert-WorkflowInventoryRejected(
 }
 
 # F-13: build-linux.yml is an additive Linux check. It must never shadow or compose the protected Windows
-# required-check name, must stay read-only, and may use only the reviewed action references below. checkout,
-# setup-dotnet and upload-artifact reuse the SHAs pinned by the release workflows; actions/cache is not pinned
-# anywhere else in the repository yet, so it uses its major tag like build.yml does for its actions.
+# required-check name, must stay read-only, and may use only the reviewed action references below, all pinned to
+# full commit SHAs. checkout, setup-dotnet and upload-artifact reuse the SHAs pinned by the release workflows;
+# actions/cache is pinned to the v6.1.0 commit.
 $linuxAllowedUsesLines = @(
     "      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1",
     "      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0",
-    "      uses: actions/cache@v6",
+    "      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0",
     "      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1"
 )
 $linuxStepNames = @(
@@ -773,7 +773,7 @@ jobs:
         sudo apt-get install -y --no-install-recommends libopenal1 xvfb
 
     - name: Cache FFmpeg tarball
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cache/llplayer/ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz
@@ -862,7 +862,10 @@ Assert-LinuxContractRejected $linuxMutableCheckoutFixture "the Linux workflow us
 $linuxUnapprovedActionFixture = $positiveLinuxFixture.Replace("    - name: Fetch FFmpeg", "    - name: Extra`n      uses: example/unapproved@main`n`n    - name: Fetch FFmpeg")
 Assert-LinuxContractRejected $linuxUnapprovedActionFixture "the Linux workflow adds an unapproved action" "unapproved or unpinned action reference"
 
-$linuxQuotedUsesFixture = $positiveLinuxFixture.Replace("      uses: actions/cache@v6", '      "u\u0073es": example/unapproved@main')
+$linuxMutableCacheFixture = $positiveLinuxFixture.Replace("      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0", "      uses: actions/cache@v6")
+Assert-LinuxContractRejected $linuxMutableCacheFixture "the Linux workflow uses a mutable cache reference" "unapproved or unpinned action reference"
+
+$linuxQuotedUsesFixture = $positiveLinuxFixture.Replace("      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0", '      "u\u0073es": example/unapproved@main')
 Assert-LinuxContractRejected $linuxQuotedUsesFixture "the Linux workflow hides an action behind an escaped quoted key" "canonical unquoted block mapping keys"
 
 $linuxWritePermissionFixture = $positiveLinuxFixture.Replace("  contents: read", "  contents: write")

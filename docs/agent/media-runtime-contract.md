@@ -55,7 +55,11 @@ Additive: everything above still applies to the Windows target unchanged. These 
   counting it as played. If `CreateSink` throws, audio is disabled for that player, as on Windows. `NullAudioSink`
   consumes at wall-clock speed, so A/V sync works without a sound device; OpenAL Soft (system `libopenal.so.1`) is the
   desktop backend; `LLPLAYER_AUDIO_BACKEND=null|openal|auto` selects, and CI/headless runs use `null`.
-  `AudioEngine.RefreshDevices()` handles hot-plug; players on a removed device fall back to the default device.
+  `AudioEngine.RefreshDevices()` re-enumerates the devices and moves players whose explicitly selected device
+  disappeared to the default device, but only when the host calls it: there is no OpenAL hot-plug notification and
+  the Linux app does not call it yet. A disconnected OpenAL device (also the one behind "default") makes every
+  `Submit` throw, and `Audio.AddSamples` turns that into `ClearBuffer`, so audio stays silent until the stream is
+  re-initialised (reopen, or a device change). Known gap, tracked in backlog F-13 (parity list).
 - **Other hooks.** Modifier keys come from `Player.KeyStateProvider`; filtered views refresh through
   `CollectionViewSource.RefreshHandler`; bitmap-subtitle OCR needs `SubtitlesOCR.ServiceFactory` (without it OCR
   initialisation fails with a message). Cursor hiding, screen-saver inhibition, and timer resolution are no-ops in

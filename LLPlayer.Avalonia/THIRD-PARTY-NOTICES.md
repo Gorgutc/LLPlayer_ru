@@ -102,3 +102,13 @@ ShadowUI code is not used.
 ## Inter font (SIL Open Font License 1.1)
 
 Shipped by the `Avalonia.Fonts.Inter` NuGet package (not copied here).
+
+## FFmpeg 8.1 shared libraries (GPL) — bundled in the Linux package
+
+The Linux package ships FFmpeg 8.1 shared libraries in `FFmpeg/` (they are not in this repository; they are fetched by
+`scripts/linux/fetch-ffmpeg.sh`). They are the GPL build `ffmpeg-n8.1-latest-linux64-gpl-shared-8.1.tar.xz` from
+[BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds), sha256-verified against that release's
+`checksums.sha256`. The package records the exact asset and its sha256 in `FFmpeg/SOURCE.txt` and carries the FFmpeg
+license text in `FFmpeg/LICENSE.txt`. FFmpeg source: <https://git.ffmpeg.org/ffmpeg.git> (the n8.1 build follows the
+`release/8.1` branch); build recipe: <https://github.com/BtbN/FFmpeg-Builds>. A formal GPL source offer for
+release packages is part of the Linux release integration (backlog F-13, parity item 11).

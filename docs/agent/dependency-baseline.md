@@ -142,7 +142,9 @@ truth, and adding or upgrading any Linux package is the same focused dependency 
   `Flyleaf.FFmpeg.Bindings` `8.0.1`. The libraries are fetched into the gitignored `FFmpeg/linux-x64/` and are
   never committed (~210 MB). `latest` is a rolling build: the checksum proves integrity, not reproducibility; pin
   `LLPLAYER_FFMPEG_URL` + `LLPLAYER_FFMPEG_SHA256` to a dated BtbN release for a reproducible build. It is a GPL
-  build, so the Linux package ships its `LICENSE.txt` as `FFmpeg/LICENSE.txt`. Windows packaging copies `FFmpeg/`
+  build, so the Linux package ships its `LICENSE.txt` as `FFmpeg/LICENSE.txt` plus `FFmpeg/SOURCE.txt` (asset name,
+  sha256 from the fetch marker, build-recipe and FFmpeg source URLs); a formal GPL source offer is part of the
+  Linux release integration (backlog F-13). Windows packaging copies `FFmpeg/`
   recursively, so do not build a Windows package from a checkout that has `FFmpeg/linux-x64/` (release jobs use
   fresh checkouts).
 - **OpenAL Soft:** the system `libopenal.so.1` (Ubuntu `libopenal1`, LGPL-2.1) is a runtime prerequisite and is not
@@ -160,8 +162,8 @@ truth, and adding or upgrading any Linux package is the same focused dependency 
 
 - positively validate the required contents: the `LLPlayer.Avalonia` apphost, `.dll`, `.deps.json`,
   `.runtimeconfig.json`, `FlyleafLib.dll`, `libSkiaSharp.so`, `libHarfBuzzSharp.so`, all seven FFmpeg sonames and
-  `FFmpeg/LICENSE.txt`, the committed `dub_sidecar` source (`server.py`, `pyproject.toml`, `uv.lock`, `README.md`),
-  `LICENSE`, the `llplayer` launcher, `llplayer.desktop`, and `LLPlayer.png` — each a non-empty file inside the package;
+  `FFmpeg/LICENSE.txt` + `FFmpeg/SOURCE.txt`, the committed `dub_sidecar` source (`server.py`, `pyproject.toml`,
+  `uv.lock`, `README.md`), `LICENSE`, `THIRD-PARTY-NOTICES.md` (shadcn/ui MIT, Lucide ISC/MIT, FFmpeg), the `llplayer` launcher, `llplayer.desktop`, and `LLPlayer.png` — each a non-empty file inside the package;
 - reject runtime config JSON (`LLPlayer.*.json`), logs, dumps, `.env*`, dubbing runtime data (`DubEngine`,
   `dubmodels`, `*.ru.dub.*`, `*.ru.voices.json`), Python venvs, downloaded models (`ggml-*.bin`, `*.traineddata`),
   user media folders, any `*.so` outside `FFmpeg/` other than the four NuGet natives above, FFmpeg libraries with

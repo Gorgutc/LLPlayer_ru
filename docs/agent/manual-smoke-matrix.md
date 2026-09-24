@@ -160,5 +160,8 @@ null audio). These checks cover what the headless suite cannot.
 - **Missing prerequisites:** without `libopenal1` the app still plays video silently and logs the fallback; without
   the .NET 10 runtime the launcher fails with the runtime's install hint.
 - **Packaging:** `scripts/linux/publish.sh` passes its positive/negative content validation; the tar.gz contains no
-  `LLPlayer.*.json`, logs, dub runtime data, or models, and `FFmpeg/` holds exactly the seven 8.1 sonames plus
-  `LICENSE.txt`.
+  `LLPlayer.*.json`, logs, dub runtime data, or models, `FFmpeg/` holds exactly the seven 8.1 sonames plus
+  `LICENSE.txt` and `SOURCE.txt` (build asset + sha256), and `THIRD-PARTY-NOTICES.md` is at the package root.
+- **Audio hot-plug (owner, known gap):** unplug the USB/Bluetooth output during playback. Today audio stays silent
+  until the file is reopened (the app does not call `AudioEngine.RefreshDevices()`; backlog F-13 parity item 14);
+  record the result until that item lands.

@@ -57,7 +57,9 @@ validate_package() {
         "llplayer.desktop"
         "LLPlayer.png"
         "LICENSE"
+        "THIRD-PARTY-NOTICES.md"
         "FFmpeg/LICENSE.txt"
+        "FFmpeg/SOURCE.txt"
         "dub_sidecar/server.py"
         "dub_sidecar/pyproject.toml"
         "dub_sidecar/uv.lock"
@@ -177,6 +179,23 @@ done
 mkdir -p "$pkg/FFmpeg"
 find "$ffmpeg_dir" -maxdepth 1 -name 'lib*.so.*' -exec cp -a {} "$pkg/FFmpeg/" \;
 cp "$ffmpeg_dir/LICENSE.txt" "$pkg/FFmpeg/LICENSE.txt"
+# Provenance of the bundled GPL FFmpeg build (the fetch-ffmpeg.sh marker records "<sha256>  <asset>").
+ffmpeg_stamp=""
+[[ -f "$ffmpeg_dir/.llplayer-ffmpeg-source" ]] && ffmpeg_stamp="$(head -n 1 "$ffmpeg_dir/.llplayer-ffmpeg-source")"
+{
+    printf 'FFmpeg shared libraries bundled with LLPlayer (Linux)\n\n'
+    printf 'License: GPL (see LICENSE.txt in this folder). LLPlayer loads these libraries dynamically.\n'
+    if [[ -n "$ffmpeg_stamp" ]]; then
+        printf 'Build: %s (BtbN/FFmpeg-Builds)\n' "${ffmpeg_stamp#*  }"
+        printf 'Build sha256: %s\n' "${ffmpeg_stamp%%  *}"
+    else
+        printf 'Build: supplied via --ffmpeg-dir; not fetched by scripts/linux/fetch-ffmpeg.sh (provenance not recorded)\n'
+    fi
+    printf 'Build recipe: https://github.com/BtbN/FFmpeg-Builds\n'
+    printf 'FFmpeg source (the n8.1 build follows the release/8.1 branch): https://git.ffmpeg.org/ffmpeg.git\n'
+    printf 'The exact FFmpeg revision is reported by the libraries (av_version_info, e.g. in the LLPlayer log).\n'
+} > "$pkg/FFmpeg/SOURCE.txt"
+[[ -n "$ffmpeg_stamp" ]] || llp_log "warning: $ffmpeg_dir has no fetch-ffmpeg.sh marker; FFmpeg/SOURCE.txt records no build hash."
 
 # dub_sidecar sources ship like the Windows package (the venv and model weights are provisioned at runtime).
 mkdir -p "$pkg/dub_sidecar"
@@ -185,9 +204,9 @@ for f in server.py pyproject.toml uv.lock README.md; do
 done
 
 cp LICENSE "$pkg/LICENSE"
-if [[ -f LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md ]]; then
-    cp LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md "$pkg/THIRD-PARTY-NOTICES.md"
-fi
+[[ -f LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md ]] ||
+    llp_die "LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md is missing (shadcn/ui MIT, Lucide ISC/MIT and FFmpeg notices ship with the package)."
+cp LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md "$pkg/THIRD-PARTY-NOTICES.md"
 cp LLPlayer.png "$pkg/LLPlayer.png"
 
 cat > "$pkg/llplayer" <<'LAUNCHER'
