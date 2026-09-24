@@ -6,8 +6,8 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 // F-13 portable (Linux) counterparts of the video filter config types declared in the (excluded) Direct3D11
 // Renderer.VF.FL.cs / Renderer.VF.D3.cs. Kept so Config.Video (FLFilters / D3Filters) has the same shape and JSON on
-// every platform. The software renderer stores the Flyleaf filter values; applying them is renderer work (see
-// Renderer.FLSetFilter). D3D11 video-processor filters never become Available off Windows.
+// every platform. The software renderer applies the Flyleaf filters to the converted frames (Renderer.FLSetFilter ->
+// SoftwareColorFilter). D3D11 video-processor filters never become Available off Windows.
 
 /// <summary>D3D11 video processor filter ids (numeric values match D3D11_VIDEO_PROCESSOR_FILTER).</summary>
 public enum VideoProcessorFilter

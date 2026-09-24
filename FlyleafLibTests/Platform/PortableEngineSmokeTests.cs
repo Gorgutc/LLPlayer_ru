@@ -127,9 +127,10 @@ public class PortableEngineSmokeTests
             player.Renderer.VideoProcessor.Should().Be(VideoProcessors.SwsScale);
             player.Video.Width.Should().Be(1280, "set from the renderer's visible size once the first frame is decoded");
             player.Video.Height.Should().Be(720);
-            surface.Width.Should().Be(1280);
-            surface.Height.Should().Be(720);
-            surface.Stride.Should().BeGreaterThanOrEqualTo(1280 * 4);
+            // Presentation frames are converted at min(native, viewport) size (the host only scales them into the viewport)
+            surface.Width.Should().Be(640);
+            surface.Height.Should().Be(360);
+            surface.Stride.Should().BeGreaterThanOrEqualTo(640 * 4);
             surface.CenterA.Should().Be(255, "video frames are converted to opaque BGRA");
             player.Renderer.Viewport.Width.Should().Be(640);
             player.Renderer.Viewport.Height.Should().Be(360);

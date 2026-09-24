@@ -1,5 +1,3 @@
-using System.Runtime.InteropServices;
-
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaStream;
@@ -14,10 +12,10 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 /// only) with the same class name, namespace, constructor and the members the shared engine calls.
 /// <para>
 /// Pipeline: the video decoder decodes in software; <c>FillPlanes</c> moves each decoded AVFrame into a
-/// <see cref="VideoFrame"/>; <c>RenderPlay</c> converts the next frame to BGRA32 with FFmpeg swscale (cropped, not
-/// scaled) and <c>PresentPlay</c> hands it to the host's <see cref="IVideoSurface"/> at presentation time. The host
-/// scales the frame into <see cref="Viewport"/> (control pixels), applying <see cref="Rotation"/>/<see cref="HFlip"/>/
-/// <see cref="VFlip"/> and painting <see cref="VPConfig.BackColor"/> around it.
+/// <see cref="VideoFrame"/>; <c>RenderPlay</c> prepares the next frame (Renderer.Portable.Convert.cs: deinterlace, HDR to
+/// SDR, crop, swscale to BGRA32 at min(native, viewport) size, rotation / mirroring, colour filters) and
+/// <c>PresentPlay</c> hands it to the host's <see cref="IVideoSurface"/> at presentation time. The host only scales the
+/// ready-to-show frame into <see cref="Viewport"/> (control pixels) and paints <see cref="VPConfig.BackColor"/> around it.
 /// </para>
 /// <para>Without a <see cref="Surface"/> (headless) frames are still decoded, queued and disposed at playback pace.</para>
 /// </summary>
@@ -102,14 +100,20 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
             ((IVP)this).MonitorChanged(monitor);
     }
 
-    /// <summary>Effective rotation in degrees (user + stream metadata) the host must apply when drawing.</summary>
+    /// <summary>
+    /// Effective clockwise rotation in degrees (user + stream display matrix). Informational: the renderer already
+    /// applies it, the frames passed to the surface are upright (the host must not rotate them again).
+    /// </summary>
     public uint                 Rotation        => rotation;
 
-    /// <summary>Whether the host must mirror the frame horizontally when drawing.</summary>
+    /// <summary>Whether the presented frames are mirrored horizontally (user). Already applied by the renderer.</summary>
     public bool                 HFlip           => ucfg.hflip;
 
-    /// <summary>Whether the host must mirror the frame vertically when drawing (user + stream metadata).</summary>
-    public bool                 VFlip           => ucfg.vflip ^ (scfg != null && scfg.VFlip);
+    /// <summary>
+    /// Whether the presented frames are mirrored vertically (user). Already applied by the renderer. Bottom-up coded
+    /// frames (negative line size) are read upright by swscale and need no extra flip.
+    /// </summary>
+    public bool                 VFlip           => ucfg.vflip;
     #endregion
 
     #region Hardware decoding hooks (never active: the portable build decodes in software)
@@ -243,139 +247,6 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
     }
     #endregion
 
-    #region Software conversion (swscale -> BGRA32)
-    SwsContext*     swsCtx;
-    int             swsWidth, swsHeight;
-    AVPixelFormat   swsFormat = AVPixelFormat.None;
-    ColorSpace      swsColorSpace;
-    ColorRange      swsColorRange;
-
-    byte*           bgraBuffer;
-    nuint           bgraBufferSize;
-    int             bgraStride;
-
-    // Prepared (rendered, not yet presented) frame region inside bgraBuffer
-    byte*           pendingPtr;
-    int             pendingWidth, pendingHeight;
-    bool            hasPending;
-
-    /// <summary>Converts <paramref name="frame"/> into bgraBuffer and prepares the cropped region for presentation.</summary>
-    bool ConvertFrame(VideoFrame frame)
-    {
-        hasPending = false;
-
-        AVFrame* f = frame == null ? null : frame.AVFrame;
-        if (f == null || f->width <= 0 || f->height <= 0 || f->data[0] == 0)
-            return false;
-
-        int width   = f->width;
-        int height  = f->height;
-        var format  = (AVPixelFormat)f->format;
-
-        if (swsCtx == null || width != swsWidth || height != swsHeight || format != swsFormat)
-        {
-            swsCtx = sws_getCachedContext(swsCtx, width, height, format, width, height, AVPixelFormat.Bgra, SwsFlags.Bilinear, null, null, null);
-            if (swsCtx == null)
-            {
-                Log.Error($"Failed to allocate SwsContext ({format} {width}x{height})");
-                swsFormat = AVPixelFormat.None;
-                return false;
-            }
-
-            swsWidth        = width;
-            swsHeight       = height;
-            swsFormat       = format;
-            swsColorSpace   = ColorSpace.None;
-            swsColorRange   = ColorRange.None;
-        }
-
-        if (scfg != null && scfg.ColorType == ColorType.YUV && (scfg.ColorSpace != swsColorSpace || scfg.ColorRange != swsColorRange))
-        {
-            swsColorSpace   = scfg.ColorSpace;
-            swsColorRange   = scfg.ColorRange;
-
-            int cs = swsColorSpace switch
-            {
-                ColorSpace.Bt709    => 1,   // SWS_CS_ITU709
-                ColorSpace.Bt2020   => 9,   // SWS_CS_BT2020
-                _                   => 5    // SWS_CS_ITU601 (SWS_CS_DEFAULT)
-            };
-
-            int* coeffs = sws_getCoefficients(cs);
-            _ = sws_setColorspaceDetails(swsCtx, coeffs, swsColorRange == ColorRange.Full ? 1 : 0, sws_getCoefficients(5), 1, 0, 1 << 16, 1 << 16);
-        }
-
-        int     stride  = width * 4;
-        nuint   size    = (nuint)stride * (nuint)height;
-        if (bgraBuffer == null || bgraBufferSize < size)
-        {
-            if (bgraBuffer != null)
-                NativeMemory.AlignedFree(bgraBuffer);
-
-            bgraBuffer      = (byte*)NativeMemory.AlignedAlloc(size, 64);
-            bgraBufferSize  = size;
-        }
-        bgraStride = stride;
-
-        int ret = sws_scale(swsCtx,
-            f->data.        ToRawArray(),
-            f->linesize.    ToArray(),
-            0, height,
-            [bgraBuffer, null, null, null],
-            [stride, 0, 0, 0]);
-
-        if (ret <= 0)
-            return false;
-
-        // Crop (stream + codec + user); clamp in case of an oversized user crop
-        uint left   = Math.Min(crop.Left,   (uint)width  - 1);
-        uint top    = Math.Min(crop.Top,    (uint)height - 1);
-        uint right  = Math.Min(crop.Right,  (uint)width  - 1 - left);
-        uint bottom = Math.Min(crop.Bottom, (uint)height - 1 - top);
-
-        pendingPtr      = bgraBuffer + (top * (uint)stride) + (left * 4);
-        pendingWidth    = width  - (int)(left + right);
-        pendingHeight   = height - (int)(top + bottom);
-        hasPending      = true;
-
-        return true;
-    }
-
-    /// <summary>Hands the prepared frame to the surface (render/playback thread, lockRenderLoops).</summary>
-    void PresentLocal()
-    {
-        var s = surface;
-        if (s == null)
-            return;
-
-        if (!hasPending)
-            return;
-
-        s.PresentFrame(new ReadOnlySpan<byte>(pendingPtr, (pendingHeight - 1) * bgraStride + pendingWidth * 4), pendingWidth, pendingHeight, bgraStride);
-        SwapChain.presentCount++;
-    }
-
-    void SwsDispose()
-    {
-        hasPending = false;
-
-        if (swsCtx != null)
-        {
-            sws_freeContext(swsCtx);
-            swsCtx = null;
-        }
-
-        swsFormat = AVPixelFormat.None;
-
-        if (bgraBuffer != null)
-        {
-            NativeMemory.AlignedFree(bgraBuffer);
-            bgraBuffer      = null;
-            bgraBufferSize  = 0;
-        }
-    }
-    #endregion
-
     #region Render loops (same scheduling as the Windows Renderer.Present.cs)
     long            renderRequestAt, lastRenderAt;
     volatile bool   canIdle;
@@ -463,6 +334,9 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
                     return true;
                 }
 
+                if (Frames.RendererFrame == null)
+                    ReleaseFrameState();
+
                 if (!Config.Video.ClearScreen)
                     return true;
 
@@ -509,7 +383,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
             lock (lockRenderLoops)
             {
                 ProcessRequests();
-                ConvertFrame(frame);
+                ConvertFrame(frame, secondField);
                 Frames.SetRendererFrame(frame);
             }
 
@@ -553,7 +427,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
                     if (rendererFrame)
                         Frames.SetRendererFrame(null);
 
-                    hasPending = false;
+                    ReleaseFrameState();
                     surface?.ClearFrame();
                 }
             }
