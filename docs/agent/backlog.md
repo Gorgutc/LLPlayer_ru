@@ -1455,9 +1455,13 @@ Windows baseline, дальнейший Core, паритет и GPU оценив
    subtitles; B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
 8. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
 
-9. **F-13 Linux-порт 🚧 (priority update владельца 2026-10-03)** — сначала завершить Linux parity срезами и продолжать
-   `scripts/linux/verify.sh` вместе с сохранёнными Windows build/CI gates; Avalonia Windows implementation и live
-   Windows acceptance deferred до завершения Linux parity. Исторические receipts ранних этапов сохранены выше.
+9. **F-13 Windows/Linux Avalonia 🚧 (priority update владельца 2026-10-18)** — продолжать общий UI/Core срезами,
+   сохраняя WPF full gate и обе Avalonia платформенные проверки. Ограниченный desktop-interaction follow-up
+   исправляет file/subtitle/settings/layout interactions; local WPF/Windows Avalonia gates, focused tests,
+   package/CRC readback и cumulative `/review` прошли. Source Windows/Linux CI ждёт публикации; native recheck
+   rebuilt package — **NOT_RUN / DEFERRED BY OWNER** (без автозапуска по просьбе владельца).
+   [Текущий receipt](f13-status-2026-10-18.md#bounded-desktop-interaction-follow-up--verification-in-progress).
+   Отсрочка Windows из решения 2026-10-03 заменена решением 2026-10-18; прежние receipts сохраняют свой scope.
 
 **Не берём сейчас:** `F-02-full` (trigger-only).
 Перед поведенческими правками сверяться с
