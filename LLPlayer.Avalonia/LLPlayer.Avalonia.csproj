@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- F-13 Linux desktop app: Avalonia 12 host over FlyleafLib's portable net10.0 TFM.
-       The Windows product stays the WPF app in ../LLPlayer (untouched). -->
+  <!-- Shared Windows/Linux Avalonia host over FlyleafLib's portable net10.0 TFM.
+       The separately shipped WPF app in ../LLPlayer remains supported. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
+    <!-- An explicit publish RID wins over the build host; ordinary dev/test builds use the host payload. -->
+    <LLPlayerNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</LLPlayerNativeRuntimeIdentifier>
+    <LLPlayerNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">win-x64</LLPlayerNativeRuntimeIdentifier>
+    <LLPlayerNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">linux-x64</LLPlayerNativeRuntimeIdentifier>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>LLPlayer.Avalonia</RootNamespace>
@@ -43,16 +47,31 @@
     <ProjectReference Include="..\LLPlayer.Core\LLPlayer.Core.csproj" />
   </ItemGroup>
 
-  <!-- The package's build targets copy foreign native payloads for a portable TFM. Select only the four
-       pinned Linux CPU libraries, retaining the layout Whisper.net's loader expects. -->
+  <!-- The package's build targets copy foreign native payloads for a portable TFM. Keep explicit CPU-only
+       allowlists for the selected platform, retaining the layout Whisper.net's loader expects. -->
   <ItemGroup>
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" ExcludeAssets="build" GeneratePathProperty="true" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' == 'linux-x64'">
     <None Include="$(PkgWhisper_net_Runtime)/build/linux-x64/libwhisper.so;
                    $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-whisper.so;
                    $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-base-whisper.so;
                    $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-cpu-whisper.so"
           TargetPath="runtimes/linux-x64/%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' == 'win-x64'">
+    <None Include="$(PkgWhisper_net_Runtime)/build/win-x64/whisper.dll;
+                   $(PkgWhisper_net_Runtime)/build/win-x64/ggml-whisper.dll;
+                   $(PkgWhisper_net_Runtime)/build/win-x64/ggml-base-whisper.dll;
+                   $(PkgWhisper_net_Runtime)/build/win-x64/ggml-cpu-whisper.dll"
+          TargetPath="runtimes/win-x64/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Select just the Windows x64 OpenAL Soft DLL. Exclude automatic assets so cross-publish never copies
+         another platform's OpenAL payload or adds a managed OpenAL binding. -->
+    <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" ExcludeAssets="all" GeneratePathProperty="true" />
+    <None Include="$(PkgSilk_NET_OpenAL_Soft_Native)/runtimes/win-x64/native/soft_oal.dll"
+          TargetPath="soft_oal.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

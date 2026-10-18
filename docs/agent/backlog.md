@@ -60,9 +60,9 @@
 > shadcn-токенов; сохраняется Windows WPF-продукт. Этап 1 — draft PR #166; этап 2 закрыт 2026-09-26 (см. F-13).
 >
 > **Текущий фокус (2026-10-18):** `F-13` активен; цель владельца — один Avalonia UI и общий Core для нативных
-> Windows и Linux. Следующий ограниченный Windows Avalonia baseline можно вести до полного Linux parity;
-> WPF сохраняется до приёмки замены. Октябрьский экспорт исходников синхронизируется отдельно от исторических
-> проверок 2026-10-07. Статус, происхождение и следующий срез:
+> Windows и Linux. Windows Avalonia build/package baseline реализован на общем UI до полного Linux parity;
+> WPF сохраняется до приёмки замены. Октябрьский экспорт восстановлен через PR #167; свежие проверки нового
+> Windows-среза фиксируются отдельно от исторических receipts. Статус, происхождение и следующий срез:
 > [`f13-status-2026-10-18.md`](f13-status-2026-10-18.md).
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
@@ -654,23 +654,25 @@ MVVM — CommunityToolkit.Mvvm 8.4.2 (у Prism.Avalonia нет релиза по
 (0.x-зависимость одного мейнтейнера; другие пакеты тем — SukiUI, Semi — тоже не берём) и web-UI с настоящим
 shadcn/ui (не может эффективно передавать видеокадры FlyleafLib и нарушает «What Not To Port» в `AGENTS.md`).
 
-**Архитектура:** Windows = существующий WPF `LLPlayer` на `net10.0-windows10.0.18362.0` с сохранением поведения;
-Linux = `LLPlayer.Avalonia` на portable `net10.0` TFM FlyleafLib (швы в
+**Архитектура:** поддерживаемый Windows WPF `LLPlayer` остаётся на `net10.0-windows10.0.18362.0` с сохранением поведения;
+единый Windows/Linux `LLPlayer.Avalonia` использует portable `net10.0` TFM FlyleafLib (швы в
 `FlyleafLib/Platform/Portable/`). Цель — «одно ядро + один UI»: ограниченные общие сервисы уже вынесены
-в `LLPlayer.Core`; остальная логика переносится поэтапно. Avalonia UI должен стать единым для обеих ОС.
+в `LLPlayer.Core`; остальная логика переносится поэтапно. Avalonia Views/ViewModels/Themes общие для обеих ОС.
 Нативный Windows baseline использует portable `net10.0`; Windows GPU-рендер — отдельный последующий срез;
 WPF выводится из эксплуатации только после owner smoke на Windows. Один репозиторий, одна ветка, CI обеих платформ
 на каждом PR (`build.yml` + `build-linux.yml`).
 
 **Дорожная карта «одно ядро + один UI» (решение 2026-09-24, приоритет уточнён владельцем 2026-10-18).**
-Сейчас: FlyleafLib с двумя TFM, WPF на Windows, Avalonia на Linux и частично вынесенный Core.
+Сейчас: FlyleafLib с двумя TFM, поддерживаемый WPF и общий Avalonia build/package baseline для Windows/Linux,
+частично вынесенный Core. Нативная приёмка и полный parity остаются отдельными проверками.
 Цель: один Avalonia UI поверх общего `LLPlayer.Core` и FlyleafLib на нативных Windows и Linux.
 Каждый срез сохраняет выпускаемый WPF-продукт до приёмки замены:
 
   1. **Синхронизация исходников и свежие проверки обеих платформ.** Октябрьские receipts остаются историческими;
      результаты текущего дерева фиксируются отдельно.
-  2. **Следующий ограниченный срез — нативный Windows Avalonia baseline.** Использовать portable `net10.0`,
-     те же Avalonia views/Core, проверить RID, FFmpeg, native audio, упаковку, пути config/log и основное воспроизведение.
+  2. **Windows Avalonia build/package baseline реализован; свежая приёмка фиксируется отдельно.** Portable
+     `net10.0`, общие views/Core, RID `win-x64;linux-x64`, Windows FFmpeg/OpenAL и отдельный ZIP.
+     Проверить нативное окно, пути config/log и основное воспроизведение; результаты — в текущем status receipt.
      Первый software-render baseline не закрывает GPU и не доказывает Windows ASR/OCR.
   3. **Отдельные Windows ASR/OCR-срезы** с проверкой native dependencies и реального runtime.
   4. **Дальнейший Core и паритет функций.** Уже есть каталог моделей, recognition/translation settings/actions,
@@ -684,15 +686,22 @@ WPF выводится из эксплуатации только после own
 **Текущий приоритет (прямое решение владельца, 2026-10-18):** единый Avalonia UI и Core для Windows/Linux.
 Windows baseline разрешён до полного Linux parity. Для будущей работы это заменяет отсрочку Windows из решения
 2026-10-03; прежние планы и receipts сохраняют исторический scope. Текущие WPF compatibility contracts
-и Windows CI/build gates остаются обязательными. Предложение следующего среза:
+и Windows CI/build gates остаются обязательными. Текущий implementation/verification status:
 [`f13-status-2026-10-18.md`](f13-status-2026-10-18.md).
 
 Avalonia-приложение обязано оставаться платформенно-нейтральным (без Linux-only допущений): конфиг — XDG
 `~/.config/LLPlayer` на Linux и `%APPDATA%\LLPlayer` на Windows (состояние/логи — `~/.local/state/LLPlayer` /
 `%LOCALAPPDATA%\LLPlayer`), список FFmpeg-библиотек — `*.so` / `*.dll` по ОС (`AppPaths`, `FFmpegLocator`, покрыто
-`LLPlayer.Avalonia.Tests`). Известные пробелы для ступени «Avalonia на Windows»: `RuntimeIdentifiers` только
-`linux-x64`, упаковка только Linux (`publish.sh`), единственный путь видео — software-рендер, OpenAL Soft на
-Windows не поставляется.
+`LLPlayer.Avalonia.Tests`). Windows Avalonia теперь имеет `win-x64` RID, отдельные verify/publish scripts и CI job;
+OpenAL Soft 1.23.1 поставляется app-local из `Silk.NET.OpenAL.Soft.Native`, FFmpeg DLLs сохраняют текущую версию.
+Для Windows-пакета нужны .NET 10 runtime и Visual C++ 2022 x64 redistributable. Единственный общий путь видео —
+software-рендер; Windows ASR/OCR и GPU ещё требуют отдельных native-проверок.
+
+**Правило дальнейшей разработки:** изменять одни `LLPlayer.Avalonia/Views`, `ViewModels`, `Themes` и общий Core,
+а платформенные различия оставлять в host/native/path adapters. Каждое общее изменение проверяется Windows
+Avalonia (`scripts/windows/verify-avalonia.ps1`) и Linux (`scripts/linux/verify.sh`) gates; WPF full gate сохраняется.
+Дублировать UI по ОС не нужно. Свежие результаты, desktop smoke и независимое `/review` текущего среза —
+[`f13-status-2026-10-18.md`](f13-status-2026-10-18.md); прежние receipts ниже исторические.
 
 **Этапы и исторические checkpoints:** результаты ниже относятся к указанным датам и пакетам, а не к свежей
 проверке импортированного дерева. Указанная в старых срезах отсрочка Windows описывает их тогдашний scope,
@@ -1317,8 +1326,12 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
 **Активный трек (решение владельца 2026-09-24, обновление 2026-10-18):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
-Синхронизировать октябрьский исходный срез и свежие проверки; следующий ограниченный Windows Avalonia baseline
-можно вести до полного Linux parity. Сохранять WPF и его gates до приёмки замены.
+Октябрьский исходный срез синхронизирован; Windows Avalonia build/package baseline реализован на общем UI/Core.
+Локальные WPF/Windows Avalonia gates, rebuilt ZIP и ограниченный dark/light native smoke прошли;
+published source candidate `93c5e31` прошёл Windows/Linux CI и независимый review в
+[PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168). Последующие docs/merge checks фиксируются в PR timeline.
+Следующий продуктовый шаг — расширенная interactive-приёмка и поэтапный shared feature parity.
+Полный Linux/WPF parity остаётся открытым; сохранять WPF и его gates до приёмки замены.
 
 **Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу.
 
@@ -1360,7 +1373,10 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 
 ## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-10-18 / F-13 active)
 
-Активный крупный трек — `F-13`; следующий ограниченный product-срез — нативный Windows Avalonia baseline после синхронизации. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
+Активный крупный трек — `F-13`; общий Windows/Linux Avalonia build/package baseline реализован. Локальные
+WPF/Windows Avalonia gates, ZIP и ограниченный dark/light native smoke прошли. Published source candidate
+`93c5e31` прошёл Windows/Linux CI и review в [PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168);
+расширенная native-приёмка и полный parity остаются открытыми. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
 используется, обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Владелец принял
 остаточный риск расширенного smoke; это `WAIVED / NOT RUN`, не `PASS`.
 

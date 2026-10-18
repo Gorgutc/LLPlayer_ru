@@ -48,8 +48,8 @@ public sealed class PortableAsrTests
         string directory = Environment.GetEnvironmentVariable("LLPLAYER_WHISPER_MODELS_DIR")!;
         WhisperConfig.ModelsDirectory.Should().Be(directory);
         Config config = new(true);
-        config.Subtitles.WhisperCppConfig.Model = new WhisperCppModel { Model = GgmlType.LargeV3 };
-        string path = Path.Combine(directory, "ggml-large-v3.bin");
+        config.Subtitles.WhisperCppConfig.Model = new WhisperCppModel { Model = GgmlType.LargeV3, Quantization = QuantizationType.NoQuantization };
+        string path = config.Subtitles.WhisperCppConfig.Model.ModelFilePath;
         SubtitlesASR asr = new(new SubtitlesManager(config, 2), config);
         asr.CanExecute(out string error, out string action).Should().BeFalse();
         error.Should().Contain(path);
@@ -133,7 +133,10 @@ public sealed class PortableAsrTests
         Action load = () => new WhisperCppASRService(config);
         var failure = load.Should().Throw<InvalidOperationException>().WithMessage("*CPU Whisper native libraries*");
         failure.Which.InnerException.Should().BeOfType<FileNotFoundException>();
-        failure.Which.Message.Should().Contain("runtimes/linux-x64").And.Contain("libgomp.so.1");
+        if (OperatingSystem.IsWindows())
+            failure.Which.Message.Should().Contain(Path.Combine("runtimes", "win-x64")).And.Contain("VCRUNTIME140");
+        else
+            failure.Which.Message.Should().Contain(Path.Combine("runtimes", "linux-x64")).And.Contain("libgomp.so.1");
         File.WriteAllText(marker, failure.Which.ToString());
     }
 
@@ -143,7 +146,8 @@ public sealed class PortableAsrTests
         try
         {
             string host = Path.Combine(Path.GetFullPath(Path.Combine(
-                System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "../../..")), "dotnet");
+                System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "../../..")),
+                OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
             ProcessStartInfo start = new(host) { RedirectStandardOutput = true, RedirectStandardError = true };
             foreach (string arg in new[] { assembly ?? typeof(PortableAsrTests).Assembly.Location, "-method",
                 $"{typeof(PortableAsrTests).FullName}.{method}", "-explicit", "only", "-noLogo" })

@@ -6,9 +6,10 @@ description: Use when editing C#, XAML, csproj, publish profiles, or .NET verifi
 # LLPlayer .NET Rules
 
 The shipped Windows WPF app targets `net10.0-windows10.0.18362.0` and `win-x64`.
-F-13 adds shared `LLPlayer.Core` and the current Linux `LLPlayer.Avalonia` host over FlyleafLib portable `net10.0`.
-The target is the same Avalonia UI/Core on native Windows and Linux; the Windows Avalonia baseline is proposed,
-not implemented or accepted. Preserve WPF until explicit replacement acceptance; see `docs/agent/architecture.md`.
+F-13 adds shared `LLPlayer.Core` and one native Windows/Linux `LLPlayer.Avalonia` host over FlyleafLib portable `net10.0`.
+The Avalonia host has `win-x64;linux-x64` RIDs with shared views, view models and themes. Its Windows build/package
+baseline is implemented; native acceptance and Windows ASR/OCR/GPU require separate evidence. Preserve WPF until
+explicit replacement acceptance; see `docs/agent/architecture.md`.
 
 ## Preserve
 
@@ -28,8 +29,10 @@ dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
 dotnet test --no-restore -warnaserror .\FlyleafLibTests
 ```
 
-For shared/Core/portable/Avalonia or Linux runtime changes, also run `scripts/linux/verify.sh`; Linux packaging uses
-`scripts/linux/publish.sh`. Report native desktop acceptance separately from build/headless evidence.
+For shared/Core/portable/Avalonia changes, also run `scripts/windows/verify-avalonia.ps1` and
+`scripts/linux/verify.sh`; package with `scripts/windows/publish-avalonia.ps1` or `scripts/linux/publish.sh`.
+Keep the portable `net10.0` engine reference on Windows Avalonia: the WPF-specific Windows engine excludes
+portable seams. Report native desktop acceptance separately from build/headless evidence.
 
 Route changed paths through `docs/agent/subagent-review-matrix.md`, use explicit spawned reviewers, and finish with a
 spawned `/review` including `verification_reviewer`. Resolve every Critical/Important finding before handoff.

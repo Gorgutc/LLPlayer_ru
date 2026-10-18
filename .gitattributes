@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# Keep the pinned upstream LGPL license text byte-for-byte, including its original trailing spaces.
+LLPlayer.Avalonia/Licenses/OpenALSoft/COPYING whitespace=-blank-at-eol

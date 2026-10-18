@@ -23,15 +23,31 @@ This repository is a fork of [umlx5h/LLPlayer](https://github.com/umlx5h/LLPlaye
 
 For the agent-facing version of this note, see [`docs/agent/architecture.md`](docs/agent/architecture.md) ("Fork Relationship").
 
-### Linux build (fork, work in progress)
+### Shared Windows and Linux UI (fork, F-13 in progress)
 
-This fork is porting the player to Linux (backlog F-13). The Windows WPF product remains supported with its
+This fork develops one Avalonia UI for native Windows and Linux (backlog F-13). Both builds use the same
+`LLPlayer.Avalonia` views, view models, themes and shared Core, so UI improvements apply to both platforms.
+The Windows WPF product remains supported with its
 behavior preserved as a compatibility requirement; shared services and serialization have moved into `LLPlayer.Core`
-with corresponding project-reference changes. Linux currently uses the Avalonia 12 app, `LLPlayer.Avalonia`,
+with corresponding project-reference changes. The Avalonia 12 app runs
 on the same FlyleafLib engine (portable `net10.0` target, software video path,
-OpenAL audio). A bounded Recognition menu/dialog supports whisper.cpp CPU ASR on either subtitle slot and OCR on an
+OpenAL audio). The new Windows Avalonia ZIP is a separate build from `LLPlayer.exe` (WPF), with native desktop
+acceptance recorded separately in the [current F-13 status](docs/agent/f13-status-2026-10-18.md).
+
+On Windows x64, install the .NET 10 runtime and x64 Microsoft Visual C++ 2022 redistributable. With the .NET 10 SDK:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1
+```
+
+Extract `artifacts/windows-avalonia/LLPlayer-Avalonia-<version>-win-x64.zip` and run `LLPlayer.Avalonia.exe` inside
+the extracted folder. Keep its `FFmpeg/` folder and `soft_oal.dll` alongside the application. WSL is not required.
+The existing WPF release still starts through `LLPlayer.exe` and keeps its separate build/release flow.
+
+The Linux build's bounded Recognition menu/dialog supports whisper.cpp CPU ASR on either subtitle slot and OCR on an
 already-selected bitmap track. Headless integration has exercised the real Player/UI-command path with existing
-models and English/Russian PGS; native desktop and Windows owner acceptance remain separate pending checks. The
+models and English/Russian PGS; this is not Windows portable ASR/OCR acceptance. The
 dialog uses system Tesseract 5 and installed traineddata for OCR and does not download/install models. Dubbing,
 YoutubeDL, faster-whisper UI, and full settings parity are not yet ported. See
 [`LLPlayer.Avalonia/README.md`](LLPlayer.Avalonia/README.md). On Ubuntu 24.04 (`sudo apt install dotnet-sdk-10.0 libopenal1`):
@@ -42,7 +58,9 @@ scripts/linux/verify.sh         # builds and tests
 scripts/linux/publish.sh        # creates LLPlayer-<version>-linux-x64.tar.gz
 ```
 
-See [`RUN_INSTRUCTIONS.md`](RUN_INSTRUCTIONS.md#linux) for details.
+See [`LLPlayer.Avalonia/README.md`](LLPlayer.Avalonia/README.md) for platform-specific prerequisites and development
+commands, and [`RUN_INSTRUCTIONS.md`](RUN_INSTRUCTIONS.md#linux) for the Linux flow. Every shared change is checked
+by Windows Avalonia and Linux CI; WPF compatibility gates remain required until explicit replacement acceptance.
 
 ## 🎬 Demo
 

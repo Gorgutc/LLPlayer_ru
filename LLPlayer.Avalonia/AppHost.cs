@@ -221,13 +221,17 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         vm.OnWordClicked(word, text, 0, p.X, p.Y);
     }
 
+    /// <summary>
+    /// Developer CLI <c>--screenshot</c>: saves a canonical 96-DPI PNG (one pixel per layout DIP), independent of
+    /// desktop scaling. This helper does not change the player's media-frame snapshots.
+    /// </summary>
     public static void SaveScreenshot(Window window, string path)
     {
         // The gallery is taller than the screen: render its whole content instead of the visible viewport.
         Visual target = window is ThemeGalleryWindow gallery ? gallery.GalleryContent : window;
-        double scaling = window.RenderScaling;
-        PixelSize size = new(Math.Max(1, (int)(target.Bounds.Width * scaling)), Math.Max(1, (int)(target.Bounds.Height * scaling)));
-        using RenderTargetBitmap rtb = new(size, new Vector(96 * scaling, 96 * scaling));
+        // Avoid Avalonia's immediate shadow-rendering transform duplication on HiDPI screenshot targets.
+        PixelSize size = new(Math.Max(1, (int)Math.Ceiling(target.Bounds.Width)), Math.Max(1, (int)Math.Ceiling(target.Bounds.Height)));
+        using RenderTargetBitmap rtb = new(size, new Vector(96, 96));
         rtb.Render(target);
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
         rtb.Save(path, PngBitmapEncoderOptions.Default);

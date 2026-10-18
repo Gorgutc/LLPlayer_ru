@@ -3,6 +3,47 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 $buildWorkflow = Join-Path $repoRoot ".github\workflows\build.yml"
 
+# Canonical additive job: the protected WPF job below remains a separate seven-step gate.
+$windowsAvaloniaJob = @'
+  avalonia-windows:
+    name: LLPlayer Windows Avalonia Build & Test
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout source
+      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      with:
+        persist-credentials: false
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Verify Windows Avalonia
+      run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
+
+    - name: Verify Windows Avalonia package contract
+      run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
+
+    - name: Publish Windows Avalonia package
+      run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1 -OutDir "$env:RUNNER_TEMP\windows-avalonia-package"
+
+    - name: Upload Windows Avalonia package
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: LLPlayer-avalonia-win-x64
+        path: |
+          ${{ runner.temp }}/windows-avalonia-package/*.zip
+          ${{ runner.temp }}/windows-avalonia-package/*.zip.sha256
+        if-no-files-found: error
+        compression-level: 0
+        retention-days: 14
+'@
+
 function Get-UniqueLineIndex(
     [string[]]$Lines,
     [string]$Pattern,
@@ -253,6 +294,116 @@ function Assert-BuildWorkflowTriggers([string]$Text, [string]$Source) {
     }
 }
 
+function Assert-WindowsAvaloniaJobContract([string[]]$JobsLines, [string]$Source) {
+    $jobLines = Get-ChildMappingBlock $JobsLines 2 "avalonia-windows" "jobs.avalonia-windows entry" $Source
+    # This additive job is intentionally small. Compare canonical executable lines rather than parsing a
+    # subset of YAML that could overlook an if/defaults/continue-on-error or a scalar-continuation bypass.
+    $expectedLines = @($windowsAvaloniaJob -split '\r?\n' | Select-Object -Skip 1 | Where-Object {
+        $_.Trim() -and -not $_.TrimStart().StartsWith("#", [System.StringComparison]::Ordinal)
+    } | ForEach-Object { $_.TrimEnd() })
+    $actualLines = @($jobLines | Where-Object {
+        $_.Trim() -and -not $_.TrimStart().StartsWith("#", [System.StringComparison]::Ordinal)
+    } | ForEach-Object { $_.TrimEnd() })
+    if (($actualLines -join "`n") -cne ($expectedLines -join "`n")) {
+        throw "$Source jobs.avalonia-windows must match the canonical six-step Windows Avalonia gate (full verify, package fixtures, publish/content/archive integrity, upload); skips, extra steps, inputs, overrides and unpinned actions are forbidden."
+    }
+}
+
+# Keep the portable test target opt-in, and run both complete suites with warnings as errors.
+$windowsAvaloniaDotnetCommands = @(
+    'Invoke-Checked dotnet "restore" "-warnaserror" "-p:LLPlayerPortableTests=true"',
+    'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\FlyleafLib" "-f" "net10.0"',
+    'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Avalonia"',
+    'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Avalonia.Tests"',
+    'Invoke-Checked dotnet "test" "--no-restore" "-warnaserror" ".\FlyleafLibTests" "-f" "net10.0" "-p:LLPlayerPortableTests=true"',
+    'Invoke-Checked dotnet "test" "--no-restore" "-warnaserror" ".\LLPlayer.Avalonia.Tests"'
+)
+$windowsAvaloniaCheckedRunner = @'
+function Invoke-Checked {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$FilePath,
+            [Parameter(ValueFromRemainingArguments = $true)]
+            [string[]]$Arguments
+        )
+
+        & $FilePath @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
+        }
+    }
+'@
+
+function Assert-WindowsAvaloniaRunnerContract([string]$Text, [string]$Source) {
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseInput($Text, [ref]$tokens, [ref]$parseErrors)
+    if (@($parseErrors).Count -ne 0 -or $null -ne $ast.ParamBlock) {
+        throw "$Source must be parseable and must not define optional Skip/Fast or other script parameters."
+    }
+    $tries = @($ast.EndBlock.Statements | Where-Object { $_ -is [System.Management.Automation.Language.TryStatementAst] })
+    if ($tries.Count -ne 1 -or $tries[0].CatchClauses.Count -ne 0 -or $null -eq $tries[0].Finally) {
+        throw "$Source must have one top-level fail-closed try/finally without catch suppression."
+    }
+    $body = $tries[0].Body
+    $runners = @($ast.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -ieq "Invoke-Checked"
+    }, $true))
+    if ($runners.Count -ne 1 -or -not [object]::ReferenceEquals($runners[0].Parent, $body) -or
+        ($runners[0].Extent.Text -replace "`r`n", "`n").Trim() -cne $windowsAvaloniaCheckedRunner.Trim()) {
+        throw "$Source must keep the canonical Invoke-Checked function that executes commands and throws on failure."
+    }
+    $errorPolicies = @($ast.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ieq '$ErrorActionPreference'
+    }, $true))
+    if ($errorPolicies.Count -ne 1 -or $errorPolicies[0].Extent.Text -cne '$ErrorActionPreference = "Stop"') {
+        throw "$Source must preserve the single ErrorActionPreference Stop policy."
+    }
+    $earlyExits = @($ast.FindAll({
+        param($node)
+        if ($node -isnot [System.Management.Automation.Language.ReturnStatementAst] -and
+            $node -isnot [System.Management.Automation.Language.ExitStatementAst]) { return $false }
+        $parent = $node.Parent
+        while ($null -ne $parent) {
+            if ($parent -is [System.Management.Automation.Language.FunctionDefinitionAst]) { return $false }
+            $parent = $parent.Parent
+        }
+        return $true
+    }, $true))
+    if ($earlyExits.Count -ne 0) { throw "$Source must not bypass required commands with return or exit." }
+
+    $commands = @($ast.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -ceq "Invoke-Checked" -and
+        $node.CommandElements.Count -gt 1 -and $node.CommandElements[1].Extent.Text -ceq "dotnet"
+    }, $true))
+    if ($commands.Count -ne $windowsAvaloniaDotnetCommands.Count) {
+        throw "$Source must contain exactly six protected dotnet invocations including both unfiltered test suites."
+    }
+    for ($index = 0; $index -lt $windowsAvaloniaDotnetCommands.Count; $index++) {
+        $command = $commands[$index]
+        if ($command.Extent.Text -cne $windowsAvaloniaDotnetCommands[$index] -or
+            $command.Parent -isnot [System.Management.Automation.Language.PipelineAst] -or
+            $command.Parent.PipelineElements.Count -ne 1 -or
+            -not [object]::ReferenceEquals($command.Parent.Parent, $body)) {
+            throw "$Source must run canonical command $($index + 1) unconditionally in order: $($windowsAvaloniaDotnetCommands[$index]). Filters, missing opt-in/target, hidden commands, and conditional wrappers are forbidden."
+        }
+    }
+}
+
+function Assert-WindowsAvaloniaRunnerRejected([string]$Text, [string]$Description, [string]$ExpectedMessagePattern) {
+    try { Assert-WindowsAvaloniaRunnerContract $Text "adversarial Windows Avalonia runner ($Description)" }
+    catch {
+        if ($_.Exception.Message -cnotmatch $ExpectedMessagePattern) {
+            throw "Windows runner validator rejected '$Description' for the wrong reason: $($_.Exception.Message)"
+        }
+        return
+    }
+    throw "Windows Avalonia runner validator accepted adversarial fixture: $Description."
+}
+
 function Assert-BuildWorkflowContract([string]$Text, [string]$Source) {
     $rootLines = @($Text -split '\r?\n')
     Assert-AllowedMappingKeys $rootLines 0 @("name", "on", "jobs") "workflow root" $Source
@@ -271,7 +422,7 @@ function Assert-BuildWorkflowContract([string]$Text, [string]$Source) {
     Assert-BuildWorkflowTriggers $Text $Source
 
     $jobsLines = Get-JobsBlock $Text $Source
-    Assert-AllowedMappingKeys $jobsLines 2 @("build") "top-level jobs" $Source
+    Assert-AllowedMappingKeys $jobsLines 2 @("build", "avalonia-windows") "top-level jobs" $Source
     $job = Get-BuildJobBlock $Text $Source
     Assert-AllowedMappingKeys $job.Lines 4 @("name", "runs-on", "steps") "jobs.build" $Source
 
@@ -343,6 +494,7 @@ function Assert-BuildWorkflowContract([string]$Text, [string]$Source) {
               $buildPlugin.Start -lt $test.Start)) {
         throw "$Source must order Checkout source, Setup .NET, Verify fast repository gates, Restore dependencies, Build App, Build Plugin (YoutubeDL), then Test in jobs.build.steps."
     }
+    Assert-WindowsAvaloniaJobContract $jobsLines $Source
 }
 
 function Assert-ContractRejected(
@@ -672,7 +824,10 @@ function Assert-LinuxContractRejected(
 }
 
 function Swap-AdjacentNamedSteps([string]$Text, [string]$FirstName, [string]$SecondName) {
-    $lines = @($Text -split '\r?\n')
+    # Scope order mutations to the WPF job: both desktop jobs intentionally have Checkout/Setup steps.
+    $job = Get-BuildJobBlock $Text "order fixture"
+    $lines = $job.Lines
+    $jobText = $lines -join "`n"
     $first = Get-UniqueLineIndex $lines ('^    - name:\s*' + [regex]::Escape($FirstName) + '\s*$') "'$FirstName' fixture step" "order fixture"
     $second = Get-UniqueLineIndex $lines ('^    - name:\s*' + [regex]::Escape($SecondName) + '\s*$') "'$SecondName' fixture step" "order fixture"
 
@@ -700,7 +855,7 @@ function Swap-AdjacentNamedSteps([string]$Text, [string]$FirstName, [string]$Sec
     for ($index = $second; $index -lt $secondEnd; $index++) { $result.Add($lines[$index]) }
     for ($index = $first; $index -lt $second; $index++) { $result.Add($lines[$index]) }
     for ($index = $secondEnd; $index -lt $lines.Count; $index++) { $result.Add($lines[$index]) }
-    return $result -join "`n"
+    return ($Text -replace "`r`n", "`n").Replace($jobText, ($result -join "`n"))
 }
 
 $positiveFixture = @'
@@ -732,8 +887,70 @@ jobs:
     - name: Test
       run: dotnet test --no-restore -warnaserror .\FlyleafLibTests
 '@
+$positiveFixture = $positiveFixture + "`n" + $windowsAvaloniaJob
 Assert-BuildWorkflowContract $positiveFixture "positive fixture"
 
+$positiveWindowsRunner = '$ErrorActionPreference = "Stop"' + "`ntry {`n    " + $windowsAvaloniaCheckedRunner + "`n    " +
+    ($windowsAvaloniaDotnetCommands -join "`n    ") + "`n}`nfinally { Pop-Location }"
+Assert-WindowsAvaloniaRunnerContract $positiveWindowsRunner "positive Windows Avalonia runner"
+$portableTestCommand = $windowsAvaloniaDotnetCommands[4]
+$uiTestCommand = $windowsAvaloniaDotnetCommands[5]
+$windowsRunnerMutations = @(
+    @{ Name = "filtered portable suite"; Pattern = "must run canonical command"; Before = $portableTestCommand; After = $portableTestCommand + ' "--filter" "FullyQualifiedName=__NoSuchTest__"' },
+    @{ Name = "filtered UI suite"; Pattern = "must run canonical command"; Before = $uiTestCommand; After = $uiTestCommand + ' "--filter" "FullyQualifiedName=__NoSuchTest__"' },
+    @{ Name = "missing portable suite"; Pattern = "exactly six protected dotnet invocations"; Before = $portableTestCommand; After = "" },
+    @{ Name = "missing UI suite"; Pattern = "exactly six protected dotnet invocations"; Before = $uiTestCommand; After = "" },
+    @{ Name = "wrong portable framework"; Pattern = "must run canonical command"; Before = '"-f" "net10.0"'; After = '"-f" "net10.0-windows10.0.18362.0"' },
+    @{ Name = "missing portable test opt-in"; Pattern = "must run canonical command"; Before = ' "-p:LLPlayerPortableTests=true"'; After = "" },
+    @{ Name = "test warnings are non-fatal"; Pattern = "must run canonical command"; Before = ' "-warnaserror"'; After = "" },
+    @{ Name = "test behind false condition"; Pattern = "must run canonical command"; Before = $uiTestCommand; After = 'if ($false) {' + "`n    " + $uiTestCommand + "`n    }" },
+    @{ Name = "tests hidden in block comment"; Pattern = "exactly six protected dotnet invocations"; Before = $portableTestCommand; After = '<#' + $portableTestCommand + '#>' },
+    @{ Name = "runner does not execute"; Pattern = "canonical Invoke-Checked function"; Before = '& $FilePath @Arguments'; After = 'return' },
+    @{ Name = "failures are non-terminating"; Pattern = "single ErrorActionPreference Stop"; Before = '$ErrorActionPreference = "Stop"'; After = '$ErrorActionPreference = "Continue"' },
+    @{ Name = "returns before tests"; Pattern = "must not bypass required commands"; Before = $portableTestCommand; After = 'return' + "`n    " + $portableTestCommand },
+    @{ Name = "early success exit"; Pattern = "must not bypass required commands"; Before = $portableTestCommand; After = 'exit 0' + "`n    " + $portableTestCommand },
+    @{ Name = "optional Skip parameter"; Pattern = "must not define optional Skip/Fast"; Before = '$ErrorActionPreference = "Stop"'; After = 'param([switch]$SkipTests)' + "`n" + '$ErrorActionPreference = "Stop"' }
+)
+foreach ($mutation in $windowsRunnerMutations) {
+    if (-not $positiveWindowsRunner.Contains($mutation.Before)) { throw "Windows runner fixture mutation is stale: $($mutation.Name)." }
+    Assert-WindowsAvaloniaRunnerRejected ($positiveWindowsRunner.Replace($mutation.Before, $mutation.After)) $mutation.Name $mutation.Pattern
+}
+
+
+Assert-BuildWorkflowContract ($positiveFixture + "`n# Harmless trailing comment") "positive additive job comment fixture"
+
+$missingAvaloniaJobFixture = $positiveFixture.Replace("`n" + $windowsAvaloniaJob, "")
+Assert-ContractRejected $missingAvaloniaJobFixture "the native Windows Avalonia job is absent" "jobs.avalonia-windows entry"
+
+$windowsAvaloniaMutations = @(
+    @{ Description = "conditional job"; Before = "  avalonia-windows:"; After = "  avalonia-windows:`n    if: false" },
+    @{ Description = "non-fatal job"; Before = "  avalonia-windows:"; After = "  avalonia-windows:`n    continue-on-error: true" },
+    @{ Description = "wrong runner"; Before = "    runs-on: windows-latest"; After = "    runs-on: ubuntu-latest" },
+    @{ Description = "missing full verification step"; Before = "    - name: Verify Windows Avalonia"; After = "    - name: Verify omitted" },
+    @{ Description = "extra step"; Before = "    - name: Verify Windows Avalonia"; After = "    - name: Extra bypass`n      run: exit 0`n    - name: Verify Windows Avalonia" },
+    @{ Description = "conditional verification step"; Before = "    - name: Verify Windows Avalonia"; After = "    - name: Verify Windows Avalonia`n      if: false" },
+    @{ Description = "non-fatal publish step"; Before = "    - name: Publish Windows Avalonia package"; After = "    - name: Publish Windows Avalonia package`n      continue-on-error: true" },
+    @{ Description = "filtered fast verification"; Before = "-File .\scripts\windows\verify-avalonia.ps1"; After = "-File .\scripts\windows\verify-avalonia.ps1 -Fast" },
+    @{ Description = "skipped package fixtures"; Before = "-File .\scripts\windows\test-package-avalonia.ps1"; After = "-File .\scripts\windows\test-package-avalonia.ps1 -Skip" },
+    @{ Description = "publish command overridden"; Before = "    - name: Publish Windows Avalonia package"; After = "    - name: Publish Windows Avalonia package`n      run: exit 0" },
+    @{ Description = "continued publish scalar"; Before = "    - name: Upload Windows Avalonia package"; After = "        ; exit 0`n    - name: Upload Windows Avalonia package" },
+    @{ Description = "mutable checkout"; Before = "actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1"; After = "actions/checkout@v5" },
+    @{ Description = "credential persistence"; Before = "persist-credentials: false"; After = "persist-credentials: true" },
+    @{ Description = "wrong SDK"; Before = "dotnet-version: 10.0.x"; After = "dotnet-version: 9.0.x" },
+    @{ Description = "missing package allowed"; Before = "if-no-files-found: error"; After = "if-no-files-found: ignore" },
+    @{ Description = "custom shell"; Before = "    steps:"; After = "    defaults:`n      run:`n        shell: cmd`n    steps:" },
+    @{ Description = "write permission"; Before = "      contents: read"; After = "      contents: write" },
+    @{ Description = "extra token permission"; Before = "      contents: read"; After = "      contents: read`n      actions: write" },
+    @{ Description = "shadows WPF check name"; Before = "name: LLPlayer Windows Avalonia Build & Test"; After = "name: LLPlayer Build & Test" }
+)
+foreach ($mutation in $windowsAvaloniaMutations) {
+    if (-not $windowsAvaloniaJob.Contains($mutation.Before)) {
+        throw "Windows Avalonia fixture mutation does not match the canonical job: $($mutation.Description)."
+    }
+    $changedJob = $windowsAvaloniaJob.Replace($mutation.Before, $mutation.After)
+    $fixture = $positiveFixture.Replace($windowsAvaloniaJob, $changedJob)
+    Assert-ContractRejected $fixture "Windows Avalonia $($mutation.Description)" "must match the canonical six-step Windows Avalonia gate"
+}
 $positiveLinuxFixture = @'
 name: Linux Build & Test
 
@@ -1409,6 +1626,10 @@ if (-not (Test-Path -LiteralPath $buildWorkflow)) {
     throw "Build workflow is missing: $buildWorkflow"
 }
 Assert-BuildWorkflowContract (Get-Content -LiteralPath $buildWorkflow -Raw) $buildWorkflow
+$windowsVerifyScript = Join-Path $repoRoot "scripts\windows\verify-avalonia.ps1"
+if (-not (Test-Path -LiteralPath $windowsVerifyScript -PathType Leaf)) { throw "Windows Avalonia verification script is missing: $windowsVerifyScript" }
+Assert-WindowsAvaloniaRunnerContract (Get-Content -LiteralPath $windowsVerifyScript -Raw) $windowsVerifyScript
+
 
 $workflowDirectory = Split-Path -Parent $buildWorkflow
 $workflowTexts = [ordered]@{}

@@ -104,6 +104,9 @@ steps, so infrastructure or frozen-contract drift fails before compilation. `ver
 exact workflow/check identities, .NET 10 setup, fast-gate placement relative to restore, and the four-file workflow
 inventory. It rejects conditional or continue-on-error bypasses, additional workflows, non-build job display names,
 and adversarial hierarchy, expression/folded/escaped/over-indented, cross-job, setup, SDK, and ordering fixtures.
+The same workflow also has an additive `avalonia-windows` job, displayed as `LLPlayer Windows Avalonia Build & Test`.
+It uses read-only permissions and pinned actions, then runs Windows Avalonia verification, package-contract tests,
+publish and artifact upload. It does not reuse the WPF required-check name or replace the WPF job/release flow.
 The fourth file, `build-linux.yml` (F-13), has its own exact contract: workflow `Linux Build & Test`, one job
 `LLPlayer Linux Build & Test` on `ubuntu-24.04`, `contents: read`, only the reviewed action references (the release
 workflows' pinned checkout/setup-dotnet/upload-artifact SHAs and `actions/cache` pinned to the v6.1.0 commit SHA), the ordered
@@ -143,6 +146,25 @@ dotnet build --no-restore -warnaserror .\LLPlayer
 dotnet build --no-restore -warnaserror .\Plugins\YoutubeDL
 dotnet test --no-restore -warnaserror .\FlyleafLibTests
 ```
+
+## Windows Avalonia Gate (F-13)
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1
+```
+
+This additive gate builds/tests the portable `net10.0` engine, Core and the same Avalonia host/UI as Linux, using
+Windows FFmpeg DLLs, a real media/subtitle fixture and native OpenAL checks. The test fixture CLI is provisioned
+from a pinned, SHA-256-verified source unless `LLPLAYER_FFMPEG_CLI` supplies an existing CLI/ffprobe pair. It is a
+test prerequisite, not shipped output. The publisher produces a separate `LLPlayer-Avalonia-<version>-win-x64.zip`
+with positive/negative content validation, verified archive bytes and a checksum. The CI job runs all three steps
+before artifact upload. WPF `verify.ps1` remains required; shared changes also require the full Linux gate.
+
+Report actual failures/skips per platform. Native-library and headless media checks do not establish GUI/real-model
+acceptance. Windows ASR/OCR and GPU support remain separately evidenced slices; historical Linux receipts do not
+prove those Windows boundaries.
 
 ## Linux Gate (F-13)
 

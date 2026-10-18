@@ -123,8 +123,10 @@ public sealed class SubtitleTranslationTests
             await Wait(() => controller.PrimaryText == "old endpoint");
             var changed = settings.Clone();
             changed.Providers[TranslateServiceType.GoogleV1] = new GoogleV1TranslateSettings { Endpoint = "https://example.invalid/new" };
-            await Assert.ThrowsAnyAsync<IOException>(() => controller.SaveTranslationAsync(() => words.SaveAndApplyAsync(changed,
+            Exception? failure = await Record.ExceptionAsync(() => controller.SaveTranslationAsync(() => words.SaveAndApplyAsync(changed,
                 new TranslationSettingsStore(dir.Path), () => { }, controller.ApplyTranslationSettings)));
+            Assert.True(failure is IOException or UnauthorizedAccessException,
+                $"Expected IOException or UnauthorizedAccessException, got {failure?.GetType().FullName ?? "no exception"}.");
             Assert.Equal("old endpoint", cue.TranslatedText); Assert.Equal(1, creates); Assert.False(old.Disposed);
             await controller.SaveTranslationAsync(() => words.SaveAndApplyAsync(changed,
                 new TranslationSettingsStore(Path.Combine(dir.Path, "translation.json")), () => { }, controller.ApplyTranslationSettings));

@@ -29,7 +29,7 @@ internal static class Program
 
         if (options.ShowVersion)
         {
-            Console.WriteLine("LLPlayer (Linux) " + Assembly.GetExecutingAssembly().GetName().Version?.ToString(3));
+            Console.WriteLine("LLPlayer (Avalonia) " + Assembly.GetExecutingAssembly().GetName().Version?.ToString(3));
             return 0;
         }
 
@@ -49,7 +49,7 @@ internal static class Program
 
     public const string ManagedDialogsVariable = "LLPLAYER_MANAGED_DIALOGS";
 
-    /// <summary>Linux windowing: X11 (or XWayland) through UsePlatformDetect. Native Wayland is a future opt-in.</summary>
+    /// <summary>Native platform detection for Windows and Linux (X11/XWayland). Native Wayland is a future opt-in.</summary>
     public static AppBuilder BuildAvaloniaApp(AppOptions options)
     {
         AppBuilder builder = AppBuilder.Configure(() => new App { Options = options })

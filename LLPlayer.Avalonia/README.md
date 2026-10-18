@@ -1,24 +1,61 @@
-# LLPlayer for Linux (LLPlayer.Avalonia)
+# LLPlayer for Windows and Linux (LLPlayer.Avalonia)
 
-The Linux desktop app of LLPlayer (backlog F-13): an Avalonia 12 UI over FlyleafLib's portable `net10.0` build.
-The Windows product is still the WPF app in `../LLPlayer` (unchanged).
+The shared Windows/Linux desktop app of LLPlayer (backlog F-13): one Avalonia 12 UI over FlyleafLib's portable
+`net10.0` build, with `win-x64` and `linux-x64` packages. Views, view models, themes, dialogs and Core are shared,
+so subsequent UI improvements are implemented once and checked on both platforms. The WPF app in `../LLPlayer`
+remains separately supported until replacement acceptance and the owner's retirement decision.
+
+The native Windows software-playback build/package baseline is implemented. Its fresh verification and desktop
+smoke are tracked in [current F-13 status](../docs/agent/f13-status-2026-10-18.md). Windows ASR/OCR, GPU support
+and full WPF feature parity require separately evidenced work; Linux model receipts do not establish them.
 
 - UI: Avalonia 12.1.3 with the built-in FluentTheme plus the "LLPlayer shadcn" theme (shadcn/ui neutral tokens,
   `Themes/`), CommunityToolkit.Mvvm view models, plain constructor wiring (`AppHost`).
 - Video: FlyleafLib's software renderer (deinterlace, HDR tone mapping, `sws_scale` → BGRA, rotation/flips, colour
   filters) presented by `Controls/VideoView`, which only scales the ready-to-show frame into the renderer's viewport.
 - Audio: `Services/AudioBackendSelector` → FlyleafLib's `AudioBackendFactory.CreateDefault()`, assigned to
-  `AudioEngine.Backend` before `Engine.Start`: OpenAL Soft (system `libopenal.so.1`, package `libopenal1`) when its
+  `AudioEngine.Backend` before `Engine.Start`: OpenAL Soft (system `libopenal.so.1`/`libopenal1` on Linux;
+  pinned app-local `soft_oal.dll` 1.23.1 on Windows) when its
   default device opens, otherwise the silent real-time `NullAudioBackend` with a warning in `flyleaf.log`.
   `LLPLAYER_AUDIO_BACKEND=null|openal|auto` forces the choice.
-- OCR prerequisite: the portable FlyleafLib adapter uses system Tesseract 5 (`libtesseract.so.5`) and installed
+- Linux OCR prerequisite: the portable FlyleafLib adapter uses system Tesseract 5 (`libtesseract.so.5`) and installed
   system tessdata; neither is bundled. Set standard `TESSDATA_PREFIX` only when tessdata is outside system discovery.
   Recognition ▸ OCR runs on a bitmap subtitle track already selected in the requested primary/secondary slot; the
   configured language fallback is used only when track metadata is unknown.
-- Windowing: X11 (or XWayland) via `UsePlatformDetect()`. Native Wayland (`Avalonia.Wayland`) is a possible future
+- Windowing: native Win32 on Windows and X11 (or XWayland) on Linux via `UsePlatformDetect()`. Native Wayland (`Avalonia.Wayland`) is a possible future
   opt-in and is intentionally not referenced yet.
 
 ## Build and run
+
+### Windows x64
+
+Install the .NET 10 SDK for development. The extracted package needs the .NET 10 runtime and **Microsoft Visual
+C++ x64 Redistributable 2022 or newer** for its native dependencies. WSL is not required for this native app.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1
+```
+
+The publisher produces `artifacts/windows-avalonia/LLPlayer-Avalonia-<version>-win-x64.zip` and its `.sha256`.
+Extract it and launch **`LLPlayer.Avalonia.exe`** inside the extracted directory; keep `FFmpeg/`, `soft_oal.dll`
+and the other native dependencies in place. This is the shared Avalonia UI; **`LLPlayer.exe`** is the separately
+supported WPF app. Both can be built without replacing the other.
+
+For a source-tree development launch:
+
+```powershell
+dotnet build LLPlayer.Avalonia -warnaserror
+dotnet LLPlayer.Avalonia/bin/Debug/net10.0/LLPlayer.Avalonia.dll --ffmpeg-dir ./FFmpeg video.mp4
+```
+
+The Windows verification script uses the tracked FFmpeg DLLs. It downloads a pinned, SHA-256-verified FFmpeg CLI
+for generating the test fixture when `LLPLAYER_FFMPEG_CLI` is unset; this test tool is not shipped. The
+`LLPlayer Windows Avalonia Build & Test` CI job runs the Windows checks/package flow, alongside the existing WPF
+job. Shared changes also run the Linux gate below.
+
+### Linux x64
 
 ```sh
 dotnet build LLPlayer.Avalonia
@@ -44,7 +81,7 @@ Command line: `LLPlayer.Avalonia [--sub <file>] [--theme dark|light] [--ffmpeg-d
 | Crash log | `$XDG_STATE_HOME/LLPlayer/crash.log` (default `~/.local/state/LLPlayer/crash.log`) |
 | Engine log (warnings; `LLPLAYER_LOG_LEVEL=Debug` for more) | `$XDG_STATE_HOME/LLPlayer/flyleaf.log` |
 
-Whisper.cpp models use `<app folder>/whispermodels` by default. Set `LLPLAYER_WHISPER_MODELS_DIR` before launch to use a different absolute directory; the value is captured when the ASR configuration is first initialized. Relative values are rejected. Linux GGML files use canonical whisper.cpp names such as `ggml-large-v3.bin`; model weights are user-downloaded and are not included in the package. The bundled Whisper CPU libraries require glibc 2.34+, `GLIBCXX_3.4.29`, `libgomp.so.1`, and an AVX/AVX2/FMA/F16C-capable CPU.
+Whisper.cpp models use `<app folder>/whispermodels` by default. Set `LLPLAYER_WHISPER_MODELS_DIR` before launch to use a different absolute directory; the value is captured when the ASR configuration is first initialized. Relative values are rejected. Linux GGML files use canonical whisper.cpp names such as `ggml-large-v3.bin`; model weights are user-downloaded and are not included in the package. The bundled Linux Whisper CPU libraries require glibc 2.34+, `GLIBCXX_3.4.29`, `libgomp.so.1`, and an AVX/AVX2/FMA/F16C-capable CPU. The Windows package includes the selected win-x64 CPU natives, but real Windows recognition acceptance remains separate.
 
 These are the Linux locations. The app code is platform-neutral (`Services/AppPaths.cs`): on Windows the preferences
 go to `%APPDATA%\LLPlayer` (or `$LLPLAYER_CONFIG_DIR`) and the logs to `%LOCALAPPDATA%\LLPlayer`.
@@ -138,6 +175,12 @@ the subtitle language with Lingua (all language models are loaded once per proce
 
 ## Tests
 
+Current Windows checks use `scripts/windows/verify-avalonia.ps1`; Linux uses `scripts/linux/verify.sh`.
+Package checks use `scripts/windows/test-package-avalonia.ps1`/`publish-avalonia.ps1` or `scripts/linux/publish.sh`.
+The same shared UI test sources run on both platforms; native environment skips must be reported explicitly.
+The existing `scripts/codex/verify.ps1` remains required for WPF compatibility. See the current status link above
+for fresh results; the dated slice receipts below retain their original scope and priority.
+
 `dotnet test LLPlayer.Avalonia.Tests` — headless Avalonia (Skia) UI tests, view-model tests and service tests. The
 end-to-end playback test (real engine, media and subtitles) runs when `LLPLAYER_FFMPEG_DIR` and `LLPLAYER_TEST_MEDIA`
 (`test-720p.mp4` with `test-720p.srt` next to it) are set and is skipped otherwise. `LLPLAYER_EVIDENCE_DIR=<dir>` makes
@@ -153,8 +196,9 @@ passing. The package was
 `artifacts/f13-translation-2026-10-03/package/LLPlayer-0.3.62-linux-x64.tar.gz` (179,141,059 bytes, SHA-256
 `0b9505e7de323e23c2f943904da94142fcf0eed94d1d68034b317985c078603a`); its positive content validation passed and the
 translation settings, backup, and dotted atomic-temp fixtures were rejected. This command does not run Windows
-compilation. Windows runtime and UI acceptance are deferred under the current Linux-priority direction; existing
-Windows CI contracts remain.
+compilation. At that 2026-10-03 checkpoint, Windows runtime/UI acceptance was deferred under the then-current
+Linux-priority direction; the later shared Windows/Linux implementation and current priority are recorded above.
+Existing WPF CI contracts remain.
 
 The F-13 word-library/definition/export implementation passed its focused Core (30) and Avalonia UI (25) tests; seven
 headless PNGs passed root/UI visual inspection. At the words-slice checkpoint, the Linux `--fast` gate passed: FlyleafLib 1584 passed/6 skipped,

@@ -340,6 +340,10 @@ try {
                 $requiredAgents.Add("media_runtime_mapper")
                 $requiredGates.Add("linux verify")
             }
+            if ($path -match '(?i)^(LLPlayer\.Core/|LLPlayer\.Avalonia(\.Tests)?/|FlyleafLib/.*\.(cs|csproj)$|FlyleafLibTests/)') {
+                $requiredGates.Add("linux verify")
+                $requiredGates.Add("windows avalonia verify")
+            }
             if ($path -match '(?i)^LLPlayer\.Core/(Services/(RecognitionSettings|TranslationSettings|WordLibrary)\.cs$|Serialization/)') {
                 $requiredAgents.Add("instruction_drift_auditor")
             }
@@ -377,19 +381,28 @@ try {
         @{ Path = "Future/Thing.axaml"; Agents = @("wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Future\Thing.AXAML"; Agents = @("wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Future/Thing.axaml.cs"; Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
-        @{ Path = "LLPlayer.Avalonia/Views/Future.axaml"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Avalonia/Views/Future.axaml.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Avalonia.Tests/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Core/Services/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Core/Services/TranslationSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Core/Services/WordLibrary.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Core\Serialization\Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
-        @{ Path = "LLPlayer.Core/LLPlayer.Core.csproj"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Avalonia/Views/Future.axaml"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Avalonia/Views/Future.axaml.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Avalonia.Tests/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Core/Services/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Core/Services/TranslationSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Core/Services/WordLibrary.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Core\Serialization\Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Core/LLPlayer.Core.csproj"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
         @{ Path = "FlyleafLib/Controls/WPF/Future.xaml"; Agents = @("media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "WpfColorFontDialog/Future.xaml.cs"; Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Plugins/YoutubeDL/Future.cs"; Agents = @("media_runtime_mapper", "dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "ship") },
+        @{ Path = "FlyleafLib/Platform/Portable/Future.props"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "FlyleafLib/MediaPlayer/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "FlyleafLib/FlyleafLib.csproj"; Agents = @("dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "FlyleafLibTests/Platform/Future.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "scripts/windows/fetch-test-ffmpeg.ps1"; Agents = @("codex_infra_architect", "instruction_drift_auditor", "dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "scripts/windows/verify-avalonia.ps1"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "scripts\windows\future-package.ps1"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = ".github/workflows/build.yml"; Agents = @("dotnet_quality_guardian", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "FFmpeg/avcodec-62.dll"; Agents = @("native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("ship", "windows avalonia verify") },
         @{ Path = "Future/Future.csproj"; Agents = @("dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Future.sln"; Agents = @("dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Future.slnx"; Agents = @("dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify") }
@@ -421,10 +434,13 @@ try {
         @{ Path = "Future/Thing.axaml.txt"; ForbiddenAgents = @("wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
         @{ Path = "Future/Thing.axaml.cs.bak"; ForbiddenAgents = @("dotnet_quality_guardian", "wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
         @{ Path = "Future/Thing.AXAML/notes.txt"; ForbiddenAgents = @("wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
-        @{ Path = "LLPlayer.CoreX/Services/RecognitionSettings.cs"; ForbiddenAgents = @("media_runtime_mapper", "instruction_drift_auditor"); ForbiddenGates = @("linux verify") },
+        @{ Path = "scripts/windows-old/future-package.ps1"; ForbiddenAgents = @("media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer"); ForbiddenGates = @("windows avalonia verify", "linux verify") },
+        @{ Path = ".github/workflows/build.yml.bak"; ForbiddenAgents = @("native_dependency_auditor"); ForbiddenGates = @("windows avalonia verify") },
+        @{ Path = "FFmpeg/avcodec-62.dll.txt"; ForbiddenAgents = @(); ForbiddenGates = @("windows avalonia verify") },
+        @{ Path = "LLPlayer.CoreX/Services/RecognitionSettings.cs"; ForbiddenAgents = @("media_runtime_mapper", "instruction_drift_auditor"); ForbiddenGates = @("linux verify", "windows avalonia verify") },
         @{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs.bak"; ForbiddenAgents = @("instruction_drift_auditor"); ForbiddenGates = @() },
         @{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs.bak"; ForbiddenAgents = @("native_dependency_auditor", "packaging_release_reviewer"); ForbiddenGates = @() },
-        @{ Path = "FlyleafLibTests/Core/FutureTests.cs"; ForbiddenAgents = @("media_runtime_mapper", "instruction_drift_auditor", "native_dependency_auditor", "packaging_release_reviewer"); ForbiddenGates = @("linux verify") },
+        @{ Path = "FlyleafLibTestsX/Core/FutureTests.cs"; ForbiddenAgents = @("media_runtime_mapper", "instruction_drift_auditor", "native_dependency_auditor", "packaging_release_reviewer"); ForbiddenGates = @("linux verify", "windows avalonia verify") },
         @{ Path = "Future/Thing.csproj.user"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
         @{ Path = "Future/Thing.sln.txt"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
         @{ Path = "Future/Thing.slnx.bak"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
@@ -497,32 +513,39 @@ try {
             Gates = @("verify")
         },
         @{
-            Name = "Core missing Linux verify"
-            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/Mutation.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify") }
+            Name = "shared Core missing native Windows Avalonia gate"
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/Mutation.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") }
             Path = "LLPlayer.Core/Services/Mutation.cs"
             Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer")
-            Gates = @("verify", "linux verify")
+            Gates = @("verify", "linux verify", "windows avalonia verify")
+        },
+        @{
+            Name = "Core missing Linux verify"
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/Mutation.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "windows avalonia verify") }
+            Path = "LLPlayer.Core/Services/Mutation.cs"
+            Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer")
+            Gates = @("verify", "linux verify", "windows avalonia verify")
         },
         @{
             Name = "Core missing runtime reviewer"
-            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/Mutation.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify", "linux verify") }
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/Mutation.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") }
             Path = "LLPlayer.Core/Services/Mutation.cs"
             Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer")
-            Gates = @("verify", "linux verify")
+            Gates = @("verify", "linux verify", "windows avalonia verify")
         },
         @{
             Name = "Core settings missing persistence reviewer"
-            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") }
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") }
             Path = "LLPlayer.Core/Services/RecognitionSettings.cs"
             Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer")
-            Gates = @("verify", "linux verify")
+            Gates = @("verify", "linux verify", "windows avalonia verify")
         },
         @{
             Name = "Core APKG missing native package reviewers"
-            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") }
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") }
             Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"
             Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer")
-            Gates = @("verify", "linux verify")
+            Gates = @("verify", "linux verify", "windows avalonia verify")
         }
     )
     foreach ($fixture in $adversarialRouteFixtures) {
@@ -546,6 +569,11 @@ try {
         $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$patterns'
     }, $true))
     $hookRouteFixtures = @(
+        @{ Path = "scripts/windows/verify-avalonia.ps1"; Expected = $true },
+        @{ Path = "scripts\windows\fetch-test-ffmpeg.ps1"; Expected = $true },
+        @{ Path = "scripts/linux/verify.sh"; Expected = $true },
+        @{ Path = "scripts/windows-old/verify.ps1"; Expected = $false },
+        @{ Path = "scripts/linux-old/verify.sh"; Expected = $false },
         @{ Path = "LLPlayer.Avalonia/Views/MainWindow.axaml"; Expected = $true },
         @{ Path = "Future/Window.axaml"; Expected = $true },
         @{ Path = "Window.AXAML"; Expected = $true },

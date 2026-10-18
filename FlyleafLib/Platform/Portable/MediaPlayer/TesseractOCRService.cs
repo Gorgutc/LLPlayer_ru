@@ -91,7 +91,10 @@ public sealed class TesseractOCRService : IOCRService
             }
             catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or NotSupportedException or InvalidOperationException or ArgumentException or IOException)
             {
-                err = $"Tesseract OCR initialization failed: {e.Message} Check/install system Tesseract 5 (libtesseract.so.5) and the selected language data.";
+                string platformHelp = OperatingSystem.IsWindows()
+                    ? "Use the supported WPF installation for OCR."
+                    : "Check/install system Tesseract 5 (libtesseract.so.5) and the selected language data.";
+                err = $"Tesseract OCR initialization failed: {e.Message} {platformHelp}";
                 return false;
             }
             finally

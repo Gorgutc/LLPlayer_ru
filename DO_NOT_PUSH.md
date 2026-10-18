@@ -12,6 +12,10 @@ Do not commit these files unless a user explicitly requests and reviews the chan
 - Linux (F-13): the fetched FFmpeg shared libraries (`FFmpeg/linux-x64/`, any `*.so`/`*.so.*`), the downloaded FFmpeg
   tarball/CLI, generated test media, Linux packages (`LLPlayer-*-linux-x64.tar.gz`, `artifacts/`), and Linux smoke
   evidence (keep it under `~/.cache/llplayer/evidence/`).
+- Windows Avalonia (F-13): downloaded test FFmpeg CLI archives/executables, generated media, restored native
+  payloads such as `soft_oal.dll`, package staging, ZIP/checksum output and smoke evidence stay under ignored
+  `artifacts/` or caches. Native binaries come from pinned restore/explicit packaging; commit source and legal
+  texts rather than copied build outputs.
 
 Allowed tracked native assets:
 
@@ -21,5 +25,5 @@ Allowed tracked native assets:
 - `LLPlayer/Assets/silero_vad.onnx`
 - `Plugins/YoutubeDL/Libs/yt-dlp.exe_here`
 
-Treat any new binary as suspicious until its role in the Windows release package (or, for Linux, in
-`scripts/linux/publish.sh` and `docs/agent/dependency-baseline.md`) is documented.
+Treat any new binary as suspicious until its role is documented in the WPF release package,
+`scripts/windows/publish-avalonia.ps1` or `scripts/linux/publish.sh`, and `docs/agent/dependency-baseline.md`.
