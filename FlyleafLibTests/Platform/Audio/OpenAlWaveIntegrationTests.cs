@@ -33,9 +33,93 @@ public class OpenAlWaveIntegrationTests(ITestOutputHelper output)
     const int    Rate           = 48000;
     const double MeasureSeconds = 3.0;
     const double MaxDesyncMs    = 100;
+    const double MaxClockReadMilliseconds = 10;
 
     sealed record ChildResult(double MaxDesyncMs, double MeanDesyncMs, int Samples, double PlayedSeconds,
-        int UnderrunRestarts, int LatencySamples, string Backend, string SinkType);
+        int UnderrunRestarts, int LatencySamples, string Backend, string SinkType)
+    {
+        public int ClockReads { get; init; }
+        public int SlowClockReads { get; init; }
+        public int ChangedAudioMappings { get; init; }
+        public double MaxClockReadDurationMs { get; init; }
+    }
+
+    readonly record struct ClockRead(long EndTicks, ulong SubmittedAfter, ulong Played, double Timebase,
+        long DeviceDelayTicks, long VideoTicks, long MappingBefore, long MappingAfter, TimeSpan ReadDuration);
+
+    enum ClockReadRejection { None, ReadDelayed, MappingChanged }
+
+    // Read validity depends only on independently measured duration and audio-map generation, never on the drift
+    // itself: a fast coherent sample with real drift above 100 ms must still reach the unchanged A/V assertion.
+    static ClockReadRejection MeasureClockRead(ClockRead read, out double driftMs)
+    {
+        long queued = read.Played >= read.SubmittedAfter ? 0 : (long)((read.SubmittedAfter - read.Played) * read.Timebase);
+        long audioClock = read.EndTicks - queued - read.DeviceDelayTicks;
+        driftMs = Math.Abs(read.VideoTicks - audioClock) / 10_000.0;
+        if (read.ReadDuration.TotalMilliseconds > MaxClockReadMilliseconds)
+            return ClockReadRejection.ReadDelayed;
+        if (read.MappingBefore != read.MappingAfter)
+            return ClockReadRejection.MappingChanged;
+        return ClockReadRejection.None;
+    }
+
+    static bool HasEnoughValidSamples(int count) => count > 20;
+
+    [Fact]
+    public void Sampler_RejectsAReadGapThatWouldCreateAnArtificialDesync()
+    {
+        // Reads of the audio clock were at 0.968 s. The sampler then lost its CPU for 150 ms; the last video frame
+        // is at 1.100 s and the actual audio clock is already 1.118 s. Real drift is 18 ms, not the measured 132 ms.
+        ClockRead read = new(10_800_000, 51_840, 48_000, 10_000_000.0 / 48_000,
+            320_000, 11_000_000, 10, 10, TimeSpan.FromMilliseconds(150));
+
+        ClockReadRejection rejection = MeasureClockRead(read, out double drift);
+
+        drift.Should().BeApproximately(132, 0.001);
+        rejection.Should().Be(ClockReadRejection.ReadDelayed);
+    }
+
+    [Fact]
+    public void Sampler_RejectsAChangedAudioMapping()
+    {
+        ClockRead read = new(10_800_000, 51_840, 48_000, 10_000_000.0 / 48_000,
+            320_000, 10_000_000, 10, 11, TimeSpan.FromMilliseconds(1));
+
+        MeasureClockRead(read, out _).Should().Be(ClockReadRejection.MappingChanged);
+    }
+
+    [Fact]
+    public void Sampler_DoesNotHideGenuineDesyncInAFastCoherentRead()
+    {
+        ClockRead read = new(10_800_000, 51_840, 48_000, 10_000_000.0 / 48_000,
+            320_000, 11_000_000, 10, 10, TimeSpan.FromMilliseconds(1));
+
+        MeasureClockRead(read, out double drift).Should().Be(ClockReadRejection.None);
+        drift.Should().BeApproximately(132, 0.001);
+        (drift < MaxDesyncMs).Should().BeFalse("a real coherent 132 ms drift must still fail the strict 100 ms gate");
+    }
+
+    [Fact]
+    public void Sampler_AllRejectedReadsCannotMeetTheMinimumObservationCount()
+    {
+        ClockRead delayed = new(10_800_000, 51_840, 48_000, 10_000_000.0 / 48_000,
+            320_000, 11_000_000, 10, 10, TimeSpan.FromMilliseconds(150));
+        int valid = Enumerable.Repeat(delayed, 30).Count(read => MeasureClockRead(read, out _) == ClockReadRejection.None);
+
+        valid.Should().Be(0);
+        HasEnoughValidSamples(valid).Should().BeFalse("rejecting every read cannot turn an unmeasured run into a pass");
+    }
+
+    [Theory]
+    [InlineData(10, true)]
+    [InlineData(10.001, false)]
+    public void Sampler_EnforcesTheInclusiveClockReadBudget(double durationMs, bool expectedValid)
+    {
+        ClockRead read = new(10_800_000, 51_840, 48_000, 10_000_000.0 / 48_000,
+            320_000, 10_000_000, 10, 10, TimeSpan.FromMilliseconds(durationMs));
+
+        (MeasureClockRead(read, out _) == ClockReadRejection.None).Should().Be(expectedValid);
+    }
 
     static (string ffmpegDir, string media) RequireEnvironment()
     {
@@ -216,6 +300,7 @@ public class OpenAlWaveIntegrationTests(ITestOutputHelper output)
             object clockLock = new();
             long lastEndTicks = 0;
             ulong submittedAfter = 0;
+            long clockVersion = 0;
             bool hasAudio = false;
             player.Audio.SamplesAdded += (_, frame) =>
             {
@@ -223,6 +308,7 @@ public class OpenAlWaveIntegrationTests(ITestOutputHelper output)
                 {
                     lastEndTicks    = frame.Timestamp + (long)(frame.dataLen / 4 * player.Audio.Timebase);
                     submittedAfter  = player.Audio.submittedSamples; // already includes this frame
+                    clockVersion++;
                     hasAudio        = true;
                 }
             };
@@ -242,27 +328,51 @@ public class OpenAlWaveIntegrationTests(ITestOutputHelper output)
             sink.SamplesPlayed.Should().BeGreaterThan(0UL, "OpenAL must consume the submitted audio");
 
             List<double> diffs = [];
+            int clockReads = 0, slowClockReads = 0, changedAudioMappings = 0;
+            double maxClockReadDurationMs = 0;
             Stopwatch measure = Stopwatch.StartNew();
             while (measure.Elapsed < TimeSpan.FromSeconds(MeasureSeconds))
             {
-                long end; ulong after;
-                lock (clockLock) { end = lastEndTicks; after = submittedAfter; }
+                long readStarted = Stopwatch.GetTimestamp();
+                long end, versionBefore; ulong after;
+                lock (clockLock) { end = lastEndTicks; after = submittedAfter; versionBefore = clockVersion; }
 
-                ulong played    = sink.SamplesPlayed;
-                long  queued    = played >= after ? 0 : (long)((after - played) * player.Audio.Timebase);
-                long  audioClock= end - queued - player.Audio.GetDeviceDelay();
-                long  curTime   = player.CurTime;
+                // Never hold clockLock while reading Audio/OpenAL: AddSamples holds Audio's lock when its event
+                // acquires clockLock, so nesting them here in the opposite order would deadlock playback.
+                ulong played = sink.SamplesPlayed;
+                double timebase = player.Audio.Timebase;
+                long delay = player.Audio.GetDeviceDelay();
+                long curTime = player.CurTime;
+                long versionAfter;
+                lock (clockLock) versionAfter = clockVersion;
+                TimeSpan readDuration = Stopwatch.GetElapsedTime(readStarted);
+                ClockRead read = new(end, after, played, timebase, delay, curTime, versionBefore, versionAfter, readDuration);
 
-                diffs.Add(Math.Abs(curTime - audioClock) / 10_000.0);
+                clockReads++;
+                maxClockReadDurationMs = Math.Max(maxClockReadDurationMs, readDuration.TotalMilliseconds);
+                if (readDuration.TotalMilliseconds > MaxClockReadMilliseconds) slowClockReads++;
+                if (versionBefore != versionAfter) changedAudioMappings++;
+                if (MeasureClockRead(read, out double drift) == ClockReadRejection.None)
+                    diffs.Add(drift);
                 Thread.Sleep(50);
             }
 
             player.Status.Should().Be(Status.Playing);
+            string maxValidDrift = diffs.Count == 0 ? "none" : diffs.Max().ToString("F1", CultureInfo.InvariantCulture);
+            output.WriteLine($"Clock reads: {clockReads} total, {diffs.Count} valid, {slowClockReads} slow, {changedAudioMappings} changed mappings "
+                + $"(rejection reasons may overlap); maximum read {maxClockReadDurationMs:F3} ms, budget <= {MaxClockReadMilliseconds} ms; max valid drift {maxValidDrift} ms");
+            HasEnoughValidSamples(diffs.Count).Should().BeTrue("at least 21 valid observations are required");
             double max = diffs.Max();
             output.WriteLine($"A/V desync over {MeasureSeconds} s: max {max:F1} ms, mean {diffs.Average():F1} ms ({diffs.Count} samples)");
 
             ChildResult result = new(max, diffs.Average(), diffs.Count, sink.SamplesPlayed / (double)Rate,
-                sink.UnderrunRestarts, sink.LatencySamples, AudioEngine.Backend.Name, sink.GetType().Name);
+                sink.UnderrunRestarts, sink.LatencySamples, AudioEngine.Backend.Name, sink.GetType().Name)
+            {
+                ClockReads = clockReads,
+                SlowClockReads = slowClockReads,
+                ChangedAudioMappings = changedAudioMappings,
+                MaxClockReadDurationMs = maxClockReadDurationMs,
+            };
 
             player.Pause();
             player.Dispose(); // closes the OpenAL device: the wave backend finalizes the file
