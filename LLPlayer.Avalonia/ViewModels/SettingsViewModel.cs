@@ -26,6 +26,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         SecondarySubtitleOutlineThickness = current.SecondarySubtitleOutlineThickness;
         SubtitleTextColor = current.SubtitleTextColor;
         SecondarySubtitleTextColor = current.SecondarySubtitleTextColor;
+        SubtitleOutlineColor = current.SubtitleOutlineColor;
         // Loaded zero thickness also needs text when the generated change hook does not run.
         SubtitleOutlineThicknessText = current.SubtitleOutlineThickness.ToString(NumberFormat);
         SecondarySubtitleOutlineThicknessText = current.SecondarySubtitleOutlineThickness.ToString(NumberFormat);
@@ -47,6 +48,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial string SubtitleTextColor { get; set; } = AppPrefs.DefaultSubtitleTextColor;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SecondarySubtitleTextBrush))]
     public partial string SecondarySubtitleTextColor { get; set; } = AppPrefs.DefaultSecondarySubtitleTextColor;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SubtitleOutlineBrush))]
+    public partial string SubtitleOutlineColor { get; set; } = AppPrefs.DefaultSubtitleOutlineColor;
     [ObservableProperty] public partial bool SubtitlesVisible { get; set; }
     [ObservableProperty] public partial bool SidebarVisible { get; set; }
     [ObservableProperty] public partial double SidebarWidth { get; set; }
@@ -63,6 +66,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool ToolsSelected => SelectedSection == 2;
     public ImmutableSolidColorBrush SubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleTextColor, out string color) ? color : AppPrefs.DefaultSubtitleTextColor));
     public ImmutableSolidColorBrush SecondarySubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string color) ? color : AppPrefs.DefaultSecondarySubtitleTextColor));
+    public ImmutableSolidColorBrush SubtitleOutlineBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleOutlineColor, out string color) ? color : AppPrefs.DefaultSubtitleOutlineColor));
     public SettingsLink? RequestedLink { get; private set; }
     public event Action? CloseRequested;
 
@@ -100,8 +104,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = "Use #RRGGBB for both text subtitle colors (for example #FFFFFF).";
             return;
         }
+        if (!AppPrefs.TryNormalizeSubtitleTextColor(SubtitleOutlineColor, out string outlineColor))
+        {
+            Error = "Use #RRGGBB for the primary and secondary text subtitle outline color (for example #000000).";
+            return;
+        }
         SubtitleTextColor = primaryColor;
         SecondarySubtitleTextColor = secondaryColor;
+        SubtitleOutlineColor = outlineColor;
         SubtitleFontSize = fontSize;
         SecondaryFontScale = scale;
         SubtitleBottomOffset = offset;

@@ -94,6 +94,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SecondarySubtitleOutlineThickness = prefs.SecondarySubtitleOutlineThickness;
         SubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SubtitleTextColor, out string primaryColor) ? primaryColor : AppPrefs.DefaultSubtitleTextColor));
         SecondarySubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SecondarySubtitleTextColor, out string secondaryColor) ? secondaryColor : AppPrefs.DefaultSecondarySubtitleTextColor));
+        SubtitleOutlineBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SubtitleOutlineColor, out string outlineColor) ? outlineColor : AppPrefs.DefaultSubtitleOutlineColor));
         SidebarVisible = prefs.SidebarVisible;
         SidebarWidth = prefs.SidebarWidth;
         IsDarkTheme = prefs.Theme != "Light";
@@ -151,6 +152,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SecondarySubtitleOutlineThickness = draft.SecondarySubtitleOutlineThickness;
         candidate.SubtitleTextColor = draft.SubtitleTextColor;
         candidate.SecondarySubtitleTextColor = draft.SecondarySubtitleTextColor;
+        candidate.SubtitleOutlineColor = draft.SubtitleOutlineColor;
         candidate.SubtitlesVisible = draft.SubtitlesVisible;
         candidate.SidebarVisible = draft.SidebarVisible;
         candidate.SidebarWidth = draft.SidebarWidth;
@@ -164,6 +166,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
         prefs.SubtitleTextColor = candidate.SubtitleTextColor;
         prefs.SecondarySubtitleTextColor = candidate.SecondarySubtitleTextColor;
+        prefs.SubtitleOutlineColor = candidate.SubtitleOutlineColor;
         prefs.SidebarVisible = candidate.SidebarVisible;
         prefs.SidebarWidth = candidate.SidebarWidth;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
@@ -173,6 +176,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
         SubtitleTextBrush = new(Color.Parse(candidate.SubtitleTextColor));
         SecondarySubtitleTextBrush = new(Color.Parse(candidate.SecondarySubtitleTextColor));
+        SubtitleOutlineBrush = new(Color.Parse(candidate.SubtitleOutlineColor));
         // A scale-only edit does not invoke OnSubtitleFontSizeChanged.
         SecondaryFontSize = Math.Round(candidate.SubtitleFontSize * candidate.SecondaryFontScale, 1);
         SidebarWidth = candidate.SidebarWidth;
@@ -281,6 +285,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial double SecondarySubtitleOutlineThickness { get; private set; } = AppPrefs.DefaultSecondarySubtitleOutlineThickness;
     [ObservableProperty] public partial ImmutableSolidColorBrush SubtitleTextBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSubtitleTextColor));
     [ObservableProperty] public partial ImmutableSolidColorBrush SecondarySubtitleTextBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSecondarySubtitleTextColor));
+    [ObservableProperty] public partial ImmutableSolidColorBrush SubtitleOutlineBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSubtitleOutlineColor));
 
     // ---- sidebar -----------------------------------------------------------------------------------------------
 
