@@ -1,0 +1,68 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.RecognitionWindow"
+        x:DataType="vm:RecognitionViewModel" Classes="dialog" Title="Recognition — LLPlayer"
+        SizeToContent="Manual" CanResize="True" Width="620" Height="600" MinWidth="400" MinHeight="360">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
+      <TextBlock Classes="dialog-title" Text="Recognition settings" />
+      <TextBlock Classes="dialog-description" Text="whisper.cpp CPU · existing models · system Tesseract OCR" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <TextBlock Name="RecognitionMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted"
+                 AutomationProperties.Name="Recognition status or validation error" />
+      <StackPanel Classes="dialog-footer">
+      <Button Name="CloseButton" Content="Close" Classes="outline" IsEnabled="{Binding !Busy}" Click="OnClose" />
+      <Button Name="SaveButton" Content="Save &amp; Close" Command="{Binding SaveCommand}" />
+      </StackPanel>
+    </StackPanel>
+    <ScrollViewer Name="RecognitionScroll">
+      <StackPanel Spacing="12">
+        <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+        <StackPanel Spacing="12" IsEnabled="{Binding !Busy}">
+        <TextBlock Text="Model directory (absolute path)" />
+        <TextBox Name="ModelDirectoryBox" Text="{Binding ModelDirectory}" />
+        <Button Content="Refresh existing models" Classes="outline" Command="{Binding RefreshModelsCommand}" HorizontalAlignment="Left" />
+        <TextBlock Text="Existing whisper.cpp model" />
+        <ComboBox Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" />
+        <CheckBox Content="Auto language" IsChecked="{Binding Draft.Whisper.LanguageDetection}" />
+        <TextBlock Text="Recognition language code (en, ru, …)" />
+        <TextBox Text="{Binding Draft.Whisper.Language}" />
+        <CheckBox Content="Translate recognized speech to English" IsChecked="{Binding Draft.Whisper.Translate}" />
+        <Expander Name="AdvancedWhisperCppExpander" Header="Advanced whisper.cpp CPU" IsExpanded="False"
+                  HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                  AutomationProperties.Name="Advanced whisper.cpp CPU settings">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Classes="small muted" TextWrapping="Wrap"
+                       Text="Blank numbers use library defaults. Values apply to the next recognition processor after Save. Existing zero or negative values appear blank and become library defaults only when you save." />
+            <TextBlock Text="Threads" />
+            <TextBox Name="ThreadsBox" Text="{Binding ThreadsText}" AutomationProperties.Name="Threads"
+                     PlaceholderText="Library default" />
+            <TextBlock Text="MaxSegmentLength (characters)" />
+            <TextBox Name="MaxSegmentLengthBox" Text="{Binding MaxSegmentLengthText}"
+                     AutomationProperties.Name="MaxSegmentLength in characters" PlaceholderText="Library default" />
+            <TextBlock Text="MaxTokensPerSegment (subword pieces)" TextWrapping="Wrap" />
+            <TextBox Name="MaxTokensPerSegmentBox" Text="{Binding MaxTokensPerSegmentText}"
+                     AutomationProperties.Name="MaxTokensPerSegment in subword pieces" PlaceholderText="Library default" />
+            <CheckBox Name="SplitOnWordBox" IsChecked="{Binding Draft.WhisperCpp.SplitOnWord}">
+              <TextBlock Text="SplitOnWord — split at word boundaries" TextWrapping="Wrap" />
+            </CheckBox>
+            <CheckBox Name="NoContextBox" IsChecked="{Binding Draft.WhisperCpp.NoContext}">
+              <TextBlock Text="NoContext — disable previous-text context" TextWrapping="Wrap" />
+            </CheckBox>
+            <TextBlock Text="Prompt" />
+            <TextBox Name="PromptBox" Text="{Binding Draft.WhisperCpp.Prompt}" AcceptsReturn="True"
+                     TextWrapping="Wrap" MinHeight="80" MaxHeight="160" AutomationProperties.Name="Whisper prompt" />
+            <Button Name="ResetAdvancedButton" Content="Reset advanced" Classes="outline"
+                    HorizontalAlignment="Left" Command="{Binding ResetAdvancedCommand}" />
+          </StackPanel>
+        </Expander>
+        <TextBlock Text="OCR fallback for unknown primary language" />
+        <TextBox Text="{Binding Draft.OcrPrimaryLanguage}" />
+        <CheckBox Content="Secondary OCR uses primary fallback" IsChecked="{Binding Draft.OcrSecondarySame}" />
+        <TextBlock Text="OCR fallback for unknown secondary language" />
+        <TextBox Text="{Binding Draft.OcrSecondaryLanguage}" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

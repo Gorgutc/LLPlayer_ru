@@ -12,6 +12,9 @@ public sealed partial class CueItemViewModel(CueInfo cue) : ObservableObject
     public TimeSpan Start => Cue.Start;
     public TimeSpan End => Cue.End;
     public string Text => Cue.Text;
+    public bool IsTranslated => Cue.IsTranslated;
+    public string SourceLanguage => Cue.SourceLanguage;
+    public string TargetLanguage => Cue.TargetLanguage;
     public string StartText => TimeFormat.Cue(Cue.Start);
 
     [ObservableProperty]

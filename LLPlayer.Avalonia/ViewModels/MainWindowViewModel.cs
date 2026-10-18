@@ -1,6 +1,8 @@
+using LLPlayer.Core.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib;
@@ -63,6 +65,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Sidebar = new SubtitlesSidebarViewModel(player);
         WordPopup = new WordPopupViewModel(translator, text => shell.SetClipboardText(text));
+        WordPopup.OpenSettings = ShowTranslation;
+        InvalidateTranslation = () => { WordPopup.Invalidate(); (translator as FlyleafWordTranslator)?.Invalidate(); };
         Shortcuts = new AppShortcutMap(new Dictionary<string, Action>
         {
             [AppShortcutMap.ToggleSidebar] = ToggleSidebar,
@@ -94,6 +98,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         player.CuesChanged += OnCuesChanged;
         player.OpenCompleted += OnOpenCompleted;
         player.ErrorOccurred += OnPlayerError;
+        if (player is IRecognitionController recognition) recognition.RecognitionError += OnRecognitionError;
 
         SyncAllFromPlayer();
         RebuildSpeedItems();
@@ -101,6 +106,76 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public SubtitlesSidebarViewModel Sidebar { get; }
     public WordPopupViewModel WordPopup { get; }
+    public WordLibrary? WordLibrary { get; set; }
+    public WordManagerViewModel? WordManager { get; private set; }
+    [RelayCommand] void ShowWordManager()
+    {
+        if (WordLibrary != null) { WordManager ??= new WordManagerViewModel(WordLibrary); shell.ShowWordManager(WordManager); }
+    }
+    public void WordManagerClosed() => WordManager = null;
+    public bool PrimaryTranslationEnabled => player.PrimaryTranslationEnabled;
+    public bool SecondaryTranslationEnabled => player.SecondaryTranslationEnabled;
+    [RelayCommand]
+    async Task TogglePrimaryTranslationAsync() => await ToggleSentenceTranslationAsync(0);
+    [RelayCommand]
+    async Task ToggleSecondaryTranslationAsync() => await ToggleSentenceTranslationAsync(1);
+    async Task ToggleSentenceTranslationAsync(int slot)
+    {
+        try { await player.ToggleTranslationAsync(slot); }
+        catch (Exception e) { ShowToast("Subtitle translation", e.Message, ToastVariant.Destructive); }
+    }
+
+    [RelayCommand]
+    void ShowSettings() => shell.ShowSettings(CreateSettings());
+
+    public SettingsViewModel CreateSettings() => new(prefs, CommitSettings);
+
+    void CommitSettings(SettingsViewModel draft)
+    {
+        // Clone the fresh current record, including unrelated values changed while the modal draft was open.
+        AppPrefs candidate = JsonSerializer.Deserialize<AppPrefs>(JsonSerializer.Serialize(prefs, PrefsStore.JsonOptions), PrefsStore.JsonOptions)!;
+        candidate.Theme = draft.Theme;
+        candidate.SubtitleFontSize = draft.SubtitleFontSize;
+        candidate.SecondaryFontScale = draft.SecondaryFontScale;
+        candidate.SubtitlesVisible = draft.SubtitlesVisible;
+        candidate.SidebarVisible = draft.SidebarVisible;
+        candidate.SidebarWidth = draft.SidebarWidth;
+        savePrefs(candidate); // may throw; nothing live has changed yet
+
+        prefs.Theme = candidate.Theme;
+        prefs.SecondaryFontScale = candidate.SecondaryFontScale;
+        prefs.SubtitleFontSize = candidate.SubtitleFontSize;
+        prefs.SidebarVisible = candidate.SidebarVisible;
+        prefs.SidebarWidth = candidate.SidebarWidth;
+        prefs.SubtitlesVisible = candidate.SubtitlesVisible;
+        SubtitleFontSize = candidate.SubtitleFontSize;
+        // A scale-only edit does not invoke OnSubtitleFontSizeChanged.
+        SecondaryFontSize = Math.Round(candidate.SubtitleFontSize * candidate.SecondaryFontScale, 1);
+        SidebarWidth = candidate.SidebarWidth;
+        SidebarVisible = candidate.SidebarVisible;
+        if (SidebarVisible) Sidebar.Reload();
+        player.SubtitlesVisible = candidate.SubtitlesVisible;
+        IsDarkTheme = candidate.Theme == "Dark";
+        shell.ApplyTheme(candidate.Theme);
+    }
+
+    public void OpenSettingsTool(SettingsLink link)
+    {
+        switch (link)
+        {
+            case SettingsLink.Translation: ShowTranslation(); break;
+            case SettingsLink.Recognition: ShowRecognition(); break;
+            case SettingsLink.Shortcuts: ShowCheatSheet(); break;
+        }
+    }
+
+    public Func<TranslationViewModel>? TranslationDialog { get; set; }
+    public Action InvalidateTranslation { get; }
+    [RelayCommand]
+    void ShowTranslation()
+    {
+        if (TranslationDialog is { } create) shell.ShowTranslation(create());
+    }
     public AppShortcutMap Shortcuts { get; }
     public IPlaybackController Player => player;
     public AppPrefs Prefs => prefs;
@@ -200,6 +275,40 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnIsOpeningChanged(bool value) => OnPropertyChanged(nameof(ShowEmptyState));
 
     // ---- commands ----------------------------------------------------------------------------------------------
+
+    public string RecognitionStatus => (player as IRecognitionController)?.RecognitionStatus ?? "Recognition idle";
+
+    [RelayCommand]
+    void ShowRecognition()
+    {
+        if (player is IRecognitionController controller && controller.RecognitionStore is { } store)
+            shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, controller.RecognitionWarning));
+    }
+
+    void OnRecognitionError(string message, string? settingsTab, string? actionHint)
+    {
+        string detail = message + (string.IsNullOrWhiteSpace(actionHint) ? "" : "\n" + actionHint);
+        ShowToast("Recognition", detail, ToastVariant.Destructive);
+        if (player is IRecognitionController controller && controller.RecognitionStore is { } store)
+            shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, detail));
+    }
+
+    [RelayCommand]
+    async Task StartRecognitionAsync(string slot) => await RecognitionAction(controller => controller.StartRecognitionAsync(int.Parse(slot)));
+    [RelayCommand]
+    async Task CancelRecognitionAsync(string slot) => await RecognitionAction(controller => controller.CancelRecognitionAsync(int.Parse(slot)));
+    [RelayCommand]
+    async Task OcrRecognitionAsync(string slot) => await RecognitionAction(controller => controller.OcrRecognitionAsync(int.Parse(slot)));
+    [RelayCommand]
+    async Task ToggleRecognitionPauseAsync() => await RecognitionAction(controller => controller.ToggleRecognitionPauseAsync());
+    async Task RecognitionAction(Func<IRecognitionController, Task> action)
+    {
+        if (player is not IRecognitionController controller) return;
+        try { await action(controller); }
+        catch (RecognitionActionCanceledException) { }
+        catch (Exception e) { OnRecognitionError(e.Message, null, null); }
+        OnPropertyChanged(nameof(RecognitionStatus));
+    }
 
     [RelayCommand]
     public async Task OpenMediaAsync()
@@ -461,11 +570,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool HandleKeyUp(WpfKey key, bool textInputFocused)
         => !textInputFocused && key != WpfKey.None && player.KeyUp(key);
 
-    public void OnWordClicked(string word, string context, int slot, double x, double y)
+    public bool PrimaryTextTranslated => player.PrimaryTextTranslated;
+    public bool SecondaryTextTranslated => player.SecondaryTextTranslated;
+    public void OnWordClicked(string word, string context, int slot, double x, double y, bool? translated = null, string? sourceLanguage = null, string? targetLanguage = null)
     {
         if (player.IsPlaying)
             player.Pause();
-        _ = WordPopup.OpenAsync(word, context, slot, x, y);
+        _ = WordPopup.OpenAsync(word, context, slot, x, y, translated ?? (slot == 0 ? player.PrimaryTextTranslated : player.SecondaryTextTranslated), sourceLanguage, targetLanguage);
     }
 
     /// <summary>The window's fullscreen state changed (menu, F, Esc via the engine's IHostPlayer calls).</summary>
@@ -521,7 +632,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         player.CuesChanged -= OnCuesChanged;
         player.OpenCompleted -= OnOpenCompleted;
         player.ErrorOccurred -= OnPlayerError;
-        WordPopup.Close();
+        if (player is IRecognitionController recognition) recognition.RecognitionError -= OnRecognitionError;
+        WordPopup.Invalidate();
     }
 
     // ---- internals ---------------------------------------------------------------------------------------------
@@ -621,6 +733,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     void OnPlayerPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(IPlaybackController.PrimaryTextTranslated) or nameof(IPlaybackController.SecondaryTextTranslated)) OnPropertyChanged(e.PropertyName);
+        if (e.PropertyName is nameof(IPlaybackController.PrimaryTranslationEnabled) or nameof(IPlaybackController.SecondaryTranslationEnabled)) OnPropertyChanged(e.PropertyName);
+        if (e.PropertyName == "SubtitleLanguage") InvalidateTranslation();
+        if (e.PropertyName == "RecognitionStatus") OnPropertyChanged(nameof(RecognitionStatus));
         switch (e.PropertyName)
         {
             case nameof(IPlaybackController.CurTime):
@@ -636,6 +752,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 UpdateIdle();
                 break;
             case nameof(IPlaybackController.IsOpening):
+                if (player.IsOpening) InvalidateTranslation();
                 IsOpening = player.IsOpening;
                 break;
             case nameof(IPlaybackController.IsOpened):

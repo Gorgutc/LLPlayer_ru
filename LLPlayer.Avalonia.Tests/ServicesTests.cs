@@ -110,21 +110,21 @@ public class StartupTests
     public void Paths_FollowXdg_WithOverride()
     {
         AppPaths defaults = AppPaths.FromEnvironment(Env([]), "/home/u", isWindows: false);
-        defaults.ConfigDir.Should().Be("/home/u/.config/LLPlayer");
-        defaults.StateDir.Should().Be("/home/u/.local/state/LLPlayer");
-        defaults.CrashLogFile.Should().Be("/home/u/.local/state/LLPlayer/crash.log");
-        defaults.PrefsFile.Should().Be("/home/u/.config/LLPlayer/LLPlayer.Avalonia.json");
+        defaults.ConfigDir.Should().Be(Path.Combine("/home/u", ".config", "LLPlayer"));
+        defaults.StateDir.Should().Be(Path.Combine("/home/u", ".local", "state", "LLPlayer"));
+        defaults.CrashLogFile.Should().Be(Path.Combine("/home/u", ".local", "state", "LLPlayer", "crash.log"));
+        defaults.PrefsFile.Should().Be(Path.Combine("/home/u", ".config", "LLPlayer", "LLPlayer.Avalonia.json"));
 
         AppPaths xdg = AppPaths.FromEnvironment(Env(new() { ["XDG_CONFIG_HOME"] = "/cfg", ["XDG_STATE_HOME"] = "/st" }), "/home/u", isWindows: false);
-        xdg.ConfigDir.Should().Be("/cfg/LLPlayer");
-        xdg.StateDir.Should().Be("/st/LLPlayer");
+        xdg.ConfigDir.Should().Be(Path.Combine("/cfg", "LLPlayer"));
+        xdg.StateDir.Should().Be(Path.Combine("/st", "LLPlayer"));
 
         AppPaths relative = AppPaths.FromEnvironment(Env(new() { ["XDG_CONFIG_HOME"] = "rel", ["XDG_STATE_HOME"] = "rel" }), "/home/u", isWindows: false);
-        relative.ConfigDir.Should().Be("/home/u/.config/LLPlayer", "relative XDG paths are invalid and ignored");
-        relative.StateDir.Should().Be("/home/u/.local/state/LLPlayer");
+        relative.ConfigDir.Should().Be(Path.Combine("/home/u", ".config", "LLPlayer"), "relative XDG paths are invalid and ignored");
+        relative.StateDir.Should().Be(Path.Combine("/home/u", ".local", "state", "LLPlayer"));
 
         AppPaths overridden = AppPaths.FromEnvironment(Env(new() { ["LLPLAYER_CONFIG_DIR"] = "/tmp/llp", ["XDG_CONFIG_HOME"] = "/cfg" }), "/home/u", isWindows: false);
-        overridden.ConfigDir.Should().Be("/tmp/llp");
+        overridden.ConfigDir.Should().Be(Path.GetFullPath("/tmp/llp"));
     }
 
     [Fact]
@@ -172,12 +172,18 @@ public class StartupTests
         FFmpegLocator.Locate(dir.Path, Env([]), isWindows: false).MissingLibraries.Should().BeEquivalentTo(FFmpegLocator.LinuxLibraries);
     }
 
-    static string RepoRoot()
+    static string RepoRoot([System.Runtime.CompilerServices.CallerFilePath] string sourceFile = "")
     {
-        for (DirectoryInfo? d = new(AppContext.BaseDirectory); d != null; d = d.Parent)
-            if (File.Exists(Path.Combine(d.FullName, "LLPlayer.slnx")))
-                return d.FullName;
-        throw new InvalidOperationException("repository root (LLPlayer.slnx) not found");
+        // Test outputs may live outside the checkout through bin/obj symlinks.
+        foreach (string start in new[] { Path.GetDirectoryName(sourceFile) ?? "", AppContext.BaseDirectory })
+        {
+            if (string.IsNullOrEmpty(start))
+                continue;
+            for (DirectoryInfo? d = new(start); d != null; d = d.Parent)
+                if (File.Exists(Path.Combine(d.FullName, "LLPlayer.slnx")))
+                    return d.FullName;
+        }
+        throw new InvalidOperationException("repository root (LLPlayer.slnx) not found from test source or output directory");
     }
 
     [Fact]
@@ -218,7 +224,7 @@ public class StartupTests
         o.FFmpegDir.Should().Be("/ff");
         o.Theme.Should().Be("Light");
         o.ShowSidebar.Should().BeTrue();
-        o.ScreenshotPath.Should().Be("/tmp/s.png");
+        o.ScreenshotPath.Should().Be(Path.GetFullPath("/tmp/s.png"));
         o.ScreenshotDelaySeconds.Should().Be(2.5);
         o.MediaPath.Should().Be("movie.mkv");
         o.SubtitlesPath.Should().Be("movie.srt");
@@ -234,12 +240,7 @@ public class StartupTests
     [Fact]
     public void AppVersion_EqualsTheWpfAppVersion()
     {
-        DirectoryInfo? dir = new(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "LLPlayer.slnx")))
-            dir = dir.Parent;
-        dir.Should().NotBeNull();
-
-        string wpf = File.ReadAllText(Path.Combine(dir!.FullName, "LLPlayer", "LLPlayer.csproj"));
+        string wpf = File.ReadAllText(Path.Combine(RepoRoot(), "LLPlayer", "LLPlayer.csproj"));
         string wpfVersion = Regex.Match(wpf, "<Version>([^<]+)</Version>").Groups[1].Value;
         Version appVersion = typeof(App).Assembly.GetName().Version!;
         appVersion.ToString(3).Should().Be(wpfVersion);
@@ -508,8 +509,42 @@ public class AudioBackendSelectorTests
     }
 }
 
+[Collection(FlyleafGlobalsCollection.Name)]
 public class EngineConfigTests
 {
+
+    [Fact]
+    public void InstallSeams_ProvidesSeparateTesseractServices_AndLeavesMicrosoftUnsupported()
+    {
+        var previousFactory = SubtitlesOCR.ServiceFactory;
+        var previousDispatcher = Utils.UIDispatcher;
+        var previousHost = Utils.HostServices;
+        var previousKeys = Player.KeyStateProvider;
+        var previousSync = System.Windows.Data.BindingOperations.CollectionSynchronizationHandler;
+        var previousRefresh = System.Windows.Data.CollectionViewSource.RefreshHandler;
+        try
+        {
+            SubtitlesOCR.ServiceFactory = null;
+            EngineBootstrap.InstallSeams(null!, null!, new CollectionSyncBridge(null), new KeyMapper());
+            SubtitlesOCR.ServiceFactory.Should().NotBeNull("the Linux host must register its OCR service");
+            Config config = new(true);
+            using IOCRService? primary = SubtitlesOCR.ServiceFactory!(config.Subtitles, SubOCREngineType.Tesseract);
+            using IOCRService? secondary = SubtitlesOCR.ServiceFactory!(config.Subtitles, SubOCREngineType.Tesseract);
+            primary.Should().NotBeNull();
+            secondary.Should().NotBeNull();
+            secondary.Should().NotBeSameAs(primary);
+            SubtitlesOCR.ServiceFactory!(config.Subtitles, SubOCREngineType.MicrosoftOCR).Should().BeNull();
+        }
+        finally
+        {
+            SubtitlesOCR.ServiceFactory = previousFactory;
+            Utils.UIDispatcher = previousDispatcher;
+            Utils.HostServices = previousHost;
+            Player.KeyStateProvider = previousKeys;
+            System.Windows.Data.BindingOperations.CollectionSynchronizationHandler = previousSync;
+            System.Windows.Data.CollectionViewSource.RefreshHandler = previousRefresh;
+        }
+    }
 
     [Fact]
     public void EngineConfig_UsesGivenFFmpegFolder_AndStateLog()
@@ -517,7 +552,7 @@ public class EngineConfigTests
         AppPaths paths = new("/c", "/s");
         EngineConfig ec = EngineBootstrap.CreateEngineConfig("/ff", paths);
         ec.FFmpegPath.Should().Be("/ff");
-        ec.LogOutput.Should().Be("/s/flyleaf.log");
+        ec.LogOutput.Should().Be(Path.Combine("/s", "flyleaf.log"));
         ec.UIRefresh.Should().BeTrue();
         typeof(EngineConfig).GetProperty(nameof(EngineConfig.PluginsPath), BindingFlags.Public | BindingFlags.Instance)!.GetValue(ec).Should().BeNull();
     }

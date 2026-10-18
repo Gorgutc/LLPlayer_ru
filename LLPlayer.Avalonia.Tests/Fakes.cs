@@ -7,7 +7,7 @@ using WpfKey = System.Windows.Input.Key;
 namespace LLPlayer.Avalonia.Tests;
 
 /// <summary>Scriptable <see cref="IPlaybackController"/> recording what the UI asked for.</summary>
-public sealed class FakePlaybackController : IPlaybackController
+public class FakePlaybackController : IPlaybackController
 {
     public event PropertyChangedEventHandler? PropertyChanged;
     public event Action<int>? CuesChanged;

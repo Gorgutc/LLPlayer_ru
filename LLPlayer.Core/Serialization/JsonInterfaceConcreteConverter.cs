@@ -21,7 +21,9 @@ public class JsonInterfaceConcreteConverter<T> : JsonConverter<T>
     {
         using JsonDocument jsonDoc = JsonDocument.ParseValue(ref reader);
 
-        if (!jsonDoc.RootElement.TryGetProperty(TypeKey, out JsonElement typeProperty))
+        if (jsonDoc.RootElement.ValueKind != JsonValueKind.Object ||
+            !jsonDoc.RootElement.TryGetProperty(TypeKey, out JsonElement typeProperty) ||
+            typeProperty.ValueKind != JsonValueKind.String)
         {
             throw new JsonException("Type discriminator not found.");
         }

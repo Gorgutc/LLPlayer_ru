@@ -11,6 +11,7 @@ using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
+using LLPlayer.Core.Services;
 using LLPlayer.Views;
 using Whisper.net.LibraryLoader;
 

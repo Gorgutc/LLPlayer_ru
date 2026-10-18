@@ -1,0 +1,102 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.TranslationWindow"
+        x:DataType="vm:TranslationViewModel" Classes="dialog" Title="Translation — LLPlayer"
+        SizeToContent="Manual" CanResize="True" Width="600" Height="640" MinWidth="400" MinHeight="360">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
+      <TextBlock Classes="dialog-title" Text="Translation" />
+      <TextBlock Classes="dialog-description" Text="Settings are applied only when saved. No connection test is sent." TextWrapping="Wrap" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,16,0,0">
+      <Button Content="Close" Classes="outline" IsEnabled="{Binding !Busy}" Click="OnClose" />
+      <Button Name="SaveButton" Content="Save &amp; Close" IsEnabled="{Binding !Busy}" Command="{Binding SaveCommand}" />
+    </StackPanel>
+    <TextBlock DockPanel.Dock="Bottom" Name="TranslationMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+    <ScrollViewer Name="TranslationScroll">
+      <StackPanel Spacing="12">
+        <TextBlock Name="LoadWarning" Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+        <StackPanel Name="TranslationFields" Spacing="12" IsEnabled="{Binding !Busy}">
+          <TextBlock Text="Word provider" />
+          <ComboBox Name="ProviderBox" ItemsSource="{Binding Providers}" SelectedItem="{Binding Provider}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="Sentence / subtitle provider (Off by default)" />
+          <ComboBox Name="SentenceProviderBox" ItemsSource="{Binding Providers}" SelectedItem="{Binding SentenceProvider}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="Edit provider settings (shared by words and subtitles)" TextWrapping="Wrap" />
+          <ComboBox Name="EditingProviderBox" ItemsSource="{Binding Providers}" SelectedItem="{Binding EditingProvider}" HorizontalAlignment="Stretch" />
+          <TextBlock Classes="small muted" Text="Enable each subtitle slot separately from the Translation menu. Both slots start Off for every session." TextWrapping="Wrap" />
+          <TextBlock Text="Dictionary mode (Off by default)" />
+          <ComboBox ItemsSource="{Binding DictionaryModes}" SelectedItem="{Binding DictionaryMode}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="Target language" />
+          <ComboBox Name="TargetBox" ItemsSource="{Binding TargetLanguages}" SelectedItem="{Binding TargetLanguage}" HorizontalAlignment="Stretch" />
+          <StackPanel Spacing="6" IsVisible="{Binding HasEndpoint}">
+            <TextBlock Text="Endpoint" /><TextBox Name="EndpointBox" Text="{Binding Endpoint}" />
+          </StackPanel>
+          <StackPanel Spacing="6" IsVisible="{Binding HasModel}">
+            <TextBlock Text="Model" /><TextBox Name="ModelBox" Text="{Binding Model}" />
+          </StackPanel>
+          <StackPanel Spacing="6" IsVisible="{Binding HasApiKey}">
+            <TextBlock Text="API key" /><TextBox Name="ApiKeyBox" Text="{Binding ApiKey}" PasswordChar="●" />
+          </StackPanel>
+          <StackPanel Spacing="6" IsVisible="{Binding HasRegion}">
+            <TextBlock Text="Azure region (optional)" /><TextBox Text="{Binding Region}" />
+          </StackPanel>
+          <StackPanel Spacing="6" IsVisible="{Binding HasChatPath}">
+            <TextBlock Text="Chat path" /><TextBox Text="{Binding ChatPath}" />
+          </StackPanel>
+          <StackPanel Spacing="6" IsVisible="{Binding HasTimeout}">
+            <TextBlock Text="Request timeout (ms)" /><NumericUpDown Name="TimeoutBox" Value="{Binding TimeoutMs}" Minimum="1" Maximum="2147483647" FormatString="0" />
+          </StackPanel>
+          <StackPanel Spacing="6" IsVisible="{Binding HasModel}">
+            <TextBlock Text="Health request timeout (ms)" /><NumericUpDown Value="{Binding HealthTimeoutMs}" Minimum="1" Maximum="2147483647" FormatString="0" />
+          </StackPanel>
+          <Expander Name="ChatExpander" Header="LLM subtitle translation" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="10" Margin="0,8,0,0">
+              <TextBlock Classes="small muted" Text="Shared chat settings apply to all LLM subtitle providers, independently of the provider editor above. They are retained when using other providers. The OneByOne prompt also applies to LLM word lookups." TextWrapping="Wrap" />
+              <TextBlock Text="Translation method" />
+              <ComboBox Name="TranslateMethodBox" ItemsSource="{Binding TranslateMethods}" SelectedItem="{Binding TranslateMethod}" HorizontalAlignment="Stretch" />
+              <CheckBox Name="IncludeTargetLangRegionBox" Content="Include target language region" IsChecked="{Binding IncludeTargetLangRegion}" />
+              <StackPanel Name="ContextWindowFields" Spacing="8" IsVisible="{Binding IsContextWindow}">
+                <TextBlock Classes="small muted" Text="Surrounding lines are read-only context. More context can improve accuracy and uses more tokens. 0 disables that side." TextWrapping="Wrap" />
+                <TextBlock Text="Context lines before" />
+                <TextBox Name="ContextWindowBeforeBox" Text="{Binding ContextWindowBefore}" />
+                <TextBlock Text="Context lines after" />
+                <TextBox Name="ContextWindowAfterBox" Text="{Binding ContextWindowAfter}" />
+                <TextBlock Text="ContextWindow prompt" />
+                <TextBlock Classes="small muted" Text="Placeholders: {source_lang}, {target_lang}. The current line and surrounding context are supplied automatically." TextWrapping="Wrap" />
+                <TextBox Name="PromptContextWindowBox" Text="{Binding PromptContextWindow}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="220" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                <Button Name="ResetContextWindowPromptButton" Content="Reset ContextWindow prompt" Classes="outline" Command="{Binding ResetContextWindowPromptCommand}" />
+                <CheckBox Name="GrammarCheckEnabledBox" Content="Grammar / fluency second pass" IsChecked="{Binding GrammarCheckEnabled}" />
+                <TextBlock Classes="small muted" Text="When enabled, a separate LLM request checks each translated line. If it fails, the first translation is retained." TextWrapping="Wrap" />
+                <StackPanel Name="GrammarPromptFields" Spacing="8" IsVisible="{Binding ShowGrammarPrompt}">
+                  <TextBlock Text="Grammar check prompt" />
+                  <TextBlock Classes="small muted" Text="Placeholders: {source_lang}, {target_lang}. The source and first translation are supplied automatically." TextWrapping="Wrap" />
+                  <TextBox Name="PromptGrammarCheckBox" Text="{Binding PromptGrammarCheck}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="220" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                  <Button Name="ResetGrammarCheckPromptButton" Content="Reset grammar check prompt" Classes="outline" Command="{Binding ResetGrammarCheckPromptCommand}" />
+                </StackPanel>
+              </StackPanel>
+              <StackPanel Name="KeepContextFields" Spacing="8" IsVisible="{Binding IsKeepContext}">
+                <TextBlock Classes="small muted" Text="Translate sequentially with conversation history. More retained lines use more tokens; 0 retains no previous subtitle pairs." TextWrapping="Wrap" />
+                <TextBlock Text="Subtitle context count" />
+                <TextBox Name="SubtitleContextCountBox" Text="{Binding SubtitleContextCount}" />
+                <TextBlock Text="Context retain policy" />
+                <ComboBox Name="ContextRetainPolicyBox" ItemsSource="{Binding ContextRetainPolicies}" SelectedItem="{Binding ContextRetainPolicy}" HorizontalAlignment="Stretch" />
+                <TextBlock Classes="small muted" Text="Reset clears history when the count is exceeded; KeepSize removes the oldest pairs." TextWrapping="Wrap" />
+                <TextBlock Text="KeepContext prompt" />
+                <TextBlock Classes="small muted" Text="Placeholders: {source_lang}, {target_lang}. Subtitle lines are supplied as conversation messages." TextWrapping="Wrap" />
+                <TextBox Name="PromptKeepContextBox" Text="{Binding PromptKeepContext}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="220" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                <Button Name="ResetKeepContextPromptButton" Content="Reset KeepContext prompt" Classes="outline" Command="{Binding ResetKeepContextPromptCommand}" />
+              </StackPanel>
+              <StackPanel Name="OneByOneFields" Spacing="8" IsVisible="{Binding IsOneByOne}">
+                <TextBlock Text="OneByOne prompt" />
+                <TextBlock Classes="small muted" Text="Placeholders: {source_lang}, {target_lang}, {source_text}. Each subtitle line is translated independently. LLM word lookups always use this prompt." TextWrapping="Wrap" />
+                <TextBox Name="PromptOneByOneBox" Text="{Binding PromptOneByOne}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="100" MaxHeight="220" ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                <Button Name="ResetOneByOnePromptButton" Content="Reset OneByOne prompt" Classes="outline" Command="{Binding ResetOneByOnePromptCommand}" />
+              </StackPanel>
+              <TextBlock Classes="small muted" Text="Context counts must be whole numbers from 0 to 2147483647. Inactive mode values are retained and validated on save." TextWrapping="Wrap" />
+            </StackPanel>
+          </Expander>
+          <TextBlock Classes="small muted" Text="Advanced sampling parameters and provider region mappings are retained when saving." TextWrapping="Wrap" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

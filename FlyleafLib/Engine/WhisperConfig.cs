@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json.Serialization;
@@ -12,7 +12,27 @@ namespace FlyleafLib;
 // Whisper Common Config (whisper.cpp, faster-whisper)
 public class WhisperConfig : NotifyPropertyChanged
 {
+#if WINDOWS
     public static string ModelsDirectory { get; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "whispermodels");
+#else
+    // Captured when the ASR configuration is first used; this slice keeps the app-base default until Core/XDG.
+    private static readonly string? ModelsDirectoryOverride = Environment.GetEnvironmentVariable("LLPLAYER_WHISPER_MODELS_DIR");
+    public static string ModelsDirectory
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(ModelsDirectoryOverride))
+                return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "whispermodels");
+            if (!Path.IsPathFullyQualified(ModelsDirectoryOverride))
+                throw new ArgumentException("LLPLAYER_WHISPER_MODELS_DIR must be an absolute directory path.");
+            try { return Path.GetFullPath(ModelsDirectoryOverride); }
+            catch (ArgumentException e)
+            {
+                throw new ArgumentException("LLPLAYER_WHISPER_MODELS_DIR is not a valid absolute directory path.", e);
+            }
+        }
+    }
+#endif
     public static string EnginesDirectory { get; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Whisper");
 
     // For UI
@@ -106,6 +126,19 @@ public class WhisperCppConfig : NotifyPropertyChanged
         }
     }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ModelDirectory { get; set => Set(ref field, value); }
+
+    public string GetModelFilePath()
+    {
+        if (Model == null)
+            throw new InvalidOperationException("Select an existing whisper.cpp model in Recognition settings.");
+        string directory = ModelDirectory ?? WhisperConfig.ModelsDirectory;
+        if (!Path.IsPathFullyQualified(directory))
+            throw new ArgumentException("The whisper.cpp model directory must be an absolute path.");
+        return Path.Combine(Path.GetFullPath(directory), Model.ModelFileName);
+    }
+
     [JsonIgnore]
     public bool IsEnglishModel => Model != null && Model.Model.ToString().EndsWith("En");
 
@@ -139,6 +172,10 @@ public class WhisperCppConfig : NotifyPropertyChanged
     public WhisperFactoryOptions GetFactoryOptions()
     {
         WhisperFactoryOptions opts = WhisperFactoryOptions.Default;
+#if !WINDOWS
+        // F-13 engine slice supplies the Linux CPU runtime only.
+        opts.UseGpu = false;
+#endif
 
         if (GpuDevice.HasValue)
             opts.GpuDevice = GpuDevice.Value;
@@ -212,7 +249,40 @@ public class WhisperCppConfig : NotifyPropertyChanged
 
 public class FasterWhisperConfig : NotifyPropertyChanged
 {
+#if WINDOWS
     public static string DefaultEnginePath { get; } = Path.Combine(WhisperConfig.EnginesDirectory, "Faster-Whisper-XXL", "faster-whisper-xxl.exe");
+#else
+    public static string DefaultEnginePath { get; } = Path.Combine(WhisperConfig.EnginesDirectory, "Faster-Whisper-XXL", "faster-whisper-xxl");
+
+    internal bool ValidateEngine(out string error)
+    {
+        string? path = UseManualEngine ? ManualEnginePath : DefaultEnginePath;
+        if (!File.Exists(path))
+        {
+            error = $"faster-whisper XXL executable does not exist: '{path}'. Configure the Linux XXL executable path.";
+            return false;
+        }
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                UnixFileMode mode = File.GetUnixFileMode(path);
+                if ((mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) == 0)
+                {
+                    error = $"faster-whisper XXL executable is not executable: '{path}'. Grant execute permission with chmod +x.";
+                    return false;
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                error = $"Cannot inspect faster-whisper XXL executable '{path}': {e.Message}";
+                return false;
+            }
+        }
+        error = "";
+        return true;
+    }
+#endif
 
     // can get by faster-whisper-xxl.exe --model foo bar.wav
     public static List<string> ModelOptions { get; } = [

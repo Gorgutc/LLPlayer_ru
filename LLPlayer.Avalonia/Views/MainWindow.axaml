@@ -5,11 +5,17 @@
         x:Class="LLPlayer.Avalonia.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding WindowTitle}"
+        Icon="avares://LLPlayer.Avalonia/Assets/llplayer.png"
         Width="1280" Height="760" MinWidth="640" MinHeight="420"
         WindowStartupLocation="CenterScreen"
         DragDrop.AllowDrop="True">
 
   <Window.Styles>
+    <!-- Compact header padding keeps all eight menus and Settings reachable at the 640 DIP minimum. -->
+    <Style Selector="Menu#MainMenu > MenuItem">
+      <Setter Property="Padding" Value="4,5" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
     <!-- transport bar: card-like strip under the video; overlays the video (translucent) in fullscreen -->
     <Style Selector="Border#TransportBar">
       <Setter Property="Background" Value="{DynamicResource Shadcn.BackgroundBrush}" />
@@ -56,12 +62,30 @@
   </Window.Styles>
 
   <DockPanel>
+    <TextBlock DockPanel.Dock="Bottom" Text="{Binding RecognitionStatus}" Classes="small muted" TextWrapping="Wrap" Margin="12,4" />
     <!-- ============ menu bar ============ -->
     <Border Name="MenuBar" DockPanel.Dock="Top" IsVisible="{Binding !IsFullScreen}"
             BorderBrush="{DynamicResource Shadcn.BorderBrush}" BorderThickness="0,0,0,1" Padding="4,2">
-      <Grid ColumnDefinitions="Auto,*,Auto">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto">
         <Menu Name="MainMenu">
-          <MenuItem Header="_Media">
+          <MenuItem Header="Words"><MenuItem Header="Word Manager…" Command="{Binding ShowWordManagerCommand}" /></MenuItem>
+          <MenuItem Header="Translation">
+            <MenuItem Header="Translate primary subtitles" ToggleType="CheckBox" IsChecked="{Binding PrimaryTranslationEnabled, Mode=OneWay}" Command="{Binding TogglePrimaryTranslationCommand}" />
+            <MenuItem Header="Translate secondary subtitles" ToggleType="CheckBox" IsChecked="{Binding SecondaryTranslationEnabled, Mode=OneWay}" Command="{Binding ToggleSecondaryTranslationCommand}" />
+            <MenuItem Header="Translation settings…" Command="{Binding ShowTranslationCommand}" />
+          </MenuItem>
+          <MenuItem Header="Recognition">
+        <MenuItem Header="Recognition settings…" Command="{Binding ShowRecognitionCommand}" />
+        <Separator />
+        <MenuItem Header="Start ASR — primary" Command="{Binding StartRecognitionCommand}" CommandParameter="0" />
+        <MenuItem Header="Start ASR — secondary" Command="{Binding StartRecognitionCommand}" CommandParameter="1" />
+        <MenuItem Header="Pause / resume ASR (both slots)" Command="{Binding ToggleRecognitionPauseCommand}" />
+        <MenuItem Header="Cancel and clear slot — primary" Command="{Binding CancelRecognitionCommand}" CommandParameter="0" />
+        <MenuItem Header="Cancel and clear slot — secondary" Command="{Binding CancelRecognitionCommand}" CommandParameter="1" />
+        <MenuItem Header="OCR selected bitmap — primary" Command="{Binding OcrRecognitionCommand}" CommandParameter="0" />
+        <MenuItem Header="OCR selected bitmap — secondary" Command="{Binding OcrRecognitionCommand}" CommandParameter="1" />
+      </MenuItem>
+      <MenuItem Header="_Media">
             <MenuItem Header="_Open media…" InputGesture="Ctrl+O" Command="{Binding OpenMediaCommand}">
               <MenuItem.Icon><c:LucideIcon Data="{StaticResource Icon.FolderOpen}" /></MenuItem.Icon>
             </MenuItem>
@@ -132,6 +156,7 @@
           </MenuItem>
 
           <MenuItem Header="_View">
+            <MenuItem Name="SettingsMenu" Header="Settings…" Command="{Binding ShowSettingsCommand}" />
             <MenuItem Header="Subtitles sidebar" InputGesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}"
                       ToggleType="CheckBox" IsChecked="{Binding SidebarVisible, Mode=OneWay}" />
             <MenuItem Header="Search subtitles" InputGesture="Ctrl+F" Command="{Binding ActivateSubsSearchCommand}" />
@@ -150,10 +175,16 @@
           </MenuItem>
         </Menu>
 
-        <TextBlock Grid.Column="1" Text="{Binding MediaTitle}" Classes="muted xs" HorizontalAlignment="Center"
-                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0" />
+        <TextBlock Grid.Column="1" Text="{Binding MediaTitle}" Classes="muted xs" HorizontalAlignment="Stretch"
+                   VerticalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0" />
 
-        <Button Grid.Column="2" Classes="ghost icon-sm" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="Toggle theme (Ctrl+Shift+T)">
+        <Button Name="SettingsButton" Grid.Column="2" Classes="ghost icon-sm" Command="{Binding ShowSettingsCommand}" ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
+          <c:LucideIcon>
+            <c:LucideIcon.Data><StreamGeometry>M12,8 A4,4 0 1 1 12,16 A4,4 0 1 1 12,8 Z M9,3 L15,3 L16,6 L19,7 L21,11 L19,14 L19,17 L15,19 L14,21 L10,21 L9,19 L5,17 L5,14 L3,11 L5,7 L8,6 Z</StreamGeometry></c:LucideIcon.Data>
+          </c:LucideIcon>
+        </Button>
+
+        <Button Grid.Column="3" Classes="ghost icon-sm" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="Toggle theme (Ctrl+Shift+T)">
           <Panel>
             <c:LucideIcon Data="{StaticResource Icon.Sun}" IsVisible="{Binding IsDarkTheme}" />
             <c:LucideIcon Data="{StaticResource Icon.Moon}" IsVisible="{Binding !IsDarkTheme}" />
@@ -174,9 +205,9 @@
           <!-- dual subtitle overlay: secondary above primary -->
           <StackPanel Name="SubtitleOverlay" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Spacing="2"
                       Margin="48,0,48,24">
-            <c:SubtitleText Name="SecondarySubtitle" Slot="1" Text="{Binding SecondaryText}" IsVisible="{Binding SecondaryVisible}"
+            <c:SubtitleText Name="SecondarySubtitle" IsTranslated="{Binding SecondaryTextTranslated}" Slot="1" Text="{Binding SecondaryText}" IsVisible="{Binding SecondaryVisible}"
                             FontSize="{Binding SecondaryFontSize}" Fill="#FFE8E8E8" OutlineThickness="2.5" />
-            <c:SubtitleText Name="PrimarySubtitle" Slot="0" Text="{Binding PrimaryText}" IsVisible="{Binding PrimaryVisible}"
+            <c:SubtitleText Name="PrimarySubtitle" IsTranslated="{Binding PrimaryTextTranslated}" Slot="0" Text="{Binding PrimaryText}" IsVisible="{Binding PrimaryVisible}"
                             FontSize="{Binding SubtitleFontSize}" Fill="White" OutlineThickness="3" />
           </StackPanel>
 
@@ -221,6 +252,7 @@
           <Canvas Name="PopupLayer">
             <Border Name="WordPopupCard" Classes="popover" Width="300" Padding="14,12"
                     IsVisible="{Binding WordPopup.IsOpen}">
+              <ScrollViewer Name="WordPopupScroll">
               <StackPanel Spacing="8">
                 <Grid ColumnDefinitions="*,Auto,Auto">
                   <SelectableTextBlock Text="{Binding WordPopup.Word}" Classes="large" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"
@@ -239,11 +271,18 @@
                 </StackPanel>
                 <SelectableTextBlock Text="{Binding WordPopup.Translation}" TextWrapping="Wrap" FontSize="15"
                                      IsVisible="{Binding WordPopup.Translation, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <Button Content="Translation settings…" Classes="outline" IsVisible="{Binding WordPopup.IsNotConfigured}" Command="{Binding WordPopup.ConfigureTranslationCommand}" />
                 <TextBlock Text="{Binding WordPopup.Status}" Classes="muted xs" TextWrapping="Wrap"
                            IsVisible="{Binding WordPopup.Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="Looking up definition…" Classes="muted xs" IsVisible="{Binding WordPopup.DefinitionBusy}" />
+                <ScrollViewer MaxHeight="160" IsVisible="{Binding WordPopup.Definition, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                  <SelectableTextBlock Text="{Binding WordPopup.Definition}" TextWrapping="Wrap" />
+                </ScrollViewer>
+                <Button Content="Save word" IsEnabled="{Binding WordPopup.CanSave}" Command="{Binding WordPopup.SaveCommand}" />
                 <TextBlock Text="{Binding WordPopup.Context}" Classes="muted xs" FontStyle="Italic" TextWrapping="Wrap" MaxLines="3"
                            TextTrimming="CharacterEllipsis" />
               </StackPanel>
+              </ScrollViewer>
             </Border>
           </Canvas>
 
@@ -371,7 +410,7 @@
                   <Border Classes="cue" Classes.current="{Binding IsCurrent}">
                     <Grid ColumnDefinitions="Auto,*">
                       <TextBlock Text="{Binding StartText}" Classes="muted xs mono" Margin="0,2,10,0" VerticalAlignment="Top" />
-                      <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" />
+                      <c:SubtitleText Grid.Column="1" Text="{Binding Text}" IsTranslated="{Binding IsTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="0" FontSize="14" OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordClicked="OnWordClicked" />
                     </Grid>
                   </Border>
                 </DataTemplate>

@@ -9,6 +9,10 @@ public interface IAppShell
     Task<string?> PickSubtitlesFileAsync(string? initialFolder);
 
     void ShowCheatSheet();
+    void ShowSettings(SettingsViewModel model) { }
+    void ShowWordManager(WordManagerViewModel model) { }
+    void ShowTranslation(TranslationViewModel model) { }
+    void ShowRecognition(RecognitionViewModel model) { }
     void SetClipboardText(string text);
     void ApplyTheme(string theme);
     void Exit();

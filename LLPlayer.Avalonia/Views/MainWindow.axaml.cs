@@ -30,6 +30,54 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     WindowState stateBeforeFullScreen = WindowState.Normal;
     Task<IDisposable>? sleepInhibition;
     CheatSheetWindow? cheatSheet;
+    SettingsWindow? settingsWindow;
+    public void ShowSettings(SettingsViewModel model)
+    {
+        if (settingsWindow != null) { settingsWindow.Activate(); return; }
+        _ = ShowSettingsAsync(model);
+    }
+    async Task ShowSettingsAsync(SettingsViewModel model)
+    {
+        var window = new SettingsWindow(model);
+        settingsWindow = window;
+        try { await window.ShowDialog(this); }
+        finally { settingsWindow = null; }
+        // ShowDialog has finished modal cleanup; the linked dialog belongs to this main window.
+        if (IsVisible && model.RequestedLink is { } link) vm?.OpenSettingsTool(link);
+    }
+
+    RecognitionWindow? recognitionWindow;
+    WordManagerWindow? wordManagerWindow;
+    public void ShowWordManager(WordManagerViewModel model)
+    {
+        if (wordManagerWindow != null) { wordManagerWindow.Activate(); return; }
+        wordManagerWindow = new WordManagerWindow(model);
+        wordManagerWindow.Closed += (_, _) => { wordManagerWindow = null; vm?.WordManagerClosed(); };
+        wordManagerWindow.Show(this);
+    }
+    TranslationWindow? translationWindow;
+    public Func<Task>? ShutdownRequested { get; set; }
+    bool shutdownComplete;
+    bool shutdownStarted;
+    public void ShowTranslation(TranslationViewModel model)
+    {
+        if (translationWindow != null) { translationWindow.Activate(); return; }
+        translationWindow = new TranslationWindow(model);
+        translationWindow.Closed += (_, _) => translationWindow = null;
+        _ = translationWindow.ShowDialog(this);
+    }
+
+    public void ShowRecognition(RecognitionViewModel model)
+    {
+        if (recognitionWindow != null)
+        {
+            if (recognitionWindow.DataContext is RecognitionViewModel current) current.Message = model.Message;
+            recognitionWindow.Activate(); return;
+        }
+        recognitionWindow = new RecognitionWindow(model);
+        recognitionWindow.Closed += (_, _) => recognitionWindow = null;
+        _ = recognitionWindow.ShowDialog(this);
+    }
 
     public MainWindow() : this(new KeyMapper(), null)
     {
@@ -61,6 +109,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.Tapped += OnVideoTapped;
         VideoHost.PointerWheelChanged += OnVideoWheel;
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
+        VideoHost.SizeChanged += (_, _) => PositionWordPopup();
         CueList.Tapped += OnCueTapped;
         SidebarSplitter.DragCompleted += (_, _) =>
         {
@@ -191,14 +240,26 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {
-        vm?.SavePrefs();
         base.OnClosing(e);
+        if (e.Cancel || shutdownComplete) return;
+        if (ShutdownRequested == null) { vm?.SavePrefs(); return; }
+        e.Cancel = true;
+        if (!shutdownStarted) { shutdownStarted = true; IsEnabled = false; _ = DrainBeforeClosingAsync(); }
+    }
+
+    async Task DrainBeforeClosingAsync()
+    {
+        try { await ShutdownRequested!(); }
+        finally { shutdownComplete = true; Close(); }
     }
 
     protected override void OnClosed(EventArgs e)
     {
         idleTimer.Stop();
+        settingsWindow?.Close();
         cheatSheet?.Close();
+        translationWindow?.Close();
+        recognitionWindow?.Close();
         ReleaseSleepInhibition();
         Video.Renderer = null;
         base.OnClosed(e);
@@ -254,6 +315,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             case nameof(MainWindowViewModel.IsPlaying):
                 UpdateSleepInhibition(vm!.IsPlaying);
                 break;
+            case nameof(MainWindowViewModel.SidebarWidth):
             case nameof(MainWindowViewModel.SidebarVisible):
                 UpdateSidebarColumn();
                 break;
@@ -284,13 +346,15 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         double h = WordPopupCard.Bounds.Height;
         double areaW = VideoHost.Bounds.Width, areaH = VideoHost.Bounds.Height;
 
+        WordPopupCard.MaxHeight = Math.Max(40, areaH - 16);
+        WordPopupCard.Width = Math.Min(300, Math.Max(120, areaW - 16));
         double left = Math.Clamp(vm.WordPopup.AnchorX - w / 2, 8, Math.Max(8, areaW - w - 8));
         double top = vm.WordPopup.AnchorY - h - 16;
         if (top < 8)
             top = Math.Min(vm.WordPopup.AnchorY + 24, Math.Max(8, areaH - h - 8));
 
         Canvas.SetLeft(WordPopupCard, left);
-        Canvas.SetTop(WordPopupCard, top);
+        Canvas.SetTop(WordPopupCard, Math.Clamp(top, 8, Math.Max(8, areaH - h - 8)));
     }
 
     void OnWordClicked(object? sender, WordClickedEventArgs e)
@@ -299,7 +363,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             return;
 
         Point p = v.TranslatePoint(e.Position, VideoHost) ?? e.Position;
-        vm.OnWordClicked(e.Word, e.Text, e.Slot, p.X, p.Y);
+        vm.OnWordClicked(e.Word, e.Text, e.Slot, p.X, p.Y, e.IsTranslated, e.SourceLanguage, e.TargetLanguage);
     }
 
     void OnVideoTapped(object? sender, TappedEventArgs e)

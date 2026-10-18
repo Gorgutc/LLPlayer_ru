@@ -79,7 +79,11 @@ public class BatchSubtitlePolicyTests
         Config config = new(true);
         config.Subtitles.ASREngine = SubASREngineType.WhisperCpp;
 
+#if WINDOWS
         BatchAsrTranscriber.RequiresVcRedistPreflight(config).Should().BeTrue();
+#else
+        BatchAsrTranscriber.RequiresVcRedistPreflight(config).Should().BeFalse();
+#endif
     }
 
     [Fact]
@@ -96,7 +100,11 @@ public class BatchSubtitlePolicyTests
     public void RequiresVcRedistPreflight_True_ByDefault_MatchesWhisperCppDefaultEngine()
     {
         // The default ASR engine is whisper.cpp, so a fresh config requires the preflight.
+#if WINDOWS
         BatchAsrTranscriber.RequiresVcRedistPreflight(new Config(true)).Should().BeTrue();
+#else
+        BatchAsrTranscriber.RequiresVcRedistPreflight(new Config(true)).Should().BeFalse();
+#endif
     }
 
     [Fact]

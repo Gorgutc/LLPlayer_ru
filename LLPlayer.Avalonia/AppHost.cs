@@ -1,3 +1,4 @@
+using LLPlayer.Core.Services;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -72,17 +73,34 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         }
 
         player = new Player(EngineBootstrap.CreatePlayerConfig(prefs));
-        controller = new FlyleafPlaybackController(player, dispatcher, bridge);
-        translator = new FlyleafWordTranslator(player, () => prefs.WordTranslationService);
+        RecognitionSettingsStore recognitionStore = new(paths.RecognitionFile);
+        RecognitionSettings? recognition = recognitionStore.Load();
+        recognition?.Apply(player.Config.Subtitles);
+        controller = new FlyleafPlaybackController(player, dispatcher, bridge)
+        { RecognitionStore = recognitionStore, RecognitionWarning = recognitionStore.LoadWarning };
+        var translationStore = new TranslationSettingsStore(paths.TranslationFile);
+        var translationSettings = translationStore.Load(prefs.WordTranslationService, prefs.TranslateTargetLanguage);
+        controller.ApplyTranslationSettings(translationSettings);
+        translator = new FlyleafWordTranslator(player, translationSettings);
 
         window = new MainWindow(keys, hostServices);
         viewModel = new MainWindowViewModel(controller, prefs, SavePrefs, translator, window);
+        var wordLibrary = new WordLibrary(paths.WordListFile);
+        wordLibrary.Load();
+        viewModel.WordLibrary = wordLibrary;
+        viewModel.WordPopup.Library = wordLibrary;
+        viewModel.TranslationDialog = () => new TranslationViewModel(translator.Settings,
+            draft => controller.SaveTranslationAsync(() => translator.SaveAndApplyAsync(draft, translationStore,
+                () => dispatcher.Post(viewModel.WordPopup.Invalidate), controller.ApplyTranslationSettings)), translationStore.LoadWarning);
+        window.ShutdownRequested = ShutdownAsync;
         window.Attach(viewModel, player.Renderer, () => AppShortcutMap.BuildCheatSheet(player.Config.Player.KeyBindings.Keys));
         player.Host = window;
         MainWindow = window;
 
         hostServices.FolderPicked += folder => prefs.LastFolder = folder;
         hostServices.CompletionRequested += () => viewModel.ShowToast("Done", "The background task finished.", ToastVariant.Success);
+        if (recognitionStore.LoadWarning is { } recognitionWarning)
+            viewModel.ShowToast("Recognition settings", recognitionWarning, ToastVariant.Destructive);
         if (prefsStore.LoadWarning is { } warning)
             viewModel.ShowToast("Preferences reset", warning, ToastVariant.Destructive);
 
@@ -91,7 +109,7 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         if (options.ShowSidebar && !viewModel.SidebarVisible)
             viewModel.ToggleSidebar();
 
-        window.Closed += (_, _) => Shutdown();
+        window.Closed += (_, _) => { player?.Dispose(); player = null; };
         desktop.MainWindow = window;
         window.Show();
 
@@ -145,14 +163,15 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         ScheduleScreenshot(error, null);
     }
 
-    void Shutdown()
+    async Task ShutdownAsync()
     {
         viewModel?.SavePrefs();
         viewModel?.Dispose();
-        controller?.Dispose();
-        translator?.Dispose();
-        player?.Dispose();
-        player = null;
+        Task managerDrain = viewModel?.WordManager?.DisposeAsync().AsTask() ?? Task.CompletedTask;
+        Task popupDrain = viewModel?.WordPopup.DisposeAsync().AsTask() ?? Task.CompletedTask;
+        Task translationDrain = translator?.DisposeAsync().AsTask() ?? Task.CompletedTask;
+        Task recognitionDrain = controller?.DisposeAsync().AsTask() ?? Task.CompletedTask;
+        await Task.WhenAll(popupDrain, managerDrain, translationDrain, recognitionDrain);
     }
 
     /// <summary>Developer option --screenshot: render <paramref name="window"/> to a PNG after the delay and exit.</summary>
@@ -182,7 +201,7 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
             finally
             {
                 window.Close();
-                desktop.Shutdown();
+                if (window != MainWindow) desktop.Shutdown();
             }
         }, TimeSpan.FromSeconds(options.ScreenshotDelaySeconds));
     }

@@ -189,6 +189,7 @@ public static class BatchSubtitleConfigSnapshot
                     Quantization = source.Model.Quantization,
                     Size = source.Model.Size
                 },
+            ModelDirectory = source.ModelDirectory,
             RuntimeLibraries = new List<RuntimeLibrary>(source.RuntimeLibraries),
             GpuDevice = source.GpuDevice,
             Threads = source.Threads,

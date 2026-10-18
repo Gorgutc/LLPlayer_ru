@@ -18,6 +18,8 @@ public static class EngineBootstrap
         Utils.HostServices = hostServices;
         bridge.Install();
         Player.KeyStateProvider = keys.IsKeyDown;
+        SubtitlesOCR.ServiceFactory = (config, type) => type == SubOCREngineType.Tesseract
+            ? new TesseractOCRService(config) : null;
     }
 
     /// <summary>Environment variable overriding the engine log level (Quiet, Error, Warn, Info, Debug, Trace).</summary>

@@ -11,9 +11,12 @@ using Avalonia.Media.TextFormatting;
 namespace LLPlayer.Avalonia.Controls;
 
 /// <summary>A word clicked in a <see cref="SubtitleText"/>.</summary>
-public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position)
+public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position, bool isTranslated = false, string? sourceLanguage = null, string? targetLanguage = null)
     : RoutedEventArgs(routedEvent)
 {
+    public bool IsTranslated { get; } = isTranslated;
+    public string? SourceLanguage { get; } = sourceLanguage;
+    public string? TargetLanguage { get; } = targetLanguage;
     public string Word { get; } = word;
     /// <summary>The whole subtitle line (context).</summary>
     public string Text { get; } = text;
@@ -29,6 +32,12 @@ public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, s
 /// </summary>
 public sealed class SubtitleText : Control
 {
+    public static readonly StyledProperty<bool> IsTranslatedProperty = AvaloniaProperty.Register<SubtitleText, bool>(nameof(IsTranslated));
+    public bool IsTranslated { get => GetValue(IsTranslatedProperty); set => SetValue(IsTranslatedProperty, value); }
+    public static readonly StyledProperty<string?> SourceLanguageProperty = AvaloniaProperty.Register<SubtitleText, string?>(nameof(SourceLanguage));
+    public string? SourceLanguage { get => GetValue(SourceLanguageProperty); set => SetValue(SourceLanguageProperty, value); }
+    public static readonly StyledProperty<string?> TargetLanguageProperty = AvaloniaProperty.Register<SubtitleText, string?>(nameof(TargetLanguage));
+    public string? TargetLanguage { get => GetValue(TargetLanguageProperty); set => SetValue(TargetLanguageProperty, value); }
     public static readonly StyledProperty<string?> TextProperty =
         AvaloniaProperty.Register<SubtitleText, string?>(nameof(Text));
 
@@ -190,7 +199,7 @@ public sealed class SubtitleText : Control
         if (TryGetWordAt(p, out string word))
         {
             e.Handled = true;
-            RaiseEvent(new WordClickedEventArgs(WordClickedEvent, word, Text ?? "", Slot, p));
+            RaiseEvent(new WordClickedEventArgs(WordClickedEvent, word, Text ?? "", Slot, p, IsTranslated, SourceLanguage, TargetLanguage));
         }
     }
 

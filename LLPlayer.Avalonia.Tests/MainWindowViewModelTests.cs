@@ -140,7 +140,7 @@ public class MainWindowViewModelTests
 
         player.Opened.Should().Equal("/videos/movie.mkv");
         player.OpenedSubtitles.Should().BeEmpty("subtitles wait for the media to open");
-        prefs.LastFolder.Should().Be("/videos");
+        prefs.LastFolder.Should().Be(Path.GetFullPath("/videos"));
 
         player.IsOpened = true;
         player.RaiseOpenCompleted("/videos/movie.mkv", false, null);

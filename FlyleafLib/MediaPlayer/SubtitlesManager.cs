@@ -1,4 +1,4 @@
-﻿using System.Collections.Specialized;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -196,6 +196,9 @@ public class SubManager : INotifyPropertyChanged
     private readonly Config _config;
     private readonly int _subIndex;
     private readonly SubTranslator _subTranslator;
+#if !WINDOWS
+    public SubTranslator Translator => _subTranslator;
+#endif
     private readonly LogHandler Log;
 
     public SubManager(Config config, int subIndex)
@@ -540,7 +543,8 @@ public class SubManager : INotifyPropertyChanged
                 }
             }
 
-            for (int i = idx + 1; i <= Math.Min(Subs.Count - 1, idx + after); i++)
+            // Add in Int64 so a valid Int32 setting cannot wrap the upper bound below the focal index.
+            for (int i = idx + 1; i <= Math.Min(Subs.Count - 1, (long)idx + after); i++)
             {
                 string? t = Subs[i].Text;
                 if (!string.IsNullOrWhiteSpace(t))

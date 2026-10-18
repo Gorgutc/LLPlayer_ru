@@ -31,6 +31,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlyleafLib\FlyleafLib.csproj" />
+    <ProjectReference Include="..\LLPlayer.Core\LLPlayer.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0'">
@@ -45,6 +46,12 @@
   <!-- Portable (net10.0) test set: files that need WPF / WinForms / GDI+ (Windows-only APIs) are excluded.
        Platform/ holds portable-only tests (excluded from the Windows TFM). -->
   <ItemGroup Condition="'$(TargetFramework)'=='net10.0'">
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" ExcludeAssets="build" GeneratePathProperty="true" />
+    <None Include="$(PkgWhisper_net_Runtime)/build/linux-x64/libwhisper.so;
+                   $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-whisper.so;
+                   $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-base-whisper.so;
+                   $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-cpu-whisper.so"
+          TargetPath="runtimes/linux-x64/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- WPF Application/Popup lifetime of the LLPlayer app (WPF) -->
     <Compile Remove="LLPlayer\**" />
     <!-- WPF (System.Windows.Media.Color) / Vortice color converters that exist only in the Windows build of Utils -->
@@ -52,6 +59,10 @@
     <!-- GDI+ ImageProcessor (System.Drawing.Common is Windows-only since .NET 7); portable counterpart: OcrImageProcessor -->
     <Compile Remove="MediaPlayer\ImageProcessorTests.cs" />
   </ItemGroup>
+  <PropertyGroup Condition="'$(TargetFramework)'=='net10.0'">
+    <!-- Native paletted OCR fixtures use the same FFmpeg allocation/disposal ownership as decoded subtitles. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)'!='net10.0'">
     <Compile Remove="Platform\**" />
   </ItemGroup>

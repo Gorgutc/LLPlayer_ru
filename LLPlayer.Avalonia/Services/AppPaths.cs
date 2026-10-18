@@ -17,6 +17,12 @@ public sealed record AppPaths(string ConfigDir, string StateDir)
     public const string AppFolderName = "LLPlayer";
 
     /// <summary>App preferences (volume, theme, recent files, ...).</summary>
+    public string WordListFile => Path.Combine(ConfigDir, "LLPlayer.WordList.json");
+
+    public string TranslationFile => Path.Combine(ConfigDir, "LLPlayer.Translation.json");
+
+    public string RecognitionFile => Path.Combine(ConfigDir, "LLPlayer.Recognition.json");
+
     public string PrefsFile => Path.Combine(ConfigDir, "LLPlayer.Avalonia.json");
 
     /// <summary>Unhandled-exception log.</summary>

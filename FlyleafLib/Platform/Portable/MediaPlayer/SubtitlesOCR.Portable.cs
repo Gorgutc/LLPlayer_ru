@@ -8,8 +8,8 @@ namespace FlyleafLib.MediaPlayer;
 /// <summary>
 /// F-13 portable (Linux) counterpart of MediaPlayer/SubtitlesOCR.cs, which depends on GDI+ (System.Drawing.Common,
 /// Windows-only since .NET 7) and WinRT <c>Windows.Media.Ocr</c>. Same public surface and per-track engine ownership
-/// (HC-36/HC-37); images are passed to engines as <see cref="BgraBitmap"/>. No OCR engine ships for Linux yet: hosts
-/// may plug one in with <see cref="ServiceFactory"/>, otherwise <see cref="TryInitialize"/> reports an actionable error.
+/// (HC-36/HC-37); images are passed to engines as <see cref="BgraBitmap"/>. Hosts install an engine through
+/// <see cref="ServiceFactory"/>; Avalonia registers the system Tesseract 5 adapter.
 /// </summary>
 public unsafe class SubtitlesOCR : IDisposable
 {

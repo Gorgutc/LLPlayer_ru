@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using FlyleafLib.MediaPlayer.Translation.Services;
@@ -21,6 +21,100 @@ public class SubTranslator
     private volatile bool _isReset;
     private Language? _srcLang;
 
+#if !WINDOWS
+    private readonly SemaphoreSlim _resetGate = new(1, 1);
+    private bool _suspended;
+    private bool _disposed;
+    private long _generation;
+    private int _resetCount;
+    private readonly List<Task> _startTasks = [];
+    private TranslateChatConfig _observedChat;
+    public Func<ITranslateService>? ServiceFactoryOverride { private get; set; }
+
+    /// <summary>Close admission before draining; callers must not hold subtitle/engine/UI locks.</summary>
+    public Task SuspendAsync()
+    {
+        lock (_taskLock) { _suspended = true; }
+        return ResetPortableAsync();
+    }
+
+    public void Resume()
+    {
+        lock (_taskLock) { if (_disposed) return; _suspended = false; }
+        KickPortable();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        lock (_taskLock) { _disposed = true; _suspended = true; }
+        await ResetPortableAsync().ConfigureAwait(false);
+        _subManager.PropertyChanged -= SubManager_OnPropertyChanged;
+        _config.PropertyChanged -= SubtitlesConfig_OnPropertyChanged;
+        _config.SubConfigs[_subIndex].PropertyChanged -= SubConfig_OnPropertyChanged;
+        _observedChat.PropertyChanged -= TranslateChatConfig_OnPropertyChanged;
+    }
+
+    void KickPortable()
+    {
+        lock (_taskLock)
+        {
+            if (_disposed || _suspended || _isReset || !IsEnabled || _subManager.Language == null) return;
+            _srcLang = _subManager.Language;
+            _translationStartCancellation?.Cancel();
+            var source = new CancellationTokenSource();
+            _translationStartCancellation = source;
+            _startTasks.RemoveAll(task => task.IsCompleted);
+            _startTasks.Add(StartPortableAsync(_subManager.CurrentIndex, source));
+        }
+    }
+
+    async Task StartPortableAsync(int index, CancellationTokenSource source)
+    {
+        try { await UpdateCurrentIndexAsync(index, source.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        finally
+        {
+            lock (_taskLock) { if (_translationStartCancellation == source) _translationStartCancellation = null; }
+            source.Dispose();
+        }
+    }
+
+    Task ResetPortableAsync()
+    {
+        Task? pending; Task delayed;
+        lock (_taskLock)
+        {
+            _isReset = true;
+            ++_resetCount;
+            ++_generation;
+            _translationStartCancellation?.Cancel();
+            _translationCancellation?.Cancel();
+            pending = _translateTask;
+            delayed = Task.WhenAll(_startTasks);
+        }
+        return DrainPortableAsync(pending, delayed);
+    }
+
+    async Task DrainPortableAsync(Task? pending, Task delayed)
+    {
+        await _resetGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            try { await delayed.ConfigureAwait(false); if (pending != null) await pending.ConfigureAwait(false); }
+            catch (OperationCanceledException) { }
+            _translateService?.Dispose();
+            _translateService = null;
+            _srcLang = null;
+            foreach (var cue in _subManager.SnapshotSubs()) cue.TranslatedText = null;
+        }
+        finally
+        {
+            _resetGate.Release();
+            lock (_taskLock) { _isReset = --_resetCount != 0; }
+        }
+    }
+#endif
+
     private bool IsEnabled => _config[_subIndex].EnabledTranslated;
 
     private readonly LogHandler Log;
@@ -37,6 +131,9 @@ public class SubTranslator
         _config.PropertyChanged += SubtitlesConfig_OnPropertyChanged;
         _config.SubConfigs[subIndex].PropertyChanged += SubConfig_OnPropertyChanged;
         _config.TranslateChatConfig.PropertyChanged += TranslateChatConfig_OnPropertyChanged;
+#if !WINDOWS
+        _observedChat = _config.TranslateChatConfig;
+#endif
 
         _translateServiceFactory = new TranslateServiceFactory(config);
 
@@ -51,6 +148,10 @@ public class SubTranslator
         switch (e.PropertyName)
         {
             case nameof(SubManager.CurrentIndex):
+#if !WINDOWS
+                KickPortable();
+                break;
+#else
                 if (!IsEnabled || _subManager.Subs.Count == 0 || _subManager.Language == null)
                     return;
 
@@ -69,6 +170,7 @@ public class SubTranslator
                 _translationStartCancellation = new CancellationTokenSource();
                 _ = UpdateCurrentIndexAsync(_subManager.CurrentIndex, _translationStartCancellation.Token);
                 break;
+#endif
             case nameof(SubManager.Language):
                 _ = Reset();
                 break;
@@ -77,6 +179,19 @@ public class SubTranslator
 
     private void SubtitlesConfig_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+#if !WINDOWS
+        if (e.PropertyName == nameof(Config.SubtitlesConfig.TranslateChatConfig))
+        {
+            _observedChat.PropertyChanged -= TranslateChatConfig_OnPropertyChanged;
+            _observedChat = _config.TranslateChatConfig;
+            _observedChat.PropertyChanged += TranslateChatConfig_OnPropertyChanged;
+        }
+        if (e.PropertyName is nameof(Config.SubtitlesConfig.TranslateServiceSettings) or nameof(Config.SubtitlesConfig.TranslateChatConfig))
+        {
+            _ = Reset();
+            return;
+        }
+#endif
         string languageFallbackPropName = _subIndex == 0 ?
             nameof(Config.SubtitlesConfig.LanguageFallbackPrimary) :
             nameof(Config.SubtitlesConfig.LanguageFallbackSecondary);
@@ -111,6 +226,10 @@ public class SubTranslator
 
     private async Task Reset()
     {
+#if !WINDOWS
+        await ResetPortableAsync().ConfigureAwait(false);
+        KickPortable();
+#else
         if (_translateService == null)
             return;
 
@@ -127,6 +246,7 @@ public class SubTranslator
         {
             _isReset = false;
         }
+#endif
     }
 
     private async Task Cancel()
@@ -194,8 +314,16 @@ public class SubTranslator
             {
                 // Singleton task (guarded): only one ahead-translation run at a time.
                 // Ensure that it is not executed in the main thread because it scans all subtitles.
-                if (_translateTask == null && !_isReset)
+                if (_translateTask == null && !_isReset
+#if !WINDOWS
+                    && !_suspended && !_disposed && IsEnabled && !token.IsCancellationRequested
+#endif
+                    )
                 {
+#if !WINDOWS
+                    _translationCancellation?.Dispose();
+                    _translationCancellation = new CancellationTokenSource();
+#endif
                     _translateTask = Task.Run(() => RunTranslateAheadAsync(newIndex));
                 }
             }
@@ -218,8 +346,16 @@ public class SubTranslator
                 _translateTask = null;
 
                 int latest = _subManager.CurrentIndex;
-                if (!_isReset && IsEnabled && latest >= 0 && latest != currentIndex)
+                if (!_isReset
+#if !WINDOWS
+                    && !_suspended && !_disposed
+#endif
+                    && IsEnabled && latest >= 0 && latest != currentIndex)
                 {
+#if !WINDOWS
+                    _translationCancellation?.Dispose();
+                    _translationCancellation = new CancellationTokenSource();
+#endif
                     _translateTask = Task.Run(() => RunTranslateAheadAsync(latest));
                 }
             }
@@ -240,7 +376,11 @@ public class SubTranslator
         {
             if (_translateService == null)
             {
-                var service = _translateServiceFactory.GetService(_config.TranslateServiceType, false);
+                var service =
+#if !WINDOWS
+                    ServiceFactoryOverride?.Invoke() ??
+#endif
+                    _translateServiceFactory.GetService(_config.TranslateServiceType, false);
                 service.Initialize(_srcLang!, _config.TranslateTargetLanguage);
 
                 Volatile.Write(ref _translateService, service);
@@ -250,6 +390,10 @@ public class SubTranslator
 
     private async Task TranslateAheadAsync(int currentIndex, int countBackward, int countForward)
     {
+#if !WINDOWS
+        long runGeneration;
+        lock (_taskLock) runGeneration = _generation;
+#endif
         try
         {
             // Token for canceling translation, releasing previous one to prevent leakage.
@@ -258,8 +402,12 @@ public class SubTranslator
             CancellationToken token;
             lock (_taskLock)
             {
+#if WINDOWS
                 _translationCancellation?.Dispose();
                 _translationCancellation = new CancellationTokenSource();
+#else
+                _translationCancellation ??= new CancellationTokenSource();
+#endif
                 token = _translationCancellation.Token;
             }
 
@@ -333,6 +481,12 @@ public class SubTranslator
         }
         catch (Exception ex)
         {
+#if !WINDOWS
+            lock (_taskLock)
+            {
+                if (runGeneration != _generation || _suspended || _disposed || !IsEnabled) return;
+            }
+#endif
             Log.Error($"Translation failed: {ex.Message}");
 
             bool isConfigError = ex is TranslationConfigException;
@@ -366,7 +520,14 @@ public class SubTranslator
             if (CanDebug) Log.Debug($"Translation Start {sub.Index} - {translateText}");
             EnsureTranslationService();
             SubtitleTranslationContext context = BuildTranslationContext(sub, translateText);
+#if !WINDOWS
+            long generation;
+            lock (_taskLock) generation = _generation;
+#endif
             string translated = await _translateService!.TranslateAsync(context, token);
+#if !WINDOWS
+            token.ThrowIfCancellationRequested();
+#endif
 
             // Do not cache an empty/whitespace result as a successful translation (shared rule): leaving
             // TranslatedText null keeps IsTranslated false, so DisplayText falls back to the source text
@@ -379,8 +540,17 @@ public class SubTranslator
 
             // Keep the translation within the same at-most-SubtitleMaxLinesPerCue-line shape as the
             // (re-segmented) source cue (shared rule with the batch path).
+#if !WINDOWS
+            lock (_taskLock)
+            {
+                token.ThrowIfCancellationRequested();
+                if (generation != _generation || _suspended || _disposed || !IsEnabled) return;
+#endif
             sub.TranslatedText = TranslationCueRules.PostProcess(
                 translated, _config.ResegmentSubtitles, _config.SubtitleSegmentOptions);
+#if !WINDOWS
+            }
+#endif
 
             if (CanDebug)
             {

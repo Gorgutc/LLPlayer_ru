@@ -12,7 +12,7 @@ namespace LLPlayer.Services;
 /// Materializes an Anki <c>.apkg</c> (a zip of <c>collection.anki2</c> SQLite + an empty <c>media</c>) from a
 /// word list. The correctness-critical content (schema, GUIDs, checksums, model/deck JSON) is computed by the
 /// pure, unit-tested <see cref="AnkiApkgModel"/>; this writer only performs the SQLite + zip plumbing, which
-/// needs the native Microsoft.Data.Sqlite dependency and so lives in the WPF layer. Fail-soft: any failure
+/// uses the pinned Microsoft.Data.Sqlite native dependency on both desktop platforms. Fail-soft: any failure
 /// (e.g. missing native e_sqlite3.dll) returns <c>null</c> and the caller falls back to TSV / AnkiConnect.
 /// </summary>
 public static class AnkiApkgWriter
