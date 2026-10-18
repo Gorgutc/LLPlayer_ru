@@ -189,6 +189,20 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   widths, including a fractional 3 → 3.1-DIP change. Confirm bitmap subtitles, sidebar styling and WPF settings
   remain outside this slice. Focused regressions and local WPF/Windows Avalonia gates passed separately; this is
   a future new-package GUI/DPI acceptance row, which those source tests and prior package receipts do not close.
+- **Text-subtitle foreground colors, separate owner-approved 2026-10-18 slice — NOT_RUN / DEFERRED BY OWNER:**
+  on each native Windows/Linux host, use the new package and an isolated profile. Missing primary/secondary
+  color keys must retain opaque `#FFFFFF`/`#E8E8E8`. Edit each Settings HEX field independently and inspect its
+  adjacent swatch; Save & Close, reopen Settings and restart, then confirm both colors return on their own text
+  overlay slots. Confirm outer whitespace is trimmed and lowercase six-digit HEX becomes uppercase. Reject
+  names, short HEX, alpha forms, non-HEX digits and other malformed input with a visible error and no Save.
+  Check independent fallback for null/invalid stored strings without changing a valid other slot; malformed JSON
+  and wrong JSON types must retain their existing whole-file behavior. Close/Esc must discard draft edits;
+  a persistence failure must preserve live/persisted values and keep Settings open for retry. Confirm unrelated
+  volume/mute/recents survive Save. Inspect primary/secondary text, long cues, word clicks, minimum-window
+  usability and 100%/150%/200% DPI; only the text `Fill` changes, retaining outline/shadow, positioning, bitmap
+  subtitles and sidebar styling. WPF settings, font/alpha controls and full F-13 parity remain outside this slice.
+  This is a future new-package native GUI/DPI acceptance row; headless source/render results and prior package
+  receipts do not close it. No Computer Use or application launch is authorized for this stage.
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
