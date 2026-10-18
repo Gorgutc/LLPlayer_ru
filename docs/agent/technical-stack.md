@@ -1,8 +1,8 @@
 # Technical Stack
 
 - Language: C# with nullable enabled where configured.
-- Runtime: `.NET 10`, Windows target `net10.0-windows10.0.18362.0` (FlyleafLib also builds portable `net10.0` for Linux).
-- UI: WPF, Prism.DryIoc, MaterialDesignThemes.
+- Runtime: `.NET 10`, WPF Windows target `net10.0-windows10.0.18362.0`; FlyleafLib portable `net10.0` serves the shared Windows/Linux Avalonia host.
+- UI: shipped WPF/Prism.DryIoc/MaterialDesignThemes and the additive shared Avalonia 12.1.3 UI described below.
 - Media: FlyleafLib, FFmpeg bindings, DirectX/Vortice, MediaFoundation, XAudio2.
 - ASR/OCR: Whisper.net runtimes, faster-whisper integration, TesseractOCR, Microsoft OCR paths.
 - Translation: Google/Bing/Azure/DeepL/DeepLX/Ollama/LM Studio/OpenAI-like services.
@@ -10,6 +10,21 @@
 - Packaging: GitHub Actions on `windows-latest`, .NET 10 SDK, publish profiles, 7-Zip archive.
 
 No Node/web stack is part of the baseline.
+
+## Shared Windows/Linux Avalonia (F-13)
+
+- One `LLPlayer.Avalonia` Views/ViewModels/Themes tree and `LLPlayer.Core` serves `win-x64;linux-x64`. Both host
+  builds use FlyleafLib portable `net10.0`; the WPF-specific Windows engine target does not supply portable seams.
+- Native Windows: existing tracked FFmpeg DLLs, software BGRA video, app-local OpenAL Soft 1.23.1 from pinned
+  `Silk.NET.OpenAL.Soft.Native`. The framework-dependent package requires .NET 10 runtime and Microsoft Visual C++
+  x64 Redistributable 2022 or newer. Windows ASR/OCR and GPU remain separately evidenced slices.
+- Windows gate: `scripts/windows/verify-avalonia.ps1`; package contract tests: `test-package-avalonia.ps1` in the
+  same folder; publish: `scripts/windows/publish-avalonia.ps1` produces
+  `LLPlayer-Avalonia-<version>-win-x64.zip` plus checksum. Extract and launch `LLPlayer.Avalonia.exe`.
+- The additive Windows Avalonia job in `build.yml` and existing Linux `build-linux.yml` both check shared changes.
+  WPF `scripts/codex/verify.ps1` and its separate `LLPlayer.exe`/release packaging remain supported. Native desktop
+  and model acceptance are separate from managed/headless/package evidence; current receipts are in
+  `f13-status-2026-10-18.md`.
 
 ## Linux (F-13)
 

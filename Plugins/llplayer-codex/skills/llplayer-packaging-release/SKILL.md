@@ -1,17 +1,28 @@
 ---
 name: llplayer-packaging-release
-description: Use when changing LLPlayer_ru publish profiles, GitHub release workflows, or Windows exe packaging.
+description: Use when changing LLPlayer_ru publish profiles, GitHub release workflows, or WPF/Avalonia packaging.
 ---
 
-# LLPlayer Windows Packaging Release
+# LLPlayer Packaging Release
 
 Windows release packaging source of truth is `.github/actions/build-package/action.yml`.
 Use `scripts/codex/ship.ps1` as the local Windows packaging smoke; keep it in sync with the action.
 
-F-13 currently packages the Linux Avalonia host and shared Core over portable FlyleafLib `net10.0` through
-`scripts/linux/publish.sh` and `.github/workflows/build-linux.yml`. This separate Linux package flow is not
-evidence of a public release or native desktop acceptance. The native Windows Avalonia baseline remains proposed,
-not implemented or accepted; it does not replace the shipped WPF package.
+F-13 packages the shared Avalonia host/Core over portable FlyleafLib `net10.0` for Windows and Linux. Windows uses
+`scripts/windows/publish-avalonia.ps1` and the additive Windows Avalonia CI job in `build.yml`; Linux uses
+`scripts/linux/publish.sh` and `build-linux.yml`. These package flows do not establish public release or desktop
+acceptance and do not replace the shipped WPF package.
+
+## Windows Avalonia Package
+
+- Produce `LLPlayer-Avalonia-<version>-win-x64.zip` plus SHA-256; keep this separate from WPF release assets.
+- Require the existing FFmpeg DLLs, explicit win-x64 native allowlists and app-local OpenAL Soft 1.23.1 through
+  pinned `Silk.NET.OpenAL.Soft.Native`, with its license/source notices. Require .NET 10 runtime and x64 Visual C++
+  2022 redistributable for users; bundled Whisper CPU files are not Windows ASR/OCR acceptance.
+- Run `scripts/windows/test-package-avalonia.ps1` and `scripts/windows/publish-avalonia.ps1`, including archive
+  verification. Reject foreign native payloads, models, runtime config/logs and reparse points.
+- A Windows Avalonia CI artifact is distinct from a public release and native GUI acceptance. Preserve the single
+  shared Views/ViewModels/Themes tree and portable engine target for both OSes.
 
 ## Preserve Windows Flow
 

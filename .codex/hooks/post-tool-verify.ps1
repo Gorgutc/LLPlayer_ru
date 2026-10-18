@@ -34,6 +34,8 @@ $patterns = @(
     '^\.github/workflows/',
     '^docs/agent/',
     '^scripts/codex/',
+    '^scripts/windows/',
+    '^scripts/linux/',
     '^dub_sidecar/',
     '^Plugins/llplayer-codex/',
     '^Plugins/YoutubeDL/',

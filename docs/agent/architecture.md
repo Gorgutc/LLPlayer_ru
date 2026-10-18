@@ -1,8 +1,8 @@
 # Architecture
 
 LLPlayer is a desktop media player for language learning. The shipped product is the Windows WPF app. F-13 adds
-Avalonia and shared Core services, currently packaged for Linux, with the same Avalonia UI on native Windows and
-Linux as the owner-confirmed target. The next bounded native Windows baseline may precede full Linux parity;
+Avalonia and shared Core services, with the same UI packaged for native Windows and Linux. The Windows software
+playback build/package baseline is implemented; full parity and native desktop acceptance remain separate.
 WPF remains supported until explicit acceptance. See the [2026-10-18 status](f13-status-2026-10-18.md).
 
 ## Fork Relationship (T-06)
@@ -23,8 +23,8 @@ The human-facing version of this note lives in the top-level `README.md` ("About
 - `LLPlayer/`: WPF app, Prism/DryIoc composition root, views, view models, controls, settings, dialogs, app config, and actions.
 - `LLPlayer.Core/`: shared multi-target app library. Bounded shared services currently include the Whisper model catalog, recognition/translation settings, recognition actions, word-click snapshots, the word library, and Anki/APKG exporters. Full app-config/action/service extraction remains incremental.
 - `FlyleafLib/`: media engine, FFmpeg integration, DirectX/Vortice rendering, audio, video, subtitles, ASR, OCR, translation, playlists, and plugin interfaces. Targets `net10.0-windows10.0.18362.0` and portable `net10.0`.
-- `LLPlayer.Avalonia/`: Linux desktop app (Avalonia 12.1.3, FluentTheme + own shadcn-token theme, CommunityToolkit.Mvvm) on FlyleafLib `net10.0`.
-- `LLPlayer.Avalonia.Tests/`: Avalonia.Headless.XUnit tests for the Linux app.
+- `LLPlayer.Avalonia/`: shared Windows/Linux desktop app (Avalonia 12.1.3, FluentTheme + own shadcn-token theme, CommunityToolkit.Mvvm) on FlyleafLib `net10.0`.
+- `LLPlayer.Avalonia.Tests/`: shared Avalonia.Headless.XUnit tests plus explicitly opted-in native/media checks.
 - `Plugins/YoutubeDL/`: runtime plugin that integrates `yt-dlp.exe` for online video.
 - `WpfColorFontDialog/`: WPF color/font dialog support.
 - `FlyleafLibTests/`: xUnit tests.
@@ -46,13 +46,13 @@ Detailed frozen boundaries live in:
 - `docs/agent/media-runtime-contract.md`
 - `docs/agent/config-data-contract.md`
 
-## Linux Port (F-13)
+## Shared Avalonia Host (F-13)
 
 WPF product behavior, the `net10.0-windows10.0.18362.0` target, and the Windows release flow remain compatibility
 requirements. The October import extracts formerly WPF-owned services and serialization into `LLPlayer.Core` and
 updates project references; shared source is not unchanged. F-13 also adds conditional platform boundaries,
 portable implementations, and bounded shared-code fixes. Keeping WPF shippable requires fresh verification.
-Linux uses:
+Windows and Linux Avalonia use:
 
 - **Portable FlyleafLib target (`net10.0`).** The D3D11 renderer, SwapChain, WPF controls/themes, MediaFoundation,
   XAudio2, native Windows methods and the Windows OCR are excluded from this target; replacements live in
@@ -72,14 +72,18 @@ Linux uses:
     `CollectionViewSource.RefreshHandler`, `SubtitlesOCR.ServiceFactory` — WPF-free hooks for modifier keys,
     collection sync, filtered views, and OCR engines.
   - Small WPF stand-ins (`Point`, `Thickness`, the `Key` enum with WPF values) keep shared engine code unchanged.
-- **`LLPlayer.Avalonia`** — the Linux app today: implements the seams above, locates FFmpeg (`--ffmpeg-dir`,
+- **`LLPlayer.Avalonia`** — one app for both OSes: implements the seams above, locates FFmpeg (`--ffmpeg-dir`,
   `LLPLAYER_FFMPEG_DIR`, else `<app>/FFmpeg`; Linux sonames or the Windows `*.dll` names by OS) and stores
   preferences per OS (`AppPaths`: XDG `~/.config/LLPlayer` + `~/.local/state/LLPlayer` on Linux,
   `%APPDATA%\LLPlayer` + `%LOCALAPPDATA%\LLPlayer` on Windows; `LLPLAYER_CONFIG_DIR` overrides the config folder).
-  It must stay platform-neutral: no Linux-only assumptions in app code. Known Windows gaps, left for the
-  "Avalonia on Windows" stage: `RuntimeIdentifiers` is `linux-x64` only, `publish.sh` builds only the Linux package,
-  the software (CPU BGRA) renderer is the only video path, and OpenAL Soft is not bundled on Windows.
-- **Tooling** — `scripts/linux/` (fetch FFmpeg, test media, verify, publish) and `.github/workflows/build-linux.yml`.
+  `RuntimeIdentifiers` selects `win-x64` or `linux-x64`; both retain the portable `net10.0` engine, shared Views,
+  ViewModels and Themes. OS-specific differences belong in native loading, filesystem and host adapters.
+  The Windows package uses the existing tracked FFmpeg DLLs and app-local OpenAL Soft 1.23.1, selected explicitly
+  from `Silk.NET.OpenAL.Soft.Native`. Linux keeps its existing system OpenAL and separately fetched FFmpeg libraries.
+  Software (CPU BGRA) video is the current shared path; GPU and Windows ASR/OCR acceptance remain separate.
+- **Tooling** — `scripts/linux/` and `.github/workflows/build-linux.yml`; additive
+  `scripts/windows/verify-avalonia.ps1`, package-contract checks and `publish-avalonia.ps1`, run by the separate
+  Windows Avalonia job in `.github/workflows/build.yml`. WPF verification and release packaging remain required.
 
 ### Current vs Target ("one core + one UI", owner decision 2026-09-24)
 
@@ -90,6 +94,7 @@ Recognition Advanced slices implemented; their Linux receipts are historical thr
 Windows:  LLPlayer (WPF, Prism) ──────────────> FlyleafLib net10.0-windows10.0.18362.0 (D3D11, XAudio2) ─> FFmpeg *.dll
           └─> LLPlayer.Core (shared model catalog and Anki/APKG exporters) ─> FlyleafLib shared types
 Linux:    LLPlayer.Avalonia (Avalonia 12) ────> FlyleafLib net10.0 (software renderer, OpenAL) ────────> FFmpeg *.so
+Windows:  LLPlayer.Avalonia (same UI) ────────> FlyleafLib net10.0 (software renderer, OpenAL) ────────> FFmpeg *.dll
           └─> LLPlayer.Core (recognition/translation settings, word library/click snapshot, exporters + model catalog)
           (other app logic remains in the UI projects and moves only in later bounded slices)
 ```
@@ -105,25 +110,28 @@ Windows + Linux:  LLPlayer.Avalonia (single UI) ─> LLPlayer.Core (config, acti
 Staged roadmap (backlog F-13; WPF remains shippable until explicit replacement acceptance):
 
 **Priority update (direct owner direction, 2026-10-18):** deliver the same Avalonia UI and shared Core on native
-Windows and Linux. A bounded native Windows Avalonia baseline may proceed before full Linux parity. This supersedes
+Windows and Linux. The bounded native Windows Avalonia build/package baseline now implements this direction
+without waiting for full Linux parity. This supersedes
 the 2026-10-03 Linux-first deferral for future work; dated plans and receipts retain their original scope.
 
 1. Reconcile the imported October source with fresh Windows WPF and Linux gates; record exact-head results separately
    from October receipts. Keep both platform CI jobs.
-2. Establish a native Windows Avalonia playback baseline using FlyleafLib's portable `net10.0` target and the same
-   Avalonia views/Core as Linux. Resolve Windows RID selection, FFmpeg/native audio dependencies, apphost/package
-   contents, config/log paths, and startup failures. Software video is an acceptable first baseline, not GPU acceptance.
+2. The native Windows Avalonia build/package baseline uses FlyleafLib's portable `net10.0` target and the same
+   Avalonia views/Core as Linux, with explicit RID/native payload selection and separate ZIP packaging. Fresh
+   verification and native desktop results belong in the current status receipt; source implementation alone
+   does not prove playback acceptance. Software video is the baseline, not GPU acceptance.
 3. Verify Windows ASR/OCR dependencies and behavior in separate bounded slices. Existing Linux Whisper/Tesseract
    receipts do not establish Windows portable-runtime support.
 4. Continue shared Core extraction and remaining feature parity. The catalog, recognition/translation settings and
    actions, word library/snapshots, and Anki/APKG exporters already exist; full app-config, service and view-model
    migration, fuller settings, faster-whisper/batch, plugins and dubbing remain open.
-5. Add GPU decode/render paths as separately measured and reviewed work. Linux software playback and a proposed
+5. Add GPU decode/render paths as separately measured and reviewed work. Linux software playback and the
    Windows software baseline do not establish VAAPI, OpenGL, or Windows GPU behavior.
 6. Obtain native desktop acceptance on both operating systems for the relevant feature set, including playback,
    audio, subtitles, settings/data preservation, and shutdown. WSL/Linux verification is useful additional evidence;
    it does not substitute for native Windows Avalonia runtime acceptance.
 7. Retire the WPF app only after replacement acceptance and the owner's explicit decision.
 
-This is the next-slice proposal and current priority, not evidence that the Windows baseline is implemented.
-One repository and feature branch (no Linux fork); CI for both platforms on every PR (`build.yml` + `build-linux.yml`).
+Future UI changes use this one Views/ViewModels/Themes tree and shared Core; do not create separate Windows/Linux
+UI copies. One repository and feature branch, with WPF compatibility, Windows Avalonia and Linux CI on every PR
+(`build.yml` + `build-linux.yml`). Full F-13 parity and WPF retirement remain open.

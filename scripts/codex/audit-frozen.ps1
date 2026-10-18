@@ -194,6 +194,30 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
         }
+        # Shared source and tests must pass both Avalonia platforms as well as the protected WPF gate.
+        # Keep the engine/test route cumulative: a Windows-only test target is not portable engine proof.
+        if ($normalized -match '(?i)^(LLPlayer\.Core/|LLPlayer\.Avalonia(\.Tests)?/|FlyleafLib/.*\.(cs|csproj)$|FlyleafLibTests/)') {
+            $gates.Add("verify")
+            $gates.Add("linux verify")
+            $gates.Add("windows avalonia verify")
+        }
+        if ($normalized -match '^(scripts/windows/|\.github/workflows/build\.yml$)') {
+            $contracts.Add("dependency-baseline.md")
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("codex_infra_architect")
+            $agents.Add("instruction_drift_auditor")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("native_dependency_auditor")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+            $gates.Add("linux verify")
+            $gates.Add("windows avalonia verify")
+        }
+        if ($normalized -match '(?i)^FFmpeg/.*\.dll$') {
+            $gates.Add("windows avalonia verify")
+        }
         # Shared Core behavior affects both desktop front-ends; domain routes add to extension floors below.
         if ($normalized -match '^LLPlayer\.Core/') {
             $contracts.Add("media-runtime-contract.md")
@@ -221,6 +245,7 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
             $gates.Add("linux verify")
+            $gates.Add("windows avalonia verify")
             $gates.Add("playback smoke")
         }
         if ($normalized -match '^LLPlayer\.Avalonia(\.Tests)?/') {

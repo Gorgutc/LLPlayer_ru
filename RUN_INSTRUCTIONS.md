@@ -1,7 +1,10 @@
 # Run Instructions
 
-The Windows product is the WPF app `LLPlayer` targeting `.NET 10` and `win-x64`. The Linux build (F-13, in progress)
-is the Avalonia app `LLPlayer.Avalonia` targeting `net10.0` and `linux-x64`; see [Linux](#linux) below.
+The supported Windows WPF product is `LLPlayer` targeting `.NET 10` and `win-x64`. F-13 adds the shared Avalonia
+app `LLPlayer.Avalonia`, targeting portable `net10.0` for both `win-x64` and `linux-x64`. One set of Views, ViewModels,
+Themes and shared Core serves both OSes; use the matching commands below. WPF remains supported until explicit
+replacement acceptance. Native desktop/model results are recorded separately in
+[current F-13 status](docs/agent/f13-status-2026-10-18.md).
 
 ## Baseline
 
@@ -23,6 +26,31 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\ship.ps1
 `ship.ps1` performs a publish smoke into a temporary directory. Release packaging remains defined by `.github/actions/build-package/action.yml`.
 
 Before final handoff, run spawned `/review` with at least `verification_reviewer`. If no subagent spawn tool is available, report that and do not claim `/review` has been satisfied.
+
+## Windows Avalonia
+
+Use the .NET 10 SDK to build. The framework-dependent package needs the .NET 10 runtime and Microsoft Visual C++
+x64 Redistributable 2022 or newer. WSL is not needed to run the native Windows app.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1
+```
+
+Extract `artifacts/windows-avalonia/LLPlayer-Avalonia-<version>-win-x64.zip` and launch `LLPlayer.Avalonia.exe` from
+the extracted folder, preserving `FFmpeg/` and native dependencies. The existing `LLPlayer.exe` is the WPF app.
+The Avalonia ZIP carries app-local OpenAL Soft 1.23.1 and the existing tracked FFmpeg DLLs; Windows ASR/OCR and
+GPU acceptance remain separate. The verification script provisions a pinned, SHA-256-verified test FFmpeg CLI
+when `LLPLAYER_FFMPEG_CLI` is unset; it is never shipped. For development:
+
+```powershell
+dotnet build LLPlayer.Avalonia -warnaserror
+dotnet LLPlayer.Avalonia/bin/Debug/net10.0/LLPlayer.Avalonia.dll --ffmpeg-dir ./FFmpeg video.mp4
+```
+
+Shared UI/Core/portable changes require both Windows Avalonia and Linux gates, plus WPF compatibility checks.
+The separate Windows Avalonia job in `build.yml` verifies and uploads its package; Linux uses `build-linux.yml`.
 
 ## Linux
 

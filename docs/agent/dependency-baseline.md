@@ -9,7 +9,7 @@ This document freezes current dependency decisions from `main`.
 - `WpfColorFontDialog`: `net10.0-windows10.0.18362.0`, WPF.
 - `Plugins/YoutubeDL`: `net10.0-windows10.0.18362.0`, `win-x64`.
 - `FlyleafLibTests`: xUnit test project targeting `net10.0-windows10.0.18362.0` (on Linux build hosts it also builds and runs `net10.0`).
-- `LLPlayer.Avalonia` (F-13): `net10.0`, `linux-x64`, framework-dependent Avalonia app. `LLPlayer.Avalonia.Tests`: `net10.0`.
+- `LLPlayer.Avalonia` (F-13): `net10.0`, `win-x64;linux-x64`, framework-dependent shared Avalonia app over the portable engine on both OSes. `LLPlayer.Avalonia.Tests`: `net10.0`.
 
 ## NuGet Baseline
 
@@ -46,6 +46,7 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `LLPlayer` | `Whisper.net.Runtime.Vulkan` | `1.9.0` |
 | `LLPlayer.Core` | `Microsoft.Data.Sqlite` | `9.0.17` |
 | `LLPlayer.Core` | `SQLitePCLRaw.bundle_e_sqlite3` | `3.0.3` |
+| `LLPlayer.Avalonia` (Windows native payload only) | `Silk.NET.OpenAL.Soft.Native` | `1.23.1` |
 | `FlyleafLibTests` | `AwesomeAssertions` | `9.4.0` |
 | `FlyleafLibTests` | `Microsoft.NET.Test.Sdk` | `18.4.0` |
 | `FlyleafLibTests` | `xunit.v3` | `3.2.2` |
@@ -66,6 +67,21 @@ License attribution is mixed: `Microsoft.Data.Sqlite.Core` is MIT (Microsoft); S
 Historically `FlyleafLib` referenced `7.1.1` while `LLPlayer` referenced `8.0.1`. That was a benign-but-confusing mismatch: with no central package management, NuGet unified the conflicting references **up** to `8.0.1` for the app output, so the actually-shipped managed binding already matched the 8.0 native DLLs; the heavy FFmpeg interop lives in `FlyleafLib`, while `LLPlayer` only consumes managed `LoadProfile`/`LogLevel` enums (no P/Invoke). Task T-01 aligned `FlyleafLib` **up** to `8.0.1` so the compile-time reference matches the runtime-unified binding and the shipped DLLs (verified: `FlyleafLib` + `LLPlayer` build `-warnaserror` 0/0 against `8.0.1`). Down-aligning to `7.1.1` was rejected: it would have forced the unified runtime binding **down** to `7.1.1` against the 8.0 DLLs, replacing a correct pairing with a real mismatch.
 
 Any future change to FFmpeg binding versions (or the tracked `FFmpeg/` DLLs) requires explicit review and playback/package verification.
+
+## Windows Avalonia OpenAL Soft (F-13)
+
+The additive Windows Avalonia software-playback baseline pins `Silk.NET.OpenAL.Soft.Native` **1.23.1**. The project
+excludes automatic assets and copies only `runtimes/win-x64/native/soft_oal.dll` to the application root; it adds no
+managed Silk binding and no foreign-platform OpenAL payload. The portable engine loads this app-local DLL on
+Windows. Linux continues to use system `libopenal.so.1`/`libopenal1`.
+
+OpenAL Soft is LGPL-2.0-or-later with BSD-3-Clause portions, not MIT. The Windows package carries upstream legal
+texts pinned to source commit `d3875f333fb6abe2f39d82caca329414871ae53b`, source attribution and the exact shipped
+DLL hash in `native-dependencies.json`. The separate DLL remains replaceable. Its Windows native prerequisite is
+the **Microsoft Visual C++ x64 Redistributable 2022 or newer** (`MSVCP140`, `VCRUNTIME140`, `VCRUNTIME140_1`), in
+addition to the app's .NET 10 runtime. Native packaging/loading tests and real audio/desktop acceptance are
+separate evidence; neither establishes Windows ASR/OCR or GPU support. This baseline does not change existing
+FFmpeg/native versions or establish a public-release corresponding-source offer.
 
 ## Tracked Native Assets
 

@@ -4,8 +4,8 @@ sandbox_mode = "read-only"
 
 developer_instructions = """
 Review Codex plugin, marketplace, skills, hooks, and verification script architecture.
-Keep infrastructure repo-local and separate from product code. Preserve the Windows PowerShell/.NET gates for WPF; shared/portable/Avalonia and Linux runtime changes also require scripts/linux/verify.sh.
+Keep infrastructure repo-local and separate from product code. Preserve the Windows PowerShell/.NET gates for WPF; shared/portable/Avalonia changes also require scripts/windows/verify-avalonia.ps1 and scripts/linux/verify.sh.
 Account for the uppercase Plugins directory across operating systems.
-F-13 currently adds a Linux Avalonia host, shared Core, and portable net10.0 engine. The same Avalonia UI on native Windows and Linux is the target; the Windows Avalonia baseline remains proposed, not implemented or accepted.
+F-13 adds one shared Windows/Linux Avalonia UI and Core over the portable net10.0 engine. The Windows build/package baseline is implemented; native desktop acceptance is separate. Keep one Views/ViewModels/Themes tree, and treat Windows ASR/OCR and GPU as separately evidenced work. Preserve WPF until replacement acceptance and an owner retirement decision.
 Return structural gaps and concrete paths.
 """
