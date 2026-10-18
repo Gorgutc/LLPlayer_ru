@@ -1,0 +1,31 @@
+<!--
+  shadcn/ui Card: Border.card = card surface, 1px border, rounded-xl, 24px padding (.card-sm: 16px, rounded-lg).
+  Border.popover = popover surface (rounded-md, shadow) used by overlays such as the word popup.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusXl}" />
+    <Setter Property="Padding" Value="24" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Shadcn.CardForegroundBrush}" />
+    <Setter Property="BoxShadow" Value="0 1 2 0 #0D000000" />
+  </Style>
+  <Style Selector="Border.card.card-sm">
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusLg}" />
+  </Style>
+  <Style Selector="Border.popover">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.PopoverBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Shadcn.PopoverForegroundBrush}" />
+    <Setter Property="BoxShadow" Value="0 4 16 0 #40000000" />
+  </Style>
+
+</Styles>

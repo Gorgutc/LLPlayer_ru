@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlyleafLib\FlyleafLib.csproj" />
+    <ProjectReference Include="..\LLPlayer.Core\LLPlayer.Core.csproj" />
     <ProjectReference Include="..\WpfColorFontDialog\WpfColorFontDialog.csproj" />
   </ItemGroup>
 

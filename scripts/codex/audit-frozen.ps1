@@ -194,6 +194,54 @@ try {
             $agents.Add("verification_reviewer")
             $gates.Add("verify")
         }
+        # Shared Core behavior affects both desktop front-ends; domain routes add to extension floors below.
+        if ($normalized -match '^LLPlayer\.Core/') {
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+            $gates.Add("linux verify")
+        }
+        if ($normalized -match '^LLPlayer\.Core/(Services/(RecognitionSettings|TranslationSettings|WordLibrary)\.cs$|Serialization/)') {
+            $contracts.Add("config-data-contract.md")
+            $agents.Add("instruction_drift_auditor")
+            $gates.Add("settings persistence smoke")
+        }
+        if ($normalized -match '^LLPlayer\.Core/Services/AnkiApkgWriter\.cs$') {
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("native_dependency_auditor")
+            $agents.Add("packaging_release_reviewer")
+        }
+        # F-13 Linux port: portable engine seams, the Avalonia app, and the Linux build/package tooling.
+        if ($normalized -match '^FlyleafLib/Platform/') {
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+            $gates.Add("linux verify")
+            $gates.Add("playback smoke")
+        }
+        if ($normalized -match '^LLPlayer\.Avalonia(\.Tests)?/') {
+            $contracts.Add("product-behavior-contract.md")
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("media_runtime_mapper")
+            $agents.Add("verification_reviewer")
+            $gates.Add("linux verify")
+            $gates.Add("manual Linux smoke")
+            if ($normalized -match '(?i)\.axaml$') {
+                $agents.Add("wpf_xaml_reviewer")
+            }
+        }
+        if ($normalized -match '^(scripts/linux/|\.github/workflows/build-linux\.yml$)') {
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("native_dependency_auditor")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("linux verify")
+        }
         if ($normalized -match '^FlyleafLibTests/') {
             $contracts.Add("test coverage")
             $agents.Add("dotnet_quality_guardian")
@@ -202,7 +250,7 @@ try {
         }
 
         # T-13c routing floors are cumulative with the narrower domain rules above. Exact extensions keep
-        # future C#/XAML/project files from silently falling through to the infrastructure-only fast gate.
+        # future C#/XAML/AXAML/project files from silently falling through to the infrastructure-only fast gate.
         if ($normalized -match '(?i)\.cs$') {
             $contracts.Add("check relevant frozen contract")
             $agents.Add("dotnet_quality_guardian")
@@ -213,9 +261,19 @@ try {
                 $contracts.Add("wpf-design-contract.md")
                 $agents.Add("wpf_xaml_reviewer")
             }
+            if ($normalized -match '(?i)\.axaml\.cs$') {
+                $contracts.Add("product-behavior-contract.md")
+                $agents.Add("wpf_xaml_reviewer")
+            }
         }
         if ($normalized -match '(?i)\.xaml$') {
             $contracts.Add("wpf-design-contract.md")
+            $agents.Add("wpf_xaml_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+        }
+        if ($normalized -match '(?i)\.axaml$') {
+            $contracts.Add("product-behavior-contract.md")
             $agents.Add("wpf_xaml_reviewer")
             $agents.Add("verification_reviewer")
             $gates.Add("verify")

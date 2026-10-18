@@ -1,5 +1,7 @@
-﻿using System.Drawing.Imaging;
+﻿#if WINDOWS
+using System.Drawing.Imaging;
 using System.Windows;
+#endif
 
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
@@ -59,6 +61,7 @@ unsafe partial class Player
 */
         Seek((int)(chapter.StartTime / 10000.0), true);
 
+#if WINDOWS
     public void CopyToClipboard()
     {
         var url = Playlist.Url;
@@ -123,6 +126,7 @@ unsafe partial class Player
         Activity.IsEnabled = true;
         IsOpenFileDialogOpen = false;
     }
+#endif
 
     public void ShowFrame(int frameIndex)
     {
@@ -321,6 +325,7 @@ unsafe partial class Player
             StartRecording();
     }
 
+#if WINDOWS
     /// <summary>
     /// <para>Saves the current video frame (encoding based on file extention .bmp, .png, .jpg)</para>
     /// <para>If filename not specified will use Config.Player.FolderSnapshots and with default filename title_frameNumber.ext (ext from Config.Player.SnapshotFormat)</para>
@@ -393,6 +398,7 @@ unsafe partial class Player
     /// <param name="height">Specify the height (0: will keep the ratio based on width)</param>
     /// <returns></returns>
     public System.Windows.Media.Imaging.BitmapSource TakeSnapshotToBitmapSource(uint width = 0, uint height = 0) => Renderer?.TakeSnapshotBitmapSource(width, height);
+#endif
 
     public void ResetAll()
     {

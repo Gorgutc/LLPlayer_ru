@@ -18,7 +18,9 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
+#if WINDOWS
 using Vortice.DXGI;
+#endif
 
 namespace FlyleafLib;
 
@@ -125,12 +127,14 @@ public enum UIRefreshType
     PerUISecond
 }
 
+#if WINDOWS
 public enum SwapChainFormat : uint
 {
     BGRA        = Vortice.DXGI.Format.B8G8R8A8_UNorm,
     RGBA        = Vortice.DXGI.Format.R8G8B8A8_UNorm,
     RGBA10bit   = Vortice.DXGI.Format.R10G10B10A2_UNorm
 }
+#endif
 
 public enum FLFilters
 {
@@ -140,6 +144,7 @@ public enum FLFilters
     Saturation
 }
 
+#if WINDOWS
 public class GPUOutput
 {
     public nint             Hwnd            { get; internal set; }
@@ -180,6 +185,7 @@ public class GPUAdapter
     public override string  ToString()
         => (Vendor + " " + Description).PadRight(40) + $"[ID: {Id,-6}, LUID: {Luid,-6}, DVM: {GetBytesReadable(VideoMemory),-8}, DSM: {GetBytesReadable(SystemMemory),-8}, SSM: {GetBytesReadable(SharedMemory)}]";
 }
+#endif
 
 public enum GPUVendor : uint
 {

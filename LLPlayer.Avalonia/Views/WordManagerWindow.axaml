@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:ai="using:FlyleafLib.MediaPlayer.AI"
+        x:Class="LLPlayer.Avalonia.Views.WordManagerWindow" x:DataType="vm:WordManagerViewModel"
+        SizeToContent="Manual" CanResize="True" Classes="dialog" Title="Word Manager — LLPlayer" Width="780" Height="680" MinWidth="440" MinHeight="400">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Text="Word Manager" Classes="dialog-title" />
+      <TextBox PlaceholderText="Filter term, reading, translation, definition or example…" Text="{Binding Filter}" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+      <TextBox PlaceholderText="Anki deck (this session)" Text="{Binding Deck}" IsEnabled="{Binding !Busy}" />
+      <WrapPanel>
+        <Button Content="Export TSV…" Classes="outline" Command="{Binding ExportTsvCommand}" IsEnabled="{Binding !Busy}" Margin="0,0,6,6" />
+        <Button Content="Export APKG…" Classes="outline" Command="{Binding ExportApkgCommand}" IsEnabled="{Binding !Busy}" Margin="0,0,6,6" />
+        <Button Content="Send to Anki" Classes="outline" Command="{Binding SendAnkiCommand}" IsEnabled="{Binding !Busy}" Margin="0,0,6,6" />
+        <Button Content="Cancel operation" Classes="outline" Command="{Binding CancelCommand}" IsVisible="{Binding Busy}" Margin="0,0,6,6" />
+        <Button Content="Clear all words" Classes="outline" Command="{Binding ClearCommand}" Margin="0,0,6,6" />
+        <Button Content="Close" Classes="outline" Click="OnClose" Margin="0,0,6,6" />
+      </WrapPanel>
+    </StackPanel>
+    <Grid ColumnDefinitions="2*,3*" ColumnSpacing="12">
+      <ListBox ItemsSource="{Binding Words}" SelectedItem="{Binding Selected}">
+        <ListBox.ItemTemplate><DataTemplate x:DataType="ai:SavedWord">
+          <StackPanel Spacing="3"><TextBlock Text="{Binding Term}" FontWeight="SemiBold" TextWrapping="Wrap" /><TextBlock Text="{Binding Translation}" Classes="small muted" TextWrapping="Wrap" /></StackPanel>
+        </DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+      <ScrollViewer Grid.Column="1"><StackPanel Spacing="8" IsEnabled="{Binding HasSelection}">
+        <TextBlock Text="Term" /><TextBox Text="{Binding Term}" IsReadOnly="True" />
+        <TextBlock Text="Reading" /><TextBox Name="ReadingEditor" Text="{Binding Reading}" />
+        <TextBlock Text="Translation" /><TextBox Text="{Binding Translation}" AcceptsReturn="True" TextWrapping="Wrap" />
+        <TextBlock Text="Definition" /><TextBox Text="{Binding Definition}" AcceptsReturn="True" TextWrapping="Wrap" />
+        <TextBlock Text="Example" /><TextBox Text="{Binding Example}" AcceptsReturn="True" TextWrapping="Wrap" />
+        <TextBlock Text="Edits are saved immediately." Classes="small muted" />
+        <Button Content="Delete selected word" Classes="outline" Command="{Binding DeleteCommand}" />
+      </StackPanel></ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>

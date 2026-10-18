@@ -2,12 +2,14 @@
 
 namespace FlyleafLib.MediaFramework.MediaPlaylist;
 
-public class PLSPlaylist
+public partial class PLSPlaylist
 {
+#if WINDOWS
     [DllImport("kernel32")]
     private static extern long WritePrivateProfileString(string name, string key, string val, string filePath);
     [DllImport("kernel32")]
     private static extern int GetPrivateProfileString(string section, string key, string def, StringBuilder retVal, int size, string filePath);
+#endif
 
     public string path;
 
@@ -39,12 +41,14 @@ public class PLSPlaylist
         return items;
     }
 
+#if WINDOWS
     public static string GetINIAttribute(string name, string key, string path)
     {
         StringBuilder sb = new(255);
         return GetPrivateProfileString(name, key, "", sb, 255, path) > 0
             ? sb.ToString() : null;
     }
+#endif
 }
 
 public class PLSPlaylistItem

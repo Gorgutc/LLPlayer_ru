@@ -1,0 +1,52 @@
+<!--
+  Toast (own control, LLPlayer.Avalonia.Controls.Toast): popover surface, 1px border, rounded-lg, shadow, title
+  (text-sm medium) + muted message, ghost close button; :success / :destructive add a coloured leading bar.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:LLPlayer.Avalonia.Controls">
+
+  <ControlTheme x:Key="{x:Type controls:Toast}" TargetType="controls:Toast">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.PopoverBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource Shadcn.PopoverForegroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusLg}" />
+    <Setter Property="Padding" Value="14,10,6,10" />
+    <Setter Property="MinWidth" Value="280" />
+    <Setter Property="MaxWidth" Value="420" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                BoxShadow="0 8 24 0 #40000000"
+                ClipToBounds="True">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <Border Name="PART_Accent" Width="3" Background="Transparent" />
+            <StackPanel Grid.Column="1" Margin="{TemplateBinding Padding}" Spacing="2" VerticalAlignment="Center">
+              <TextBlock Text="{TemplateBinding Title}" FontSize="{DynamicResource Shadcn.TextSm}" FontWeight="Medium"
+                         TextWrapping="Wrap" />
+              <TextBlock Text="{TemplateBinding Message}" FontSize="{DynamicResource Shadcn.TextXs}"
+                         Foreground="{DynamicResource Shadcn.MutedForegroundBrush}" TextWrapping="Wrap"
+                         IsVisible="{TemplateBinding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+            <Button Grid.Column="2" Classes="ghost icon-sm" Margin="0,6,6,0" VerticalAlignment="Top"
+                    Command="{TemplateBinding CloseCommand}" CommandParameter="{TemplateBinding CloseCommandParameter}"
+                    ToolTip.Tip="Dismiss">
+              <controls:LucideIcon Data="{DynamicResource Icon.X}" Size="14" />
+            </Button>
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:success /template/ Border#PART_Accent">
+      <Setter Property="Background" Value="#FF22C55E" />
+    </Style>
+    <Style Selector="^:destructive /template/ Border#PART_Accent">
+      <Setter Property="Background" Value="{DynamicResource Shadcn.DestructiveBrush}" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

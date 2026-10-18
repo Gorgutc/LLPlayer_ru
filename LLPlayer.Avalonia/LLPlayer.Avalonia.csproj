@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- F-13 Linux desktop app: Avalonia 12 host over FlyleafLib's portable net10.0 TFM.
+       The Windows product stays the WPF app in ../LLPlayer (untouched). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>LLPlayer.Avalonia</RootNamespace>
+    <AssemblyName>LLPlayer.Avalonia</AssemblyName>
+    <!-- Keep equal to ../LLPlayer/LLPlayer.csproj <Version> (checked by LLPlayer.Avalonia.Tests). -->
+    <Version>0.3.62</Version>
+    <Product>LLPlayer</Product>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Source + output of Themes/tools/oklch_to_hex.py; the token test reads it next to the test assembly. -->
+    <None Include="Themes\tools\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets/llplayer.png" />
+    <None Include="../LLPlayer/Assets/silero_vad.onnx" Link="Assets/silero_vad.onnx"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- Avalonia's transitive build-telemetry task (network call on every build): opted out for this repo. -->
+    <PackageReference Include="Avalonia.BuildServices" Version="11.3.2" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FlyleafLib\FlyleafLib.csproj" />
+    <ProjectReference Include="..\LLPlayer.Core\LLPlayer.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The package's build targets copy foreign native payloads for a portable TFM. Select only the four
+       pinned Linux CPU libraries, retaining the layout Whisper.net's loader expects. -->
+  <ItemGroup>
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.0" ExcludeAssets="build" GeneratePathProperty="true" />
+    <None Include="$(PkgWhisper_net_Runtime)/build/linux-x64/libwhisper.so;
+                   $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-whisper.so;
+                   $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-base-whisper.so;
+                   $(PkgWhisper_net_Runtime)/build/linux-x64/libggml-cpu-whisper.so"
+          TargetPath="runtimes/linux-x64/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LLPlayer.Avalonia.Tests" />
+  </ItemGroup>
+
+</Project>

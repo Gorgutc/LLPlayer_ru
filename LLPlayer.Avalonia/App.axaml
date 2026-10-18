@@ -1,0 +1,12 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LLPlayer.Avalonia.App"
+             Name="LLPlayer"
+             RequestedThemeVariant="Dark">
+
+  <!-- Built-in FluentTheme + "LLPlayer shadcn" tokens/styles (Themes/ShadcnTheme.axaml includes FluentTheme). -->
+  <Application.Styles>
+    <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/ShadcnTheme.axaml" />
+  </Application.Styles>
+
+</Application>

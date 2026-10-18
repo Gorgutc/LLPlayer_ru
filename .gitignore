@@ -359,6 +359,8 @@ LLPlayer.Config.json
 LLPlayer.Engine.json
 LLPlayer.PlayerConfig.json
 LLPlayer.WordList.json
+LLPlayer.WordList.json.*
+.LLPlayer.WordList.json.*.tmp
 crash.log
 *.dmp
 *.dump
@@ -376,3 +378,26 @@ dubmodels/
 *.ru.dub.*
 # F-16: per-line dub voice assignment companion files (video.ru.voices.json) — user runtime data beside media.
 *.ru.voices.json
+
+# F-13 Linux build: FFmpeg shared libs are fetched by scripts/linux/fetch-ffmpeg.sh, never committed (~210 MB);
+# Linux packages come from scripts/linux/publish.sh (default output artifacts/linux/, ignored above).
+FFmpeg/linux-x64/
+*.so
+*.so.[0-9]*
+LLPlayer-*-linux-x64.tar.gz
+LLPlayer-*-linux-x64.tar.gz.sha256
+
+# Detached Avalonia host settings and atomic-save staging
+LLPlayer.Avalonia.json
+LLPlayer.Avalonia.json.*
+.LLPlayer.Avalonia.json.*.tmp
+
+# Detached Linux recognition settings and atomic-save staging
+LLPlayer.Recognition.json
+LLPlayer.Recognition.json.*
+.LLPlayer.Recognition.json.*.tmp
+
+# Detached translation preferences may contain credentials.
+LLPlayer.Translation.json
+LLPlayer.Translation.json.*
+.LLPlayer.Translation.json.*.tmp

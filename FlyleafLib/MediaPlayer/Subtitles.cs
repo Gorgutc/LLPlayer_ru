@@ -1,18 +1,22 @@
-﻿using FlyleafLib.MediaFramework.MediaContext;
+using FlyleafLib.MediaFramework.MediaContext;
 using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer.Dubbing;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Windows;
+#if WINDOWS
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+#endif
 
 namespace FlyleafLib.MediaPlayer;
 
-public class SubsBitmap
+public partial class SubsBitmap
 {
+#if WINDOWS
     public WriteableBitmap Source { get; set; }
+#endif
     // retain for recreating WritableBitmap when dpi change
     internal byte[] Data { get; set; }
     public int X { get; set; }
@@ -20,6 +24,7 @@ public class SubsBitmap
     public int Width { get; set; }
     public int Height { get; set; }
 
+#if WINDOWS
     internal static WriteableBitmap CreateWritableBitmap(byte[] data, int width, int height)
     {
         WriteableBitmap wb = new(
@@ -34,6 +39,7 @@ public class SubsBitmap
 
         return wb;
     }
+#endif
 }
 
 public class SubsBitmapPosition : NotifyPropertyChanged
@@ -734,8 +740,13 @@ public class Subtitle : NotifyPropertyChanged
         Data.BitmapPosition.Calculate();
     }
 
+    /// <summary>Exact attempt acknowledgement after ASR cancellation ownership has been installed.</summary>
+    public Task ASRStartup { get; private set; } = Task.CompletedTask;
+
     public void EnableASR()
     {
+        TaskCompletionSource startup = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ASRStartup = startup.Task;
         _enabledASR = true;
 
         var url = _player.AudioDecoder.Demuxer.Url;
@@ -750,7 +761,7 @@ public class Subtitle : NotifyPropertyChanged
 
                 using (_player.SubtitlesManager[_subIndex].StartLoading())
                 {
-                    isDone = _player.SubtitlesASR.Execute(_subIndex, url, streamIndex, type, curTime);
+                    isDone = _player.SubtitlesASR.Execute(_subIndex, url, streamIndex, type, curTime, () => startup.TrySetResult());
                 }
 
                 // F-16: restore persisted per-line voices onto the freshly transcribed cues too (same gated,
@@ -763,11 +774,13 @@ public class Subtitle : NotifyPropertyChanged
                     // re-enable spinner because it is running
                     _player.SubtitlesManager[_subIndex].StartLoading();
                 }
+                startup.TrySetResult();
             })
             .ContinueWith(t =>
             {
                 if (t.IsFaulted)
                 {
+                    startup.TrySetException(t.Exception!.Flatten().InnerExceptions);
                     if (_player.SubtitlesManager[_subIndex].Subs.Count == 0)
                     {
                         // reset if not single subtitles generated

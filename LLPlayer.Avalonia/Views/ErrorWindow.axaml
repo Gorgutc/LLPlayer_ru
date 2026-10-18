@@ -1,0 +1,31 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:LLPlayer.Avalonia.Controls"
+        x:Class="LLPlayer.Avalonia.Views.ErrorWindow"
+        Classes="dialog"
+        Title="LLPlayer"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="True"
+        MaxWidth="640">
+
+  <StackPanel Spacing="16" Width="560">
+    <Grid ColumnDefinitions="Auto,*">
+      <Border Width="40" Height="40" CornerRadius="20" Background="{DynamicResource Shadcn.MutedBrush}" VerticalAlignment="Top">
+        <c:LucideIcon Data="{StaticResource Icon.CircleAlert}" Size="22" Foreground="{DynamicResource Shadcn.DestructiveBrush}" />
+      </Border>
+      <StackPanel Grid.Column="1" Spacing="6" Margin="14,0,0,0">
+        <TextBlock Name="TitleText" Classes="dialog-title" TextWrapping="Wrap" />
+        <TextBlock Name="MessageText" Classes="dialog-description" />
+      </StackPanel>
+    </Grid>
+
+    <Border Classes="card card-sm" Padding="12">
+      <SelectableTextBlock Name="DetailsText" Classes="mono xs" TextWrapping="Wrap" FontSize="12" />
+    </Border>
+
+    <StackPanel Classes="dialog-footer">
+      <Button Name="CopyButton" Classes="outline" Content="Copy details" Click="OnCopyClick" />
+      <Button Name="CloseButton" Content="Close" Click="OnCloseClick" />
+    </StackPanel>
+  </StackPanel>
+</Window>

@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
+#if WINDOWS
 using System.Windows.Forms;
+#endif
 
 namespace FlyleafLib.MediaPlayer;
 
@@ -151,6 +153,7 @@ public class Activity : NotifyPropertyChanged
     #region Ensures we catch the mouse move even when the Cursor is hidden
     static bool isCursorHidden;
     static object cursorLocker = new();
+#if WINDOWS
     public class GlobalMouseHandler : IMessageFilter
     {
         public bool PreFilterMessage(ref Message m)
@@ -178,6 +181,7 @@ public class Activity : NotifyPropertyChanged
         GlobalMouseHandler gmh = new();
         Application.AddMessageFilter(gmh);
     }
+#endif
     #endregion
 }
 

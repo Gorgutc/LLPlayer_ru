@@ -1,0 +1,23 @@
+<!--
+  shadcn/ui Input on top of the Fluent TextBox template: h-9, rounded-md, border-input, dark:bg-input/30,
+  muted placeholder, ring-coloured border when focused (colours via the Fluent TextControl* keys in ShadcnTokens).
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="TextBox">
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Shadcn.ControlHeight}" />
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+    <Setter Property="SelectionBrush" Value="{DynamicResource Shadcn.RingBrush}" />
+    <Setter Property="SelectionForegroundBrush" Value="{DynamicResource Shadcn.ForegroundBrush}" />
+    <Setter Property="CaretBrush" Value="{DynamicResource Shadcn.ForegroundBrush}" />
+  </Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="TextBox:disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+
+</Styles>

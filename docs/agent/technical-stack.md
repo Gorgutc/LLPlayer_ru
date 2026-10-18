@@ -1,7 +1,7 @@
 # Technical Stack
 
 - Language: C# with nullable enabled where configured.
-- Runtime: `.NET 10`, Windows target `net10.0-windows10.0.18362.0`.
+- Runtime: `.NET 10`, Windows target `net10.0-windows10.0.18362.0` (FlyleafLib also builds portable `net10.0` for Linux).
 - UI: WPF, Prism.DryIoc, MaterialDesignThemes.
 - Media: FlyleafLib, FFmpeg bindings, DirectX/Vortice, MediaFoundation, XAudio2.
 - ASR/OCR: Whisper.net runtimes, faster-whisper integration, TesseractOCR, Microsoft OCR paths.
@@ -10,6 +10,56 @@
 - Packaging: GitHub Actions on `windows-latest`, .NET 10 SDK, publish profiles, 7-Zip archive.
 
 No Node/web stack is part of the baseline.
+
+## Linux (F-13)
+
+- Runtime/UI: FlyleafLib portable `net10.0` target + `LLPlayer.Avalonia` (Avalonia 12.1.3, built-in FluentTheme,
+  Avalonia.Fonts.Inter, own theme from shadcn/ui design tokens, CommunityToolkit.Mvvm 8.4.2); `linux-x64`,
+  framework-dependent.
+- Media: FFmpeg 8.1 shared libraries (BtbN `gpl-shared` build, fetched and sha256-verified by
+  `scripts/linux/fetch-ffmpeg.sh`), software `sws_scale` → BGRA video path, OpenAL Soft (`libopenal.so.1`) audio.
+- Tests: `FlyleafLibTests` portable target and `LLPlayer.Avalonia.Tests` (Avalonia.Headless.XUnit 12.1.3);
+  FFmpeg/media integration tests are gated on `LLPLAYER_FFMPEG_DIR` / `LLPLAYER_TEST_MEDIA` and skip without them.
+- CI: `.github/workflows/build-linux.yml` on `ubuntu-24.04`.
+
+Linux toolchain notes:
+
+- **SDK:** on Ubuntu 24.04, `sudo apt install dotnet-sdk-10.0` installs the Ubuntu-built SDK (10.0.1xx band) from
+  `noble-updates`; it builds both FlyleafLib targets and compile-checks the WPF projects because
+  `Directory.Build.props` sets `EnableWindowsTargeting` on non-Windows hosts. CI uses `actions/setup-dotnet` 10.0.x.
+- **PowerShell:** the `scripts/codex/*.ps1` validators run under PowerShell 7 from `dotnet tool install -g PowerShell`
+  (`~/.dotnet/tools/pwsh`); `scripts/linux/verify.sh` finds it there or on `PATH`. `check-environment.ps1` and
+  `verify-plugin.ps1` are Windows-only by design.
+- **Native runtime:** `libopenal1` (OpenAL Soft) for sound; `xvfb` only for headless app runs. FFmpeg is not taken
+  from the distribution (Ubuntu 24.04 ships FFmpeg 6.1, `libavcodec.so.60`): the engine binds to the FFmpeg 8
+  sonames (`libavcodec.so.62`, `libavutil.so.60`, ...).
+- **Package:** `scripts/linux/publish.sh` → `LLPlayer-<version>-linux-x64.tar.gz` (app, `FFmpeg/`, launcher,
+  `.desktop` file, icon, licenses); end users install `dotnet-runtime-10.0` and `libopenal1`.
+- **Owner's local refresh workflow (2026-10-03):** after each completed and reviewed Linux slice, publish and verify
+  a new immutable installed package under `/models/codex-builds/LLPlayer_ru/installed`, then atomically switch
+  `/models/codex-builds/LLPlayer_ru/installed/current` to that package. Both maintained launchers—the existing
+  `~/.local/share/applications/llplayer.desktop` and the original
+  `~/Загрузки/LLPlayer-linux-x64/LLPlayer-0.3.62-linux-x64/llplayer.desktop`—must resolve `Exec` and `Icon` through
+  `current/llplayer.sh %F` and `current/llplayer.png`, respectively. Verify both launcher resolutions and record
+  them in the refresh receipt; preserve older packages and user XDG data. Reopen the application after switching
+  `current`. This is local owner practice, not a CI or release requirement; it does not add a watcher or
+  auto-download. Treat deployment as complete only when its verification receipt exists; a successful publish alone
+  does not establish installation or launcher readiness.
+
+### Owner storage layout (verified 2026-10-03)
+
+- Verified relocation placed repository artifacts at `/models/codex-builds/LLPlayer_ru/artifacts` and eight projects'
+  `bin`/`obj` directories under `/models/codex-builds/LLPlayer_ru/build/<project>/{bin,obj}`; 17 repository-local
+  symlink redirects were read back. Receipt: `/models/codex-builds/LLPlayer_ru/storage-migration-2026-10-03/receipt.json`.
+- Future package outputs, evidence, and logs use the artifact path; future desktop-installed versions use
+  `/models/codex-builds/LLPlayer_ru/installed`. Keep future model downloads under `/models` as needed; existing model
+  locations were not moved.
+- For future heavy commands, use process-scoped `TMPDIR=/models/codex-builds/LLPlayer_ru/tmp` or explicit publish
+  staging under artifacts. This is local-machine guidance, not a global environment or CI default.
+- Tracked source, global caches, XDG data, and currently installed versions were preserved. Exact redirect-ignore
+  entries were added to local `.git/info/exclude` with a backup. Measured root space reclaimed during migration was
+  6.92 GiB; check `df` on `/` and `/models` before future heavy builds. Avoid `git clean`: it can remove the redirect
+  symlinks, causing later builds to write under the repository root.
 
 ## Local Development Environment (T-11)
 

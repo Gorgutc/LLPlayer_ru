@@ -595,6 +595,30 @@ public unsafe partial class DecoderContext : PluginHandler
                 if (ret != 0)
                 {
                     av_packet_free(&packet);
+                    // Drain decoder pipeline (frame-threading may have buffered frames)
+                    AVPacket* flushPacket = av_packet_alloc();
+                    flushPacket->data = null;
+                    flushPacket->size = 0;
+                    bool wasKey = VideoDecoder.keyPacketRequired;
+                    VideoDecoder.keyPacketRequired = false;
+                    if (VideoDecoder.SendAVPacket(flushPacket) == 0)
+                    {
+                        while (VideoDecoder.RecvAVFrame() == 0)
+                        {
+                            if (timestamp != -1 && !VideoDemuxer.IsLive &&
+                                (long)(VideoDecoder.frame->pts * VideoStream.Timebase) - VideoDemuxer.StartTime + (VideoStream.FrameDuration / 2) < timestamp)
+                            {
+                                av_frame_unref(VideoDecoder.frame);
+                                continue;
+                            }
+                            if (VideoDecoder.FillEnqueueAVFrame() == 0)
+                            {
+                                VideoDecoder.keyPacketRequired = wasKey;
+                                return;
+                            }
+                        }
+                    }
+                    VideoDecoder.keyPacketRequired = wasKey;
                     return;
                 }
             }

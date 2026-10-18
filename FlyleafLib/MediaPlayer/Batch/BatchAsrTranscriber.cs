@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 
 namespace FlyleafLib.MediaPlayer.Batch;
 
@@ -43,7 +43,11 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     public static bool RequiresVcRedistPreflight(Config config)
     {
         ArgumentNullException.ThrowIfNull(config);
+#if WINDOWS
         return config.Subtitles.ASREngine == SubASREngineType.WhisperCpp;
+#else
+        return false;
+#endif
     }
 
     public Task<BatchAsrResult> TranscribeAsync(
@@ -228,16 +232,22 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
             // Defense in depth — the batch dialog VM already preflights this via RequiresVcRedistPreflight and
             // surfaces a clean known-error before constructing the transcriber, so this throw is only a backstop
             // for any other caller. faster-whisper (external exe) is not checked.
+#if WINDOWS
             if (!VcRedistChecker.IsRuntimePresent(out _))
                 throw new InvalidOperationException(VcRedistChecker.BuildMissingMessage("Speech-to-text (whisper.cpp)"));
+#endif
 
             if (config.Subtitles.WhisperCppConfig.Model == null)
                 throw new InvalidOperationException("whisper.cpp model is not set. Please download it from the settings.");
 
-            if (!File.Exists(config.Subtitles.WhisperCppConfig.Model.ModelFilePath))
+            if (!File.Exists(config.Subtitles.WhisperCppConfig.GetModelFilePath()))
             {
                 throw new InvalidOperationException(
+#if WINDOWS
                     $"whisper.cpp model file '{config.Subtitles.WhisperCppConfig.Model.ModelFileName}' does not exist in the folder. Please download it from the settings.");
+#else
+                    $"whisper.cpp model file does not exist: '{config.Subtitles.WhisperCppConfig.GetModelFilePath()}'. Place the selected ggml model at this path.");
+#endif
             }
 
             return;
@@ -245,6 +255,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 
         if (config.Subtitles.ASREngine == SubASREngineType.FasterWhisper)
         {
+#if WINDOWS
             if (config.Subtitles.FasterWhisperConfig.UseManualEngine)
             {
                 if (!File.Exists(config.Subtitles.FasterWhisperConfig.ManualEnginePath))
@@ -254,6 +265,10 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
             {
                 throw new InvalidOperationException("faster-whisper engine is not downloaded. Please download it from the settings.");
             }
+#else
+            if (!config.Subtitles.FasterWhisperConfig.ValidateEngine(out string error))
+                throw new InvalidOperationException(error);
+#endif
 
             if (config.Subtitles.FasterWhisperConfig.UseManualModel &&
                 !Directory.Exists(config.Subtitles.FasterWhisperConfig.ManualModelDir))

@@ -17,11 +17,32 @@
 
 This repository is a fork of [umlx5h/LLPlayer](https://github.com/umlx5h/LLPlayer). The **`_ru` suffix denotes a Russified agent/automation infrastructure layer, not a Russian-localized build of the player.**
 
-- **What `_ru` changes:** the agent/automation layer only — agent instructions and contracts (`AGENTS.md`, `docs/agent/`), verification scripts (`scripts/codex/`), the `Plugins/llplayer-codex/` skill plugin, and Russian-language commit messages and infrastructure docs.
-- **What `_ru` does *not* change (yet):** the application itself. The player UI and code track upstream and are **not** localized — strings, menus, and settings remain in upstream English. Feature work is additive on top of upstream.
+- **What `_ru` refers to:** the Russified agent/automation layer — agent instructions and contracts (`AGENTS.md`, `docs/agent/`), verification scripts (`scripts/codex/`), the `Plugins/llplayer-codex/` skill plugin, and Russian-language commit messages and infrastructure docs.
+- **Application language and source:** strings, menus, and settings remain in English. The fork adds product features and F-13 portability/Core extraction on top of upstream; `_ru` does not mean that the app is localized or that its source is unchanged.
 - **Possible future direction (not started):** Russian localization of the app's UI resources is a plausible future evolution, so the `_ru` suffix has room to grow into an actual localized build. No UI-localization work has begun.
 
 For the agent-facing version of this note, see [`docs/agent/architecture.md`](docs/agent/architecture.md) ("Fork Relationship").
+
+### Linux build (fork, work in progress)
+
+This fork is porting the player to Linux (backlog F-13). The Windows WPF product remains supported with its
+behavior preserved as a compatibility requirement; shared services and serialization have moved into `LLPlayer.Core`
+with corresponding project-reference changes. Linux currently uses the Avalonia 12 app, `LLPlayer.Avalonia`,
+on the same FlyleafLib engine (portable `net10.0` target, software video path,
+OpenAL audio). A bounded Recognition menu/dialog supports whisper.cpp CPU ASR on either subtitle slot and OCR on an
+already-selected bitmap track. Headless integration has exercised the real Player/UI-command path with existing
+models and English/Russian PGS; native desktop and Windows owner acceptance remain separate pending checks. The
+dialog uses system Tesseract 5 and installed traineddata for OCR and does not download/install models. Dubbing,
+YoutubeDL, faster-whisper UI, and full settings parity are not yet ported. See
+[`LLPlayer.Avalonia/README.md`](LLPlayer.Avalonia/README.md). On Ubuntu 24.04 (`sudo apt install dotnet-sdk-10.0 libopenal1`):
+
+```bash
+scripts/linux/fetch-ffmpeg.sh   # downloads and verifies the FFmpeg 8.1 shared libraries
+scripts/linux/verify.sh         # builds and tests
+scripts/linux/publish.sh        # creates LLPlayer-<version>-linux-x64.tar.gz
+```
+
+See [`RUN_INSTRUCTIONS.md`](RUN_INSTRUCTIONS.md#linux) for details.
 
 ## 🎬 Demo
 

@@ -1,0 +1,440 @@
+<!--
+  "LLPlayer shadcn" design tokens.
+
+  Colours: shadcn/ui (MIT) "neutral" theme, apps/v4/registry/themes.ts @ 98a1fe67b439324ddc857f47fbdce056600a4329,
+  converted OKLCH -> sRGB by Themes/tools/oklch_to_hex.py (the regions between BEGIN/END GENERATED are written by that
+  script; edit the script, not the region). Key scheme: Shadcn.<Token>Color (Color) and Shadcn.<Token>Brush
+  (SolidColorBrush), e.g. Shadcn.MutedForegroundBrush. Dark is LLPlayer's default theme.
+
+  Shape / spacing / typography follow the shadcn v4 defaults: radius = 0.625rem = 10px at 16px/rem, sm/md/lg/xl =
+  0.6/0.8/1/1.4 x radius (apps/v4/app/globals.css @theme inline); Tailwind spacing unit 0.25rem = 4px; Inter.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Dark">
+                <!-- BEGIN GENERATED Dark (Themes/tools/oklch_to_hex.py) -->
+                <Color x:Key="Shadcn.BackgroundColor">#FF0A0A0A</Color>
+                <SolidColorBrush x:Key="Shadcn.BackgroundBrush" Color="#FF0A0A0A" />
+                <Color x:Key="Shadcn.ForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.ForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.CardColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.CardBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.CardForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.CardForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.PopoverColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.PopoverBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.PopoverForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.PopoverForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.PrimaryColor">#FFE5E5E5</Color>
+                <SolidColorBrush x:Key="Shadcn.PrimaryBrush" Color="#FFE5E5E5" />
+                <Color x:Key="Shadcn.PrimaryForegroundColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.PrimaryForegroundBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.SecondaryColor">#FF262626</Color>
+                <SolidColorBrush x:Key="Shadcn.SecondaryBrush" Color="#FF262626" />
+                <Color x:Key="Shadcn.SecondaryForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.SecondaryForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.MutedColor">#FF262626</Color>
+                <SolidColorBrush x:Key="Shadcn.MutedBrush" Color="#FF262626" />
+                <Color x:Key="Shadcn.MutedForegroundColor">#FFA1A1A1</Color>
+                <SolidColorBrush x:Key="Shadcn.MutedForegroundBrush" Color="#FFA1A1A1" />
+                <Color x:Key="Shadcn.AccentColor">#FF262626</Color>
+                <SolidColorBrush x:Key="Shadcn.AccentBrush" Color="#FF262626" />
+                <Color x:Key="Shadcn.AccentForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.AccentForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.DestructiveColor">#FFFF6467</Color>
+                <SolidColorBrush x:Key="Shadcn.DestructiveBrush" Color="#FFFF6467" />
+                <Color x:Key="Shadcn.DestructiveForegroundColor">#FFFFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.DestructiveForegroundBrush" Color="#FFFFFFFF" />
+                <Color x:Key="Shadcn.BorderColor">#1AFFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.BorderBrush" Color="#1AFFFFFF" />
+                <Color x:Key="Shadcn.InputColor">#26FFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.InputBrush" Color="#26FFFFFF" />
+                <Color x:Key="Shadcn.RingColor">#FF737373</Color>
+                <SolidColorBrush x:Key="Shadcn.RingBrush" Color="#FF737373" />
+                <Color x:Key="Shadcn.SidebarColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.SidebarForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.SidebarAccentColor">#FF262626</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarAccentBrush" Color="#FF262626" />
+                <Color x:Key="Shadcn.SidebarAccentForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarAccentForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.SidebarBorderColor">#1AFFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarBorderBrush" Color="#1AFFFFFF" />
+                <SolidColorBrush x:Key="Shadcn.PrimaryHoverBrush" Color="#E6E5E5E5" />
+                <SolidColorBrush x:Key="Shadcn.SecondaryHoverBrush" Color="#CC262626" />
+                <SolidColorBrush x:Key="Shadcn.DestructiveFillBrush" Color="#99FF6467" />
+                <SolidColorBrush x:Key="Shadcn.DestructiveHoverBrush" Color="#80FF6467" />
+                <SolidColorBrush x:Key="Shadcn.GhostHoverBrush" Color="#80262626" />
+                <SolidColorBrush x:Key="Shadcn.InputFillBrush" Color="#0BFFFFFF" />
+                <SolidColorBrush x:Key="Shadcn.InputHoverBrush" Color="#13FFFFFF" />
+                <SolidColorBrush x:Key="Shadcn.RingFocusBrush" Color="#80737373" />
+                <!-- FluentTheme keys re-pointed at the tokens above -->
+                <StaticResource x:Key="SliderTrackFill" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackFillPointerOver" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackFillPressed" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackFillDisabled" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackValueFill" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderTrackValueFillPointerOver" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderTrackValueFillPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderTrackValueFillDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="SliderThumbBackground" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderThumbBackgroundPointerOver" ResourceKey="Shadcn.PrimaryHoverBrush" />
+                <StaticResource x:Key="SliderThumbBackgroundPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderThumbBackgroundDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+                <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+                <StaticResource x:Key="ToggleSwitchFillOff" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOffPointerOver" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOffPressed" ResourceKey="Shadcn.InputBrush" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOffDisabled" Color="Transparent" />
+                <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="Shadcn.PrimaryHoverBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOnDisabled" ResourceKey="Shadcn.MutedBrush" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOnDisabled" Color="Transparent" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOff" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOffPointerOver" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOffPressed" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOffDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOnDisabled" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchContentForeground" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="CheckBoxForegroundUnchecked" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="CheckBoxForegroundChecked" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPressed" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="Shadcn.PrimaryHoverBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="TextControlBackground" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBackgroundDisabled" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBorderBrush" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="TextControlForeground" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlButtonForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlButtonBackgroundPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxBackground" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="Shadcn.InputHoverBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="Shadcn.InputHoverBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundDisabled" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundUnfocused" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrushDisabled" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundBorderBrushFocused" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="ComboBoxForeground" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="ComboBoxPlaceHolderForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="Shadcn.PopoverBrush" />
+                <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="Shadcn.BorderBrush" />
+                <StaticResource x:Key="ComboBoxItemForeground" ResourceKey="Shadcn.PopoverForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemForegroundPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemForegroundSelected" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemForegroundSelectedPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="Shadcn.PopoverBrush" />
+                <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="Shadcn.BorderBrush" />
+                <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="Shadcn.PopoverForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForegroundDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutSubItemChevron" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutSubItemChevronPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutSubItemChevronSubMenuOpened" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="Shadcn.PopoverBrush" />
+                <StaticResource x:Key="ToolTipBackground" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ToolTipForeground" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="ToolTipBorderBrush" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ScrollBarThumbFillPointerOver" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ScrollBarThumbFillPressed" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+                <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="Transparent" />
+                <StaticResource x:Key="ScrollBarButtonArrowForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <!-- END GENERATED Dark -->
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Light">
+                <!-- BEGIN GENERATED Light (Themes/tools/oklch_to_hex.py) -->
+                <Color x:Key="Shadcn.BackgroundColor">#FFFFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.BackgroundBrush" Color="#FFFFFFFF" />
+                <Color x:Key="Shadcn.ForegroundColor">#FF0A0A0A</Color>
+                <SolidColorBrush x:Key="Shadcn.ForegroundBrush" Color="#FF0A0A0A" />
+                <Color x:Key="Shadcn.CardColor">#FFFFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.CardBrush" Color="#FFFFFFFF" />
+                <Color x:Key="Shadcn.CardForegroundColor">#FF0A0A0A</Color>
+                <SolidColorBrush x:Key="Shadcn.CardForegroundBrush" Color="#FF0A0A0A" />
+                <Color x:Key="Shadcn.PopoverColor">#FFFFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.PopoverBrush" Color="#FFFFFFFF" />
+                <Color x:Key="Shadcn.PopoverForegroundColor">#FF0A0A0A</Color>
+                <SolidColorBrush x:Key="Shadcn.PopoverForegroundBrush" Color="#FF0A0A0A" />
+                <Color x:Key="Shadcn.PrimaryColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.PrimaryBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.PrimaryForegroundColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.PrimaryForegroundBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.SecondaryColor">#FFF5F5F5</Color>
+                <SolidColorBrush x:Key="Shadcn.SecondaryBrush" Color="#FFF5F5F5" />
+                <Color x:Key="Shadcn.SecondaryForegroundColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.SecondaryForegroundBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.MutedColor">#FFF5F5F5</Color>
+                <SolidColorBrush x:Key="Shadcn.MutedBrush" Color="#FFF5F5F5" />
+                <Color x:Key="Shadcn.MutedForegroundColor">#FF737373</Color>
+                <SolidColorBrush x:Key="Shadcn.MutedForegroundBrush" Color="#FF737373" />
+                <Color x:Key="Shadcn.AccentColor">#FFF5F5F5</Color>
+                <SolidColorBrush x:Key="Shadcn.AccentBrush" Color="#FFF5F5F5" />
+                <Color x:Key="Shadcn.AccentForegroundColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.AccentForegroundBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.DestructiveColor">#FFE7000B</Color>
+                <SolidColorBrush x:Key="Shadcn.DestructiveBrush" Color="#FFE7000B" />
+                <Color x:Key="Shadcn.DestructiveForegroundColor">#FFFFFFFF</Color>
+                <SolidColorBrush x:Key="Shadcn.DestructiveForegroundBrush" Color="#FFFFFFFF" />
+                <Color x:Key="Shadcn.BorderColor">#FFE5E5E5</Color>
+                <SolidColorBrush x:Key="Shadcn.BorderBrush" Color="#FFE5E5E5" />
+                <Color x:Key="Shadcn.InputColor">#FFE5E5E5</Color>
+                <SolidColorBrush x:Key="Shadcn.InputBrush" Color="#FFE5E5E5" />
+                <Color x:Key="Shadcn.RingColor">#FFA1A1A1</Color>
+                <SolidColorBrush x:Key="Shadcn.RingBrush" Color="#FFA1A1A1" />
+                <Color x:Key="Shadcn.SidebarColor">#FFFAFAFA</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarBrush" Color="#FFFAFAFA" />
+                <Color x:Key="Shadcn.SidebarForegroundColor">#FF0A0A0A</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarForegroundBrush" Color="#FF0A0A0A" />
+                <Color x:Key="Shadcn.SidebarAccentColor">#FFF5F5F5</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarAccentBrush" Color="#FFF5F5F5" />
+                <Color x:Key="Shadcn.SidebarAccentForegroundColor">#FF171717</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarAccentForegroundBrush" Color="#FF171717" />
+                <Color x:Key="Shadcn.SidebarBorderColor">#FFE5E5E5</Color>
+                <SolidColorBrush x:Key="Shadcn.SidebarBorderBrush" Color="#FFE5E5E5" />
+                <SolidColorBrush x:Key="Shadcn.PrimaryHoverBrush" Color="#E6171717" />
+                <SolidColorBrush x:Key="Shadcn.SecondaryHoverBrush" Color="#CCF5F5F5" />
+                <SolidColorBrush x:Key="Shadcn.DestructiveFillBrush" Color="#FFE7000B" />
+                <SolidColorBrush x:Key="Shadcn.DestructiveHoverBrush" Color="#E6E7000B" />
+                <SolidColorBrush x:Key="Shadcn.GhostHoverBrush" Color="#FFF5F5F5" />
+                <SolidColorBrush x:Key="Shadcn.InputFillBrush" Color="#00E5E5E5" />
+                <SolidColorBrush x:Key="Shadcn.InputHoverBrush" Color="#FFF5F5F5" />
+                <SolidColorBrush x:Key="Shadcn.RingFocusBrush" Color="#80A1A1A1" />
+                <!-- FluentTheme keys re-pointed at the tokens above -->
+                <StaticResource x:Key="SliderTrackFill" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackFillPointerOver" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackFillPressed" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackFillDisabled" ResourceKey="Shadcn.MutedBrush" />
+                <StaticResource x:Key="SliderTrackValueFill" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderTrackValueFillPointerOver" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderTrackValueFillPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderTrackValueFillDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="SliderThumbBackground" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderThumbBackgroundPointerOver" ResourceKey="Shadcn.PrimaryHoverBrush" />
+                <StaticResource x:Key="SliderThumbBackgroundPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="SliderThumbBackgroundDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <SolidColorBrush x:Key="SliderContainerBackground" Color="Transparent" />
+                <SolidColorBrush x:Key="SliderContainerBackgroundPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="SliderContainerBackgroundPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="SliderContainerBackgroundDisabled" Color="Transparent" />
+                <StaticResource x:Key="ToggleSwitchFillOff" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOffPointerOver" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOffPressed" ResourceKey="Shadcn.InputBrush" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOffPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOffPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOffDisabled" Color="Transparent" />
+                <StaticResource x:Key="ToggleSwitchFillOn" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOnPointerOver" ResourceKey="Shadcn.PrimaryHoverBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOnPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ToggleSwitchFillOnDisabled" ResourceKey="Shadcn.MutedBrush" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="ToggleSwitchStrokeOnDisabled" Color="Transparent" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOff" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOffPointerOver" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOffPressed" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOffDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOn" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOnPointerOver" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOnPressed" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchKnobFillOnDisabled" ResourceKey="Shadcn.BackgroundBrush" />
+                <StaticResource x:Key="ToggleSwitchContentForeground" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="CheckBoxForegroundUnchecked" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="CheckBoxForegroundChecked" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUnchecked" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPointerOver" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeUncheckedPressed" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillUnchecked" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPointerOver" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillUncheckedPressed" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillChecked" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPointerOver" ResourceKey="Shadcn.PrimaryHoverBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundFillCheckedPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPointerOver" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckBackgroundStrokeCheckedPressed" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="CheckBoxCheckGlyphForegroundChecked" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPointerOver" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="CheckBoxCheckGlyphForegroundCheckedPressed" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="TextControlBackground" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBackgroundDisabled" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="TextControlBorderBrush" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="TextControlBorderBrushFocused" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="TextControlBorderBrushDisabled" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="TextControlForeground" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="TextControlForegroundPointerOver" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlButtonForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="TextControlButtonBackgroundPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxBackground" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundPointerOver" ResourceKey="Shadcn.InputHoverBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundPressed" ResourceKey="Shadcn.InputHoverBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundDisabled" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundUnfocused" ResourceKey="Shadcn.InputFillBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrush" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrushPointerOver" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrushPressed" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="ComboBoxBorderBrushDisabled" ResourceKey="Shadcn.InputBrush" />
+                <StaticResource x:Key="ComboBoxBackgroundBorderBrushFocused" ResourceKey="Shadcn.RingBrush" />
+                <StaticResource x:Key="ComboBoxForeground" ResourceKey="Shadcn.ForegroundBrush" />
+                <StaticResource x:Key="ComboBoxPlaceHolderForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ComboBoxDropDownGlyphForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ComboBoxDropDownBackground" ResourceKey="Shadcn.PopoverBrush" />
+                <StaticResource x:Key="ComboBoxDropDownBorderBrush" ResourceKey="Shadcn.BorderBrush" />
+                <StaticResource x:Key="ComboBoxItemForeground" ResourceKey="Shadcn.PopoverForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemForegroundPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemForegroundSelected" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemForegroundSelectedPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundPressed" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundSelected" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundSelectedPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="ComboBoxItemBackgroundSelectedPressed" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="MenuFlyoutPresenterBackground" ResourceKey="Shadcn.PopoverBrush" />
+                <StaticResource x:Key="MenuFlyoutPresenterBorderBrush" ResourceKey="Shadcn.BorderBrush" />
+                <StaticResource x:Key="MenuFlyoutItemBackgroundPointerOver" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="MenuFlyoutItemBackgroundPressed" ResourceKey="Shadcn.AccentBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForeground" ResourceKey="Shadcn.PopoverForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForegroundPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForegroundPressed" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemForegroundDisabled" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutItemKeyboardAcceleratorTextForegroundPointerOver" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutSubItemChevron" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutSubItemChevronPointerOver" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="MenuFlyoutSubItemChevronSubMenuOpened" ResourceKey="Shadcn.AccentForegroundBrush" />
+                <StaticResource x:Key="FlyoutPresenterBackground" ResourceKey="Shadcn.PopoverBrush" />
+                <StaticResource x:Key="ToolTipBackground" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ToolTipForeground" ResourceKey="Shadcn.PrimaryForegroundBrush" />
+                <StaticResource x:Key="ToolTipBorderBrush" ResourceKey="Shadcn.PrimaryBrush" />
+                <StaticResource x:Key="ScrollBarThumbFillPointerOver" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <StaticResource x:Key="ScrollBarThumbFillPressed" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <SolidColorBrush x:Key="ScrollBarTrackFill" Color="Transparent" />
+                <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="Transparent" />
+                <StaticResource x:Key="ScrollBarButtonArrowForeground" ResourceKey="Shadcn.MutedForegroundBrush" />
+                <!-- END GENERATED Light -->
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+
+  <!-- Radius (px): radius = 10, sm = 6, md = 8, lg = 10, xl = 14 -->
+  <x:Double x:Key="Shadcn.Radius">10</x:Double>
+  <CornerRadius x:Key="Shadcn.RadiusSm">6</CornerRadius>
+  <CornerRadius x:Key="Shadcn.RadiusMd">8</CornerRadius>
+  <CornerRadius x:Key="Shadcn.RadiusLg">10</CornerRadius>
+  <CornerRadius x:Key="Shadcn.RadiusXl">14</CornerRadius>
+  <CornerRadius x:Key="Shadcn.RadiusFull">9999</CornerRadius>
+
+  <!-- FluentTheme shape defaults: buttons/inputs use rounded-md, popovers/menus rounded-md, cards rounded-xl -->
+  <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
+  <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+
+  <!-- Spacing (Tailwind unit = 4px) -->
+  <x:Double x:Key="Shadcn.Space1">4</x:Double>
+  <x:Double x:Key="Shadcn.Space2">8</x:Double>
+  <x:Double x:Key="Shadcn.Space3">12</x:Double>
+  <x:Double x:Key="Shadcn.Space4">16</x:Double>
+  <x:Double x:Key="Shadcn.Space6">24</x:Double>
+  <x:Double x:Key="Shadcn.Space8">32</x:Double>
+
+  <!-- Control metrics (shadcn v4 button / input sizes) -->
+  <x:Double x:Key="Shadcn.ControlHeightSm">32</x:Double>
+  <x:Double x:Key="Shadcn.ControlHeight">36</x:Double>
+  <x:Double x:Key="Shadcn.ControlHeightLg">40</x:Double>
+  <Thickness x:Key="Shadcn.ButtonPaddingSm">12,0</Thickness>
+  <Thickness x:Key="Shadcn.ButtonPadding">16,0</Thickness>
+  <Thickness x:Key="Shadcn.ButtonPaddingLg">24,0</Thickness>
+  <Thickness x:Key="Shadcn.InputPadding">12,4</Thickness>
+  <Thickness x:Key="Shadcn.FocusRingThickness">2</Thickness>
+
+  <!-- Typography: Inter (Avalonia.Fonts.Inter), text-xs .. text-2xl -->
+  <FontFamily x:Key="Shadcn.FontSans">fonts:Inter#Inter, $Default</FontFamily>
+  <x:Double x:Key="Shadcn.TextXs">12</x:Double>
+  <x:Double x:Key="Shadcn.TextSm">14</x:Double>
+  <x:Double x:Key="Shadcn.TextBase">16</x:Double>
+  <x:Double x:Key="Shadcn.TextLg">18</x:Double>
+  <x:Double x:Key="Shadcn.TextXl">20</x:Double>
+  <x:Double x:Key="Shadcn.Text2xl">24</x:Double>
+  <FontWeight x:Key="Shadcn.FontNormal">Normal</FontWeight>
+  <FontWeight x:Key="Shadcn.FontMedium">Medium</FontWeight>
+  <FontWeight x:Key="Shadcn.FontSemibold">SemiBold</FontWeight>
+  <FontWeight x:Key="Shadcn.FontBold">Bold</FontWeight>
+
+  <!-- FluentTheme metric overrides -->
+  <x:Double x:Key="ControlContentThemeFontSize">14</x:Double>
+  <x:Double x:Key="SliderTrackThemeHeight">6</x:Double>
+  <x:Double x:Key="SliderHorizontalThumbWidth">16</x:Double>
+  <x:Double x:Key="SliderHorizontalThumbHeight">16</x:Double>
+  <x:Double x:Key="SliderVerticalThumbWidth">16</x:Double>
+  <x:Double x:Key="SliderVerticalThumbHeight">16</x:Double>
+  <CornerRadius x:Key="SliderThumbCornerRadius">8</CornerRadius>
+  <x:Double x:Key="SliderHorizontalHeight">24</x:Double>
+  <GridLength x:Key="SliderPreContentMargin">4</GridLength>
+  <GridLength x:Key="SliderPostContentMargin">4</GridLength>
+  <x:Double x:Key="TextControlThemeMinHeight">36</x:Double>
+  <Thickness x:Key="TextControlThemePadding">12,7,12,6</Thickness>
+  <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
+  <Thickness x:Key="MenuFlyoutPresenterThemePadding">4</Thickness>
+  <Thickness x:Key="MenuFlyoutItemThemePadding">8,6,8,6</Thickness>
+  <Thickness x:Key="MenuFlyoutItemThemePaddingNarrow">8,6,8,6</Thickness>
+  <Thickness x:Key="ToolTipBorderThemePadding">12,6</Thickness>
+  <x:Double x:Key="ToolTipContentThemeFontSize">12</x:Double>
+  <x:Double x:Key="ScrollBarSize">10</x:Double>
+
+</ResourceDictionary>

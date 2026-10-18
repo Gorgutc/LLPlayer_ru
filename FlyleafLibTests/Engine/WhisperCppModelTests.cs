@@ -33,7 +33,11 @@ public class WhisperCppModelTests
     [InlineData(GgmlType.Base, QuantizationType.Q5_1, "ggml-base-q5_1.bin")]
     [InlineData(GgmlType.Base, QuantizationType.Q8_0, "ggml-base-q8_0.bin")]
     [InlineData(GgmlType.Medium, QuantizationType.Q8_0, "ggml-medium-q8_0.bin")]
+#if WINDOWS
     [InlineData(GgmlType.LargeV3Turbo, QuantizationType.Q5_1, "ggml-largev3turbo-q5_1.bin")]
+#else
+    [InlineData(GgmlType.LargeV3Turbo, QuantizationType.Q5_1, "ggml-large-v3-turbo-q5_1.bin")]
+#endif
     public void ModelFileName_Quantized_UsesWhisperCppConvention(GgmlType model, QuantizationType quant, string expected)
     {
         new WhisperCppModel { Model = model, Quantization = quant }.ModelFileName

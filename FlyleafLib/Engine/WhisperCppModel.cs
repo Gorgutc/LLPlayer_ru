@@ -35,6 +35,21 @@ public class WhisperCppModel : NotifyPropertyChanged, IEquatable<WhisperCppModel
         get
         {
             string modelName = Model.ToString().ToLower();
+#if !WINDOWS
+            // Linux uses upstream GGML filenames directly, including the full large-v3 model.
+            modelName = Model switch
+            {
+                GgmlType.TinyEn => "tiny.en",
+                GgmlType.BaseEn => "base.en",
+                GgmlType.SmallEn => "small.en",
+                GgmlType.MediumEn => "medium.en",
+                GgmlType.LargeV1 => "large-v1",
+                GgmlType.LargeV2 => "large-v2",
+                GgmlType.LargeV3 => "large-v3",
+                GgmlType.LargeV3Turbo => "large-v3-turbo",
+                _ => Model.ToString().ToLowerInvariant()
+            };
+#endif
             // NoQuantization keeps the legacy "ggml-{model}.bin" byte-identical so existing downloads/configs still
             // resolve. Quantized variants follow the whisper.cpp convention "ggml-{model}-{quant}.bin" (e.g.
             // ggml-base-q5_1.bin), guaranteeing they never collide with the full model on disk. ToLowerInvariant on

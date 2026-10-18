@@ -5,6 +5,7 @@ using System.Net.Http;
 using FlyleafLib;
 using LLPlayer.Extensions;
 using LLPlayer.Services;
+using LLPlayer.Core.Services;
 using Whisper.net.Ggml;
 
 namespace LLPlayer.ViewModels;

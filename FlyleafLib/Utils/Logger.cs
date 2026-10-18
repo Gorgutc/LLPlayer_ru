@@ -26,7 +26,11 @@ public static class Logger
             logLevels.Add(loglevel, loglevel.ToString().PadRight(5, ' '));
 
         // Flush File Data on Application Exit
+#if WINDOWS
         System.Windows.Application.Current.Exit += (o, e) =>
+#else
+        AppDomain.CurrentDomain.ProcessExit += (o, e) =>
+#endif
         {
             lock (lockFileStream)
             {

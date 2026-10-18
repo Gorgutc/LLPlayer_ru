@@ -1,0 +1,13 @@
+<!-- Thin scrollbars: Fluent's auto-hiding bars with a slimmer, ring-coloured rounded thumb. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="ScrollBar">
+    <Setter Property="AllowAutoHide" Value="True" />
+  </Style>
+  <Style Selector="ScrollBar /template/ Thumb">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.RingBrush}" />
+    <Setter Property="CornerRadius" Value="3" />
+  </Style>
+
+</Styles>

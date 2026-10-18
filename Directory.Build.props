@@ -1,0 +1,7 @@
+<Project>
+	<!-- Linux/macOS build hosts: allow restoring/building the Windows TFMs (net10.0-windows*) off Windows.
+	     No-op on Windows, where the SDK already enables Windows targeting. -->
+	<PropertyGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
+	</PropertyGroup>
+</Project>

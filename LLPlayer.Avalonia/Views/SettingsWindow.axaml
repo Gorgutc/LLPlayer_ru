@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel" Title="Settings — LLPlayer" Width="760" Height="550"
+        MinWidth="560" MinHeight="440" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Shadcn.BackgroundBrush}">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <StackPanel Margin="0,0,0,18" Spacing="4">
+      <TextBlock Text="Settings" Classes="dialog-title" />
+      <TextBlock Text="Appearance and subtitle preferences for this player." Classes="dialog-description" />
+    </StackPanel>
+    <Grid Grid.Row="1" ColumnDefinitions="132,*" ColumnSpacing="20">
+      <ListBox Name="SettingsNavigation" SelectedIndex="{Binding SelectedSection}" VerticalAlignment="Top">
+        <ListBoxItem Content="Appearance" />
+        <ListBoxItem Content="Subtitles" />
+        <ListBoxItem Content="Tools" />
+      </ListBox>
+      <ScrollViewer Name="SettingsScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="18">
+          <StackPanel Name="AppearancePage" IsVisible="{Binding AppearanceSelected}" Spacing="14">
+            <TextBlock Text="Appearance" Classes="dialog-title" />
+            <TextBlock Text="Theme" />
+            <ComboBox Name="ThemeEditor" ItemsSource="{x:Static vm:SettingsViewModel.Themes}" SelectedItem="{Binding Theme}" HorizontalAlignment="Stretch" />
+            <CheckBox Name="SidebarVisibleEditor" Content="Show subtitle sidebar" IsChecked="{Binding SidebarVisible}" />
+            <TextBlock Text="Sidebar width (220–900 DIP)" />
+            <NumericUpDown Name="SidebarWidthEditor" Minimum="220" Maximum="900" Increment="10" Value="{Binding SidebarWidth}" FormatString="0" />
+          </StackPanel>
+          <StackPanel Name="SubtitlesPage" IsVisible="{Binding SubtitlesSelected}" Spacing="14">
+            <TextBlock Text="Subtitles" Classes="dialog-title" />
+            <CheckBox Name="SubtitlesVisibleEditor" Content="Show subtitle overlay" IsChecked="{Binding SubtitlesVisible}" />
+            <TextBlock Text="Primary font size (12–96 DIP)" />
+            <NumericUpDown Name="FontSizeEditor" Minimum="12" Maximum="96" Increment="2" Value="{Binding SubtitleFontSize}" FormatString="0.#" />
+            <TextBlock Text="Secondary font scale (0.4–1.5 × primary)" TextWrapping="Wrap" />
+            <NumericUpDown Name="ScaleEditor" Minimum="0.4" Maximum="1.5" Increment="0.05" Value="{Binding SecondaryFontScale}" FormatString="0.##" />
+          </StackPanel>
+          <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
+            <TextBlock Text="Tools" Classes="dialog-title" />
+            <TextBlock Text="Opening a tool closes Settings and discards unsaved edits here." Classes="dialog-description" />
+            <TextBlock Text="Language learning" FontWeight="SemiBold" />
+            <Button Name="TranslationLink" Content="Translation settings…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Translation}" HorizontalAlignment="Stretch" />
+            <Button Name="RecognitionLink" Content="Recognition (ASR / OCR)…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Recognition}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Keyboard" FontWeight="SemiBold" />
+            <Button Name="ShortcutsLink" Content="Keyboard shortcuts…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Shortcuts}" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+    <StackPanel Grid.Row="2" Spacing="12" Margin="0,16,0,0">
+      <TextBlock Name="SaveError" Text="{Binding Error}" TextWrapping="Wrap" Foreground="{DynamicResource Shadcn.DestructiveBrush}" />
+      <StackPanel Classes="dialog-footer">
+        <Button Name="CloseButton" Content="Close" Classes="outline" Command="{Binding CloseCommand}" />
+        <Button Name="SaveButton" Content="Save &amp; Close" Classes="primary" Command="{Binding SaveCommand}" />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

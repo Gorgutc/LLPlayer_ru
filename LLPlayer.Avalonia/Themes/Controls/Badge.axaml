@@ -1,0 +1,52 @@
+<!--
+  shadcn/ui Badge (Border.badge + .secondary / .outline / .destructive) and Kbd (Border.kbd, a key cap used by the
+  shortcut cheat sheet). Put a TextBlock inside.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="Border.badge">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.PrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Shadcn.PrimaryForegroundBrush}" />
+    <Setter Property="TextElement.FontSize" Value="{DynamicResource Shadcn.TextXs}" />
+    <Setter Property="TextElement.FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Border.badge.secondary">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.SecondaryBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Shadcn.SecondaryForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.badge.outline">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.BorderBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Shadcn.ForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.badge.destructive">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.DestructiveFillBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Shadcn.DestructiveForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Border.kbd">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.MutedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="MinWidth" Value="22" />
+    <Setter Property="MinHeight" Value="22" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Shadcn.MutedForegroundBrush}" />
+    <Setter Property="TextElement.FontSize" Value="{DynamicResource Shadcn.TextXs}" />
+    <Setter Property="TextElement.FontWeight" Value="Medium" />
+  </Style>
+  <Style Selector="Border.kbd > TextBlock">
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+</Styles>

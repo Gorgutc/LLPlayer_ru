@@ -1,0 +1,101 @@
+<!--
+  "LLPlayer shadcn" theme = Avalonia's built-in FluentTheme (palettes re-coloured from the shadcn tokens so untouched
+  Fluent controls already look close) + ShadcnTokens.axaml + the shadcn-variant control styles under Controls/.
+  Include this single file from App.axaml (and from tests) instead of FluentTheme.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <FluentTheme>
+    <FluentTheme.Palettes>
+      <!-- BEGIN GENERATED Palettes (Themes/tools/oklch_to_hex.py) -->
+      <ColorPaletteResources x:Key="Dark"
+          Accent="#FFE5E5E5"
+          RegionColor="#FF0A0A0A"
+          AltHigh="#FF0A0A0A"
+          AltMediumHigh="#FF0A0A0A"
+          AltMedium="#FF0A0A0A"
+          AltMediumLow="#FF0A0A0A"
+          AltLow="#FF0A0A0A"
+          BaseHigh="#FFFAFAFA"
+          BaseMediumHigh="#FFFAFAFA"
+          BaseMedium="#FFA1A1A1"
+          BaseMediumLow="#FF737373"
+          BaseLow="#FF262626"
+          ChromeAltLow="#FFFAFAFA"
+          ChromeBlackHigh="#FF000000"
+          ChromeBlackLow="#33000000"
+          ChromeBlackMedium="#99000000"
+          ChromeBlackMediumLow="#66000000"
+          ChromeDisabledHigh="#FF262626"
+          ChromeDisabledLow="#FFA1A1A1"
+          ChromeGray="#FFA1A1A1"
+          ChromeHigh="#FF737373"
+          ChromeLow="#FF171717"
+          ChromeMedium="#FF171717"
+          ChromeMediumLow="#FF171717"
+          ChromeWhite="#FFFFFFFF"
+          ListLow="#FF262626"
+          ListMedium="#FF262626"
+          ErrorText="#FFFF6467" />
+      <ColorPaletteResources x:Key="Light"
+          Accent="#FF171717"
+          RegionColor="#FFFFFFFF"
+          AltHigh="#FFFFFFFF"
+          AltMediumHigh="#FFFFFFFF"
+          AltMedium="#FFFFFFFF"
+          AltMediumLow="#FFFFFFFF"
+          AltLow="#FFFFFFFF"
+          BaseHigh="#FF0A0A0A"
+          BaseMediumHigh="#FF0A0A0A"
+          BaseMedium="#FF737373"
+          BaseMediumLow="#FFA1A1A1"
+          BaseLow="#FFE5E5E5"
+          ChromeAltLow="#FF0A0A0A"
+          ChromeBlackHigh="#FF000000"
+          ChromeBlackLow="#33000000"
+          ChromeBlackMedium="#99000000"
+          ChromeBlackMediumLow="#66000000"
+          ChromeDisabledHigh="#FFE5E5E5"
+          ChromeDisabledLow="#FF737373"
+          ChromeGray="#FF737373"
+          ChromeHigh="#FFA1A1A1"
+          ChromeLow="#FFFFFFFF"
+          ChromeMedium="#FFFFFFFF"
+          ChromeMediumLow="#FFFFFFFF"
+          ChromeWhite="#FFFFFFFF"
+          ListLow="#FFF5F5F5"
+          ListMedium="#FFF5F5F5"
+          ErrorText="#FFE7000B" />
+      <!-- END GENERATED Palettes -->
+    </FluentTheme.Palettes>
+  </FluentTheme>
+
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://LLPlayer.Avalonia/Themes/ShadcnTokens.axaml" />
+        <ResourceInclude Source="avares://LLPlayer.Avalonia/Themes/Icons.axaml" />
+        <ResourceInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Button.axaml" />
+        <ResourceInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/ToggleButton.axaml" />
+        <ResourceInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Toast.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Typography.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/TextBox.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Slider.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/CheckBox.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/ToggleSwitch.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/ComboBox.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/ListBox.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Menu.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/ToolTip.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/ScrollBar.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Card.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Separator.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Badge.axaml" />
+  <StyleInclude Source="avares://LLPlayer.Avalonia/Themes/Controls/Dialog.axaml" />
+
+</Styles>

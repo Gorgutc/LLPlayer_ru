@@ -6,7 +6,9 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
 using CliWrap;
+#if WINDOWS
 using Vortice.Direct3D11;
+#endif
 
 namespace FlyleafLib;
 
@@ -14,9 +16,11 @@ public static partial class Utils
 {
     public static bool IsTesting { private get; set; } = false;
 
+#if WINDOWS
     public static readonly Rect         RectZero            = new(); // Rect.Empty has infinity values
     public static readonly Point        PointEmpty          = new();
     public static readonly CornerRadius CornerRadiusEmpty   = new();
+#endif
 
 
     // VLC : https://github.com/videolan/vlc/blob/master/modules/gui/qt/dialogs/preferences/simple_preferences.cpp
@@ -77,6 +81,7 @@ public static partial class Utils
     private static int uniqueId;
     public static int GetUniqueId() { Interlocked.Increment(ref uniqueId); return uniqueId; }
 
+#if WINDOWS
     /// <summary>
     /// Begin Invokes the UI thread to execute the specified action
     /// </summary>
@@ -137,6 +142,7 @@ public static partial class Utils
         Thread thread = STA(action);
         thread.Join();
     }
+#endif
 
     public static int Align(int num, int align)
     {
@@ -228,6 +234,7 @@ public static partial class Utils
         return "";
     }
 
+#if WINDOWS
     public static List<Language> GetSystemLanguages()
     {
         List<Language> Languages = [ Language.English ];
@@ -241,6 +248,7 @@ public static partial class Utils
 
         return Languages;
     }
+#endif
 
     public static CultureInfo OriginalCulture { get; private set; }
     public static CultureInfo OriginalUICulture { get; private set; }
@@ -341,7 +349,19 @@ public static partial class Utils
 
         return null;
     }
+#if WINDOWS
     public static string GetValidFileName(string name) => string.Join("_", name.Split(Path.GetInvalidFileNameChars()));
+#else
+    // Portable build: use the Windows invalid set (a superset of the Unix one: '\0' and '/') so generated names are
+    // identical on every platform and stay valid on NTFS/exFAT media and shared folders.
+    static readonly char[] InvalidFileNameCharsPortable =
+        ['\"', '<', '>', '|', '\0',
+        (char)1, (char)2, (char)3, (char)4, (char)5, (char)6, (char)7, (char)8, (char)9, (char)10,
+        (char)11, (char)12, (char)13, (char)14, (char)15, (char)16, (char)17, (char)18, (char)19, (char)20,
+        (char)21, (char)22, (char)23, (char)24, (char)25, (char)26, (char)27, (char)28, (char)29, (char)30,
+        (char)31, ':', '*', '?', '\\', '/'];
+    public static string GetValidFileName(string name) => string.Join("_", name.Split(InvalidFileNameCharsPortable));
+#endif
 
     public static string GetFolderPath(string folder)
     {
@@ -415,6 +435,11 @@ public static partial class Utils
     {
         try
         {
+#if !WINDOWS
+            // Windows shell links (WScript.Shell COM) cannot be resolved on other platforms
+            if (!OperatingSystem.IsWindows())
+                throw new PlatformNotSupportedException("Windows shell links are not supported on this platform.");
+#endif
             // Using dynamic COM
             // ref: https://stackoverflow.com/a/49198242/9070784
             dynamic windowsShell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell", true)!);
@@ -515,6 +540,7 @@ public static partial class Utils
     public unsafe static string BytePtrToStringUTF8(byte* bytePtr)
         => Marshal.PtrToStringUTF8((nint)bytePtr);
 
+#if WINDOWS
     public static System.Windows.Media.Color WinFormsToWPFColor(System.Drawing.Color sColor)
         => System.Windows.Media.Color.FromArgb(sColor.A, sColor.R, sColor.G, sColor.B);
     public static System.Drawing.Color WPFToWinFormsColor(System.Windows.Media.Color wColor)
@@ -537,6 +563,7 @@ public static partial class Utils
             }
         };
     }
+#endif
         
 
     public static readonly double SWFREQ_TO_TICKS = 10000000.0 / Stopwatch.Frequency;
@@ -753,6 +780,13 @@ public static partial class Utils
         if (string.IsNullOrEmpty(baseDir) || string.IsNullOrEmpty(untrustedName))
             return null;
 
+#if !WINDOWS
+        // Untrusted names may carry Windows paths: treat '\\' as a separator and drop a drive prefix like Windows does,
+        // so only the final file name is kept on every platform.
+        untrustedName = untrustedName.Replace('\\', '/');
+        if (untrustedName.Length >= 2 && untrustedName[1] == ':' && char.IsAsciiLetter(untrustedName[0]))
+            untrustedName = untrustedName[2..];
+#endif
         string fileName = Path.GetFileName(untrustedName);
         if (string.IsNullOrEmpty(fileName) || fileName == "." || fileName == "..")
             return null;
@@ -804,6 +838,7 @@ public static partial class Utils
         return str.Substring(0, availableLength) + suffix;
     }
 
+#if WINDOWS
     // TODO: L: move to app, using event
     public static void PlayCompletionSound()
     {
@@ -829,6 +864,7 @@ public static partial class Utils
             }
         });
     }
+#endif
 
     public static string CommandToText(this Command cmd)
     {

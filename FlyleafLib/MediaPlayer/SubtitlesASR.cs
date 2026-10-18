@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -109,12 +109,14 @@ public class SubtitlesASR
             // whisper.cpp loads its native runtime in-process; without the VC++ redistributable that load
             // aborts the whole app (README). Preflight the CRT here so the user gets an actionable message
             // instead of a crash. faster-whisper is a self-contained external exe, so it is not checked.
+#if WINDOWS
             if (!VcRedistChecker.IsRuntimePresent(out _))
             {
                 err = VcRedistChecker.BuildMissingMessage("Speech-to-text (whisper.cpp)");
                 actionHint = KnownErrorActionKeys.InstallVcRedist;
                 return false;
             }
+#endif
 
             if (_config.Subtitles.WhisperCppConfig.Model == null)
             {
@@ -123,15 +125,20 @@ public class SubtitlesASR
                 return false;
             }
 
-            if (!File.Exists(_config.Subtitles.WhisperCppConfig.Model.ModelFilePath))
+            if (!File.Exists(_config.Subtitles.WhisperCppConfig.GetModelFilePath()))
             {
+#if WINDOWS
                 err = $"whisper.cpp model file '{_config.Subtitles.WhisperCppConfig.Model.ModelFileName}' does not exist in the folder. Please download it from the settings.";
+#else
+                err = $"whisper.cpp model file does not exist: '{_config.Subtitles.WhisperCppConfig.GetModelFilePath()}'. Place the selected ggml model at this path.";
+#endif
                 actionHint = KnownErrorActionKeys.DownloadWhisperModel;
                 return false;
             }
         }
         else if (_config.Subtitles.ASREngine == SubASREngineType.FasterWhisper)
         {
+#if WINDOWS
             if (_config.Subtitles.FasterWhisperConfig.UseManualEngine)
             {
                 if (!File.Exists(_config.Subtitles.FasterWhisperConfig.ManualEnginePath))
@@ -148,6 +155,10 @@ public class SubtitlesASR
                     return false;
                 }
             }
+#else
+            if (!_config.Subtitles.FasterWhisperConfig.ValidateEngine(out err))
+                return false;
+#endif
 
             if (_config.Subtitles.FasterWhisperConfig.UseManualModel)
             {
@@ -173,7 +184,7 @@ public class SubtitlesASR
     /// <param name="type">Demuxer type</param>
     /// <param name="curTime">Current playback timestamp, from which whisper is run</param>
     /// <returns>true: process completed, false: run in progress</returns>
-    public bool Execute(int subIndex, string url, int streamIndex, MediaType type, TimeSpan curTime)
+    public bool Execute(int subIndex, string url, int streamIndex, MediaType type, TimeSpan curTime, Action? startupAcknowledged = null)
     {
         // When Dual ASR: Copy the other ASR result and return early. HC-37: read SubIndexSet under _lockerSubs
         // (every mutation uses it) instead of racing the raw HashSet.
@@ -220,6 +231,7 @@ public class SubtitlesASR
             }
 
             // return early
+            startupAcknowledged?.Invoke();
             return false;
         }
 
@@ -279,6 +291,7 @@ public class SubtitlesASR
             // A fresh run must never start paused (e.g. left paused before a seek-triggered restart).
             _pauseSource.Resume();
             _config.Subtitles.player.IsASRPaused = false;
+            startupAcknowledged?.Invoke();
             // F-19 slice 2: enable VAD cue-boundary snapping only on the interactive ASR path (batch re-segments
             // post-hoc without per-chunk audio, so it does not run VAD). Gated by the config toggle; fail-soft.
             using AudioReader reader = new(_config, subIndex, enableVadSnapping: _config.Subtitles.VadCueSnapping);
@@ -1382,7 +1395,23 @@ public class WhisperCppASRService : IASRService
 
             if (CanDebug) Log.Debug($"Selecting whisper runtime libraries from ({string.Join(",", RuntimeOptions.RuntimeLibraryOrder)})");
 
-            _factory = WhisperFactory.FromPath(_config.Subtitles.WhisperCppConfig.Model!.ModelFilePath, _config.Subtitles.WhisperCppConfig.GetFactoryOptions());
+#if WINDOWS
+            _factory = WhisperFactory.FromPath(_config.Subtitles.WhisperCppConfig.GetModelFilePath(), _config.Subtitles.WhisperCppConfig.GetFactoryOptions());
+#else
+            try
+            {
+                _factory = WhisperFactory.FromPath(_config.Subtitles.WhisperCppConfig.GetModelFilePath(), _config.Subtitles.WhisperCppConfig.GetFactoryOptions());
+            }
+            catch (Exception e) when (e is DllNotFoundException or BadImageFormatException ||
+                                      e is FileNotFoundException missing && string.IsNullOrEmpty(missing.FileName))
+            {
+                _logger.Dispose();
+                throw new InvalidOperationException(
+                    $"Could not load the Linux CPU Whisper native libraries in '{Path.Combine(AppContext.BaseDirectory, "runtimes", "linux-x64")}'. " +
+                    $"This package supplies CPU only; selected runtimes: {string.Join(", ", RuntimeOptions.RuntimeLibraryOrder)}. " +
+                    "Restore the complete Linux package and verify libgomp.so.1, glibc >= 2.34 and libstdc++ (GLIBCXX >= 3.4.29) are available.", e);
+            }
+#endif
 
             if (CanDebug) Log.Debug($"Selected whisper runtime library '{RuntimeOptions.LoadedLibrary}'");
 
@@ -1731,6 +1760,9 @@ public partial class FasterWhisperASRService : IASRService
             StringBuilder output = new(); // for error output
             Lock outputLock = new();
             bool oneSuccess = false;
+#if !WINDOWS
+            int exitCode = 0;
+#endif
 
             // Per-segment detection (T-10): re-detect the language for every chunk instead of pinning the first
             // chunk's. Clearing the remembered language makes the stderr detection below capture this chunk's own
@@ -1759,6 +1791,10 @@ public partial class FasterWhisperASRService : IASRService
             await foreach (var cmdEvent in cmd.ListenAsync(Encoding.Default, Encoding.Default, forceCts.Token, token))
             {
                 token.ThrowIfCancellationRequested();
+#if !WINDOWS
+                if (cmdEvent is ExitedCommandEvent exited)
+                    exitCode = exited.ExitCode;
+#endif
 
                 if (cmdEvent is StandardErrorCommandEvent stdErr)
                 {
@@ -1880,9 +1916,15 @@ public partial class FasterWhisperASRService : IASRService
             }
 
             // validate if success
+#if !WINDOWS
+            if (exitCode != 0 || lastLine == null || !EndReg.Match(lastLine).Success)
+            {
+                throw new InvalidOperationException($"Failed to execute faster-whisper (exit code {exitCode}).")
+#else
             if (lastLine == null || !EndReg.Match(lastLine).Success)
             {
                 throw new InvalidOperationException("Failed to execute faster-whisper")
+#endif
                 {
                     Data =
                     {

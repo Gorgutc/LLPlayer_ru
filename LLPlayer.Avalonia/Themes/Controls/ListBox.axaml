@@ -1,0 +1,30 @@
+<!-- shadcn-flavoured ListBox: transparent list, rounded items, hover = accent, selected = secondary. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ListBoxItem">
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="FontSize" Value="{DynamicResource Shadcn.TextSm}" />
+  </Style>
+  <Style Selector="ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="CornerRadius" Value="{DynamicResource Shadcn.RadiusMd}" />
+  </Style>
+  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource Shadcn.AccentForegroundBrush}" />
+  </Style>
+  <Style Selector="ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.AccentBrush}" />
+  </Style>
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Shadcn.SecondaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource Shadcn.SecondaryForegroundBrush}" />
+  </Style>
+
+</Styles>
