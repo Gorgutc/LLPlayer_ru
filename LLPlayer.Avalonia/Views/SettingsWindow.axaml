@@ -38,6 +38,17 @@
             <TextBlock Text="Secondary text subtitle outline thickness (0–8 DIP)" TextWrapping="Wrap" />
             <NumericUpDown Name="SecondaryOutlineEditor" Minimum="0" Maximum="8" Increment="0.25" NumberFormat="{Binding NumberFormat}" Text="{Binding SecondarySubtitleOutlineThicknessText, Mode=TwoWay}" AutomationProperties.Name="Secondary text subtitle outline thickness (0–8 DIP)" />
             <TextBlock Text="Zero removes the outline; the existing shadow remains." Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBlock Text="Text subtitle outline color (primary and secondary)" TextWrapping="Wrap" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <TextBox Name="SubtitleOutlineColorEditor" Text="{Binding SubtitleOutlineColor, Mode=TwoWay}"
+                       AutomationProperties.Name="Text subtitle outline color (primary and secondary)"
+                       AutomationProperties.HelpText="Use #RRGGBB, for example #000000. Applies to both primary and secondary text subtitle outlines." />
+              <Border Name="SubtitleOutlineColorSwatch" Grid.Column="1" Width="36" Height="36"
+                      Background="{Binding SubtitleOutlineBrush}" BorderThickness="1" BorderBrush="{DynamicResource Shadcn.BorderBrush}"
+                      CornerRadius="4" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock Text="Use #RRGGBB (for example #000000). Applies to both primary and secondary text subtitle outlines."
+                       Classes="dialog-description" TextWrapping="Wrap" />
             <TextBlock Text="Primary text subtitle color" />
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
               <TextBox Name="PrimaryTextColorEditor" Text="{Binding SubtitleTextColor, Mode=TwoWay}"

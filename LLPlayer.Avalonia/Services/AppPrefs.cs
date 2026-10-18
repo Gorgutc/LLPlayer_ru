@@ -22,6 +22,7 @@ public sealed class AppPrefs
     public const double DefaultSecondarySubtitleOutlineThickness = 2.5;
     public const string DefaultSubtitleTextColor = "#FFFFFF";
     public const string DefaultSecondarySubtitleTextColor = "#E8E8E8";
+    public const string DefaultSubtitleOutlineColor = "#000000";
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -40,6 +41,8 @@ public sealed class AppPrefs
     public string SubtitleTextColor { get; set; } = DefaultSubtitleTextColor;
     /// <summary>Opaque secondary text subtitle fill in canonical #RRGGBB format.</summary>
     public string SecondarySubtitleTextColor { get; set; } = DefaultSecondarySubtitleTextColor;
+    /// <summary>Opaque outline color shared by both text subtitle overlays in canonical #RRGGBB format.</summary>
+    public string SubtitleOutlineColor { get; set; } = DefaultSubtitleOutlineColor;
     public bool SubtitlesVisible { get; set; } = true;
 
     public bool SidebarVisible { get; set; }
@@ -80,6 +83,7 @@ public sealed class AppPrefs
         SecondarySubtitleOutlineThickness = double.IsFinite(SecondarySubtitleOutlineThickness) ? Math.Clamp(SecondarySubtitleOutlineThickness, MinSubtitleOutlineThickness, MaxSubtitleOutlineThickness) : DefaultSecondarySubtitleOutlineThickness;
         SubtitleTextColor = TryNormalizeSubtitleTextColor(SubtitleTextColor, out string primaryColor) ? primaryColor : DefaultSubtitleTextColor;
         SecondarySubtitleTextColor = TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string secondaryColor) ? secondaryColor : DefaultSecondarySubtitleTextColor;
+        SubtitleOutlineColor = TryNormalizeSubtitleTextColor(SubtitleOutlineColor, out string outlineColor) ? outlineColor : DefaultSubtitleOutlineColor;
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
