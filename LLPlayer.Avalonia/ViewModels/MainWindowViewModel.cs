@@ -47,6 +47,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     readonly IAppShell shell;
     readonly TimeProvider time;
     readonly List<string> pendingSubtitles = [];
+    object? pendingMediaRequest;
     DateTimeOffset lastActivity;
     bool updatingFromPlayer;
     double seekTarget = -1;
@@ -97,6 +98,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         player.PropertyChanged += OnPlayerPropertyChanged;
         player.CuesChanged += OnCuesChanged;
         player.OpenCompleted += OnOpenCompleted;
+        player.ExternalMediaOpening += OnExternalMediaOpening;
         player.ErrorOccurred += OnPlayerError;
         if (player is IRecognitionController recognition) recognition.RecognitionError += OnRecognitionError;
 
@@ -500,7 +502,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         pendingSubtitles.Clear();
         if (subtitles != null)
             pendingSubtitles.AddRange(subtitles);
-        player.Open(path);
+        object request = new();
+        pendingMediaRequest = request;
+        player.Open(path, error =>
+        {
+            if (disposed || !ReferenceEquals(pendingMediaRequest, request))
+                return;
+            pendingMediaRequest = null;
+            string[] subs = [.. pendingSubtitles];
+            pendingSubtitles.Clear();
+            if (error == null)
+                foreach (string subtitle in subs)
+                    player.OpenSubtitles(subtitle);
+        });
     }
 
     public void OpenSubtitlesFile(string path)
@@ -631,6 +645,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         player.PropertyChanged -= OnPlayerPropertyChanged;
         player.CuesChanged -= OnCuesChanged;
         player.OpenCompleted -= OnOpenCompleted;
+        player.ExternalMediaOpening -= OnExternalMediaOpening;
         player.ErrorOccurred -= OnPlayerError;
         if (player is IRecognitionController recognition) recognition.RecognitionError -= OnRecognitionError;
         WordPopup.Invalidate();
@@ -697,10 +712,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Sidebar.Reload();
     }
 
+    void OnExternalMediaOpening()
+    {
+        pendingMediaRequest = null;
+        pendingSubtitles.Clear();
+    }
+
     void OnOpenCompleted(string? url, bool isSubtitles, string? error)
     {
         if (error != null)
         {
+            if (!isSubtitles && pendingMediaRequest == null)
+                pendingSubtitles.Clear();
             ShowToast(isSubtitles ? "Could not open subtitles" : "Could not open media", error, ToastVariant.Destructive);
             return;
         }
@@ -720,10 +743,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SavePrefs();
         }
 
-        string[] subs = [.. pendingSubtitles];
-        pendingSubtitles.Clear();
-        foreach (string s in subs)
-            player.OpenSubtitles(s);
+        // Native engine shortcuts also open media. Their pending subtitles retain the generic event path;
+        // app-owned requests consume their own sidecars only from their per-request completion callback.
+        if (pendingMediaRequest == null)
+        {
+            string[] subs = [.. pendingSubtitles];
+            pendingSubtitles.Clear();
+            foreach (string s in subs)
+                player.OpenSubtitles(s);
+        }
 
         Sidebar.Reload();
         SyncAllFromPlayer();

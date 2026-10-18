@@ -8,6 +8,7 @@ namespace FlyleafLib.MediaPlayer;
 
 unsafe partial class Player
 {
+    long openRequestSequence;
     #region Events
     public event EventHandler<OpeningArgs>                              Opening; // Will be also used for subtitles
     public event EventHandler<OpenCompletedArgs>                        OpenCompleted; // Will be also used for subtitles
@@ -184,9 +185,9 @@ unsafe partial class Player
     #endregion
 
     #region Open Implementation
-    private OpenCompletedArgs OpenInternal(object url_iostream, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true)
+    private OpenCompletedArgs OpenInternal(object url_iostream, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true, long requestId = 0)
     {
-        OpenCompletedArgs args = new();
+        OpenCompletedArgs args = new() { RequestId = requestId };
 
         try
         {
@@ -247,9 +248,9 @@ unsafe partial class Player
             OnOpenCompleted(args);
         }
     }
-    private OpenCompletedArgs OpenSubtitles(string url)
+    private OpenCompletedArgs OpenSubtitles(string url, long requestId = 0)
     {
-        OpenCompletedArgs args = new(url, null, null, true);
+        OpenCompletedArgs args = new(url, null, null, true) { RequestId = requestId };
 
         try
         {
@@ -291,15 +292,16 @@ unsafe partial class Player
     /// <returns></returns>
     public OpenCompletedArgs Open(string url, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true, bool forceSubtitles = false)
     {
+        long requestId = Interlocked.Increment(ref openRequestSequence);
         if (forceSubtitles || ExtensionsSubtitles.Contains(GetUrlExtention(url)))
         {
-            OnOpening(new() { Url = url, IsSubtitles = true});
-            return OpenSubtitles(url);
+            OnOpening(new() { Url = url, IsSubtitles = true, RequestId = requestId });
+            return OpenSubtitles(url, requestId);
         }
         else
         {
-            OnOpening(new() { Url = url });
-            return OpenInternal(url, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles);
+            OnOpening(new() { Url = url, RequestId = requestId });
+            return OpenInternal(url, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles, requestId);
         }
     }
 
@@ -326,8 +328,9 @@ unsafe partial class Player
     /// <returns></returns>
     public OpenCompletedArgs Open(Stream iostream, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true)
     {
-        OnOpening(new() { IOStream = iostream });
-        return OpenInternal(iostream, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles);
+        long requestId = Interlocked.Increment(ref openRequestSequence);
+        OnOpening(new() { IOStream = iostream, RequestId = requestId });
+        return OpenInternal(iostream, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles, requestId);
     }
 
     /// <summary>
@@ -862,7 +865,7 @@ unsafe partial class Player
                 {
                     openInputs.Clear();
                     decoder.Interrupt = true;
-                    OpenInternal(data.url_iostream, data.defaultPlaylistItem, data.defaultVideo, data.defaultAudio, data.defaultSubtitles);
+                    OpenInternal(data.url_iostream, data.defaultPlaylistItem, data.defaultVideo, data.defaultAudio, data.defaultSubtitles, data.RequestId);
                 }
                 else if (openSessions.TryPop(out data))
                 {
@@ -896,7 +899,7 @@ unsafe partial class Player
                 {
                     openSubtitles.Clear();
                     if (data.url_iostream != null)
-                        OpenSubtitles(data.url_iostream.ToString());
+                        OpenSubtitles(data.url_iostream.ToString(), data.RequestId);
                     else if (data.extStream != null)
                         Open(data.extStream, data.resync);
                     else if (data.stream != null)
@@ -932,21 +935,22 @@ unsafe partial class Player
                 }
             }
 
+            long requestId = Interlocked.Increment(ref openRequestSequence);
             if ((url_iostream is string) && ExtensionsSubtitles.Contains(GetUrlExtention(url_iostream.ToString())))
             {
-                OnOpening(new() { Url = url_iostream.ToString(), IsSubtitles = true});
-                openSubtitles.Push(new OpenAsyncData(url_iostream));
+                OnOpening(new() { Url = url_iostream.ToString(), IsSubtitles = true, RequestId = requestId });
+                openSubtitles.Push(new OpenAsyncData(url_iostream) { RequestId = requestId });
             }
             else
             {
                 decoder.Interrupt = true;
 
                 if (url_iostream is string)
-                    OnOpening(new() { Url = url_iostream.ToString() });
+                    OnOpening(new() { Url = url_iostream.ToString(), RequestId = requestId });
                 else
-                    OnOpening(new() { IOStream = (Stream)url_iostream });
+                    OnOpening(new() { IOStream = (Stream)url_iostream, RequestId = requestId });
 
-                openInputs.Push(new OpenAsyncData(url_iostream, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles));
+                openInputs.Push(new OpenAsyncData(url_iostream, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles) { RequestId = requestId });
             }
 
             // Select primary subtitle & original mode when dropped
@@ -1047,6 +1051,8 @@ unsafe partial class Player
 
 public class OpeningArgs
 {
+    /// <summary>Identifies this input request, including repeated URLs and coalesced async input queues.</summary>
+    public long         RequestId;
     public string       Url;
     public Stream       IOStream;
     public bool         IsSubtitles;
@@ -1054,6 +1060,8 @@ public class OpeningArgs
 
 public class OpenCompletedArgs
 {
+    /// <summary>The matching input OpeningArgs.RequestId (zero for legacy manually constructed results).</summary>
+    public long         RequestId;
     public string       Url;
     public Stream       IOStream;
     public string       Error;
@@ -1065,6 +1073,7 @@ public class OpenCompletedArgs
 
 class OpenAsyncData
 {
+    public long RequestId;
     public object url_iostream;
     public Session session;
     public PlaylistItem playlistItem;

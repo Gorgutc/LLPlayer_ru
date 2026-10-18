@@ -16,6 +16,10 @@ namespace LLPlayer.Avalonia.Services;
 /// </summary>
 public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitionController, IDisposable, IAsyncDisposable
 {
+    sealed record NativeMediaOpen(long RequestId, int Epoch);
+    readonly AsyncLocal<int> appMediaOpenEpoch = new();
+    volatile NativeMediaOpen? latestNativeOpen;
+    int mediaOpenEpoch;
     readonly Player player;
     readonly IUIDispatcher? ui;
     readonly CollectionSyncBridge bridge;
@@ -109,6 +113,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     public event PropertyChangedEventHandler? PropertyChanged;
     public event Action<int>? CuesChanged;
     public event Action<string?, bool, string?>? OpenCompleted;
+    public event Action? ExternalMediaOpening;
     public event Action<string>? ErrorOccurred;
     public event Action<string, string?, string?>? RecognitionError;
 
@@ -291,8 +296,23 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
             else PlayerRecognitionBackend.RunSubtitleCommand(player, track.Source, () => player.Commands.OpenSubtitlesAction(((object)subIndex, track.Source, (object)SelectSubMethod.Original)), token);
         }));
 
-    public void Open(string url) => Observe(MutateWithTranslationAsync(() => player.Open(url), mediaChange: true));
-    public void OpenSubtitles(string path) => Observe(MutateWithTranslationAsync(() => player.Open(path)));
+    public void Open(string url) => Open(url, _ => { });
+    public void Open(string url, Action<string?> completed)
+    {
+        int epoch = Interlocked.Increment(ref mediaOpenEpoch);
+        Observe(MutateWithTranslationAsync(() =>
+        {
+            // Player.Open raises Opening/OpenCompleted synchronously. Carry this request's identity through those
+            // events instead of inferring ownership from a URL, which may be opened more than once.
+            int previous = appMediaOpenEpoch.Value;
+            appMediaOpenEpoch.Value = epoch;
+            string? error;
+            try { error = player.Open(url).Error; }
+            finally { appMediaOpenEpoch.Value = previous; }
+            Post(() => { if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) completed(error); });
+        }, mediaChange: true));
+    }
+    public void OpenSubtitles(string path) => Observe(MutateWithTranslationAsync(() => player.Open(path, forceSubtitles: true)));
     async void Observe(Task work)
     {
         try { await work; }
@@ -307,6 +327,12 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     {
         long ms = Math.Max(0, (long)position.TotalMilliseconds);
         player.SeekAccurate((int)Math.Min(ms, int.MaxValue));
+    }
+
+    public void SeekToSubtitle(TimeSpan position, int slot)
+    {
+        if (slot is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(slot));
+        player.SeekAccurate(position, slot);
     }
 
     public bool KeyDown(WpfKey key) => Player.KeyDown(player, key);
@@ -408,8 +434,19 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
 
     void OnOpening(object? sender, OpeningArgs e)
     {
-        // Native engine shortcuts open asynchronously, outside the app mutation queue. Reject the old media generation.
-        if (!e.IsSubtitles) Recognition.Invalidate();
+        if (e.IsSubtitles) return;
+        // Native engine shortcuts open outside the app mutation queue. Invalidate immediately, before the UI
+        // notification can run, so an already-posted app completion cannot attach its sidecars to the new media.
+        Recognition.Invalidate();
+        if (appMediaOpenEpoch.Value == 0)
+        {
+            int epoch = Interlocked.Increment(ref mediaOpenEpoch);
+            latestNativeOpen = new(e.RequestId, epoch);
+            Post(() =>
+            {
+                if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) ExternalMediaOpening?.Invoke();
+            });
+        }
     }
 
     void OnOpenCompleted(object? sender, OpenCompletedArgs? e)
@@ -420,8 +457,18 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         string? url = e.Url;
         bool isSubs = e.IsSubtitles;
         string? error = e.Error;
+        int epoch = appMediaOpenEpoch.Value;
+        if (!isSubs && epoch == 0)
+        {
+            // OpenAsync reuses one worker and coalesces queued inputs. Only the engine's per-input identity can
+            // match its completion to Opening; a captured execution context or URL cannot establish ownership.
+            NativeMediaOpen? native = latestNativeOpen;
+            if (native == null || native.RequestId != e.RequestId) return;
+            epoch = native.Epoch;
+        }
         Post(() =>
         {
+            if (disposed || (!isSubs && epoch != Volatile.Read(ref mediaOpenEpoch))) return;
             Raise(nameof(Title));
             Raise(nameof(Url));
             Raise(nameof(IsOpened));

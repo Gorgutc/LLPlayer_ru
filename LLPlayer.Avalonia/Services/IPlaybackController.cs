@@ -59,6 +59,9 @@ public interface IPlaybackController : INotifyPropertyChanged
     /// <summary>Raised (UI thread) after an open finishes: (url, isSubtitles, error or null).</summary>
     event Action<string?, bool, string?>? OpenCompleted;
 
+    /// <summary>Raised on the UI thread when an engine/native media opening supersedes app-owned requests.</summary>
+    event Action? ExternalMediaOpening;
+
     /// <summary>Raised (UI thread) for engine errors the user should see.</summary>
     event Action<string>? ErrorOccurred;
 
@@ -67,11 +70,18 @@ public interface IPlaybackController : INotifyPropertyChanged
     void SelectSubtitleTrack(int slot, SubtitleTrack? track);
 
     void Open(string url);
+
+    /// <summary>Opens media and reports this particular request's result on the UI thread, even when URLs repeat.
+    /// Requests superseded before engine dispatch need not complete.</summary>
+    void Open(string url, Action<string?> completed);
     void OpenSubtitles(string path);
     void Play();
     void Pause();
     void TogglePlayPause();
     void SeekTo(TimeSpan position);
+
+    /// <summary>Seeks to a subtitle cue using its slot's delay and the engine's fractional timestamp rounding.</summary>
+    void SeekToSubtitle(TimeSpan position, int slot);
 
     /// <summary>Routes a key to the engine's key bindings (Player.KeyDown / KeyUp). Returns true when handled.</summary>
     bool KeyDown(WpfKey key);

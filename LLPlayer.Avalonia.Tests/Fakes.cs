@@ -12,8 +12,10 @@ public class FakePlaybackController : IPlaybackController
     public event PropertyChangedEventHandler? PropertyChanged;
     public event Action<int>? CuesChanged;
     public event Action<string?, bool, string?>? OpenCompleted;
+    public event Action? ExternalMediaOpening;
     public event Action<string>? ErrorOccurred;
 
+    readonly List<Action<string?>?> openCompletions = [];
     public List<TimeSpan> Seeks { get; } = [];
     public List<WpfKey> KeysDown { get; } = [];
     public List<WpfKey> KeysUp { get; } = [];
@@ -52,6 +54,13 @@ public class FakePlaybackController : IPlaybackController
     public void Open(string url)
     {
         Opened.Add(url);
+        openCompletions.Add(null);
+    }
+
+    public void Open(string url, Action<string?> completed)
+    {
+        Open(url);
+        openCompletions[^1] = completed;
     }
 
     public void OpenSubtitles(string path) => OpenedSubtitles.Add(path);
@@ -70,6 +79,7 @@ public class FakePlaybackController : IPlaybackController
     }
 
     public void SeekTo(TimeSpan position) => Seeks.Add(position);
+    public void SeekToSubtitle(TimeSpan position, int slot) => Seeks.Add(position);
 
     public bool KeyDown(WpfKey key)
     {
@@ -85,8 +95,28 @@ public class FakePlaybackController : IPlaybackController
 
     public string? GetSubtitleLanguage(int slot) => Language;
 
+    public void CompleteOpen(int requestIndex, string? error = null)
+    {
+        Action<string?>? completed = openCompletions[requestIndex];
+        openCompletions[requestIndex] = null;
+        OpenCompleted?.Invoke(Opened[requestIndex], false, error);
+        completed?.Invoke(error);
+    }
+
+    public void RaiseExternalMediaOpening() => ExternalMediaOpening?.Invoke();
+
     public void RaiseCuesChanged(int slot) => CuesChanged?.Invoke(slot);
-    public void RaiseOpenCompleted(string? url, bool isSubtitles, string? error) => OpenCompleted?.Invoke(url, isSubtitles, error);
+    public void RaiseOpenCompleted(string? url, bool isSubtitles, string? error)
+    {
+        if (!isSubtitles)
+            for (int i = 0; i < Opened.Count; i++)
+                if (Opened[i] == url && openCompletions[i] != null)
+                {
+                    CompleteOpen(i, error);
+                    return;
+                }
+        OpenCompleted?.Invoke(url, isSubtitles, error);
+    }
     public void RaiseError(string message) => ErrorOccurred?.Invoke(message);
 
     void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
