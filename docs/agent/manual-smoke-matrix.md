@@ -167,8 +167,8 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
 - Enter fullscreen with F and return with Esc; confirm normal-window restoration. Resize the window and
   inspect transport controls and sidebar bounds without hidden or overlapping controls.
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
-  ZIP validation/CRC readback and cumulative independent review passed. Source Windows/Linux CI awaits
-  publication. On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
+  ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
+  is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
   (video and 24 primary cues), gear Settings/Close draft discard, F/Esc fullscreen restoration and Media menu
   visibility were observed. The rebuilt package was not launched; rebuilt interactions and secondary subtitles
   are **NOT_RUN / DEFERRED BY OWNER**, following the request for no Computer Use while working. No new Linux

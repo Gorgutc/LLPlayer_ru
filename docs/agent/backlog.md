@@ -1458,7 +1458,8 @@ Windows baseline, дальнейший Core, паритет и GPU оценив
 9. **F-13 Windows/Linux Avalonia 🚧 (priority update владельца 2026-10-18)** — продолжать общий UI/Core срезами,
    сохраняя WPF full gate и обе Avalonia платформенные проверки. Ограниченный desktop-interaction follow-up
    исправляет file/subtitle/settings/layout interactions; local WPF/Windows Avalonia gates, focused tests,
-   package/CRC readback и cumulative `/review` прошли. Source Windows/Linux CI ждёт публикации; native recheck
+   package/CRC readback и cumulative `/review` прошли. Source Windows/Linux CI отслеживается в
+   [PR № 169](https://github.com/Gorgutc/LLPlayer_ru/pull/169); native recheck
    rebuilt package — **NOT_RUN / DEFERRED BY OWNER** (без автозапуска по просьбе владельца).
    [Текущий receipt](f13-status-2026-10-18.md#bounded-desktop-interaction-follow-up--verification-in-progress).
    Отсрочка Windows из решения 2026-10-03 заменена решением 2026-10-18; прежние receipts сохраняют свой scope.
