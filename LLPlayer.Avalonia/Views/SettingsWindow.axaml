@@ -33,6 +33,11 @@
             <NumericUpDown Name="ScaleEditor" Minimum="0.4" Maximum="1.5" Increment="0.05" NumberFormat="{Binding NumberFormat}" Text="{Binding SecondaryFontScaleText, Mode=TwoWay}" FormatString="0.##" />
             <TextBlock Text="Text subtitle bottom offset (0–400 DIP)" TextWrapping="Wrap" />
             <NumericUpDown Name="PositionEditor" Minimum="0" Maximum="400" Increment="8" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitleBottomOffsetText, Mode=TwoWay}" AutomationProperties.Name="Text subtitle bottom offset (0–400 DIP)" />
+            <TextBlock Text="Primary text subtitle outline thickness (0–8 DIP)" TextWrapping="Wrap" />
+            <NumericUpDown Name="PrimaryOutlineEditor" Minimum="0" Maximum="8" Increment="0.25" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitleOutlineThicknessText, Mode=TwoWay}" AutomationProperties.Name="Primary text subtitle outline thickness (0–8 DIP)" />
+            <TextBlock Text="Secondary text subtitle outline thickness (0–8 DIP)" TextWrapping="Wrap" />
+            <NumericUpDown Name="SecondaryOutlineEditor" Minimum="0" Maximum="8" Increment="0.25" NumberFormat="{Binding NumberFormat}" Text="{Binding SecondarySubtitleOutlineThicknessText, Mode=TwoWay}" AutomationProperties.Name="Secondary text subtitle outline thickness (0–8 DIP)" />
+            <TextBlock Text="Zero removes the outline; the existing shadow remains." Classes="dialog-description" TextWrapping="Wrap" />
           </StackPanel>
           <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
             <TextBlock Text="Tools" Classes="dialog-title" />

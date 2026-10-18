@@ -16,6 +16,10 @@ public sealed class AppPrefs
     public const double MinSubtitleBottomOffset = 0;
     public const double MaxSubtitleBottomOffset = 400;
     public const double DefaultSubtitleBottomOffset = 24;
+    public const double MinSubtitleOutlineThickness = 0;
+    public const double MaxSubtitleOutlineThickness = 8;
+    public const double DefaultSubtitleOutlineThickness = 3;
+    public const double DefaultSecondarySubtitleOutlineThickness = 2.5;
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -26,6 +30,10 @@ public sealed class AppPrefs
     public double SecondaryFontScale { get; set; } = 0.8;
     /// <summary>Distance of the text subtitle overlay from the bottom edge in DIPs.</summary>
     public double SubtitleBottomOffset { get; set; } = DefaultSubtitleBottomOffset;
+    /// <summary>Primary text subtitle outline thickness in DIPs; zero leaves the existing shadow.</summary>
+    public double SubtitleOutlineThickness { get; set; } = DefaultSubtitleOutlineThickness;
+    /// <summary>Secondary text subtitle outline thickness in DIPs; zero leaves the existing shadow.</summary>
+    public double SecondarySubtitleOutlineThickness { get; set; } = DefaultSecondarySubtitleOutlineThickness;
     public bool SubtitlesVisible { get; set; } = true;
 
     public bool SidebarVisible { get; set; }
@@ -62,6 +70,8 @@ public sealed class AppPrefs
         Volume = Math.Clamp(Volume, 0, 1000);
         SubtitleFontSize = double.IsFinite(SubtitleFontSize) ? Math.Clamp(SubtitleFontSize, MinSubtitleFontSize, MaxSubtitleFontSize) : DefaultSubtitleFontSize;
         SubtitleBottomOffset = double.IsFinite(SubtitleBottomOffset) ? Math.Clamp(SubtitleBottomOffset, MinSubtitleBottomOffset, MaxSubtitleBottomOffset) : DefaultSubtitleBottomOffset;
+        SubtitleOutlineThickness = double.IsFinite(SubtitleOutlineThickness) ? Math.Clamp(SubtitleOutlineThickness, MinSubtitleOutlineThickness, MaxSubtitleOutlineThickness) : DefaultSubtitleOutlineThickness;
+        SecondarySubtitleOutlineThickness = double.IsFinite(SecondarySubtitleOutlineThickness) ? Math.Clamp(SecondarySubtitleOutlineThickness, MinSubtitleOutlineThickness, MaxSubtitleOutlineThickness) : DefaultSecondarySubtitleOutlineThickness;
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";

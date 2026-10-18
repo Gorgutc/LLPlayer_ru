@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -143,7 +143,7 @@ public sealed class SubtitleText : Control
     {
         base.OnPropertyChanged(change);
         if (change.Property == TextProperty || change.Property == FontSizeProperty || change.Property == FontFamilyProperty
-            || change.Property == FontWeightProperty)
+            || change.Property == FontWeightProperty || change.Property == OutlineThicknessProperty)
         {
             Invalidate();
         }
