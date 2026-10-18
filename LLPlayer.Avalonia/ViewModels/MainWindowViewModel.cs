@@ -88,6 +88,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         SubtitleFontSize = prefs.SubtitleFontSize;
         SubtitleBottomOffset = prefs.SubtitleBottomOffset;
+        SubtitleOutlineThickness = prefs.SubtitleOutlineThickness;
+        SecondarySubtitleOutlineThickness = prefs.SecondarySubtitleOutlineThickness;
         SidebarVisible = prefs.SidebarVisible;
         SidebarWidth = prefs.SidebarWidth;
         IsDarkTheme = prefs.Theme != "Light";
@@ -141,6 +143,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitleFontSize = draft.SubtitleFontSize;
         candidate.SecondaryFontScale = draft.SecondaryFontScale;
         candidate.SubtitleBottomOffset = draft.SubtitleBottomOffset;
+        candidate.SubtitleOutlineThickness = draft.SubtitleOutlineThickness;
+        candidate.SecondarySubtitleOutlineThickness = draft.SecondarySubtitleOutlineThickness;
         candidate.SubtitlesVisible = draft.SubtitlesVisible;
         candidate.SidebarVisible = draft.SidebarVisible;
         candidate.SidebarWidth = draft.SidebarWidth;
@@ -150,11 +154,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SecondaryFontScale = candidate.SecondaryFontScale;
         prefs.SubtitleFontSize = candidate.SubtitleFontSize;
         prefs.SubtitleBottomOffset = candidate.SubtitleBottomOffset;
+        prefs.SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
+        prefs.SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
         prefs.SidebarVisible = candidate.SidebarVisible;
         prefs.SidebarWidth = candidate.SidebarWidth;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
         SubtitleFontSize = candidate.SubtitleFontSize;
         SubtitleBottomOffset = candidate.SubtitleBottomOffset;
+        SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
+        SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
         // A scale-only edit does not invoke OnSubtitleFontSizeChanged.
         SecondaryFontSize = Math.Round(candidate.SubtitleFontSize * candidate.SecondaryFontScale, 1);
         SidebarWidth = candidate.SidebarWidth;
@@ -259,6 +267,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial double SubtitleFontSize { get; private set; }
     [ObservableProperty] public partial double SecondaryFontSize { get; private set; }
     [ObservableProperty] public partial double SubtitleBottomOffset { get; private set; } = AppPrefs.DefaultSubtitleBottomOffset;
+    [ObservableProperty] public partial double SubtitleOutlineThickness { get; private set; } = AppPrefs.DefaultSubtitleOutlineThickness;
+    [ObservableProperty] public partial double SecondarySubtitleOutlineThickness { get; private set; } = AppPrefs.DefaultSecondarySubtitleOutlineThickness;
 
     // ---- sidebar -----------------------------------------------------------------------------------------------
 

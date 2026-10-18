@@ -207,9 +207,9 @@
           <StackPanel Name="SubtitleOverlay" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Spacing="2"
                       Margin="48,0,48,24">
             <c:SubtitleText Name="SecondarySubtitle" IsTranslated="{Binding SecondaryTextTranslated}" Slot="1" Text="{Binding SecondaryText}" IsVisible="{Binding SecondaryVisible}"
-                            FontSize="{Binding SecondaryFontSize}" Fill="#FFE8E8E8" OutlineThickness="2.5" />
+                            FontSize="{Binding SecondaryFontSize}" Fill="#FFE8E8E8" OutlineThickness="{Binding SecondarySubtitleOutlineThickness}" />
             <c:SubtitleText Name="PrimarySubtitle" IsTranslated="{Binding PrimaryTextTranslated}" Slot="0" Text="{Binding PrimaryText}" IsVisible="{Binding PrimaryVisible}"
-                            FontSize="{Binding SubtitleFontSize}" Fill="White" OutlineThickness="3" />
+                            FontSize="{Binding SubtitleFontSize}" Fill="White" OutlineThickness="{Binding SubtitleOutlineThickness}" />
           </StackPanel>
 
           <!-- empty state -->

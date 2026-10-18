@@ -177,6 +177,18 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   confirm clearance is transient and reopening/restarting retains only the base offset. Confirm primary and
   secondary text move together while bitmap positioning is unaffected. Native GUI/DPI/fullscreen checks remain
   deferred under the owner's no-Computer-Use instruction; focused headless results do not close this row.
+- **Text-subtitle outline thickness, separate owner-approved 2026-10-18 slice — NOT_RUN / DEFERRED BY OWNER:**
+  on each native Windows/Linux host, use the new package and an isolated profile. Missing primary/secondary
+  keys must retain the existing 3/2.5-DIP widths. Edit each Settings outline value independently, Save & Close,
+  reopen Settings and restart; confirm both persisted widths return on their own text-overlay slots. Check
+  fractional input under the host's number format, 0 and 8 DIP, and rejection of malformed, non-finite or
+  out-of-range raw input. Close/Esc must discard both draft edits; a persistence failure must preserve live and
+  persisted values and keep Settings open for retry. At zero the black outline is off and the existing shadow
+  remains; its pen width still derives from the selected outline, so do not expect an unchanged shadow footprint.
+  Inspect long primary/secondary cues, word clicks, minimum-window usability and 100%/150%/200% DPI after changing
+  widths, including a fractional 3 → 3.1-DIP change. Confirm bitmap subtitles, sidebar styling and WPF settings
+  remain outside this slice. Focused regressions and local WPF/Windows Avalonia gates passed separately; this is
+  a future new-package GUI/DPI acceptance row, which those source tests and prior package receipts do not close.
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open

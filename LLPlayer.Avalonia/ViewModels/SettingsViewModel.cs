@@ -20,6 +20,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitleBottomOffset = current.SubtitleBottomOffset;
         // A zero offset matches the generated property's initial value and does not invoke its change hook.
         SubtitleBottomOffsetText = current.SubtitleBottomOffset.ToString(NumberFormat);
+        SubtitleOutlineThickness = current.SubtitleOutlineThickness;
+        SecondarySubtitleOutlineThickness = current.SecondarySubtitleOutlineThickness;
+        // Loaded zero thickness also needs text when the generated change hook does not run.
+        SubtitleOutlineThicknessText = current.SubtitleOutlineThickness.ToString(NumberFormat);
+        SecondarySubtitleOutlineThicknessText = current.SecondarySubtitleOutlineThickness.ToString(NumberFormat);
         SubtitlesVisible = current.SubtitlesVisible;
         SidebarVisible = current.SidebarVisible;
         SidebarWidth = current.SidebarWidth;
@@ -32,12 +37,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial double SubtitleFontSize { get; set; }
     [ObservableProperty] public partial double SecondaryFontScale { get; set; }
     [ObservableProperty] public partial double SubtitleBottomOffset { get; set; }
+    [ObservableProperty] public partial double SubtitleOutlineThickness { get; set; }
+    [ObservableProperty] public partial double SecondarySubtitleOutlineThickness { get; set; }
     [ObservableProperty] public partial bool SubtitlesVisible { get; set; }
     [ObservableProperty] public partial bool SidebarVisible { get; set; }
     [ObservableProperty] public partial double SidebarWidth { get; set; }
     [ObservableProperty] public partial string SubtitleFontSizeText { get; set; } = "";
     [ObservableProperty] public partial string SecondaryFontScaleText { get; set; } = "";
     [ObservableProperty] public partial string SubtitleBottomOffsetText { get; set; } = "";
+    [ObservableProperty] public partial string SubtitleOutlineThicknessText { get; set; } = "";
+    [ObservableProperty] public partial string SecondarySubtitleOutlineThicknessText { get; set; } = "";
     [ObservableProperty] public partial string SidebarWidthText { get; set; } = "";
     [ObservableProperty] public partial int SelectedSection { get; set; }
     [ObservableProperty] public partial string? Error { get; private set; }
@@ -50,6 +59,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnSubtitleFontSizeChanged(double value) => SubtitleFontSizeText = value.ToString(NumberFormat);
     partial void OnSecondaryFontScaleChanged(double value) => SecondaryFontScaleText = value.ToString(NumberFormat);
     partial void OnSubtitleBottomOffsetChanged(double value) => SubtitleBottomOffsetText = value.ToString(NumberFormat);
+    partial void OnSubtitleOutlineThicknessChanged(double value) => SubtitleOutlineThicknessText = value.ToString(NumberFormat);
+    partial void OnSecondarySubtitleOutlineThicknessChanged(double value) => SecondarySubtitleOutlineThicknessText = value.ToString(NumberFormat);
     partial void OnSidebarWidthChanged(double value) => SidebarWidthText = value.ToString(NumberFormat);
 
     partial void OnSelectedSectionChanged(int value)
@@ -65,15 +76,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (!TryRead(SubtitleFontSizeText, 12, 96, out double fontSize)
             || !TryRead(SecondaryFontScaleText, 0.4, 1.5, out double scale)
             || !TryRead(SubtitleBottomOffsetText, AppPrefs.MinSubtitleBottomOffset, AppPrefs.MaxSubtitleBottomOffset, out double offset)
+            || !TryRead(SubtitleOutlineThicknessText, AppPrefs.MinSubtitleOutlineThickness, AppPrefs.MaxSubtitleOutlineThickness, out double outline)
+            || !TryRead(SecondarySubtitleOutlineThicknessText, AppPrefs.MinSubtitleOutlineThickness, AppPrefs.MaxSubtitleOutlineThickness, out double secondaryOutline)
             || !TryRead(SidebarWidthText, 220, 900, out double width)
             || Theme is not ("Dark" or "Light"))
         {
-            Error = "Choose Dark or Light, font size 12–96, secondary scale 0.4–1.5, text subtitle bottom offset 0–400 and sidebar width 220–900.";
+            Error = "Choose Dark or Light, font size 12–96, secondary scale 0.4–1.5, text subtitle bottom offset 0–400, primary and secondary outline thickness 0–8 and sidebar width 220–900.";
             return;
         }
         SubtitleFontSize = fontSize;
         SecondaryFontScale = scale;
         SubtitleBottomOffset = offset;
+        SubtitleOutlineThickness = outline;
+        SecondarySubtitleOutlineThickness = secondaryOutline;
         SidebarWidth = width;
         try { commit(this); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
