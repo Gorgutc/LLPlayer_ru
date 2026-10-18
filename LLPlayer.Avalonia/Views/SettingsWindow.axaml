@@ -38,6 +38,26 @@
             <TextBlock Text="Secondary text subtitle outline thickness (0–8 DIP)" TextWrapping="Wrap" />
             <NumericUpDown Name="SecondaryOutlineEditor" Minimum="0" Maximum="8" Increment="0.25" NumberFormat="{Binding NumberFormat}" Text="{Binding SecondarySubtitleOutlineThicknessText, Mode=TwoWay}" AutomationProperties.Name="Secondary text subtitle outline thickness (0–8 DIP)" />
             <TextBlock Text="Zero removes the outline; the existing shadow remains." Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBlock Text="Primary text subtitle color" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <TextBox Name="PrimaryTextColorEditor" Text="{Binding SubtitleTextColor, Mode=TwoWay}"
+                       AutomationProperties.Name="Primary text subtitle color"
+                       AutomationProperties.HelpText="Use #RRGGBB, for example #FFFFFF." />
+              <Border Name="PrimaryTextColorSwatch" Grid.Column="1" Width="36" Height="36"
+                      Background="{Binding SubtitleTextBrush}" BorderThickness="1" BorderBrush="{DynamicResource Shadcn.BorderBrush}"
+                      CornerRadius="4" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock Text="Secondary text subtitle color" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <TextBox Name="SecondaryTextColorEditor" Text="{Binding SecondarySubtitleTextColor, Mode=TwoWay}"
+                       AutomationProperties.Name="Secondary text subtitle color"
+                       AutomationProperties.HelpText="Use #RRGGBB, for example #E8E8E8." />
+              <Border Name="SecondaryTextColorSwatch" Grid.Column="1" Width="36" Height="36"
+                      Background="{Binding SecondarySubtitleTextBrush}" BorderThickness="1" BorderBrush="{DynamicResource Shadcn.BorderBrush}"
+                      CornerRadius="4" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock Text="Use #RRGGBB (for example #FFFFFF). Colors apply to text subtitle overlays."
+                       Classes="dialog-description" TextWrapping="Wrap" />
           </StackPanel>
           <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
             <TextBlock Text="Tools" Classes="dialog-title" />

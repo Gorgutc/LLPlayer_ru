@@ -1,5 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using LLPlayer.Avalonia.Services;
 using System.Globalization;
 
@@ -22,6 +24,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitleBottomOffsetText = current.SubtitleBottomOffset.ToString(NumberFormat);
         SubtitleOutlineThickness = current.SubtitleOutlineThickness;
         SecondarySubtitleOutlineThickness = current.SecondarySubtitleOutlineThickness;
+        SubtitleTextColor = current.SubtitleTextColor;
+        SecondarySubtitleTextColor = current.SecondarySubtitleTextColor;
         // Loaded zero thickness also needs text when the generated change hook does not run.
         SubtitleOutlineThicknessText = current.SubtitleOutlineThickness.ToString(NumberFormat);
         SecondarySubtitleOutlineThicknessText = current.SecondarySubtitleOutlineThickness.ToString(NumberFormat);
@@ -39,6 +43,10 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial double SubtitleBottomOffset { get; set; }
     [ObservableProperty] public partial double SubtitleOutlineThickness { get; set; }
     [ObservableProperty] public partial double SecondarySubtitleOutlineThickness { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SubtitleTextBrush))]
+    public partial string SubtitleTextColor { get; set; } = AppPrefs.DefaultSubtitleTextColor;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SecondarySubtitleTextBrush))]
+    public partial string SecondarySubtitleTextColor { get; set; } = AppPrefs.DefaultSecondarySubtitleTextColor;
     [ObservableProperty] public partial bool SubtitlesVisible { get; set; }
     [ObservableProperty] public partial bool SidebarVisible { get; set; }
     [ObservableProperty] public partial double SidebarWidth { get; set; }
@@ -53,6 +61,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool AppearanceSelected => SelectedSection == 0;
     public bool SubtitlesSelected => SelectedSection == 1;
     public bool ToolsSelected => SelectedSection == 2;
+    public ImmutableSolidColorBrush SubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleTextColor, out string color) ? color : AppPrefs.DefaultSubtitleTextColor));
+    public ImmutableSolidColorBrush SecondarySubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string color) ? color : AppPrefs.DefaultSecondarySubtitleTextColor));
     public SettingsLink? RequestedLink { get; private set; }
     public event Action? CloseRequested;
 
@@ -84,6 +94,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = "Choose Dark or Light, font size 12–96, secondary scale 0.4–1.5, text subtitle bottom offset 0–400, primary and secondary outline thickness 0–8 and sidebar width 220–900.";
             return;
         }
+        if (!AppPrefs.TryNormalizeSubtitleTextColor(SubtitleTextColor, out string primaryColor)
+            || !AppPrefs.TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string secondaryColor))
+        {
+            Error = "Use #RRGGBB for both text subtitle colors (for example #FFFFFF).";
+            return;
+        }
+        SubtitleTextColor = primaryColor;
+        SecondarySubtitleTextColor = secondaryColor;
         SubtitleFontSize = fontSize;
         SecondaryFontScale = scale;
         SubtitleBottomOffset = offset;

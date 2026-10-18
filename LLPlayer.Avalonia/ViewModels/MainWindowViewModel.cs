@@ -3,6 +3,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib;
@@ -90,6 +92,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SubtitleBottomOffset = prefs.SubtitleBottomOffset;
         SubtitleOutlineThickness = prefs.SubtitleOutlineThickness;
         SecondarySubtitleOutlineThickness = prefs.SecondarySubtitleOutlineThickness;
+        SubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SubtitleTextColor, out string primaryColor) ? primaryColor : AppPrefs.DefaultSubtitleTextColor));
+        SecondarySubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SecondarySubtitleTextColor, out string secondaryColor) ? secondaryColor : AppPrefs.DefaultSecondarySubtitleTextColor));
         SidebarVisible = prefs.SidebarVisible;
         SidebarWidth = prefs.SidebarWidth;
         IsDarkTheme = prefs.Theme != "Light";
@@ -145,6 +149,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitleBottomOffset = draft.SubtitleBottomOffset;
         candidate.SubtitleOutlineThickness = draft.SubtitleOutlineThickness;
         candidate.SecondarySubtitleOutlineThickness = draft.SecondarySubtitleOutlineThickness;
+        candidate.SubtitleTextColor = draft.SubtitleTextColor;
+        candidate.SecondarySubtitleTextColor = draft.SecondarySubtitleTextColor;
         candidate.SubtitlesVisible = draft.SubtitlesVisible;
         candidate.SidebarVisible = draft.SidebarVisible;
         candidate.SidebarWidth = draft.SidebarWidth;
@@ -156,6 +162,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         prefs.SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
         prefs.SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
+        prefs.SubtitleTextColor = candidate.SubtitleTextColor;
+        prefs.SecondarySubtitleTextColor = candidate.SecondarySubtitleTextColor;
         prefs.SidebarVisible = candidate.SidebarVisible;
         prefs.SidebarWidth = candidate.SidebarWidth;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
@@ -163,6 +171,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
         SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
+        SubtitleTextBrush = new(Color.Parse(candidate.SubtitleTextColor));
+        SecondarySubtitleTextBrush = new(Color.Parse(candidate.SecondarySubtitleTextColor));
         // A scale-only edit does not invoke OnSubtitleFontSizeChanged.
         SecondaryFontSize = Math.Round(candidate.SubtitleFontSize * candidate.SecondaryFontScale, 1);
         SidebarWidth = candidate.SidebarWidth;
@@ -269,6 +279,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial double SubtitleBottomOffset { get; private set; } = AppPrefs.DefaultSubtitleBottomOffset;
     [ObservableProperty] public partial double SubtitleOutlineThickness { get; private set; } = AppPrefs.DefaultSubtitleOutlineThickness;
     [ObservableProperty] public partial double SecondarySubtitleOutlineThickness { get; private set; } = AppPrefs.DefaultSecondarySubtitleOutlineThickness;
+    [ObservableProperty] public partial ImmutableSolidColorBrush SubtitleTextBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSubtitleTextColor));
+    [ObservableProperty] public partial ImmutableSolidColorBrush SecondarySubtitleTextBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSecondarySubtitleTextColor));
 
     // ---- sidebar -----------------------------------------------------------------------------------------------
 
