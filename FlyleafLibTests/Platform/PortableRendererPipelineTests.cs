@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using AwesomeAssertions;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaRenderer;
@@ -374,6 +375,84 @@ public class PortableRendererPipelineTests
         }
     }
 
+    [Theory]
+    [InlineData("png")]
+    [InlineData("bmp")]
+    [InlineData("jpg")]
+    [InlineData("jpeg")]
+    public void Snapshot_FormatsPreserveNativeUprightFrame_AndDecodedColours(string extension)
+    {
+        using Session source = new(PortableVideoTestMedia.QuadRotated, 90, 160);
+        var expected = ExpectedQuadrants(270, false, false);
+        source.WaitFrame((px, w, h) => w == 90 && h == 160 && QuadrantsMatch(px, w, h, expected));
+        string file = Path.Combine(Path.GetTempPath(), $"llplayer-snapshot-\u0446\u0432\u0435\u0442-{Guid.NewGuid():N}.{extension}");
+        bool validationFailed = false;
+        try
+        {
+            source.Renderer.TakeSnapshotToFile(file).Should().BeTrue();
+            byte[] signature = File.ReadAllBytes(file);
+            if (extension is "jpg" or "jpeg")
+            {
+                signature.Take(3).Should().Equal((byte)0xFF, (byte)0xD8, (byte)0xFF);
+                signature.TakeLast(2).Should().Equal((byte)0xFF, (byte)0xD9);
+            }
+            else if (extension == "png")
+                signature.Take(8).Should().Equal((byte)137, (byte)80, (byte)78, (byte)71, (byte)13, (byte)10, (byte)26, (byte)10);
+            else
+                signature.Take(2).Should().Equal((byte)'B', (byte)'M');
+
+            // Decode independently with the CLI already used to generate these fixtures. A still image need not
+            // support Player's paused-seek lifecycle; that is separate from whether the snapshot is a valid image.
+            var (pixels, width, height) = DecodeSnapshot(file);
+            (width, height).Should().Be((180, 320), "saving retains the native upright size despite half-size presentation");
+            var colours = Quadrants(pixels, width, height);
+            int tolerance = extension is "jpg" or "jpeg" ? 20 : 8;
+            for (int y = 0; y < 2; y++)
+                for (int x = 0; x < 2; x++)
+                    Near(colours[y, x], expected[y, x], tolerance).Should().BeTrue(
+                        $"{extension} quadrant ({x},{y}) must retain {expected[y, x]} (actual {colours[y, x]})");
+        }
+        catch (Exception error)
+        {
+            validationFailed = true;
+            TestContext.Current.TestOutputHelper?.WriteLine($"Snapshot validation failed: {error}");
+            throw;
+        }
+        finally
+        {
+            try { File.Delete(file); }
+            catch (IOException cleanup) when (validationFailed)
+            {
+                TestContext.Current.TestOutputHelper?.WriteLine($"Snapshot cleanup also failed: {cleanup}");
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("png")]
+    [InlineData("bmp")]
+    [InlineData("jpg")]
+    public void Snapshot_RepeatedSaveAndLockedFileFailure_ReleaseFileOwnership(string extension)
+    {
+        using Session source = new(PortableVideoTestMedia.Quad, 320, 180);
+        string file = Path.Combine(Path.GetTempPath(), $"llplayer-snapshot-retry-{Guid.NewGuid():N}.{extension}");
+        try
+        {
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                using (FileStream locked = new(file, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
+                {
+                    Action blockedSave = () => source.Renderer.TakeSnapshotToFile(file);
+                    blockedSave.Should().Throw<IOException>("an exclusively locked output cannot be overwritten");
+                }
+                source.Renderer.TakeSnapshotToFile(file).Should().BeTrue("a failed save does not poison the encoder");
+                using FileStream exclusive = new(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+                exclusive.Length.Should().BeGreaterThan(0, "the encoder finishes writing and releases its file");
+            }
+        }
+        finally { File.Delete(file); }
+    }
+
     sealed class NullSurface : IVideoSurface
     {
         public int Frames;
@@ -495,6 +574,58 @@ public class PortableRendererPipelineTests
     }
 
     #region Image file helpers
+    // The fixture scripts install ffmpeg and ffprobe together on both platforms; no extra image parser or native
+    // dependency is introduced by decoding the saved files through that independent, full-codec toolchain.
+    static (byte[] Pixels, int Width, int Height) DecodeSnapshot(string file)
+    {
+        string? cli = Environment.GetEnvironmentVariable("LLPLAYER_FFMPEG_CLI");
+        if (string.IsNullOrEmpty(cli))
+            cli = Path.GetFullPath(Path.Combine(Environment.GetEnvironmentVariable("LLPLAYER_FFMPEG_DIR")!, "..", "bin",
+                OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg"));
+        string probe = Path.Combine(Path.GetDirectoryName(cli)!, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
+        File.Exists(cli).Should().BeTrue("the fixture generator requires the FFmpeg CLI");
+        File.Exists(probe).Should().BeTrue("the fixture scripts install ffprobe beside ffmpeg");
+
+        using JsonDocument metadata = JsonDocument.Parse(RunSnapshotTool(probe, "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height", "-of", "json", file));
+        JsonElement streams = metadata.RootElement.GetProperty("streams");
+        streams.GetArrayLength().Should().Be(1);
+        int width = streams[0].GetProperty("width").GetInt32();
+        int height = streams[0].GetProperty("height").GetInt32();
+        byte[] pixels = RunSnapshotTool(cli, "-nostdin", "-v", "error", "-i", file, "-map", "0:v:0", "-frames:v", "1",
+            "-f", "rawvideo", "-pix_fmt", "bgra", "-");
+        pixels.Length.Should().Be(checked(width * height * 4), "one complete BGRA frame must actually decode");
+        return (pixels, width, height);
+    }
+
+    static byte[] RunSnapshotTool(string executable, params string[] args)
+    {
+        ProcessStartInfo start = new(executable)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (string arg in args)
+            start.ArgumentList.Add(arg);
+        if (!OperatingSystem.IsWindows() && Environment.GetEnvironmentVariable("LLPLAYER_FFMPEG_DIR") is { } libraries)
+            start.Environment["LD_LIBRARY_PATH"] = libraries;
+
+        using Process process = Process.Start(start)!;
+        using MemoryStream output = new();
+        Task copy = process.StandardOutput.BaseStream.CopyToAsync(output);
+        Task<string> errors = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(TimeSpan.FromSeconds(30)))
+        {
+            process.Kill(entireProcessTree: true);
+            process.WaitForExit(TimeSpan.FromSeconds(5));
+            throw new TimeoutException($"Snapshot decoder timed out: {executable}");
+        }
+        Task.WaitAll(copy, errors);
+        process.ExitCode.Should().Be(0, $"snapshot decoding must succeed: {errors.Result}");
+        return output.ToArray();
+    }
+
     static (int W, int H) ReadPngSize(string file)
     {
         var b = File.ReadAllBytes(file);

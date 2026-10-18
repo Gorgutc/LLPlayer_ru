@@ -17,7 +17,8 @@ public class CoreModelCatalogSmokeTests
         try
         {
             string host = Path.Combine(Path.GetFullPath(Path.Combine(
-                System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "../../..")), "dotnet");
+                System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "../../..")),
+                OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
             ProcessStartInfo start = new(host) { RedirectStandardOutput = true, RedirectStandardError = true };
             foreach (string arg in new[] { typeof(CoreModelCatalogSmokeTests).Assembly.Location, "-method",
                 $"{typeof(CoreModelCatalogSmokeTests).FullName}.{nameof(PublicCatalogChild)}", "-explicit", "only", "-noLogo" })
@@ -80,7 +81,8 @@ public class CoreModelCatalogSmokeTests
         Assert.True(Path.IsPathFullyQualified(directory));
         Assert.Equal(Path.GetFullPath(directory), WhisperConfig.ModelsDirectory);
         Assert.True(Directory.Exists(directory));
-        var path = Path.Combine(directory, "ggml-large-v3.bin");
+        var model = new WhisperCppModel { Model = GgmlType.LargeV3, Quantization = QuantizationType.NoQuantization };
+        var path = model.ModelFilePath;
         long length = new FileInfo(path).Length;
         Assert.True(length > 0);
         var row = Assert.Single(WhisperCppModelLoader.LoadAllModels(), row =>

@@ -43,6 +43,8 @@ internal sealed unsafe class TesseractNative : ITesseractNative
 
     TesseractNative()
     {
+        if (OperatingSystem.IsWindows())
+            throw new NotSupportedException("OCR is not supported in the Windows Avalonia playback baseline.");
         if (!NativeLibrary.TryLoad("libtesseract.so.5", out library))
             throw new DllNotFoundException("libtesseract.so.5 is unavailable; install Tesseract 5 (Ubuntu: tesseract-ocr).");
         try

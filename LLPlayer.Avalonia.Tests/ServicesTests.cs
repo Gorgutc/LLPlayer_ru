@@ -463,9 +463,9 @@ public class AudioBackendSelectorTests
     [Fact]
     public void ForcedOpenAl_SelectsTheOpenAlBackend_WhenTheLibraryIsInstalled()
     {
-        Assert.SkipUnless(System.Runtime.InteropServices.NativeLibrary.TryLoad("libopenal.so.1", out _)
-                          || System.Runtime.InteropServices.NativeLibrary.TryLoad("libopenal.so", out _),
-            "OpenAL Soft (libopenal.so.1) is not installed.");
+        // Probe the same platform-specific binding as production, without opening an audio device or leaking
+        // temporary NativeLibrary handles. Windows uses the pinned app-local DLL; Linux uses system OpenAL Soft.
+        Assert.SkipUnless(OpenAlAudioBackend.TryCreate(out _, out string? error), error ?? "OpenAL Soft is unavailable.");
 
         List<string> log = [];
         IAudioBackend backend = WithBackendVariable("openal", () => AudioBackendSelector.Select(log.Add));

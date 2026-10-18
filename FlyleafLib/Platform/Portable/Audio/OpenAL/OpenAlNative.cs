@@ -6,8 +6,7 @@ namespace FlyleafLib;
 #nullable enable
 
 /// <summary>
-/// F-13 (Linux port): minimal OpenAL binding over the system OpenAL Soft library (<c>libopenal.so.1</c>, then
-/// <c>libopenal.so</c>).
+/// Minimal OpenAL binding over the system OpenAL Soft library on Unix and the app-local Windows library.
 /// <para>
 /// The library is loaded with <see cref="NativeLibrary.TryLoad(string, out nint)"/> and every entry point is bound as an
 /// unmanaged function pointer from <see cref="NativeLibrary.GetExport"/>. This keeps the binding scoped to this type:
@@ -20,8 +19,32 @@ namespace FlyleafLib;
 /// </summary>
 internal sealed unsafe class OpenAlNative : IOpenAl
 {
-    /// <summary>Probe order (Linux first; the portable TFM also builds on macOS/Windows hosts).</summary>
-    internal static readonly string[] LibraryNames = ["libopenal.so.1", "libopenal.so", "libopenal.1.dylib", "libopenal.dylib", "soft_oal.dll", "OpenAL32.dll"];
+    /// <summary>Current platform's load candidates; Windows paths never depend on the working directory.</summary>
+    internal static readonly string[] LibraryNames = GetLibraryCandidates(AppContext.BaseDirectory, OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// Windows uses only the host application's native payload. The runtime subdirectory also supports build output
+    /// retaining the NuGet layout; Unix keeps its existing system-library probing order.
+    /// </summary>
+    internal static string[] GetLibraryCandidates(string baseDirectory, bool isWindows)
+    {
+        if (!isWindows)
+            return ["libopenal.so.1", "libopenal.so", "libopenal.1.dylib", "libopenal.dylib", "soft_oal.dll", "OpenAL32.dll"];
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
+        if (!Path.IsPathFullyQualified(baseDirectory))
+            throw new ArgumentException("The application directory must be an absolute path.", nameof(baseDirectory));
+
+        string appDirectory = Path.GetFullPath(baseDirectory);
+        string nativeDirectory = Path.Combine(appDirectory, "runtimes", "win-x64", "native");
+        return
+        [
+            Path.Combine(appDirectory, "soft_oal.dll"),
+            Path.Combine(appDirectory, "OpenAL32.dll"),
+            Path.Combine(nativeDirectory, "soft_oal.dll"),
+            Path.Combine(nativeDirectory, "OpenAL32.dll"),
+        ];
+    }
 
     static readonly Lazy<(OpenAlNative? api, string? error)> instance = new(Load, LazyThreadSafetyMode.ExecutionAndPublication);
 

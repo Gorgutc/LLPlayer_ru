@@ -93,7 +93,6 @@ public class OpenAlAudioBackendTests
         devices.Select(d => d.Id).Should().OnlyHaveUniqueItems();
         if (defaultDevice != null && devices.Count > 0)
             devices.Select(d => d.Id).Should().Contain(defaultDevice.Id);
-        OpenAlNative.LibraryNames.Should().StartWith("libopenal.so.1");
     }
 
     // === AudioBackendFactory =====================================================================================

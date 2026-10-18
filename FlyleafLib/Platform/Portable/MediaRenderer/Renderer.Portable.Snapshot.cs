@@ -5,7 +5,7 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 // F-13 portable snapshots: renders the renderer's current frame through the same software pipeline as the presented
 // frames (deinterlace, HDR to SDR, crop, rotation / mirroring, colour filters — like the Windows snapshot, which renders
 // through the Flyleaf pixel shader) but at native resolution, and encodes it with FFmpeg's image encoders
-// (png / bmp / mjpeg) instead of GDI+ (Windows Renderer.Snapshot.cs).
+// (png / bmp / mjpeg), with the built-in Windows GDI+ encoders when its decoder-only FFmpeg has no encoder.
 public unsafe partial class Renderer
 {
     /// <summary>
@@ -57,7 +57,7 @@ public unsafe partial class Renderer
 
             try
             {
-                if (codec == null)
+                if (codec == null && !OperatingSystem.IsWindows())
                     throw new($"Snapshot encoder {codecId} not found");
 
                 if (stream != null && stream.HDRFormat != HDRFormat.None && SoftwareFramePreprocessor.CanToneMap)
@@ -78,6 +78,15 @@ public unsafe partial class Renderer
                     stream != null ? stream.ColorSpace : ColorSpace.None, stream != null ? stream.ColorRange : ColorRange.Limited,
                     colorFilter, highQuality: true))
                     throw new($"Snapshot conversion failed ({conv.LastError})");
+
+                // The tracked Windows FFmpeg build is decoder-only; WPF snapshots use GDI+ as well. Keep
+                // the shared conversion above, then use Windows' built-in image encoders only when FFmpeg has none.
+                if (codec == null && OperatingSystem.IsWindows())
+                {
+                    int length = checked((outH - 1) * conv.OutputStride + outW * 4);
+                    WindowsSnapshotEncoder.Save(filename, ext, new ReadOnlySpan<byte>(conv.Output, length), outW, outH, conv.OutputStride);
+                    return true;
+                }
 
                 dst = av_frame_alloc();
                 dst->format = (int)pixFmt;

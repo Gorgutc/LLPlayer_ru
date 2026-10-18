@@ -1406,10 +1406,16 @@ public class WhisperCppASRService : IASRService
                                       e is FileNotFoundException missing && string.IsNullOrEmpty(missing.FileName))
             {
                 _logger.Dispose();
+                bool isWindows = OperatingSystem.IsWindows();
+                string platform = isWindows ? "Windows" : "Linux";
+                string runtime = isWindows ? "win-x64" : "linux-x64";
+                string prerequisites = isWindows
+                    ? "install the Microsoft Visual C++ x64 runtime (MSVCP140.dll, VCRUNTIME140.dll and VCRUNTIME140_1.dll)."
+                    : "verify libgomp.so.1, glibc >= 2.34 and libstdc++ (GLIBCXX >= 3.4.29) are available.";
                 throw new InvalidOperationException(
-                    $"Could not load the Linux CPU Whisper native libraries in '{Path.Combine(AppContext.BaseDirectory, "runtimes", "linux-x64")}'. " +
+                    $"Could not load the {platform} CPU Whisper native libraries in '{Path.Combine(AppContext.BaseDirectory, "runtimes", runtime)}'. " +
                     $"This package supplies CPU only; selected runtimes: {string.Join(", ", RuntimeOptions.RuntimeLibraryOrder)}. " +
-                    "Restore the complete Linux package and verify libgomp.so.1, glibc >= 2.34 and libstdc++ (GLIBCXX >= 3.4.29) are available.", e);
+                    $"Restore the complete {platform} package and {prerequisites}", e);
             }
 #endif
 

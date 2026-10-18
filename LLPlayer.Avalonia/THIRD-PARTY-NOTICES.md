@@ -398,3 +398,34 @@ SQLitePCLRaw Apache License 2.0 text follows.
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+## Native Windows Avalonia package
+
+The additive Windows package is built from the same Avalonia UI and shared Core as the Linux package.
+The Linux component notices above retain their original platform scope. The Windows package also carries the
+Silero VAD model, the Windows ONNX Runtime/SQLite/Skia/HarfBuzz native dependencies, and the four CPU DLLs from
+Whisper.net.Runtime 1.9.0 under runtimes/win-x64/; no model weights or GPU runtime are included. The Whisper MIT
+attribution and terms above apply to the Windows CPU libraries as well. Shipping these files does not establish
+native ASR/OCR or desktop acceptance.
+
+Windows FFmpeg is copied from the seven tracked DLLs in the repository's FFmpeg/ folder, rather than from the
+Linux FFmpeg download. Their PE version is n8.0-16-gd8605a6b55-20250925; their exact hashes are recorded in the
+generated package's native-dependencies.json. FFmpeg/LICENSE.GPLv3.txt contains the GPLv3 text shipped by
+LLPlayer and FFmpeg/SOURCE.txt records this binary provenance and the upstream FFmpeg source URL. The original
+Windows binary build archive, complete build/dependency source provenance and a formal corresponding-source offer
+are not established by this baseline; these files do not claim public-release/source-offer acceptance.
+
+Avalonia's Windows renderer also ships av_libglesv2.dll from Avalonia.Angle.Windows.Natives. The native manifest
+records its restored package version and source commit, and licenses/Avalonia.ANGLE.LICENSE is copied verbatim
+from that package.
+
+The Windows audio dependency is pinned NuGet package Silk.NET.OpenAL.Soft.Native 1.23.1. It declares
+LGPL-2.0-or-later but carries no license texts. The package ships the verbatim upstream COPYING and BSD-3Clause
+texts under licenses/OpenALSoft.LICENSE and licenses/OpenALSoft.BSD-3Clause.txt, pinned to tag 1.23.1's immutable
+commit d3875f333fb6abe2f39d82caca329414871ae53b; their SHA-256 values and source provenance are recorded in
+licenses/OpenALSoft.SOURCE.txt. The dynamically loaded DLL remains a separate replaceable file. This receipt does
+not establish a formal corresponding-source offer for the native package.
+
+OpenAL upstream source: <https://github.com/kcat/openal-soft/tree/d3875f333fb6abe2f39d82caca329414871ae53b>.
+Windows requires the Microsoft Visual C++ x64 Redistributable 2022 or newer for the bundled OpenAL DLL
+(MSVCP140/VCRUNTIME140/VCRUNTIME140_1); these system runtimes are not bundled.

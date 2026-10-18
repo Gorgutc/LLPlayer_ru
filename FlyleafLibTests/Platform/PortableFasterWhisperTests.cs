@@ -10,12 +10,13 @@ public sealed class PortableFasterWhisperTests : IDisposable
 
     Config CreateConfig(string body, bool executable = true)
     {
-        if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException("Linux CLI fixture");
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "This process fixture requires a Linux shell and Unix executable permissions.");
         Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, "faster-whisper-xxl");
         File.WriteAllText(path, "#!/bin/sh\n" + body + "\n");
-        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite |
-            (executable ? UnixFileMode.UserExecute : 0));
+        if (OperatingSystem.IsLinux())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                (executable ? UnixFileMode.UserExecute : 0));
         Config config = new(true);
         config.Subtitles.ASREngine = SubASREngineType.FasterWhisper;
         config.Subtitles.FasterWhisperConfig.UseManualEngine = true;
@@ -27,9 +28,10 @@ public sealed class PortableFasterWhisperTests : IDisposable
     [Fact]
     public void DefaultCommand_UsesLinuxExecutableName()
     {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "The Linux default executable is checked on Linux; Windows XXL integration is a separate slice.");
         var command = FasterWhisperASRService.BuildCommand(new FasterWhisperConfig(), new WhisperConfig());
 
-        command.TargetFilePath.Should().EndWith("/Faster-Whisper-XXL/faster-whisper-xxl");
+        command.TargetFilePath.Should().Be(Path.Combine(WhisperConfig.EnginesDirectory, "Faster-Whisper-XXL", "faster-whisper-xxl"));
     }
 
     [Fact]
