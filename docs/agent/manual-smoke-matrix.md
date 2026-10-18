@@ -203,6 +203,21 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   subtitles and sidebar styling. WPF settings, font/alpha controls and full F-13 parity remain outside this slice.
   This is a future new-package native GUI/DPI acceptance row; headless source/render results and prior package
   receipts do not close it. No Computer Use or application launch is authorized for this stage.
+- **Common text-subtitle outline color, separate owner-approved 2026-10-18 slice — NOT_RUN / DEFERRED BY OWNER:**
+  on each native Windows/Linux host, use the new package and an isolated profile. A missing `SubtitleOutlineColor`
+  must retain opaque black (`#000000`) on both text overlays. Edit the single Settings raw HEX field and inspect
+  its adjacent swatch; Save & Close, reopen Settings and restart, then confirm the same saved outline color on
+  primary and secondary cues. Confirm outer whitespace is trimmed and lowercase six-digit HEX becomes uppercase.
+  Names, short HEX, alpha forms, non-HEX digits and other malformed raw input must visibly block Save. Missing,
+  null and invalid stored strings must fall back to black; malformed whole-file JSON and wrong JSON types retain
+  their existing policy. Close/Esc must discard the detached draft; a persistence failure must preserve live and
+  persisted values and keep Settings open for retry. Save must preserve the other eleven Settings fields and
+  unrelated volume/mute/recents. Inspect both overlays, long cues, word clicks, minimum-window usability and
+  100%/150%/200% DPI with distinct foreground colors and independent outline thicknesses, including zero.
+  Only the common text `Outline` color changes; `Fill`, thickness, shadow, positioning, bitmap/sidebar styling,
+  engine/native behavior, WPF settings and dependencies remain outside this slice. This is a future new-package
+  native GUI/DPI acceptance row; headless source/render results and prior package receipts do not close it.
+  No Computer Use or application launch is authorized for this stage.
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
