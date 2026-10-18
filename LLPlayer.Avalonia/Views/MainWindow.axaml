@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
         xmlns:c="using:LLPlayer.Avalonia.Controls"
+        xmlns:v="using:LLPlayer.Avalonia.Views"
         x:Class="LLPlayer.Avalonia.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding WindowTitle}"
@@ -199,8 +200,8 @@
       <Grid Name="VideoColumn" RowDefinitions="*,Auto">
         <Panel Name="VideoHost" Background="Black" ClipToBounds="True">
           <c:VideoView Name="Video" RenderOptions.BitmapInterpolationMode="MediumQuality" />
-          <c:SubtitleImageView Name="PrimaryImageView" Image="{Binding PrimaryImage}" Video="{Binding #Video}" />
-          <c:SubtitleImageView Name="SecondaryImageView" Image="{Binding SecondaryImage}" Video="{Binding #Video}" />
+          <c:SubtitleImageView Name="PrimaryImageView" IsVisible="{Binding SubtitlesVisible}" Image="{Binding PrimaryImage}" Video="{Binding #Video}" />
+          <c:SubtitleImageView Name="SecondaryImageView" IsVisible="{Binding SubtitlesVisible}" Image="{Binding SecondaryImage}" Video="{Binding #Video}" />
 
           <!-- dual subtitle overlay: secondary above primary -->
           <StackPanel Name="SubtitleOverlay" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Spacing="2"
@@ -324,7 +325,7 @@
                 <x:Double x:Key="SliderHorizontalHeight">20</x:Double>
               </Slider.Resources>
             </Slider>
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+            <v:TransportPanel>
               <Button Name="PlayPauseButton" Classes="ghost icon" Command="{Binding TogglePlayPauseCommand}"
                       IsEnabled="{Binding IsOpened}" ToolTip.Tip="Play / Pause (Space)">
                 <Panel>
@@ -332,16 +333,16 @@
                   <c:LucideIcon Data="{StaticResource Icon.Pause}" Size="18" Fill="True" IsVisible="{Binding IsPlaying}" />
                 </Panel>
               </Button>
-              <Button Grid.Column="1" Classes="ghost icon" Command="{Binding OpenMediaCommand}" ToolTip.Tip="Open media (Ctrl+O)">
+              <Button Classes="ghost icon" Command="{Binding OpenMediaCommand}" ToolTip.Tip="Open media (Ctrl+O)">
                 <c:LucideIcon Data="{StaticResource Icon.FolderOpen}" Size="18" />
               </Button>
-              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="4" Margin="8,0,0,0" VerticalAlignment="Center">
                 <TextBlock Name="CurrentTime" Classes="time" Text="{Binding CurrentTimeText}" />
                 <TextBlock Classes="time muted" Text="/" />
                 <TextBlock Name="DurationTime" Classes="time muted" Text="{Binding DurationText}" />
               </StackPanel>
 
-              <Button Grid.Column="4" Classes="ghost sm" Content="{Binding SpeedText}" ToolTip.Tip="Playback speed (+ / -)"
+              <Button Classes="ghost sm" Content="{Binding SpeedText}" ToolTip.Tip="Playback speed (+ / -)"
                       MinWidth="52" FontSize="12">
                 <Button.Flyout>
                   <MenuFlyout ItemsSource="{Binding SpeedItems}" Placement="Top">
@@ -356,30 +357,30 @@
                   </MenuFlyout>
                 </Button.Flyout>
               </Button>
-              <Button Grid.Column="5" Classes="ghost icon" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="Mute (M)">
+              <Button Classes="ghost icon" Command="{Binding ToggleMuteCommand}" ToolTip.Tip="Mute (M)">
                 <Panel>
                   <c:LucideIcon Data="{StaticResource Icon.Volume2}" Size="18" IsVisible="{Binding !IsMuted}" />
                   <c:LucideIcon Data="{StaticResource Icon.VolumeX}" Size="18" IsVisible="{Binding IsMuted}" />
                 </Panel>
               </Button>
-              <Slider Name="VolumeSlider" Grid.Column="6" Width="96" Minimum="0" Maximum="{Binding VolumeMax}"
+              <Slider Name="VolumeSlider" Width="96" Minimum="0" Maximum="{Binding VolumeMax}"
                       Value="{Binding Volume}" Focusable="False" VerticalAlignment="Center" Margin="0,0,8,0"
                       ToolTip.Tip="{Binding Volume, StringFormat='Volume {0}%'}" />
-              <ToggleButton Grid.Column="7" Classes="icon" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}"
+              <ToggleButton Classes="icon" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}"
                             Command="{Binding ToggleSubtitlesCommand}" ToolTip.Tip="Show subtitles (V)">
                 <c:LucideIcon Data="{StaticResource Icon.Captions}" Size="18" />
               </ToggleButton>
-              <ToggleButton Grid.Column="8" Classes="icon" IsChecked="{Binding SidebarVisible, Mode=OneWay}"
+              <ToggleButton Classes="icon" IsChecked="{Binding SidebarVisible, Mode=OneWay}"
                             Command="{Binding ToggleSidebarCommand}" ToolTip.Tip="Subtitles sidebar (Ctrl+B)">
                 <c:LucideIcon Data="{StaticResource Icon.PanelRight}" Size="18" />
               </ToggleButton>
-              <Button Grid.Column="9" Classes="ghost icon" Command="{Binding ToggleFullScreenCommand}" ToolTip.Tip="Fullscreen (F)">
+              <Button Classes="ghost icon" Command="{Binding ToggleFullScreenCommand}" ToolTip.Tip="Fullscreen (F)">
                 <Panel>
                   <c:LucideIcon Data="{StaticResource Icon.Maximize}" Size="18" IsVisible="{Binding !IsFullScreen}" />
                   <c:LucideIcon Data="{StaticResource Icon.Minimize}" Size="18" IsVisible="{Binding IsFullScreen}" />
                 </Panel>
               </Button>
-            </Grid>
+            </v:TransportPanel>
           </StackPanel>
         </Border>
       </Grid>

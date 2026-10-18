@@ -22,15 +22,15 @@
             <ComboBox Name="ThemeEditor" ItemsSource="{x:Static vm:SettingsViewModel.Themes}" SelectedItem="{Binding Theme}" HorizontalAlignment="Stretch" />
             <CheckBox Name="SidebarVisibleEditor" Content="Show subtitle sidebar" IsChecked="{Binding SidebarVisible}" />
             <TextBlock Text="Sidebar width (220–900 DIP)" />
-            <NumericUpDown Name="SidebarWidthEditor" Minimum="220" Maximum="900" Increment="10" Value="{Binding SidebarWidth}" FormatString="0" />
+            <NumericUpDown Name="SidebarWidthEditor" Minimum="220" Maximum="900" Increment="10" Text="{Binding SidebarWidthText, Mode=TwoWay}" FormatString="0" />
           </StackPanel>
           <StackPanel Name="SubtitlesPage" IsVisible="{Binding SubtitlesSelected}" Spacing="14">
             <TextBlock Text="Subtitles" Classes="dialog-title" />
             <CheckBox Name="SubtitlesVisibleEditor" Content="Show subtitle overlay" IsChecked="{Binding SubtitlesVisible}" />
             <TextBlock Text="Primary font size (12–96 DIP)" />
-            <NumericUpDown Name="FontSizeEditor" Minimum="12" Maximum="96" Increment="2" Value="{Binding SubtitleFontSize}" FormatString="0.#" />
+            <NumericUpDown Name="FontSizeEditor" Minimum="12" Maximum="96" Increment="2" Text="{Binding SubtitleFontSizeText, Mode=TwoWay}" FormatString="0.#" />
             <TextBlock Text="Secondary font scale (0.4–1.5 × primary)" TextWrapping="Wrap" />
-            <NumericUpDown Name="ScaleEditor" Minimum="0.4" Maximum="1.5" Increment="0.05" Value="{Binding SecondaryFontScale}" FormatString="0.##" />
+            <NumericUpDown Name="ScaleEditor" Minimum="0.4" Maximum="1.5" Increment="0.05" Text="{Binding SecondaryFontScaleText, Mode=TwoWay}" FormatString="0.##" />
           </StackPanel>
           <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
             <TextBlock Text="Tools" Classes="dialog-title" />

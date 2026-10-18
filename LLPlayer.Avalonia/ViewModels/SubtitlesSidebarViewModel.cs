@@ -105,7 +105,7 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     void Seek(CueItemViewModel? cue)
     {
         if (cue != null)
-            player.SeekTo(cue.Start);
+            player.SeekToSubtitle(cue.Start, 0);
     }
 
     [RelayCommand]

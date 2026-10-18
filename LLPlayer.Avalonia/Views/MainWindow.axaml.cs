@@ -22,6 +22,7 @@ namespace LLPlayer.Avalonia.Views;
 /// </summary>
 public partial class MainWindow : Window, IAppShell, IHostPlayer
 {
+    const double MinimumVideoColumnWidth = 240;
     readonly KeyMapper keys;
     readonly AvaloniaHostServices? hostServices;
     readonly DispatcherTimer idleTimer;
@@ -110,6 +111,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.PointerWheelChanged += OnVideoWheel;
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => PositionWordPopup();
+        TransportBar.SizeChanged += (_, _) => UpdateSubtitleMargin();
+        ContentGrid.SizeChanged += (_, _) => UpdateSidebarColumn();
+        SidebarSplitter.SizeChanged += (_, _) => UpdateSidebarColumn();
         CueList.Tapped += OnCueTapped;
         SidebarSplitter.DragCompleted += (_, _) =>
         {
@@ -283,6 +287,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         if (vm.SidebarVisible)
         {
             column.MinWidth = 220;
+            // Keep the remembered width; cap only the arranged column so narrowing does not swallow the video.
+            double splitterWidth = Math.Max(SidebarSplitter.DesiredSize.Width, ContentGrid.ColumnDefinitions[1].ActualWidth);
+            column.MaxWidth = Math.Max(column.MinWidth, ContentGrid.Bounds.Width - splitterWidth - MinimumVideoColumnWidth);
             column.Width = new GridLength(vm.SidebarWidth, GridUnitType.Pixel);
         }
         else
@@ -500,5 +507,80 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             else
                 _ = r.Exception;   // observed: an unsupported inhibition is not an error
         }, TaskScheduler.Default);
+    }
+}
+
+/// <summary>
+/// Keeps the transport's leading controls left and trailing controls right when they fit on one row.
+/// A narrow video column wraps controls at their natural sizes instead of placing them under the sidebar.
+/// </summary>
+public sealed class TransportPanel : Panel
+{
+    const int LeadingControlCount = 3;
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        foreach (Control child in Children)
+            child.Measure(Size.Infinity);
+        return Layout(availableSize.Width, arrange: false);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        Layout(finalSize.Width, arrange: true);
+        return finalSize;
+    }
+
+    Size Layout(double width, bool arrange)
+    {
+        double totalWidth = Children.Sum(child => child.DesiredSize.Width);
+        double maxHeight = Children.Count == 0 ? 0 : Children.Max(child => child.DesiredSize.Height);
+        if (totalWidth <= width)
+        {
+            if (arrange)
+            {
+                double left = 0;
+                for (int index = 0; index < Children.Count; index++)
+                {
+                    if (index == LeadingControlCount)
+                        left += width - totalWidth;
+                    Control child = Children[index];
+                    child.Arrange(new Rect(left, 0, child.DesiredSize.Width, maxHeight));
+                    left += child.DesiredSize.Width;
+                }
+            }
+            return new Size(totalWidth, maxHeight);
+        }
+
+        double rowWidth = 0, rowHeight = 0, top = 0;
+        int rowStart = 0;
+        for (int index = 0; index < Children.Count; index++)
+        {
+            Size desired = Children[index].DesiredSize;
+            double childWidth = Math.Min(width, desired.Width);
+            if (index > rowStart && rowWidth + childWidth > width)
+            {
+                if (arrange) ArrangeRow(rowStart, index, width, top, rowHeight);
+                top += rowHeight;
+                rowStart = index;
+                rowWidth = rowHeight = 0;
+            }
+            rowWidth += childWidth;
+            rowHeight = Math.Max(rowHeight, desired.Height);
+        }
+        if (arrange) ArrangeRow(rowStart, Children.Count, width, top, rowHeight);
+        return new Size(width, top + rowHeight);
+    }
+
+    void ArrangeRow(int start, int end, double width, double top, double height)
+    {
+        double left = 0;
+        for (int index = start; index < end; index++)
+        {
+            Control child = Children[index];
+            double childWidth = Math.Min(width, child.DesiredSize.Width);
+            child.Arrange(new Rect(left, top, childWidth, height));
+            left += childWidth;
+        }
     }
 }
