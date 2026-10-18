@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace LLPlayer.Avalonia.Services;
@@ -13,6 +13,9 @@ public sealed class AppPrefs
     public const double MinSubtitleFontSize = 12;
     public const double MaxSubtitleFontSize = 96;
     public const double DefaultSubtitleFontSize = 34;
+    public const double MinSubtitleBottomOffset = 0;
+    public const double MaxSubtitleBottomOffset = 400;
+    public const double DefaultSubtitleBottomOffset = 24;
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -21,6 +24,8 @@ public sealed class AppPrefs
     /// <summary>Primary overlay font size in DIPs; the secondary line uses <see cref="SecondaryFontScale"/> of it.</summary>
     public double SubtitleFontSize { get; set; } = DefaultSubtitleFontSize;
     public double SecondaryFontScale { get; set; } = 0.8;
+    /// <summary>Distance of the text subtitle overlay from the bottom edge in DIPs.</summary>
+    public double SubtitleBottomOffset { get; set; } = DefaultSubtitleBottomOffset;
     public bool SubtitlesVisible { get; set; } = true;
 
     public bool SidebarVisible { get; set; }
@@ -56,6 +61,7 @@ public sealed class AppPrefs
     {
         Volume = Math.Clamp(Volume, 0, 1000);
         SubtitleFontSize = double.IsFinite(SubtitleFontSize) ? Math.Clamp(SubtitleFontSize, MinSubtitleFontSize, MaxSubtitleFontSize) : DefaultSubtitleFontSize;
+        SubtitleBottomOffset = double.IsFinite(SubtitleBottomOffset) ? Math.Clamp(SubtitleBottomOffset, MinSubtitleBottomOffset, MaxSubtitleBottomOffset) : DefaultSubtitleBottomOffset;
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";

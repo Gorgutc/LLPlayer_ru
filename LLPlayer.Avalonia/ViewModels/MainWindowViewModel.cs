@@ -1,4 +1,4 @@
-using LLPlayer.Core.Services;
+﻿using LLPlayer.Core.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -87,6 +87,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         RecentFiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentFiles));
 
         SubtitleFontSize = prefs.SubtitleFontSize;
+        SubtitleBottomOffset = prefs.SubtitleBottomOffset;
         SidebarVisible = prefs.SidebarVisible;
         SidebarWidth = prefs.SidebarWidth;
         IsDarkTheme = prefs.Theme != "Light";
@@ -139,6 +140,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.Theme = draft.Theme;
         candidate.SubtitleFontSize = draft.SubtitleFontSize;
         candidate.SecondaryFontScale = draft.SecondaryFontScale;
+        candidate.SubtitleBottomOffset = draft.SubtitleBottomOffset;
         candidate.SubtitlesVisible = draft.SubtitlesVisible;
         candidate.SidebarVisible = draft.SidebarVisible;
         candidate.SidebarWidth = draft.SidebarWidth;
@@ -147,10 +149,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.Theme = candidate.Theme;
         prefs.SecondaryFontScale = candidate.SecondaryFontScale;
         prefs.SubtitleFontSize = candidate.SubtitleFontSize;
+        prefs.SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         prefs.SidebarVisible = candidate.SidebarVisible;
         prefs.SidebarWidth = candidate.SidebarWidth;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
         SubtitleFontSize = candidate.SubtitleFontSize;
+        SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         // A scale-only edit does not invoke OnSubtitleFontSizeChanged.
         SecondaryFontSize = Math.Round(candidate.SubtitleFontSize * candidate.SecondaryFontScale, 1);
         SidebarWidth = candidate.SidebarWidth;
@@ -254,7 +258,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool SubtitlesVisible { get; private set; } = true;
     [ObservableProperty] public partial double SubtitleFontSize { get; private set; }
     [ObservableProperty] public partial double SecondaryFontSize { get; private set; }
-    [ObservableProperty] public partial double SubtitleBottomOffset { get; private set; } = 24;
+    [ObservableProperty] public partial double SubtitleBottomOffset { get; private set; } = AppPrefs.DefaultSubtitleBottomOffset;
 
     // ---- sidebar -----------------------------------------------------------------------------------------------
 
@@ -266,6 +270,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SecondaryFontSize = Math.Round(value * prefs.SecondaryFontScale, 1);
         prefs.SubtitleFontSize = value;
     }
+
+    partial void OnSubtitleBottomOffsetChanged(double value) => prefs.SubtitleBottomOffset = value;
 
     partial void OnSidebarWidthChanged(double value)
     {
@@ -415,10 +421,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public void DecreaseSubtitleSize() => SetSubtitleSize(SubtitleFontSize - SubtitleSizeStep);
 
     [RelayCommand]
-    public void SubtitlesUp() => SubtitleBottomOffset = Math.Min(400, SubtitleBottomOffset + SubtitlePositionStep);
+    public void SubtitlesUp() => SubtitleBottomOffset = Math.Min(AppPrefs.MaxSubtitleBottomOffset, SubtitleBottomOffset + SubtitlePositionStep);
 
     [RelayCommand]
-    public void SubtitlesDown() => SubtitleBottomOffset = Math.Max(0, SubtitleBottomOffset - SubtitlePositionStep);
+    public void SubtitlesDown() => SubtitleBottomOffset = Math.Max(AppPrefs.MinSubtitleBottomOffset, SubtitleBottomOffset - SubtitlePositionStep);
 
     [RelayCommand]
     public void CopyPrimaryText()

@@ -166,6 +166,17 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   applying changes and preserve unrelated preferences. Reopen to verify the saved values.
 - Enter fullscreen with F and return with Esc; confirm normal-window restoration. Resize the window and
   inspect transport controls and sidebar bounds without hidden or overlapping controls.
+- **Persisted text-subtitle position, owner-approved 2026-10-18 slice — NOT_RUN / DEFERRED BY OWNER:** on each
+  native Windows/Linux host, use an isolated profile and confirm a missing `SubtitleBottomOffset` starts at
+  24 DIP. Edit the Settings text-subtitle bottom offset, Save & Close, reopen Settings and restart the app;
+  confirm the saved base offset is retained. Exercise existing Up/Down commands in 8-DIP steps, including
+  clamping at 0 and 400, then restart and confirm the command-updated preference survives the normal save path.
+  Close/Esc must discard draft edits. Invalid/out-of-range input must block Save; a persistence failure must
+  retain live/persisted values and keep the dialog open for retry. Check fractional input under the host's
+  number format, minimum-window usability, and 100%/150%/200% DPI. Toggle fullscreen and transport controls;
+  confirm clearance is transient and reopening/restarting retains only the base offset. Confirm primary and
+  secondary text move together while bitmap positioning is unaffected. Native GUI/DPI/fullscreen checks remain
+  deferred under the owner's no-Computer-Use instruction; focused headless results do not close this row.
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
