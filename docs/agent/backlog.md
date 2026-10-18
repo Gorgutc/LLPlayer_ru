@@ -1328,7 +1328,9 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 **Активный трек (решение владельца 2026-09-24, обновление 2026-10-18):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
 Октябрьский исходный срез синхронизирован; Windows Avalonia build/package baseline реализован на общем UI/Core.
 Локальные WPF/Windows Avalonia gates, rebuilt ZIP и ограниченный dark/light native smoke прошли;
-следующий шаг — exact-head Linux CI и review опубликованного PR. Расширенная interactive-приёмка остаётся открытой.
+published source candidate `93c5e31` прошёл Windows/Linux CI и независимый review в
+[PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168). Последующие docs/merge checks фиксируются в PR timeline.
+Следующий продуктовый шаг — расширенная interactive-приёмка и поэтапный shared feature parity.
 Полный Linux/WPF parity остаётся открытым; сохранять WPF и его gates до приёмки замены.
 
 **Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу.
@@ -1372,8 +1374,9 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 ## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-10-18 / F-13 active)
 
 Активный крупный трек — `F-13`; общий Windows/Linux Avalonia build/package baseline реализован. Локальные
-WPF/Windows Avalonia gates, ZIP и ограниченный dark/light native smoke прошли; exact-head Linux CI,
-publication review и расширенная native-приёмка остаются отдельными gates. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
+WPF/Windows Avalonia gates, ZIP и ограниченный dark/light native smoke прошли. Published source candidate
+`93c5e31` прошёл Windows/Linux CI и review в [PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168);
+расширенная native-приёмка и полный parity остаются открытыми. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
 используется, обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Владелец принял
 остаточный риск расширенного smoke; это `WAIVED / NOT RUN`, не `PASS`.
 
