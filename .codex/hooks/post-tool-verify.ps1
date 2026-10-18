@@ -18,6 +18,7 @@ if (-not $changed) {
 $patterns = @(
     '\.cs$',
     '\.xaml$',
+    '\.axaml$',
     '\.csproj$',
     '\.slnx$',
     '^Directory\.Build\.',

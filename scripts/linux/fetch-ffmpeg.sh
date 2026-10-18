@@ -193,7 +193,7 @@ for so in "${LLP_FFMPEG_SONAMES[@]}"; do
 done
 if command -v readelf >/dev/null 2>&1; then
     for so in "${LLP_FFMPEG_SONAMES[@]}"; do
-        soname="$(readelf -d "$src_lib/$so" 2>/dev/null | sed -n 's/.*Library soname: \[\(.*\)\].*/\1/p')" || soname=""
+        soname="$(LC_ALL=C readelf -d "$src_lib/$so" 2>/dev/null | sed -n 's/.*Library soname: \[\(.*\)\].*/\1/p')" || soname=""
         [[ "$soname" == "$so" ]] || llp_die "$so has ELF SONAME '$soname' (expected '$so')."
     done
 else

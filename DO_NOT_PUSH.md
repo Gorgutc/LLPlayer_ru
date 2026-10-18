@@ -6,7 +6,7 @@ Do not commit these files unless a user explicitly requests and reviews the chan
 - Downloaded `yt-dlp.exe`, Whisper models, faster-whisper engines, Tesseract data, OCR/ASR caches.
 - AI dubbing runtime data: the dub Python venv (`DubEngine/`), downloaded TTS model weights (`dubmodels/`), rendered dub tracks (`*.ru.dub.*`), and per-line voice companion files (`*.ru.voices.json`). NOTE: `dub_sidecar/` (server.py, pyproject.toml, uv.lock) IS committed GPLv3 source.
 - Local media output folders such as `Recordings/` and `Snapshots/`.
-- Runtime config and local state: `LLPlayer.Config.json`, `LLPlayer.Engine.json`, `LLPlayer.PlayerConfig.json`, `LLPlayer.WordList.json`, `crash.log`, logs, dumps.
+- Runtime config and local state: `LLPlayer.Config.json`, `LLPlayer.Engine.json`, `LLPlayer.PlayerConfig.json`, `LLPlayer.WordList.json`, `LLPlayer.Avalonia.json`, `LLPlayer.Recognition.json`, `LLPlayer.Translation.json`, `crash.log`, logs, dumps. Keep leading-dot atomic-write temps such as `.LLPlayer.Recognition.json.<guid>.tmp` and `.LLPlayer.Translation.json.<guid>.tmp` out of source control too.
 - Secrets, API keys, translator credentials, `.env*`, local Codex memories, local machine paths.
 - Screenshots, videos, benchmark artifacts, or generated reports unless the task explicitly asks for evidence artifacts.
 - Linux (F-13): the fetched FFmpeg shared libraries (`FFmpeg/linux-x64/`, any `*.so`/`*.so.*`), the downloaded FFmpeg

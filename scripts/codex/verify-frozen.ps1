@@ -260,7 +260,9 @@ try {
     Require-Text ".\docs\agent\subagent-review-matrix.md" "\*\.csproj" "Subagent review matrix must route project files through .NET/package review."
     Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.cs`: `dotnet_quality_guardian`, `verification_reviewer`.' "Subagent review matrix must define the exact generic C# reviewer floor."
     Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.xaml`: `wpf_xaml_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact generic XAML reviewer floor."
+    Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.axaml`: `wpf_xaml_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact generic AXAML reviewer floor."
     Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.xaml.cs`: `dotnet_quality_guardian`, `wpf_xaml_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact XAML code-behind reviewer floor."
+    Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `**/*.axaml.cs`: `dotnet_quality_guardian`, `wpf_xaml_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact AXAML code-behind reviewer floor."
     Require-ExactLine ".\docs\agent\subagent-review-matrix.md" '- `*.sln`, `*.slnx`, `*.csproj`, `Directory.Build.*`, `Directory.Packages.props`, `global.json`: `dotnet_quality_guardian`, `packaging_release_reviewer`, `verification_reviewer`.' "Subagent review matrix must define the exact project/solution reviewer floor."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "LLPlayer/\(Views\|Controls\|ViewModels\|Converters\|Themes\|Resources\)" "Frozen audit must route LLPlayer converters/resources/themes through WPF review."
     Require-Text ".\scripts\codex\audit-frozen.ps1" "FlyleafLib/Utils/" "Frozen audit must route FlyleafLib utilities through media/.NET review."
@@ -273,7 +275,7 @@ try {
     # T-13c: prove routing behavior over the live tracked set. The human-facing audit and this guard share the
     # same implementation through -ChangedPath/-PassThru; do not replace this with source-marker assertions.
     $auditScript = ".\scripts\codex\audit-frozen.ps1"
-    [string[]]$targetExtensions = @(".cs", ".xaml", ".csproj", ".sln", ".slnx")
+    [string[]]$targetExtensions = @(".cs", ".xaml", ".axaml", ".csproj", ".sln", ".slnx")
     [string[]]$trackedAppProjectPaths = @(git ls-files | Where-Object {
         $targetExtensions -contains [System.IO.Path]::GetExtension($_).ToLowerInvariant()
     })
@@ -301,11 +303,12 @@ try {
             switch ($extension) {
                 ".cs" {
                     $requiredAgents.Add("dotnet_quality_guardian")
-                    if ($path -match '(?i)\.xaml\.cs$') {
+                    if ($path -match '(?i)\.(xaml|axaml)\.cs$') {
                         $requiredAgents.Add("wpf_xaml_reviewer")
                     }
                 }
                 ".xaml" { $requiredAgents.Add("wpf_xaml_reviewer") }
+                ".axaml" { $requiredAgents.Add("wpf_xaml_reviewer") }
                 ".csproj" {
                     $requiredAgents.Add("dotnet_quality_guardian")
                     $requiredAgents.Add("packaging_release_reviewer")
@@ -331,11 +334,25 @@ try {
                 $requiredAgents.Add("packaging_release_reviewer")
             }
 
+            $requiredGates = New-Object System.Collections.Generic.List[string]
+            $requiredGates.Add("verify")
+            if ($path -match '(?i)^(LLPlayer\.Core/|LLPlayer\.Avalonia(\.Tests)?/|FlyleafLib/Platform/)') {
+                $requiredAgents.Add("media_runtime_mapper")
+                $requiredGates.Add("linux verify")
+            }
+            if ($path -match '(?i)^LLPlayer\.Core/(Services/(RecognitionSettings|TranslationSettings|WordLibrary)\.cs$|Serialization/)') {
+                $requiredAgents.Add("instruction_drift_auditor")
+            }
+            if ($path -match '(?i)^LLPlayer\.Core/Services/AnkiApkgWriter\.cs$') {
+                $requiredAgents.Add("native_dependency_auditor")
+                $requiredAgents.Add("packaging_release_reviewer")
+            }
+
             foreach ($issue in @(Get-AuditRouteViolations `
                 -Route $pathRoutes[0] `
                 -ExpectedPath $path `
                 -RequiredAgents @($requiredAgents | Sort-Object -Unique) `
-                -RequiredGates @("verify"))) {
+                -RequiredGates @($requiredGates | Sort-Object -Unique))) {
                 $trackedRouteViolations.Add($issue)
             }
         }
@@ -357,6 +374,19 @@ try {
         @{ Path = "Future/Thing.CS"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Future\Thing.xaml"; Agents = @("wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Future/Thing.xaml.cs"; Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future/Thing.axaml"; Agents = @("wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future\Thing.AXAML"; Agents = @("wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "Future/Thing.axaml.cs"; Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
+        @{ Path = "LLPlayer.Avalonia/Views/Future.axaml"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Avalonia/Views/Future.axaml.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Avalonia.Tests/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Core/Services/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Core/Services/TranslationSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Core/Services/WordLibrary.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Core\Serialization\Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
+        @{ Path = "LLPlayer.Core/LLPlayer.Core.csproj"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify") },
         @{ Path = "FlyleafLib/Controls/WPF/Future.xaml"; Agents = @("media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "WpfColorFontDialog/Future.xaml.cs"; Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Plugins/YoutubeDL/Future.cs"; Agents = @("media_runtime_mapper", "dotnet_quality_guardian", "packaging_release_reviewer", "verification_reviewer"); Gates = @("verify", "ship") },
@@ -388,6 +418,13 @@ try {
     $nearMissFixtures = @(
         @{ Path = "Future/Thing.cs.bak"; ForbiddenAgents = @("dotnet_quality_guardian"); ForbiddenGates = @("verify") },
         @{ Path = "Future/Thing.xaml.txt"; ForbiddenAgents = @("wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "Future/Thing.axaml.txt"; ForbiddenAgents = @("wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "Future/Thing.axaml.cs.bak"; ForbiddenAgents = @("dotnet_quality_guardian", "wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "Future/Thing.AXAML/notes.txt"; ForbiddenAgents = @("wpf_xaml_reviewer"); ForbiddenGates = @("verify") },
+        @{ Path = "LLPlayer.CoreX/Services/RecognitionSettings.cs"; ForbiddenAgents = @("media_runtime_mapper", "instruction_drift_auditor"); ForbiddenGates = @("linux verify") },
+        @{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs.bak"; ForbiddenAgents = @("instruction_drift_auditor"); ForbiddenGates = @() },
+        @{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs.bak"; ForbiddenAgents = @("native_dependency_auditor", "packaging_release_reviewer"); ForbiddenGates = @() },
+        @{ Path = "FlyleafLibTests/Core/FutureTests.cs"; ForbiddenAgents = @("media_runtime_mapper", "instruction_drift_auditor", "native_dependency_auditor", "packaging_release_reviewer"); ForbiddenGates = @("linux verify") },
         @{ Path = "Future/Thing.csproj.user"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
         @{ Path = "Future/Thing.sln.txt"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
         @{ Path = "Future/Thing.slnx.bak"; ForbiddenAgents = @("packaging_release_reviewer"); ForbiddenGates = @("verify") },
@@ -444,6 +481,48 @@ try {
             Path = "Mutation/WrongCaseAgent.cs"
             Agents = @("dotnet_quality_guardian", "verification_reviewer")
             Gates = @("verify")
+        },
+        @{
+            Name = "AXAML missing full verify"
+            Route = [pscustomobject]@{ Path = "Future/Mutation.axaml"; Agents = @("wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify-fast") }
+            Path = "Future/Mutation.axaml"
+            Agents = @("wpf_xaml_reviewer", "verification_reviewer")
+            Gates = @("verify")
+        },
+        @{
+            Name = "AXAML code-behind missing UI reviewer"
+            Route = [pscustomobject]@{ Path = "Future/Mutation.axaml.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify") }
+            Path = "Future/Mutation.axaml.cs"
+            Agents = @("dotnet_quality_guardian", "wpf_xaml_reviewer", "verification_reviewer")
+            Gates = @("verify")
+        },
+        @{
+            Name = "Core missing Linux verify"
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/Mutation.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify") }
+            Path = "LLPlayer.Core/Services/Mutation.cs"
+            Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer")
+            Gates = @("verify", "linux verify")
+        },
+        @{
+            Name = "Core missing runtime reviewer"
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/Mutation.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify", "linux verify") }
+            Path = "LLPlayer.Core/Services/Mutation.cs"
+            Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer")
+            Gates = @("verify", "linux verify")
+        },
+        @{
+            Name = "Core settings missing persistence reviewer"
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") }
+            Path = "LLPlayer.Core/Services/RecognitionSettings.cs"
+            Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer")
+            Gates = @("verify", "linux verify")
+        },
+        @{
+            Name = "Core APKG missing native package reviewers"
+            Route = [pscustomobject]@{ Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify") }
+            Path = "LLPlayer.Core/Services/AnkiApkgWriter.cs"
+            Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "native_dependency_auditor", "packaging_release_reviewer", "verification_reviewer")
+            Gates = @("verify", "linux verify")
         }
     )
     foreach ($fixture in $adversarialRouteFixtures) {
@@ -456,6 +535,61 @@ try {
             $failures.Add("Frozen audit adversarial fixture '$($fixture.Name)' was accepted.")
         }
     }
+
+    # Parse only the literal route-pattern array: these probes never invoke a hook or change hook trust.
+    $hookPath = Join-Path $repoRoot ".codex/hooks/post-tool-verify.ps1"
+    $hookTokens = $null
+    $hookParseErrors = $null
+    $hookAst = [System.Management.Automation.Language.Parser]::ParseFile($hookPath, [ref]$hookTokens, [ref]$hookParseErrors)
+    $hookPatternAssignments = @($hookAst.FindAll({
+        param($node)
+        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -ceq '$patterns'
+    }, $true))
+    $hookRouteFixtures = @(
+        @{ Path = "LLPlayer.Avalonia/Views/MainWindow.axaml"; Expected = $true },
+        @{ Path = "Future/Window.axaml"; Expected = $true },
+        @{ Path = "Window.AXAML"; Expected = $true },
+        @{ Path = "Future\Window.axaml"; Expected = $true },
+        @{ Path = "Future/Window.axaml.cs"; Expected = $true },
+        @{ Path = "Future/Window.xaml"; Expected = $true },
+        @{ Path = "Future/Window.cs"; Expected = $true },
+        @{ Path = "Future/Window.axaml.txt"; Expected = $false },
+        @{ Path = "Window.AXAML.bak"; Expected = $false },
+        @{ Path = "Future/Window.axaml.cs.bak"; Expected = $false },
+        @{ Path = "Future/Window.axaml/notes.txt"; Expected = $false },
+        @{ Path = "Future/notes.txt"; Expected = $false }
+    )
+    $hookRouteViolations = New-Object System.Collections.Generic.List[string]
+    if (@($hookParseErrors).Count -ne 0 -or $hookPatternAssignments.Count -ne 1) {
+        $hookRouteViolations.Add("post-tool hook must contain one parseable literal patterns assignment")
+    }
+    else {
+        $literalArray = $hookPatternAssignments[0].Right.Find({
+            param($node)
+            $node -is [System.Management.Automation.Language.ArrayLiteralAst]
+        }, $true)
+        if ($null -eq $literalArray -or @($literalArray.Elements | Where-Object {
+            $_ -isnot [System.Management.Automation.Language.StringConstantExpressionAst]
+        }).Count -ne 0) {
+            $hookRouteViolations.Add("post-tool hook route patterns must remain literal strings")
+        }
+        else {
+            [string[]]$hookPatterns = @($literalArray.Elements | ForEach-Object { $_.Value })
+            foreach ($fixture in $hookRouteFixtures) {
+                $normalizedHookPath = $fixture.Path -replace '\\', '/'
+                $matchesHook = @($hookPatterns | Where-Object { $normalizedHookPath -match $_ }).Count -gt 0
+                if ($matchesHook -ne $fixture.Expected) {
+                    $hookRouteViolations.Add("$($fixture.Path): expected hook route $($fixture.Expected), got $matchesHook")
+                }
+            }
+        }
+    }
+    if ($hookRouteViolations.Count -gt 0) {
+        $failures.Add("Frozen audit static hook fixtures failed: $(@($hookRouteViolations) -join '; ')")
+    }
+    Write-Host ("Frozen routing probes: tracked={0}, future={1}, near-miss={2}, adversarial={3}, static-hook={4}; requirement gaps: tracked={5}, future={6}, near-miss={7}, static-hook={8}." -f
+        $trackedAppProjectPaths.Count, $positiveRouteFixtures.Count, $nearMissFixtures.Count, $adversarialRouteFixtures.Count, $hookRouteFixtures.Count,
+        $trackedRouteViolations.Count, $positiveRouteViolations.Count, $nearMissViolations.Count, $hookRouteViolations.Count)
 
     Require-Text ".\.codex\config.toml" "LLPlayer_ru" ".codex/config.toml must describe LLPlayer_ru."
     Require-Text ".\LLPlayer\LLPlayer.csproj" "dub_sidecar\\uv\.lock" "LLPlayer publish items must include dub_sidecar/uv.lock."
@@ -502,10 +636,16 @@ try {
 
     $gitignore = Get-Content ".\.gitignore" -Raw
     foreach ($pattern in @(
+        "LLPlayer.Translation.json",
+        "LLPlayer.Translation.json.*",
+        ".LLPlayer.Translation.json.*.tmp",
+        "LLPlayer.Recognition.json",
         "LLPlayer.Config.json",
         "LLPlayer.Engine.json",
         "LLPlayer.PlayerConfig.json",
         "LLPlayer.WordList.json",
+        "LLPlayer.WordList.json.*",
+        ".LLPlayer.WordList.json.*.tmp",
         "crash.log",
         "*.dmp",
         "*.dump",
@@ -564,10 +704,18 @@ try {
 
     $forbiddenTracked = @(git ls-files -- `
         ":(glob)**/yt-dlp.exe" `
+        ":(glob)**/LLPlayer.Translation.json" `
+        ":(glob)**/LLPlayer.Translation.json.*" `
+        ":(glob)**/.LLPlayer.Translation.json.*.tmp" `
+        ":(glob)**/LLPlayer.Recognition.json" `
+        ":(glob)**/LLPlayer.Recognition.json.*" `
+        ":(glob)**/.LLPlayer.Recognition.json.*.tmp" `
         ":(glob)**/LLPlayer.Config.json" `
         ":(glob)**/LLPlayer.Engine.json" `
         ":(glob)**/LLPlayer.PlayerConfig.json" `
         ":(glob)**/LLPlayer.WordList.json" `
+        ":(glob)**/LLPlayer.WordList.json.*" `
+        ":(glob)**/.LLPlayer.WordList.json.*.tmp" `
         ":(glob)**/crash.log" `
         ":(glob)**/.env*" `
         ":(glob)**/*.dmp" `

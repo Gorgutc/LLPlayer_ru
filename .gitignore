@@ -359,6 +359,8 @@ LLPlayer.Config.json
 LLPlayer.Engine.json
 LLPlayer.PlayerConfig.json
 LLPlayer.WordList.json
+LLPlayer.WordList.json.*
+.LLPlayer.WordList.json.*.tmp
 crash.log
 *.dmp
 *.dump
@@ -384,3 +386,18 @@ FFmpeg/linux-x64/
 *.so.[0-9]*
 LLPlayer-*-linux-x64.tar.gz
 LLPlayer-*-linux-x64.tar.gz.sha256
+
+# Detached Avalonia host settings and atomic-save staging
+LLPlayer.Avalonia.json
+LLPlayer.Avalonia.json.*
+.LLPlayer.Avalonia.json.*.tmp
+
+# Detached Linux recognition settings and atomic-save staging
+LLPlayer.Recognition.json
+LLPlayer.Recognition.json.*
+.LLPlayer.Recognition.json.*.tmp
+
+# Detached translation preferences may contain credentials.
+LLPlayer.Translation.json
+LLPlayer.Translation.json.*
+.LLPlayer.Translation.json.*.tmp

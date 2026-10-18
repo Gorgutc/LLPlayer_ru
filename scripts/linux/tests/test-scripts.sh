@@ -42,11 +42,13 @@ sonames=(libavcodec.so.62 libavdevice.so.62 libavfilter.so.11 libavformat.so.62 
 # ---------------------------------------------------------------- publish.sh --check-package
 make_package() { # dir
     local p="$1" so
-    mkdir -p "$p/FFmpeg" "$p/dub_sidecar"
+    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets" "$p/runtimes/linux-x64"
     for f in LLPlayer.Avalonia LLPlayer.Avalonia.dll LLPlayer.Avalonia.deps.json LLPlayer.Avalonia.runtimeconfig.json \
-        FlyleafLib.dll libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so llplayer llplayer.desktop LLPlayer.png \
+        FlyleafLib.dll LLPlayer.Core.dll libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libe_sqlite3.so llplayer llplayer.desktop llplayer.png llplayer.sh LLPlayer.png \
         LICENSE THIRD-PARTY-NOTICES.md FFmpeg/LICENSE.txt FFmpeg/SOURCE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
-        dub_sidecar/README.md; do
+        dub_sidecar/README.md Assets/silero_vad.onnx runtimes/linux-x64/libwhisper.so \
+        runtimes/linux-x64/libggml-whisper.so runtimes/linux-x64/libggml-base-whisper.so \
+        runtimes/linux-x64/libggml-cpu-whisper.so; do
         printf 'x\n' > "$p/$f"
     done
     chmod 755 "$p/LLPlayer.Avalonia" "$p/llplayer"
@@ -68,6 +70,8 @@ mutate() { # name command-string -> fresh copy in $work/m-<name>, prints its pat
     (cd "$dir" && eval "$2")
     printf '%s\n' "$dir"
 }
+expect_fail "missing Core assembly" "missing required file LLPlayer.Core.dll" \
+    check_pkg "$(mutate missing-core 'rm LLPlayer.Core.dll')"
 expect_fail "missing FFmpeg soname" "missing required file FFmpeg/libavcodec.so.62" \
     check_pkg "$(mutate missing-so 'rm FFmpeg/libavcodec.so.62')"
 expect_fail "empty LICENSE" "LICENSE must be a non-empty regular file" \
@@ -78,8 +82,36 @@ expect_fail "missing third-party notices" "missing required file THIRD-PARTY-NOT
     check_pkg "$(mutate no-notices 'rm THIRD-PARTY-NOTICES.md')"
 expect_fail "missing FFmpeg provenance" "missing required file FFmpeg/SOURCE.txt" \
     check_pkg "$(mutate no-ffmpeg-source 'rm FFmpeg/SOURCE.txt')"
+expect_fail "missing launcher icon" "missing required file llplayer.png" \
+    check_pkg "$(mutate no-icon 'rm llplayer.png')"
+expect_fail "missing runtime wrapper" "missing required file llplayer.sh" \
+    check_pkg "$(mutate no-wrapper 'rm llplayer.sh')"
+expect_fail "missing bundled VAD model" "missing required file Assets/silero_vad.onnx" \
+    check_pkg "$(mutate no-vad 'rm Assets/silero_vad.onnx')"
+for native in libwhisper.so libggml-whisper.so libggml-base-whisper.so libggml-cpu-whisper.so; do
+    expect_fail "missing Whisper native $native" "missing required file runtimes/linux-x64/$native" \
+        check_pkg "$(mutate "no-${native%.so}" "rm runtimes/linux-x64/$native")"
+done
+expect_fail "foreign mac runtime" "unexpected runtime payload" \
+    check_pkg "$(mutate foreign-mac 'mkdir -p runtimes/macos-x64; echo x > runtimes/macos-x64/libwhisper.dylib')"
+expect_fail "GPU runtime tree" "unexpected runtime payload" \
+    check_pkg "$(mutate gpu 'mkdir -p runtimes/cuda/linux-x64')"
+expect_fail "Whisper runtime misplaced at root" "unexpected native library outside FFmpeg/: libwhisper.so" \
+    check_pkg "$(mutate misplaced-whisper 'echo x > libwhisper.so')"
 expect_fail "launcher not executable" "llplayer must be executable" \
     check_pkg "$(mutate noexec 'chmod 644 llplayer')"
+expect_fail "translation config JSON" "runtime config" \
+    check_pkg "$(mutate translation 'echo {} > LLPlayer.Translation.json')"
+expect_fail "translation atomic temporary JSON" "runtime config" \
+    check_pkg "$(mutate translationdottmp 'echo {} > .LLPlayer.Translation.json.guid.tmp')"
+expect_fail "translation backup JSON" "runtime config" \
+    check_pkg "$(mutate translationbackup 'echo {} > LLPlayer.Translation.json.bad')"
+expect_fail "recognition config JSON" "runtime config" \
+    check_pkg "$(mutate recognition 'echo {} > LLPlayer.Recognition.json')"
+expect_fail "recognition atomic temporary JSON" "runtime config" \
+    check_pkg "$(mutate recognitiondottmp 'echo {} > .LLPlayer.Recognition.json.guid.tmp')"
+expect_fail "recognition temporary JSON" "runtime config" \
+    check_pkg "$(mutate recognitiontmp 'echo {} > LLPlayer.Recognition.json.test.tmp')"
 expect_fail "runtime config JSON" "runtime config" \
     check_pkg "$(mutate config 'echo {} > LLPlayer.Config.json')"
 expect_fail "crash log" "runtime config" \
@@ -170,6 +202,9 @@ if command -v cc >/dev/null 2>&1 && command -v readelf >/dev/null 2>&1; then
         echo GPL > LICENSE.txt'
     read -r c s < <(fake_tarball good "$elf_setup")
     expect_ok "fetch: install from pinned cached tarball" run_fetch good "$c" "$s" "$work/good-lib" --bin-dir "$work/good-bin"
+    expect_ok "fetch: install with ru_RU.UTF-8 locale (regression)" \
+        env LC_ALL=ru_RU.UTF-8 LLPLAYER_CACHE_DIR="$c" LLPLAYER_FFMPEG_URL="https://invalid.example/good.tar.xz" \
+            LLPLAYER_FFMPEG_SHA256="$s" bash "$linux_dir/fetch-ffmpeg.sh" --dest "$work/good-lib-ru" --no-bin
     all=1
     for so in "${sonames[@]}"; do [[ -f "$work/good-lib/$so" ]] || all=0; done
     [[ $all -eq 1 && -f "$work/good-lib/LICENSE.txt" && -x "$work/good-bin/bin/ffmpeg" ]] && ok ||
@@ -187,6 +222,16 @@ fi
 # ---------------------------------------------------------------- make-test-media.sh
 expect_fail "media: missing ffmpeg CLI" "ffmpeg CLI not found" \
     bash "$linux_dir/make-test-media.sh" --ffmpeg "$work/no-such-ffmpeg" --out "$work/media"
+
+
+expect_fail "missing SQLite native" "missing required file libe_sqlite3.so" \
+    check_pkg "$(mutate no-sqlite 'rm libe_sqlite3.so')"
+expect_fail "unexpected SQLite native layout" "unexpected native library" \
+    check_pkg "$(mutate foreign-sqlite 'mkdir -p extra; echo x > extra/libe_sqlite3.so')"
+expect_fail "word library backup" "runtime config / logs / dumps / secrets" \
+    check_pkg "$(mutate words-backup 'echo {} > LLPlayer.WordList.json.bak')"
+expect_fail "word library temp" "runtime config / logs / dumps / secrets" \
+    check_pkg "$(mutate words-temp 'echo {} > .LLPlayer.WordList.json.guid.tmp')"
 
 printf 'scripts/linux self-tests: %d passed, %d failed\n' "$passed" "$failed" >&2
 [[ $failed -eq 0 ]]

@@ -44,6 +44,8 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `LLPlayer` | `Whisper.net.Runtime.NoAvx` | `1.9.0` |
 | `LLPlayer` | `Whisper.net.Runtime.OpenVino` | `1.9.0` |
 | `LLPlayer` | `Whisper.net.Runtime.Vulkan` | `1.9.0` |
+| `LLPlayer.Core` | `Microsoft.Data.Sqlite` | `9.0.17` |
+| `LLPlayer.Core` | `SQLitePCLRaw.bundle_e_sqlite3` | `3.0.3` |
 | `FlyleafLibTests` | `AwesomeAssertions` | `9.4.0` |
 | `FlyleafLibTests` | `Microsoft.NET.Test.Sdk` | `18.4.0` |
 | `FlyleafLibTests` | `xunit.v3` | `3.2.2` |
@@ -55,7 +57,11 @@ Runtime-sensitive package versions are part of the frozen baseline:
 
 ## SQLite (Anki .apkg export, F-10)
 
-`LLPlayer` references `Microsoft.Data.Sqlite` to write Anki `.apkg` decks (a SQLite `collection.anki2` zipped with a `media` manifest). The native `e_sqlite3.dll` it depends on is supplied by `SQLitePCLRaw.bundle_e_sqlite3`, which `dotnet publish` copies into the output `runtimes/win-x64/native/` folder alongside the other bundled native assets (no manual packaging step needed). This is security-sensitive: the whole `SQLitePCLRaw 2.1.x` line carries advisory GHSA-2m69-gcr7-jv3q (vulnerable bundled SQLite, no 2.1.x fix), so the bundle is pinned to the patched `3.0.3` (which ships native `e_sqlite3` `3.50.3`). NuGet audit (`-warnaserror` / NU1903) fails the build if a vulnerable SQLitePCLRaw is reintroduced; keep these on a non-vulnerable release rather than downgrading.
+`LLPlayer` already references `Microsoft.Data.Sqlite` 9.0.17 and `SQLitePCLRaw.bundle_e_sqlite3` 3.0.3 for Windows APKG export. `LLPlayer.Core` now references those same pinned versions for portable Linux APKG export; no package-family or version upgrade was introduced. SQLitePCLRaw 2.1.x carries advisory GHSA-2m69-gcr7-jv3q, so retain the patched 3.0.3 line and NuGet audit (`-warnaserror` / NU1903).
+
+The 3.0.3 bundle resolves `SourceGear.sqlite3` 3.50.4.5 (SQLite 3.50.4). Windows publishing carries `e_sqlite3.dll` in its runtime assets; the Linux package explicitly includes `libe_sqlite3.so` at the package root as required by the native provider's loader. The cached Linux binary is x86-64 and has only `libc.so.6` as a `DT_NEEDED` library, with maximum imported `GLIBC_2.34`; it has no `libstdc++`, OpenMP, VC++ runtime, or GPU dependency. Its hash and final-package proof belong to the slice receipt, not this dependency baseline.
+
+License attribution is mixed: `Microsoft.Data.Sqlite.Core` is MIT (Microsoft); SQLitePCLRaw bundle/config/core/provider components are Apache-2.0 (SourceGear); the `SourceGear.sqlite3` package states that SQLite is Public Domain. The Linux package's `THIRD-PARTY-NOTICES.md` includes the complete MIT and Apache-2.0 texts and corresponding attributions; do not describe the whole SQLite stack as MIT. Package validation must require the native library and notices and reject unrelated native files.
 
 Historically `FlyleafLib` referenced `7.1.1` while `LLPlayer` referenced `8.0.1`. That was a benign-but-confusing mismatch: with no central package management, NuGet unified the conflicting references **up** to `8.0.1` for the app output, so the actually-shipped managed binding already matched the 8.0 native DLLs; the heavy FFmpeg interop lives in `FlyleafLib`, while `LLPlayer` only consumes managed `LoadProfile`/`LogLevel` enums (no P/Invoke). Task T-01 aligned `FlyleafLib` **up** to `8.0.1` so the compile-time reference matches the runtime-unified binding and the shipped DLLs (verified: `FlyleafLib` + `LLPlayer` build `-warnaserror` 0/0 against `8.0.1`). Down-aligning to `7.1.1` was rejected: it would have forced the unified runtime binding **down** to `7.1.1` against the 8.0 DLLs, replacing a correct pairing with a real mismatch.
 
@@ -112,6 +118,8 @@ The Linux build is additive; nothing above changes for Windows.
 | `LLPlayer.Avalonia` | `Avalonia.Themes.Fluent` | `12.1.3` |
 | `LLPlayer.Avalonia` | `Avalonia.Fonts.Inter` | `12.1.3` |
 | `LLPlayer.Avalonia` | `CommunityToolkit.Mvvm` | `8.4.2` |
+| `LLPlayer.Avalonia` | `Whisper.net.Runtime` | `1.9.0` (`ExcludeAssets="build"`; explicit CPU Linux native allowlist) |
+| `FlyleafLibTests` (portable `net10.0`) | `Whisper.net.Runtime` | `1.9.0` (`ExcludeAssets="build"`; explicit CPU Linux test runtime files) |
 | `LLPlayer.Avalonia` | `Avalonia.BuildServices` | `11.3.2` (`ExcludeAssets="all"`, `PrivateAssets="all"`: only switches off Avalonia's build-time telemetry task) |
 | `LLPlayer.Avalonia.Tests` | `Avalonia.Headless.XUnit` | `12.1.3` |
 | `LLPlayer.Avalonia.Tests` | `Avalonia.Skia` | `12.1.3` |
@@ -121,7 +129,7 @@ The Linux build is additive; nothing above changes for Windows.
 | `LLPlayer.Avalonia.Tests` | `xunit.v3` | `3.2.2` |
 | `LLPlayer.Avalonia.Tests` | `xunit.runner.visualstudio` | `3.1.5` |
 
-The portable `net10.0` TFM of `FlyleafLib` adds no package: the OpenAL Soft output binds `libopenal.so.1` at run time
+The portable `net10.0` TFM of `FlyleafLib` adds no package of its own for OpenAL: the OpenAL Soft output binds `libopenal.so.1` at run time
 with `NativeLibrary.TryLoad` + `GetExport` (no `DllImport` resolver, so it cannot collide with another resolver in
 the assembly), and the software renderer uses the FFmpeg libraries already bound by `Flyleaf.FFmpeg.Bindings`
 (`swscale`, `avfilter`: `bwdif`/`yadif`/`estdif`, `zscale`+`tonemap`).
@@ -149,10 +157,20 @@ truth, and adding or upgrading any Linux package is the same focused dependency 
   fresh checkouts).
 - **OpenAL Soft:** the system `libopenal.so.1` (Ubuntu `libopenal1`, LGPL-2.1) is a runtime prerequisite and is not
   bundled. Without it, audio falls back to the silent null sink.
-- **Bundled NuGet natives in the Linux package:** `libSkiaSharp.so`, `libHarfBuzzSharp.so` (Avalonia rendering) and
-  `libonnxruntime.so`, `libonnxruntime_providers_shared.so` (Silero VAD). The Windows-only `x64/`/`x86/` Tesseract
-  DLLs that the TesseractOCR build targets copy are removed from the Linux package.
-- **Prerequisites for end users:** .NET 10 runtime (Ubuntu: `apt install dotnet-runtime-10.0`) and `libopenal1`.
+- **Linux OCR:** the portable engine calls the system Tesseract 5 C API (`libtesseract.so.5`) and reads system
+  traineddata; neither the native library nor language data is bundled, and no Tesseract NuGet runtime is added.
+  `TESSDATA_PREFIX` is the standard optional data-path override. The reviewed host has Tesseract 5.5.0,
+  Leptonica 1.86.0, and `eng`/`osd`/`rus` data; these versions describe the smoke host, not a frozen minimum.
+- **Bundled NuGet natives in the Linux package:** `libSkiaSharp.so`, `libHarfBuzzSharp.so` (Avalonia rendering),
+  `libonnxruntime.so`, `libonnxruntime_providers_shared.so` (Silero VAD), and exactly
+  `runtimes/linux-x64/libwhisper.so`, `libggml-whisper.so`, `libggml-base-whisper.so`,
+  `libggml-cpu-whisper.so` (Whisper.net CPU inference), plus `libe_sqlite3.so` at package root for Core APKG export.
+  `Whisper.net.Runtime` 1.9.0 is referenced with
+  `ExcludeAssets="build"`; the csproj copies only those four files, and `publish.sh` rejects foreign/GPU or other
+  unexpected runtime payloads. Linux host requirements for the cached native binaries: glibc 2.34+, `GLIBCXX_3.4.29`,
+  `libgomp.so.1`, and AVX/AVX2/FMA/F16C CPU support. The Windows-only `x64/`/`x86/` Tesseract DLLs that the
+  TesseractOCR build targets copy are removed from the Linux package.
+- **Prerequisites for end users:** .NET 10 runtime (Ubuntu: `apt install dotnet-runtime-10.0`), `libopenal1` for OpenAL output, and system Tesseract 5 plus traineddata for OCR; Whisper CPU host ABI and instruction-set requirements are listed above.
 
 ### Linux package rules
 
@@ -161,13 +179,19 @@ truth, and adding or upgrading any Linux package is the same focused dependency 
 `LLPlayer.csproj`). Mirroring the Windows ship rules, it must:
 
 - positively validate the required contents: the `LLPlayer.Avalonia` apphost, `.dll`, `.deps.json`,
-  `.runtimeconfig.json`, `FlyleafLib.dll`, `libSkiaSharp.so`, `libHarfBuzzSharp.so`, all seven FFmpeg sonames and
-  `FFmpeg/LICENSE.txt` + `FFmpeg/SOURCE.txt`, the committed `dub_sidecar` source (`server.py`, `pyproject.toml`,
-  `uv.lock`, `README.md`), `LICENSE`, `THIRD-PARTY-NOTICES.md` (shadcn/ui MIT, Lucide ISC/MIT, FFmpeg), the `llplayer` launcher, `llplayer.desktop`, and `LLPlayer.png` — each a non-empty file inside the package;
+  `.runtimeconfig.json`, `LLPlayer.Core.dll`, `FlyleafLib.dll`, `libSkiaSharp.so`, `libHarfBuzzSharp.so`, `libonnxruntime.so`,
+  root `libe_sqlite3.so`,
+  all seven FFmpeg sonames and `FFmpeg/LICENSE.txt` + `FFmpeg/SOURCE.txt`,
+  the committed `dub_sidecar` source (`server.py`, `pyproject.toml`, `uv.lock`, `README.md`), `LICENSE`,
+  `THIRD-PARTY-NOTICES.md` (shadcn/ui MIT, Lucide ISC/MIT, FFmpeg GPL, Whisper.net/whisper.cpp CPU runtime MIT,
+  Silero VAD MIT, Microsoft.Data.Sqlite.Core MIT, SQLitePCLRaw Apache-2.0, and SQLite Public Domain notice),
+  the `llplayer` launcher, `llplayer.sh` wrapper, `llplayer.desktop`, `llplayer.png`,
+  `Assets/silero_vad.onnx`, and all four approved Whisper CPU natives — each a non-empty file inside the package;
 - reject runtime config JSON (`LLPlayer.*.json`), logs, dumps, `.env*`, dubbing runtime data (`DubEngine`,
   `dubmodels`, `*.ru.dub.*`, `*.ru.voices.json`), Python venvs, downloaded models (`ggml-*.bin`, `*.traineddata`),
-  user media folders, any `*.so` outside `FFmpeg/` other than the four NuGet natives above, FFmpeg libraries with
-  other majors, Windows native payload folders, and symlinks that escape the package.
+  user media folders; any `*.so` outside `FFmpeg/` except the explicitly allowed NuGet shared libraries above,
+  the four Whisper natives under `runtimes/linux-x64/`, and root `libe_sqlite3.so`; FFmpeg libraries with other
+  majors; Windows native payload folders; and symlinks that escape the package.
 
 ## Release Packaging Tail
 

@@ -51,10 +51,20 @@ validate_package() {
         "LLPlayer.Avalonia.deps.json"
         "LLPlayer.Avalonia.runtimeconfig.json"
         "FlyleafLib.dll"
+        "LLPlayer.Core.dll"
         "libSkiaSharp.so"
         "libHarfBuzzSharp.so"
+        "libonnxruntime.so"
+        "libe_sqlite3.so"
+        "Assets/silero_vad.onnx"
+        "runtimes/linux-x64/libwhisper.so"
+        "runtimes/linux-x64/libggml-whisper.so"
+        "runtimes/linux-x64/libggml-base-whisper.so"
+        "runtimes/linux-x64/libggml-cpu-whisper.so"
         "llplayer"
         "llplayer.desktop"
+        "llplayer.png"
+        "llplayer.sh"
         "LLPlayer.png"
         "LICENSE"
         "THIRD-PARTY-NOTICES.md"
@@ -78,8 +88,8 @@ validate_package() {
     done
 
     # ---- Negative validation (mirrors the Windows ship rules in docs/agent/dependency-baseline.md) ----
-    hits="$(find "$pkg" \( -name 'LLPlayer.Config.json' -o -name 'LLPlayer.Engine.json' -o -name 'LLPlayer.PlayerConfig.json' \
-        -o -name 'LLPlayer.WordList.json' -o -name 'crash.log' -o -name '*.log' -o -name '*.dmp' -o -name '*.dump' \
+    hits="$(find "$pkg" \( -name '.LLPlayer.Translation.json.*.tmp' -o -name 'LLPlayer.Translation.json' -o -name 'LLPlayer.Translation.json.*' -o -name '.LLPlayer.Recognition.json.*.tmp' -o -name 'LLPlayer.Recognition.json' -o -name 'LLPlayer.Recognition.json.*' -o -name 'LLPlayer.Config.json' -o -name 'LLPlayer.Engine.json' -o -name 'LLPlayer.PlayerConfig.json' \
+        -o -name 'LLPlayer.WordList.json' -o -name 'LLPlayer.WordList.json.*' -o -name '.LLPlayer.WordList.json.*.tmp' -o -name 'crash.log' -o -name '*.log' -o -name '*.dmp' -o -name '*.dump' \
         -o -name '.env*' \) -print)"
     [[ -z "$hits" ]] || reject "runtime config / logs / dumps / secrets" "$hits"
     hits="$(find "$pkg" -type d \( -name DubEngine -o -name dubmodels -o -name '.venv' -o -name venv -o -name __pycache__ \
@@ -88,8 +98,10 @@ validate_package() {
     hits="$(find "$pkg" \( -name '*.ru.dub.*' -o -name '*.ru.voices.json' -o -name 'ggml-*.bin' -o -name '*.traineddata' \) -print)"
     [[ -z "$hits" ]] || reject "rendered dubs, voice companion files or downloaded models" "$hits"
     # Shared objects outside FFmpeg/: only the known runtime natives of the referenced NuGet packages
-    # (Avalonia/Skia/HarfBuzz rendering, ONNX Runtime for Silero VAD).
-    allowed_natives=" libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libonnxruntime_providers_shared.so "
+    # (Avalonia/Skia/HarfBuzz rendering, ONNX Runtime for Silero VAD, pinned Whisper CPU loader layout).
+    allowed_natives=" libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libonnxruntime_providers_shared.so libe_sqlite3.so \
+runtimes/linux-x64/libwhisper.so runtimes/linux-x64/libggml-whisper.so \
+runtimes/linux-x64/libggml-base-whisper.so runtimes/linux-x64/libggml-cpu-whisper.so "
     while IFS= read -r so_path; do
         rel="${so_path#"$pkg"/}"
         case "$rel" in
@@ -110,6 +122,13 @@ validate_package() {
     hits="$(find "$pkg" -maxdepth 1 -type d \( -name x86 -o -name x64 \) -print
         find "$pkg" -path '*/runtimes/win*' -prune -print)"
     [[ -z "$hits" ]] || reject "Windows native payload folders" "$hits"
+    # A portable NuGet TFM can otherwise copy foreign/GPU runtimes regardless of the publish RID.
+    # Reject the entire unexpected tree, including non-.so files or empty directories.
+    while IFS= read -r path; do
+        rel="${path#"$pkg"/}"
+        [[ "$rel" == runtimes/linux-x64 || "$allowed_natives" == *" $rel "* ]] ||
+            reject "an unexpected runtime payload" "$rel"
+    done < <(find "$pkg/runtimes" -mindepth 1 -print)
     # No symlink may point outside the package.
     while IFS= read -r link; do
         target="$(readlink -f "$link" || true)"
@@ -208,6 +227,7 @@ cp LICENSE "$pkg/LICENSE"
     llp_die "LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md is missing (shadcn/ui MIT, Lucide ISC/MIT and FFmpeg notices ship with the package)."
 cp LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md "$pkg/THIRD-PARTY-NOTICES.md"
 cp LLPlayer.png "$pkg/LLPlayer.png"
+cp LLPlayer.Avalonia/Assets/llplayer.png "$pkg/llplayer.png"
 
 cat > "$pkg/llplayer" <<'LAUNCHER'
 #!/bin/sh
@@ -231,13 +251,25 @@ Comment=Media player for language learning with dual subtitles
 Exec=llplayer %F
 Icon=llplayer
 Terminal=false
-Categories=AudioVideo;Video;Player;Education;
+Categories=AudioVideo;Player;Education;
 MimeType=video/mp4;video/x-matroska;video/webm;video/quicktime;video/x-msvideo;video/mpeg;audio/mpeg;audio/mp4;audio/flac;audio/ogg;audio/x-wav;application/x-subrip;
 Keywords=video;subtitles;language;learning;
 DESKTOP
 if command -v desktop-file-validate >/dev/null 2>&1; then
     desktop-file-validate "$pkg/llplayer.desktop"
 fi
+
+cat > "$pkg/llplayer.sh" <<'WRAPPER'
+#!/bin/sh
+# LLPlayer launcher: resolves the .NET runtime when it is not on a system path.
+dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+if [ -z "${DOTNET_ROOT:-}" ] && [ ! -d /usr/share/dotnet ] && [ -x "$HOME/.dotnet/dotnet" ]; then
+    DOTNET_ROOT="$HOME/.dotnet"
+    export DOTNET_ROOT
+fi
+exec "$dir/LLPlayer.Avalonia" "$@"
+WRAPPER
+chmod 755 "$pkg/llplayer.sh"
 
 validate_package "$pkg"
 

@@ -35,6 +35,31 @@ Linux toolchain notes:
   sonames (`libavcodec.so.62`, `libavutil.so.60`, ...).
 - **Package:** `scripts/linux/publish.sh` → `LLPlayer-<version>-linux-x64.tar.gz` (app, `FFmpeg/`, launcher,
   `.desktop` file, icon, licenses); end users install `dotnet-runtime-10.0` and `libopenal1`.
+- **Owner's local refresh workflow (2026-10-03):** after each completed and reviewed Linux slice, publish and verify
+  a new immutable installed package under `/models/codex-builds/LLPlayer_ru/installed`, then atomically switch
+  `/models/codex-builds/LLPlayer_ru/installed/current` to that package. Both maintained launchers—the existing
+  `~/.local/share/applications/llplayer.desktop` and the original
+  `~/Загрузки/LLPlayer-linux-x64/LLPlayer-0.3.62-linux-x64/llplayer.desktop`—must resolve `Exec` and `Icon` through
+  `current/llplayer.sh %F` and `current/llplayer.png`, respectively. Verify both launcher resolutions and record
+  them in the refresh receipt; preserve older packages and user XDG data. Reopen the application after switching
+  `current`. This is local owner practice, not a CI or release requirement; it does not add a watcher or
+  auto-download. Treat deployment as complete only when its verification receipt exists; a successful publish alone
+  does not establish installation or launcher readiness.
+
+### Owner storage layout (verified 2026-10-03)
+
+- Verified relocation placed repository artifacts at `/models/codex-builds/LLPlayer_ru/artifacts` and eight projects'
+  `bin`/`obj` directories under `/models/codex-builds/LLPlayer_ru/build/<project>/{bin,obj}`; 17 repository-local
+  symlink redirects were read back. Receipt: `/models/codex-builds/LLPlayer_ru/storage-migration-2026-10-03/receipt.json`.
+- Future package outputs, evidence, and logs use the artifact path; future desktop-installed versions use
+  `/models/codex-builds/LLPlayer_ru/installed`. Keep future model downloads under `/models` as needed; existing model
+  locations were not moved.
+- For future heavy commands, use process-scoped `TMPDIR=/models/codex-builds/LLPlayer_ru/tmp` or explicit publish
+  staging under artifacts. This is local-machine guidance, not a global environment or CI default.
+- Tracked source, global caches, XDG data, and currently installed versions were preserved. Exact redirect-ignore
+  entries were added to local `.git/info/exclude` with a backup. Measured root space reclaimed during migration was
+  6.92 GiB; check `df` on `/` and `/models` before future heavy builds. Avoid `git clean`: it can remove the redirect
+  symlinks, causing later builds to write under the repository root.
 
 ## Local Development Environment (T-11)
 

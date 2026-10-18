@@ -9,7 +9,9 @@ new files; narrower product/runtime rows add domain reviewers and never replace 
 
 - `**/*.cs`: `dotnet_quality_guardian`, `verification_reviewer`.
 - `**/*.xaml`: `wpf_xaml_reviewer`, `verification_reviewer`.
+- `**/*.axaml`: `wpf_xaml_reviewer`, `verification_reviewer`.
 - `**/*.xaml.cs`: `dotnet_quality_guardian`, `wpf_xaml_reviewer`, `verification_reviewer`.
+- `**/*.axaml.cs`: `dotnet_quality_guardian`, `wpf_xaml_reviewer`, `verification_reviewer`.
 - `LLPlayer/**/*.xaml`, `LLPlayer/Views/**`, `LLPlayer/Controls/**`, `LLPlayer/ViewModels/**`, `LLPlayer/Converters/**`, `LLPlayer/Themes/**`, `LLPlayer/Resources/**`: `wpf_xaml_reviewer`, `verification_reviewer`.
 - `LLPlayer/Services/AppConfig.cs`, `FlyleafLib/Engine/Config.cs`, settings controls, key bindings: `dotnet_quality_guardian`, `instruction_drift_auditor`, `verification_reviewer`.
 - `FlyleafLib/**/*.cs`, `FlyleafLib/**/*.xaml`: `media_runtime_mapper` in addition to the extension minimums.
@@ -20,13 +22,26 @@ new files; narrower product/runtime rows add domain reviewers and never replace 
 - `FlyleafLib/MediaPlayer/Translation/**`: `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`.
 - `FlyleafLib/MediaPlayer/Dubbing/**`: `media_runtime_mapper`, `dotnet_quality_guardian`, `native_dependency_auditor`, `verification_reviewer`.
 - `FlyleafLibTests/**`: `dotnet_quality_guardian`, `verification_reviewer`.
+- `LLPlayer.Core/**`: `dotnet_quality_guardian`, `media_runtime_mapper`, `verification_reviewer`; shared services
+  require both Windows WPF and Linux gates, plus the relevant native Windows Avalonia checks once that baseline exists.
+- `LLPlayer.Core/Services/RecognitionSettings.cs`, `LLPlayer.Core/Services/TranslationSettings.cs`,
+  `LLPlayer.Core/Services/WordLibrary.cs`, `LLPlayer.Core/Serialization/**`: `instruction_drift_auditor` in addition
+  to the Core reviewers, for persistence/defaults/data ownership.
+- `LLPlayer.Core/Services/AnkiApkgWriter.cs`: `native_dependency_auditor`, `packaging_release_reviewer` in addition
+  to the Core reviewers, for native SQLite and package/export boundaries.
 - `*.sln`, `*.slnx`, `*.csproj`, `Directory.Build.*`, `Directory.Packages.props`, `global.json`: `dotnet_quality_guardian`, `packaging_release_reviewer`, `verification_reviewer`.
 - `dub_sidecar/**`: `media_runtime_mapper`, `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer`.
 - `Plugins/YoutubeDL/**`: `media_runtime_mapper`, `packaging_release_reviewer`, `verification_reviewer`, plus the extension/project minimums.
 - `FFmpeg/**`, `LLPlayer/lib/**`, `LLPlayer/Assets/**`, publish profiles, `.github/actions/build-package/action.yml`: `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer`.
 - `.github/workflows/**`: `dotnet_quality_guardian`, `packaging_release_reviewer`, `verification_reviewer`.
 - `FlyleafLib/Platform/**` (F-13 portable seams): `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`; gates `verify`, `scripts/linux/verify.sh`, playback smoke.
-- `LLPlayer.Avalonia/**`, `LLPlayer.Avalonia.Tests/**` (F-13 Linux app): `dotnet_quality_guardian`, `media_runtime_mapper`, `verification_reviewer`, plus `wpf_xaml_reviewer` for `*.axaml`; gates `scripts/linux/verify.sh` and the Linux rows of the manual smoke matrix.
+- `LLPlayer.Avalonia/**`, `LLPlayer.Avalonia.Tests/**` (shared F-13 UI, currently packaged for Linux):
+  `dotnet_quality_guardian`, `media_runtime_mapper`, `verification_reviewer`, plus `wpf_xaml_reviewer` for `*.axaml`;
+  gates `scripts/linux/verify.sh` and relevant manual smoke rows. Windows baseline paths also require native Windows
+  Avalonia build/runtime evidence; Linux/headless results alone do not satisfy it.
+- Avalonia Windows RID/native-runtime/package paths: `dotnet_quality_guardian`, `native_dependency_auditor`,
+  `packaging_release_reviewer`, `media_runtime_mapper`, `verification_reviewer`; preserve the WPF full gate.
+  Test the portable `net10.0` engine path explicitly; a successful WPF-target build is not Avalonia runtime proof.
 - `scripts/linux/**`, `.github/workflows/build-linux.yml` (F-13 Linux build/package): `native_dependency_auditor`, `packaging_release_reviewer`, `verification_reviewer` (the workflow also gets the `.github/workflows/**` reviewers); gate `scripts/linux/verify.sh`.
 - `docs/agent/product-behavior-contract.md`: `wpf_xaml_reviewer`, `media_runtime_mapper`, `dotnet_quality_guardian`, `verification_reviewer`.
 - `docs/agent/wpf-design-contract.md`: `wpf_xaml_reviewer`, `verification_reviewer`.

@@ -12,7 +12,7 @@
 > `Improvements.md` + `Sessions/2026-06-25-handoff-competitive-analysis-roadmap.md`, авто-память.
 > Перед изменением ПОВЕДЕНИЯ — сверяться с frozen-контрактами (не трогать без явного запроса владельца).
 >
-> **Актуальный рабочий срез (2026-07-20, v0.3.62 candidate):** app-срез `HC-27b` смёржен через
+> **Исторический закрывающий срез (2026-07-20, v0.3.62 candidate):** app-срез `HC-27b` смёржен через
 > [PR #142](https://github.com/Gorgutc/LLPlayer_ru/pull/142), post-merge truth sync — через
 > [PR #143](https://github.com/Gorgutc/LLPlayer_ru/pull/143). `T-13a` реализован и проверен в
 > [PR #144](https://github.com/Gorgutc/LLPlayer_ru/pull/144): Testing Release больше не интерполирует release
@@ -57,7 +57,13 @@
 > итог — `ACCEPTED WITH OWNER WAIVER`, `HC-22` закрыт как **DONE WITH RESIDUAL RISK**.
 >
 > **2026-09-24:** владелец активировал `F-13` (Linux-порт): Avalonia 12.1.3 + FluentTheme + своя тема из
-> shadcn-токенов; Windows WPF-продукт не меняется. Этап 1 — draft PR #166; этап 2 — в работе (см. F-13).
+> shadcn-токенов; сохраняется Windows WPF-продукт. Этап 1 — draft PR #166; этап 2 закрыт 2026-09-26 (см. F-13).
+>
+> **Текущий фокус (2026-10-18):** `F-13` активен; цель владельца — один Avalonia UI и общий Core для нативных
+> Windows и Linux. Следующий ограниченный Windows Avalonia baseline можно вести до полного Linux parity;
+> WPF сохраняется до приёмки замены. Октябрьский экспорт исходников синхронизируется отдельно от исторических
+> проверок 2026-10-07. Статус, происхождение и следующий срез:
+> [`f13-status-2026-10-18.md`](f13-status-2026-10-18.md).
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
@@ -638,7 +644,7 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Идея от SubtitleEdit.** **Остаток (waveform):** рендер waveform из аудио FlyleafLib для визуального sync.
 **Рассуждение:** A-B повтор — заметный single-session UX-win для изучения языка; waveform — крупный effort, не топ.
 
-### F-13 — Кросс-платформенность (Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (решение владельца 2026-09-24)** · (upstream «Future»)
+### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-18; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 SE5 и Buzz уже кросс-платформенны → Windows-only был конкурентным минусом. Владелец явно запросил Linux-порт;
 трек переведён из DEFERRED в IN PROGRESS.
 
@@ -648,22 +654,38 @@ MVVM — CommunityToolkit.Mvvm 8.4.2 (у Prism.Avalonia нет релиза по
 (0.x-зависимость одного мейнтейнера; другие пакеты тем — SukiUI, Semi — тоже не берём) и web-UI с настоящим
 shadcn/ui (не может эффективно передавать видеокадры FlyleafLib и нарушает «What Not To Port» в `AGENTS.md`).
 
-**Архитектура:** Windows = существующий WPF `LLPlayer` на `net10.0-windows10.0.18362.0` — код и поведение не
-меняются; Linux = новый `LLPlayer.Avalonia` на новом portable `net10.0` TFM FlyleafLib (швы в
-`FlyleafLib/Platform/Portable/`). Целевое направление — «одно ядро + один UI»: после паритета вынести логику
-приложения в общий `LLPlayer.Core`, затем Avalonia-UI становится единым для обеих ОС (с GPU-рендером на Windows);
+**Архитектура:** Windows = существующий WPF `LLPlayer` на `net10.0-windows10.0.18362.0` с сохранением поведения;
+Linux = `LLPlayer.Avalonia` на portable `net10.0` TFM FlyleafLib (швы в
+`FlyleafLib/Platform/Portable/`). Цель — «одно ядро + один UI»: ограниченные общие сервисы уже вынесены
+в `LLPlayer.Core`; остальная логика переносится поэтапно. Avalonia UI должен стать единым для обеих ОС.
+Нативный Windows baseline использует portable `net10.0`; Windows GPU-рендер — отдельный последующий срез;
 WPF выводится из эксплуатации только после owner smoke на Windows. Один репозиторий, одна ветка, CI обеих платформ
 на каждом PR (`build.yml` + `build-linux.yml`).
 
-**Решение владельца «одно ядро + один UI» (2026-09-24) — запись и поэтапная дорожная карта.** Сейчас (этапы 1–2):
-общее ядро FlyleafLib (два TFM) + WPF на Windows (без изменений) + Avalonia на Linux. Цель: один UI (Avalonia) на
-обеих ОС поверх общего `LLPlayer.Core` и FlyleafLib. Порядок (каждая ступень оставляет WPF-продукт выпускаемым до
-последней; схема «текущее vs целевое» — `architecture.md` → «Current vs Target»):
-  1. **Вынос `LLPlayer.Core`** — логика приложения из WPF-проекта (конфиг, actions, сервисы, логика VM) в общий проект.
-  2. **Паритет Avalonia** — Avalonia-UI догоняет WPF (паритет-лист ниже).
-  3. **GPU-рендер для Avalonia на Windows** — без CPU-копии BGRA.
-  4. **Owner smoke на Windows** — Avalonia-приложение на Windows.
-  5. **Вывод WPF из эксплуатации** — только после owner smoke.
+**Дорожная карта «одно ядро + один UI» (решение 2026-09-24, приоритет уточнён владельцем 2026-10-18).**
+Сейчас: FlyleafLib с двумя TFM, WPF на Windows, Avalonia на Linux и частично вынесенный Core.
+Цель: один Avalonia UI поверх общего `LLPlayer.Core` и FlyleafLib на нативных Windows и Linux.
+Каждый срез сохраняет выпускаемый WPF-продукт до приёмки замены:
+
+  1. **Синхронизация исходников и свежие проверки обеих платформ.** Октябрьские receipts остаются историческими;
+     результаты текущего дерева фиксируются отдельно.
+  2. **Следующий ограниченный срез — нативный Windows Avalonia baseline.** Использовать portable `net10.0`,
+     те же Avalonia views/Core, проверить RID, FFmpeg, native audio, упаковку, пути config/log и основное воспроизведение.
+     Первый software-render baseline не закрывает GPU и не доказывает Windows ASR/OCR.
+  3. **Отдельные Windows ASR/OCR-срезы** с проверкой native dependencies и реального runtime.
+  4. **Дальнейший Core и паритет функций.** Уже есть каталог моделей, recognition/translation settings/actions,
+     word snapshots/library и Anki/APKG export; полный app config, остальные сервисы и VM logic ещё не перенесены.
+     Продолжить паритет-лист ниже, сохраняя одни views и общую логику.
+  5. **GPU decode/render** на соответствующей платформе — отдельные измеряемые срезы.
+  6. **Нативная desktop-приёмка на обеих ОС.** WSL/Linux gates дополняют доказательства,
+     но не заменяют нативный Windows Avalonia smoke.
+  7. **Вывод WPF из эксплуатации** — только после приёмки замены и явного решения владельца.
+
+**Текущий приоритет (прямое решение владельца, 2026-10-18):** единый Avalonia UI и Core для Windows/Linux.
+Windows baseline разрешён до полного Linux parity. Для будущей работы это заменяет отсрочку Windows из решения
+2026-10-03; прежние планы и receipts сохраняют исторический scope. Текущие WPF compatibility contracts
+и Windows CI/build gates остаются обязательными. Предложение следующего среза:
+[`f13-status-2026-10-18.md`](f13-status-2026-10-18.md).
 
 Avalonia-приложение обязано оставаться платформенно-нейтральным (без Linux-only допущений): конфиг — XDG
 `~/.config/LLPlayer` на Linux и `%APPDATA%\LLPlayer` на Windows (состояние/логи — `~/.local/state/LLPlayer` /
@@ -672,13 +694,16 @@ Avalonia-приложение обязано оставаться платфор
 `linux-x64`, упаковка только Linux (`publish.sh`), единственный путь видео — software-рендер, OpenAL Soft на
 Windows не поставляется.
 
-**Этапы:**
+**Этапы и исторические checkpoints:** результаты ниже относятся к указанным датам и пакетам, а не к свежей
+проверке импортированного дерева. Указанная в старых срезах отсрочка Windows описывает их тогдашний scope,
+а не текущий приоритет 2026-10-18.
+
 - **Этап 1 ✅** (commit `b82cde0`, draft [PR #166](https://github.com/Gorgutc/LLPlayer_ru/pull/166)): FlyleafLib
   multi-target `net10.0`; швы `IUIDispatcher`/`IHostServices`/`IVideoSurface`/`IAudioSink`/`IAudioBackend`,
   `Player.KeyStateProvider`, `BindingOperations`/`CollectionViewSource`-хуки, `SubtitlesOCR.ServiceFactory`;
   software `sws_scale` → BGRA рендер, `NullAudioSink`, WPF-заглушки; `PortableEngineSmokeTests`. Windows-сборка
   проверена декомпиляцией (отличия только в именах сгенерированных regex-классов).
-- **Этап 2 🚧** (четыре параллельных среза, интегрируются вместе): **video** — полировка software-рендера
+- **Этап 2 ✅** (четыре параллельных среза, интегрируются вместе; done 2026-09-26): **video** — полировка software-рендера
   (rotation/flip/фильтры, даунскейл); **audio** — OpenAL Soft backend + фабрика (`LLPLAYER_AUDIO_BACKEND=null|openal|auto`);
   **app** — `LLPlayer.Avalonia` + `LLPlayer.Avalonia.Tests` (главное окно, плеер, dual subtitles, базовый WordPopup,
   тема из shadcn-токенов, XDG-конфиг `~/.config/LLPlayer`); **infra** — `scripts/linux/` (fetch-ffmpeg,
@@ -689,12 +714,113 @@ Windows не поставляется.
   опубликованного tar.gz. **Поправка (ревью):** Linux CI на `e0d8403` был красным — тест рендера зависел от порядка
   тестов (`Utils.IsTesting` оставался `true` у `Engine.Start`); исправлено в `dd9f4af`. Зелёный статус CI
   подтверждается только прогоном `build-linux.yml` на новом head.
-- **Дальше — паритет (по одному срезу, каждый со своим тестом/смоуком):**
-  1. ASR/Whisper на Linux: Linux-runtime Whisper.net (natives `linux-x64`), пути Linux-бинарника faster-whisper
-     (дефолт сейчас `faster-whisper-xxl.exe`).
-  2. OCR через системный Tesseract (`SubtitlesOCR.ServiceFactory`; пакет TesseractOCR несёт только Windows-natives).
-  3. Паритет перевода/WordPopup (провайдеры, словари, Anki-экспорт).
-  4. Паритет диалогов настроек (Settings, Keys, Subtitles, ASR, Translation, Dubbing).
+  **Закрытие этапа 2 (2026-09-26):** на машине владельца (Linux, 32 cores, X11 + OpenAL) полный
+  `scripts/linux/verify.sh` зелёный — FlyleafLibTests 1499/1499, LLPlayer.Avalonia.Tests 137/137, validators,
+  Windows compile check. Найдены и исправлены три дефекта: SONAME-проверка `fetch-ffmpeg.sh` зависела от локали
+  (`543b68b`, +регресс-тест); `GetVideoFrame` терял кадры frame-threaded декодера на EOF на многоядерных машинах —
+  drain вместо голого return (`8ff969d`); восстановление `keyPacketRequired` на успешном пути drain (`7b4a8d1`).
+  Ревью `reviewer-alt-family` — без открытых находок. Смоук собранного пакета 0.3.62 (tar.gz sha256 `58cc053c`,
+  пересобран с head `7b4a8d1`): запуск, 720p-клип с субтитрами, OpenAL backend, без падений; визуальный owner smoke
+  подтверждён. Icon-launch contract added: package ships llplayer.png (from LLPlayer.ico) + llplayer.sh wrapper
+  (DOTNET_ROOT fallback) + llplayer.desktop; future builds enforce it via publish.sh validation.
+- **Первый срез `LLPlayer.Core` — реализован, Linux-проверки пройдены; общая ступень Core остаётся частичной.** Новый multi-target проект содержит
+  общий `WhisperCppModelLoader`; два WPF-потребителя используют его, Avalonia ссылается на Core. Recognition-only
+  settings/actions добавлены как отдельный bounded slice; app config, другие actions/services и VM logic остаются
+  последующей работой.
+  Семь focused-тестов прошли; opt-in read-only `/models` probe обнаружил `large-v3` (3,095,033,483 байта) и
+  проверил только метаданные каталога, без inference. `scripts/linux/verify.sh` завершился успешно:
+  FlyleafLibTests 1541 passed, 5 opt-in OCR native tests skipped, Avalonia tests 138 passed, shell tests 54 passed,
+  validators и Windows/plugin cross-compile. Отдельный Windows-target test-project build прошёл без warnings.
+  `scripts/linux/publish.sh` и package positive validation прошли; package negative validation отклонила staging без
+  `LLPlayer.Core.dll` как ожидается. Архив `artifacts/f13-core-2026-10-03/LLPlayer-0.3.62-linux-x64.tar.gz`
+  (179,089,582 bytes) SHA-256 `5cb03bb673c575766398592f51efd64678356234f17c41154bdbdaf19c8d357d` содержит DLL.
+  Независимый финальный verification review прошёл без Critical/Important/Minor. Windows `scripts/codex/verify.ps1`
+  и Windows-native runtime/GUI smoke остаются pending на Windows host.
+  План: [`2026-10-03-f13-core-model-catalog.md`](plans/2026-10-03-f13-core-model-catalog.md).
+- **Recognition UI/Core slice — implementation reviews and verification gates passed.** Shared Core provides a detached
+  recognition-only settings record/store and serialized canonical recognition actions. Avalonia adds a Recognition
+  menu/dialog for whisper.cpp CPU with existing model files, auto/explicit ASR language, global pause/resume,
+  per-slot start/cancel, and OCR for an already-selected bitmap track. OCR fallback applies only when selected-track
+  language metadata is unknown. `LLPlayer.Recognition.json` is additive under the app config directory and is written
+  atomically only by Save & Close; Close discards edits. Corrupt input is preserved and reported. Saving while
+  recognition or subtitle loading is busy is blocked; cancel/clear the active ASR slot first where `EnabledASR`
+  remains set after inference. Recognition actions serialize with media/track mutations and drain at host shutdown.
+  Existing WPF behavior/defaults, faster-whisper UI, downloads/installers/GPU selection, and full settings parity are
+  unchanged or deferred. Headless real-Player UI-command and rendered-dialog evidence is distinct from native desktop
+  and Windows owner acceptance. The UI smoke passed 2/2 (14 s), and dark/light/small/scrolled dialog PNGs passed visual
+  review. The fresh Linux gate passed (FlyleafLib 1554 passed/6 skipped; Avalonia 139 passed/1 skipped), Core focused
+  tests passed 14/14, Windows-target test-project cross-compilation passed with 0 warnings/errors, and publish/package
+  validation passed. Archive `package/LLPlayer-0.3.62-linux-x64.tar.gz` is 179,121,762 bytes, SHA-256
+  `b2ad514a4eaa53ad0aecd4e188af934d5e22af88682a4db9f5ca060d5a5651a6`. Package negatives rejected the recognition
+  settings JSON and both `.bad` and actual leading-dot atomic `.tmp` variants. Receipts are under
+  `artifacts/f13-recognition-2026-10-03/`. Independent final verification review passed with zero Critical/Important
+  findings. Native desktop/Windows runtime owner acceptance remains pending. Plan:
+  [`2026-10-03-f13-recognition-ui.md`](plans/2026-10-03-f13-recognition-ui.md).
+- **Translation preferences/WordPopup lifecycle — implementation and scoped reviews passed (zero Critical/Important); Linux `--fast` and package passed.**
+  Avalonia now has detached Core `TranslationSettings`, separate atomic `LLPlayer.Translation.json`, provider/Off and
+  target selection, existing provider endpoint/model/key/region/chat-path/timeout controls, and preserved engine
+  advanced settings/chat. Legacy `AppPrefs` provider/target seed only when the file is absent (in memory until saved);
+  an existing file is authoritative. Corrupt content is preserved with a generic warning; settings load/save never
+  probes a provider. Popup lookup cache/generation invalidation, operation-owned cancellation and async terminal drain
+  prevent late canceled results from updating UI/cache; the guarded main-window close drains operations. The initial
+  RED exposed premature CTS disposal on save admission; the correction passed 35 focused fake-provider tests, and
+  headless dialog/Not Configured-entry renders passed visual review. No endpoint was contacted. The fresh Linux `--fast`
+  gate passed: FlyleafLib 1554 passed/6 skipped, Avalonia 173 passed/1 skipped, shell tests 60 passed, portable builds
+  had zero warnings/errors, and validators passed. Publish and package validation passed: archive
+  `artifacts/f13-translation-2026-10-03/package/LLPlayer-0.3.62-linux-x64.tar.gz` is 179,141,059 bytes with SHA-256
+  `0b9505e7de323e23c2f943904da94142fcf0eed94d1d68034b317985c078603a`; positive content validation passed and the
+  translation settings, backup, and dotted atomic-temp fixtures were rejected. Final `verification_reviewer` passed with
+  zero Critical/Important findings; 21 source hashes matched and the frozen validator passed.
+  Windows build/runtime/UI work is deferred under the
+  2026-10-03 Linux-priority direction. No dictionaries, Save Word, Word Manager, Anki, or automatic sentence/subtitle
+  translation in this slice. Plan: [`2026-10-03-f13-translation-preferences.md`](plans/2026-10-03-f13-translation-preferences.md).
+- **Linux word dictionary/library/export slice — bounded implementation, verification, package, and launcher refresh passed; broader point-3 parity remains incomplete.**
+  Avalonia exposes dictionary lookup (default `Off`) from the existing definition service, parallel to translation.
+  A detached click snapshot preserves term/context/languages and the overlay `Data.IsTranslated` state separately
+  from sidebar `SubtitleData.UseTranslated`; Save is blocked until both lookups finish. The shared Core `WordLibrary`
+  reuses the `SavedWord` JSON-array schema and first-wins store semantics, persists atomically before publishing
+  in-memory changes, and preserves corrupt bytes while blocking mutations until external repair. The Word Manager
+  edits the four non-Term fields immediately, filters/deletes/clears entries, and exports TSV/APKG through explicit
+  save pickers; the separate Send to Anki action talks to AnkiConnect only when invoked. No import/recovery UI,
+  automatic sentence translation, or full point-3 parity is included. Focused tests passed (Core 30, Avalonia UI 25),
+  and fresh Linux `--fast` passed (FlyleafLib 1584 passed/6 skipped, Avalonia 181 passed/1 skipped, shell tests 64,
+  validators). Seven headless PNGs passed visual inspection; scoped C#, runtime, UI, native, package, stack, infra, and
+  drift reviews passed; final verification review passed with 32 matching source hashes. Publish/content validation
+  and the packaged native SQLite 3.50.4 load probe passed. Archive
+  `artifacts/f13-words-2026-10-03/package/LLPlayer-0.3.62-linux-x64.tar.gz` is 179,984,997 bytes, SHA-256
+  `4496e5c019c25abcdc904447ef18680773f334ada085f9e82bd0ab2f7a723ed9`. Managed tests validate APKG ZIP/SQLite
+  structure; no real Anki import or live AnkiConnect request was made. At the words-slice checkpoint, the launcher targeted
+  `/home/maxim/Загрузки/LLPlayer-linux-x64/LLPlayer-0.3.62-linux-x64-words-4496e5c019c2/llplayer.sh %F`; only Exec/Icon
+  changed, seven installed hashes match, previous translation package hashes and XDG user data were preserved, and
+  no app process was running before/after (no launch performed). Receipt: `artifacts/f13-current-build-2026-10-03/installation-receipt-words.json`.
+  Windows compilation/runtime and live provider/Anki smoke were not run. Plan:
+  [`2026-10-03-f13-words-anki.md`](plans/2026-10-03-f13-words-anki.md).
+- **Linux subtitle/sentence translation — implementation, Linux gate, package, scoped reviews, independent verification, and launcher refresh passed.** Sentence provider selection is separate from Word translation but uses the shared provider records, target language, chat settings and `LLPlayer.Translation.json`; the new provider field defaults Off when absent. Primary/secondary translation switches are session-only and start Off. Runtime work reuses `SubTranslator` and the existing `RecognitionActions` serialization path, with portable suspend/drain, generation/cache invalidation and stale-result rejection on settings/media/track changes and shutdown. Settings load/save sends no health/probe/test requests; ordinary requests may run only for slots explicitly enabled in the current session. Focused tests passed (engine 6; Avalonia settings/UI/controller 44); the observed RED was acceptance of a canceled late provider reply. Fresh Linux `--fast` passed after restore: FlyleafLib 1590 passed/6 skipped, Avalonia 189 passed/1 skipped, shell tests 64 passed, plus portable builds and validators. Publish/content validation passed; `artifacts/f13-subtitle-translation-2026-10-03/package-final/LLPlayer-0.3.62-linux-x64.tar.gz` is 179,993,542 bytes, SHA-256 `7bb3c471d7f4aa74cd5bc54804e3cda313b35beddfaa21c99fbe1ab46b886a5b`. Its 96-entry manifest matched the package-stage snapshot; final compiled-inputs projection `artifacts/f13-subtitle-translation-2026-10-03/final-compiled-inputs.json` has SHA-256 `d2f0ef84a912201a6eb1ccd01fdfd4609a069eac857b44b6f2f62048a1260f9d`; nonpackaged acceptance docs are outside the projection. Final dark/light cue renders passed original-byte/pixel review. Independent final verification passed with no Critical/Important findings. At that checkpoint, the launcher targeted `/home/maxim/Загрузки/LLPlayer-linux-x64/LLPlayer-0.3.62-linux-x64-subtitles-7bb3c471d7f4/llplayer.sh %F`; that launcher state was superseded by the chat slice, documented in [`2026-10-03-f13-translation-chat.md`](plans/2026-10-03-f13-translation-chat.md). Receipt: `artifacts/f13-current-build-2026-10-03/installation-receipt-subtitles.json`. Provider/GPU/model, native desktop GUI, and Windows runtime acceptance were not run. Full F-13 parity remains incomplete. Plan: [`2026-10-03-f13-subtitle-translation.md`](plans/2026-10-03-f13-subtitle-translation.md).
+- **Avalonia translation chat settings — bounded Linux implementation, verification, package review, and installation readback passed.** The detached Translation draft exposes the existing method, nonnegative whole-Int32 context counts, grammar and target-region toggles, four prompts, and KeepContext count/retention policy. Explicit reset actions restore only selected engine defaults; custom prompt text is preserved exactly, with LF normalization only on explicit reset. Save & Close applies the saved draft and may resume ordinary translation only for a session-enabled slot; Close discards it. No health/probe calls. Focused settings tests passed (49); negative-count and extreme context-window regressions had genuine RED/GREEN evidence. Linux `--fast` passed (FlyleafLib 1593 passed/6 skipped, Avalonia 196 passed/1 skipped, shell 64; builds/validators passed). Package `LLPlayer-0.3.62-linux-x64.tar.gz` is 180,005,849 bytes, SHA-256 `4bb2f0545bae7c3cd2544f46adec4e94f539d4f90a816696613b6f76bd029b90`; package review passed. Launcher points to `/models/codex-builds/LLPlayer_ru/installed/LLPlayer-0.3.62-linux-x64-chat-4bb2f0545bae`; only `Exec`/`Icon` changed, seven new payload hashes match, the prior subtitle package's seven hashes and XDG state were preserved, and no app was running or launched. Receipt: `artifacts/f13-translation-chat-2026-10-03/installation-receipt-chat.json`; readback: `artifacts/f13-translation-chat-2026-10-03/install-readback.json`. Native desktop/provider acceptance and Windows build/runtime were not performed; full F-13 parity remains incomplete. Plan: [`2026-10-03-f13-translation-chat.md`](plans/2026-10-03-f13-translation-chat.md).
+- **Паритет-лист F-13 (каждый срез со своим тестом/смоуком):**
+  1. **Linux ASR engine/runtime — частично реализован.** Whisper.net CPU runtime и faster-whisper-XXL engine path
+     добавлены в общие interactive/batch пути. Подтверждён отдельный CPU inference через `WhisperCppASRService`
+     на 11-секундном JFK sample с полной моделью `large-v3` и тремя связными английскими cue; receipt —
+     `artifacts/f13-asr-2026-10-02/large-v3-cpu-inference.json`. Полный Linux gate для текущего рабочего дерева `codex/f13-linux-asr` поверх `57e900d`: 1516 FlyleafLibTests,
+     137 Avalonia tests, validators и WPF/plugin cross-compile прошли. Ограниченный Avalonia whisper.cpp CPU UI path
+     теперь проверен отдельно в headless real-Player smoke; реальный faster-whisper-XXL, batch ASR acceptance,
+     Windows native runtime/owner smoke и live desktop acceptance остаются открыты до соответствующих receipt.
+  2. **Linux OCR engine — implemented and verified; final source/artifact review passed.** Portable FlyleafLib registers a direct system
+     Tesseract 5 C API adapter through `SubtitlesOCR.ServiceFactory`; it uses system tessdata, existing language/model
+     mapping and bitmap preprocessing, with per-track engine ownership and cancellation between cues. No new NuGet
+     runtime or bundled native/data payload. Focused native, full Linux gate, package content/SHA and console-probe
+     English/Russian recognition checks pass; the source/artifact review found zero Critical/Important findings.
+     Headless Avalonia command integration has now OCR'd actual English primary and Russian secondary PGS cues with
+     zero error toasts; live desktop/Windows owner smoke remains pending. Bitmap/package OCR alone does not establish
+     media-to-overlay behavior.
+  3. **Translation/WordPopup/word library — bounded preferences, lifecycle, dictionary, saving and export slices are implemented; parity remains incomplete.**
+     The Linux words/library/export slice passed its checks and refreshed the installed desktop launcher (see receipt
+     above). The current bounded work adds opt-in Linux subtitle/sentence translation through the existing
+     `SubTranslator`; Linux `--fast`, package/content validation, scoped reviews and independent final verification
+     passed and the existing launcher now points to the verified package (receipt above). Full WPF point-3 parity remains later work. Plan:
+     [`2026-10-03-f13-subtitle-translation.md`](plans/2026-10-03-f13-subtitle-translation.md).
+  4. Settings hub — approved bounded first slice: one modal singleton, View → Settings… plus gear, existing shadcn theme, detached edits, and only six existing AppPrefs fields (Dark/Light, subtitle font 12–96 DIP, secondary scale 0.4–1.5, subtitle/sidebar visibility, sidebar width 220–900 DIP). Settings links warn and discard the draft before routing to existing Translation/Recognition/shortcut windows. Save merges only owned fields into fresh preferences and persists before applying. No schema/default changes or subtitle-position persistence; Windows remains unchanged. Implementation passed focused tests (20/20), Linux `--fast` with restore (FlyleafLib 1593 passed/6 skipped; Avalonia 216 passed/1 skipped; shell/builds/validators passed), and independent source/UI review with zero Critical/Important/UI-minor findings. Fifteen rendered screenshots are hashed; root visually reviewed seven representative images. Linux archive/content and source-projection review passed for `LLPlayer-0.3.62-linux-x64.tar.gz` (180,020,698 bytes, SHA-256 `337a37210ec0bf1897df06b550f7f6cf2e8b47695b06e47997fbdb8711cdbe4b`; 473 regular files + 7 symlinks match staging; 722-record source projection stable). Installation/readback passed at the Settings Hub checkpoint: package `/models/codex-builds/LLPlayer_ru/installed/LLPlayer-0.3.62-linux-x64-settings-337a37210ec0` was current then; this target was superseded by Recognition Advanced below. Both existing launchers still resolve through stable `current`; prior package/seven critical hashes and XDG state were preserved. Receipts: `artifacts/f13-settings-hub-2026-10-07/installation-receipt.json` and `installation-readback.json`. Independent final verification review passed with zero Critical/Important findings; native desktop and Windows acceptance remain open. Full Settings parity remains incomplete. Plan: [`2026-10-07-f13-settings-hub.md`](plans/2026-10-07-f13-settings-hub.md).
+     Recognition Advanced is a separate bounded follow-up: six existing whisper.cpp CPU fields, detached draft validation/reset, and existing save gating. Focused tests passed (19); Linux `--fast` with restore passed (FlyleafLib 1593/6 skipped, Avalonia 235/1 skipped, shell 64); scoped source/UI reviews passed with zero Critical/Important/Minor findings. The 32 final headless renders are hashed (manifest SHA-256 `9bfb2fb1ba7609adfbb79e8974f44037f41801df3710dbb01dee2854faf422b4`), with six representative images viewed by root. Package coherence and independent package/installer reviews passed with zero Critical/Important findings for the built archive (180,022,223 bytes, SHA-256 `f080a30143d8b8462fd824e956065ea493c86520c6c4706eafaef186fe6b36d7`; 473 files + 7 symlinks match staging; 723 source records stable). Installation/readback passed: stable `current` resolves to `/models/codex-builds/LLPlayer_ru/installed/LLPlayer-0.3.62-linux-x64-recognition-advanced-f080a30143d8`; installed payload/modes, seven new and old critical hashes, both unchanged launchers, and no XDG writes are verified. Independent final verification passed with zero Critical/Important/Minor findings. Native GUI and Windows remain open; full F-13 point-4 parity is incomplete. Plan: [`2026-10-07-f13-recognition-advanced.md`](plans/2026-10-07-f13-recognition-advanced.md).
   5. Плагин YoutubeDL с Linux-бинарником `yt-dlp` (плагин сейчас `net10.0-windows`).
   6. Дубляж-сайдкар на Linux + эквивалент JobObject (process group / `prctl(PR_SET_PDEATHSIG)`), venv `bin/python`.
   7. VAAPI hw-decode.
@@ -712,7 +838,7 @@ Windows не поставляется.
   14. Hot-plug звука на Linux: у OpenAL нет уведомления, приложение не вызывает `AudioEngine.RefreshDevices()`;
       после отключения устройства (в том числе стоящего за «default») звук молчит до переоткрытия потока. Нужен
       периодический или по-ошибке refresh + переинициализация синка и строка в `manual-smoke-matrix.md`.
-  Также: v4l2 capture devices; cursor-hide/screensaver-inhibit на стороне хоста. Вынос `LLPlayer.Core` — ступень 1 дорожной карты выше.
+  Также: v4l2 capture devices; cursor-hide/screensaver-inhibit на стороне хоста. Инкрементальный вынос `LLPlayer.Core` продолжается в ступени 4 дорожной карты выше.
 
 **Гейты:** `scripts/linux/verify.sh` (+ неизменные Windows-гейты); ручной smoke —
 `manual-smoke-matrix.md` → «Linux (F-13)». **Рассуждение:** огромная работа, но швы этапа 1 позволяют вести её
@@ -1182,16 +1308,17 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-09-24 / F-13 active)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-10-18 / F-13 active)
 
-Owner-selected трек с 2026-09-24 — `F-13` (Linux-порт, см. ниже). `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
+Owner-selected трек с 2026-09-24 — `F-13`; с 2026-10-18 приоритет — единый Avalonia UI для Windows/Linux. `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
 host-level lifetime и non-vacuous WPF WeakReference regression доказаны, а расширенный owner-smoke сознательно
 `WAIVED / NOT RUN` и не считается `PASS`. Прочие задачи автоматически не выбираются.
 
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
-**Активный трек (решение владельца 2026-09-24):** `F-13` Linux-порт — 🚧 IN PROGRESS: этап 2 (video/audio/app/infra)
-интегрируется; дальше — паритет-срезы по списку в F-13.
+**Активный трек (решение владельца 2026-09-24, обновление 2026-10-18):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
+Синхронизировать октябрьский исходный срез и свежие проверки; следующий ограниченный Windows Avalonia baseline
+можно вести до полного Linux parity. Сохранять WPF и его gates до приёмки замены.
 
 **Trigger-only / deferred:** `F-02-full` Demucs — только по явному запросу.
 
@@ -1231,15 +1358,15 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-09-24 / F-13 active)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-10-18 / F-13 active)
 
-Активного малого среза нет (активный крупный трек — `F-13`). `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
+Активный крупный трек — `F-13`; следующий ограниченный product-срез — нативный Windows Avalonia baseline после синхронизации. `HC-22` реализован и смёржен через PR #163; дочерний `WordPopup.Unloaded` не
 используется, обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Владелец принял
 остаточный риск расширенного smoke; это `WAIVED / NOT RUN`, не `PASS`.
 
 **Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
-GPU-lease/координатором; `F-02-full` trigger-only. `F-13` (ⓍⓁ) — 🚧 IN PROGRESS: ведётся срезами (этап 2 →
-паритет-лист в F-13), каждый срез отдельно оценивается по сложности.
+GPU-lease/координатором; `F-02-full` trigger-only. `F-13` (ⓍⓁ) — 🚧 IN PROGRESS: этапы 1–2 закрыты;
+Windows baseline, дальнейший Core, паритет и GPU оцениваются отдельными срезами.
 
 ### Исторический снимок сложности до 2026-07-01 (не использовать для выбора новой работы)
 
@@ -1312,8 +1439,9 @@ GPU-lease/координатором; `F-02-full` trigger-only. `F-13` (ⓍⓁ) 
    subtitles; B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
 8. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
 
-9. **F-13 Linux-порт 🚧 (решение владельца 2026-09-24)** — этап 1 в draft PR #166; этап 2 (video/audio/app/infra)
-   интегрируется и проходит `scripts/linux/verify.sh` + Windows-гейты; затем паритет-срезы по списку в F-13.
+9. **F-13 Linux-порт 🚧 (priority update владельца 2026-10-03)** — сначала завершить Linux parity срезами и продолжать
+   `scripts/linux/verify.sh` вместе с сохранёнными Windows build/CI gates; Avalonia Windows implementation и live
+   Windows acceptance deferred до завершения Linux parity. Исторические receipts ранних этапов сохранены выше.
 
 **Не берём сейчас:** `F-02-full` (trigger-only).
 Перед поведенческими правками сверяться с
