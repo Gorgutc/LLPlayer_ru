@@ -20,6 +20,8 @@ public sealed class AppPrefs
     public const double MaxSubtitleOutlineThickness = 8;
     public const double DefaultSubtitleOutlineThickness = 3;
     public const double DefaultSecondarySubtitleOutlineThickness = 2.5;
+    public const string DefaultSubtitleTextColor = "#FFFFFF";
+    public const string DefaultSecondarySubtitleTextColor = "#E8E8E8";
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -34,6 +36,10 @@ public sealed class AppPrefs
     public double SubtitleOutlineThickness { get; set; } = DefaultSubtitleOutlineThickness;
     /// <summary>Secondary text subtitle outline thickness in DIPs; zero leaves the existing shadow.</summary>
     public double SecondarySubtitleOutlineThickness { get; set; } = DefaultSecondarySubtitleOutlineThickness;
+    /// <summary>Opaque primary text subtitle fill in canonical #RRGGBB format.</summary>
+    public string SubtitleTextColor { get; set; } = DefaultSubtitleTextColor;
+    /// <summary>Opaque secondary text subtitle fill in canonical #RRGGBB format.</summary>
+    public string SecondarySubtitleTextColor { get; set; } = DefaultSecondarySubtitleTextColor;
     public bool SubtitlesVisible { get; set; } = true;
 
     public bool SidebarVisible { get; set; }
@@ -72,6 +78,8 @@ public sealed class AppPrefs
         SubtitleBottomOffset = double.IsFinite(SubtitleBottomOffset) ? Math.Clamp(SubtitleBottomOffset, MinSubtitleBottomOffset, MaxSubtitleBottomOffset) : DefaultSubtitleBottomOffset;
         SubtitleOutlineThickness = double.IsFinite(SubtitleOutlineThickness) ? Math.Clamp(SubtitleOutlineThickness, MinSubtitleOutlineThickness, MaxSubtitleOutlineThickness) : DefaultSubtitleOutlineThickness;
         SecondarySubtitleOutlineThickness = double.IsFinite(SecondarySubtitleOutlineThickness) ? Math.Clamp(SecondarySubtitleOutlineThickness, MinSubtitleOutlineThickness, MaxSubtitleOutlineThickness) : DefaultSecondarySubtitleOutlineThickness;
+        SubtitleTextColor = TryNormalizeSubtitleTextColor(SubtitleTextColor, out string primaryColor) ? primaryColor : DefaultSubtitleTextColor;
+        SecondarySubtitleTextColor = TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string secondaryColor) ? secondaryColor : DefaultSecondarySubtitleTextColor;
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
@@ -79,6 +87,20 @@ public sealed class AppPrefs
         if (string.IsNullOrWhiteSpace(WordTranslationService))
             WordTranslationService = "GoogleV1";
         return this;
+    }
+
+    /// <summary>Accepts only an opaque RGB hex string, ignoring surrounding whitespace.</summary>
+    public static bool TryNormalizeSubtitleTextColor(string? raw, out string normalized)
+    {
+        normalized = "";
+        string? value = raw?.Trim();
+        if (value is not { Length: 7 } || value[0] != '#')
+            return false;
+        foreach (char digit in value.AsSpan(1))
+            if (digit is not (>= '0' and <= '9' or >= 'A' and <= 'F' or >= 'a' and <= 'f'))
+                return false;
+        normalized = value.ToUpperInvariant();
+        return true;
     }
 }
 
