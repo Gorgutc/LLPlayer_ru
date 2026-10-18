@@ -23,6 +23,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public static IReadOnlyList<string> Themes { get; } = ["Dark", "Light"];
+    // NumericUpDown's framework default may have been initialized under another culture.
+    public NumberFormatInfo NumberFormat { get; } = NumberFormatInfo.ReadOnly((NumberFormatInfo)CultureInfo.CurrentCulture.NumberFormat.Clone());
     [ObservableProperty] public partial string Theme { get; set; } = "Dark";
     [ObservableProperty] public partial double SubtitleFontSize { get; set; }
     [ObservableProperty] public partial double SecondaryFontScale { get; set; }
@@ -40,9 +42,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsLink? RequestedLink { get; private set; }
     public event Action? CloseRequested;
 
-    partial void OnSubtitleFontSizeChanged(double value) => SubtitleFontSizeText = value.ToString(CultureInfo.CurrentCulture);
-    partial void OnSecondaryFontScaleChanged(double value) => SecondaryFontScaleText = value.ToString(CultureInfo.CurrentCulture);
-    partial void OnSidebarWidthChanged(double value) => SidebarWidthText = value.ToString(CultureInfo.CurrentCulture);
+    partial void OnSubtitleFontSizeChanged(double value) => SubtitleFontSizeText = value.ToString(NumberFormat);
+    partial void OnSecondaryFontScaleChanged(double value) => SecondaryFontScaleText = value.ToString(NumberFormat);
+    partial void OnSidebarWidthChanged(double value) => SidebarWidthText = value.ToString(NumberFormat);
 
     partial void OnSelectedSectionChanged(int value)
     {
@@ -73,10 +75,10 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         CloseRequested?.Invoke();
     }
-    static bool TryRead(string text, double min, double max, out double value)
+    bool TryRead(string text, double min, double max, out double value)
     {
         value = 0;
-        if (!decimal.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out decimal parsed)) return false;
+        if (!decimal.TryParse(text, NumberStyles.Any, NumberFormat, out decimal parsed)) return false;
         value = (double)parsed;
         return value >= min && value <= max;
     }

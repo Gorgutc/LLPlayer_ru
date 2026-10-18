@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -13,6 +14,46 @@ namespace LLPlayer.Avalonia.Tests;
 
 public class SettingsNumericInputRegressionTests
 {
+    [AvaloniaTheory]
+    [InlineData("")]
+    [InlineData("en-US")]
+    [InlineData("ru-RU")]
+    public void Numeric_value_edits_save_with_the_same_culture_as_the_editor(string culture)
+    {
+        CultureInfo previous = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(culture);
+        try
+        {
+            using TempDir temp = new();
+            var store = new PrefsStore(Path.Combine(temp.Path, "preferences.json"));
+            var prefs = new AppPrefs(); store.Save(prefs);
+            using var main = new MainWindowViewModel(new FakePlaybackController(), prefs, store.Save, new FakeTranslator(), new FakeShell());
+            var model = main.CreateSettings();
+            var window = new SettingsWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+            try
+            {
+                var width = window.FindControl<NumericUpDown>("SidebarWidthEditor")!;
+                var font = window.FindControl<NumericUpDown>("FontSizeEditor")!;
+                var scale = window.FindControl<NumericUpDown>("ScaleEditor")!;
+                width.Value = 420;
+                model.SelectedSection = 1; Dispatcher.UIThread.RunJobs();
+                font.Value = 44; scale.Value = 1.25m; Dispatcher.UIThread.RunJobs();
+                var save = window.FindControl<Button>("SaveButton")!;
+                Point point = save.TranslatePoint(new Point(save.Bounds.Width / 2, save.Bounds.Height / 2), window)!.Value;
+                window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left); Dispatcher.UIThread.RunJobs();
+
+                Assert.True(!window.IsVisible,
+                    $"Culture={CultureInfo.CurrentCulture.Name}; editor decimal={scale.NumberFormat?.NumberDecimalSeparator}; "
+                    + $"raw width={model.SidebarWidthText}, font={model.SubtitleFontSizeText}, scale={model.SecondaryFontScaleText}; error={model.Error}");
+                var saved = store.Load();
+                Assert.Equal(420, saved.SidebarWidth); Assert.Equal(44, saved.SubtitleFontSize);
+                Assert.Equal(1.25, saved.SecondaryFontScale);
+            }
+            finally { window.Close(); }
+        }
+        finally { CultureInfo.CurrentCulture = previous; }
+    }
+
     [AvaloniaTheory]
     [InlineData("SidebarWidthEditor", 0, "")]
     [InlineData("SidebarWidthEditor", 0, "abc")]
@@ -70,6 +111,7 @@ public class SettingsNumericInputRegressionTests
                 model.SelectedSection = 1; Dispatcher.UIThread.RunJobs();
                 SetText(window, "FontSizeEditor", "42");
                 SetText(window, "ScaleEditor", culture == "ru-RU" ? "1,25" : "1.25");
+                Assert.Equal(1.25m, window.FindControl<NumericUpDown>("ScaleEditor")!.Value);
                 model.SaveCommand.Execute(null); Dispatcher.UIThread.RunJobs();
 
                 Assert.False(window.IsVisible); Assert.Null(model.Error);
