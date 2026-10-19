@@ -218,6 +218,41 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   engine/native behavior, WPF settings and dependencies remain outside this slice. This is a future new-package
   native GUI/DPI acceptance row; headless source/render results and prior package receipts do not close it.
   No Computer Use or application launch is authorized for this stage.
+- **Text-subtitle font block, owner-approved 2026-10-19 — implemented/local source gates PASS; native acceptance NOT_RUN / DEFERRED BY OWNER:**
+  when native acceptance is separately authorized, use a new package and isolated profile on each native Windows/Linux host. Older files
+  missing the seven font keys must keep the existing app Inter, `SemiBold` / `Normal`, primary size 34 DIP,
+  secondary scale 0.8 and secondary family/weight/style inheritance enabled. For the six family/weight/style
+  strings only, check per-field defaults for missing/null/invalid string values, trimmed valid family names, and
+  trimmed/canonicalized valid weight/style spellings. A missing `SecondarySubtitleInheritsFont` key defaults true.
+  A null/wrongly typed flag or wrong JSON type for any of the six strings must keep the existing malformed-input
+  whole-file behavior: load warning, original file retained, best-effort `.bad` copy, and whole-file defaults.
+  Confirm no migration of the other twelve Settings fields or WPF settings.
+  Select an installed family, each offered weight (`Normal`, `SemiBold`, `Bold`) and style (`Normal`, `Italic`).
+  Inspect both draft-preview lines before Save: they must show draft primary and effective secondary without
+  changing live overlays or writing preferences. Family lists may differ by OS. A valid unavailable requested
+  family and unsupported face must remain visible/stored, including after unrelated Save, while a clear fallback
+  status explains effective rendering through the existing app Inter/renderer. Reject arbitrary font URIs/files;
+  no font download, asset or dependency is authorized. Native exact-face/glyph acceptance remains separate.
+  Check inheritance on/off and retained secondary overrides. Copy Primary must snapshot the requested tuple and
+  disable inheritance; later primary edits must not change that copy. Reset Secondary must enable inheritance
+  without erasing overrides. Reset Fonts must reset only all seven new fields; size, scale, Fill, outline,
+  position and other prior fields must survive all three actions. Save & Close must persist a fresh candidate
+  before applying live fonts; reopen/restart must restore the requested values. Close/Esc must discard the draft;
+  write failure must preserve live/persisted state and leave Settings open. Preserve concurrent volume/mute/recents.
+  With long primary/secondary cues, inspect actual family/weight/style rendering, wrapping, clipping, cached
+  geometry and word click/selection hits after warm-cache edits, inherited-primary edits and resize. Compare a
+  changed control with a fresh control using the same tuple. Italic needs visible shaping/render evidence with
+  the existing bundled Inter/renderer (synthesis permitted); persisted `Italic` alone is insufficient. If a new
+  font/package is needed, pause italic acceptance for an owner scope decision. Check minimum-window usability,
+  dark/light preview, 100%/150%/200% DPI and fullscreen clearance when native acceptance is separately authorized.
+  Sidebar/bitmap subtitles, engine/Core/WPF behavior and the prior twelve Settings fields remain preserved.
+  No Computer Use, application launch, native/model/provider run or acceptance is authorized by this row.
+  Focused headless regressions observed Inter italic, actual installed-family glyph rendering and routed word hits;
+  local WPF/Windows Avalonia and package-contract/publish checks passed at product `37fbe776e556e26ce6e55fb841ebedf7637c8a2a`.
+  The locally built ZIP is a pre-product-commit QA artifact, not exact-main delivery. Linux is NOT_RUN locally;
+  public candidate/main CI and exact-main delivery/merge remain PENDING at that local checkpoint. WPF `ship.ps1`
+  is NOT_RUN and WPF packaging is unchanged. These source/headless/package results do not close this native row;
+  see [the font checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-fonts).
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
