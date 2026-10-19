@@ -113,10 +113,15 @@ public class SettingsWindowTests
                         _ => new[] { "TranslationLink", "RecognitionLink", "ShortcutsLink" }
                     })
                     {
-                        var control = window.FindControl<Control>(name)!; AssertContained(control, window);
+                        var control = window.FindControl<Control>(name)!;
+                        control.BringIntoView(); Dispatcher.UIThread.RunJobs(); AssertContained(control, window);
                         var scroll = window.FindControl<ScrollViewer>("SettingsScroll")!;
                         Point controlPoint = control.TranslatePoint(default, scroll)!.Value;
-                        Assert.True(controlPoint.Y + control.Bounds.Height <= scroll.Bounds.Height + 1, name + " clipped by scroll viewport");
+                        Assert.True(controlPoint.Y >= -1 && controlPoint.Y + control.Bounds.Height <= scroll.Viewport.Height + 1,
+                            name + " clipped by scroll viewport");
+                        AssertContained(window.FindControl<Button>("SaveButton")!, window);
+                        AssertContained(window.FindControl<Button>("CloseButton")!, window);
+                        AssertContained(window.FindControl<ListBox>("SettingsNavigation")!, window);
                     }
                     // Let the existing 120 ms theme brush transition settle before visual evidence.
                     await Task.Delay(160); AvaloniaHeadlessPlatform.ForceRenderTimerTick(2); Dispatcher.UIThread.RunJobs();

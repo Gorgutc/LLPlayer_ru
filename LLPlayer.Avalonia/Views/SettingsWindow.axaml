@@ -1,8 +1,13 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.SettingsWindow"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:c="using:LLPlayer.Avalonia.Controls" xmlns:services="using:LLPlayer.Avalonia.Services" x:Class="LLPlayer.Avalonia.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel" Title="Settings — LLPlayer" Width="760" Height="550"
         MinWidth="560" MinHeight="440" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Shadcn.BackgroundBrush}">
+  <Window.Resources>
+    <DataTemplate x:Key="FontFamilyTemplate" x:DataType="x:String">
+      <TextBlock Text="{Binding Converter={x:Static services:SubtitleFontCatalog.DisplayNameConverter}}" TextTrimming="CharacterEllipsis" />
+    </DataTemplate>
+  </Window.Resources>
   <Grid RowDefinitions="Auto,*,Auto" Margin="20">
     <StackPanel Margin="0,0,0,18" Spacing="4">
       <TextBlock Text="Settings" Classes="dialog-title" />
@@ -27,6 +32,52 @@
           <StackPanel Name="SubtitlesPage" IsVisible="{Binding SubtitlesSelected}" Spacing="14">
             <TextBlock Text="Subtitles" Classes="dialog-title" />
             <CheckBox Name="SubtitlesVisibleEditor" Content="Show subtitle overlay" IsChecked="{Binding SubtitlesVisible}" />
+            <TextBlock Text="Primary font" FontWeight="SemiBold" />
+            <TextBlock Text="Font family" />
+            <ComboBox Name="SubtitleFontFamilyEditor" ItemsSource="{Binding SubtitleFontFamilies}" SelectedItem="{Binding SubtitleFontFamily, Mode=TwoWay}"
+                      ItemTemplate="{StaticResource FontFamilyTemplate}" HorizontalAlignment="Stretch" MaxDropDownHeight="240"
+                      AutomationProperties.Name="Primary subtitle font family" AutomationProperties.HelpText="Default uses the bundled app Inter font. Missing requested fonts are retained and use Inter as a fallback." />
+            <TextBlock Text="Font weight" />
+            <ComboBox Name="SubtitleFontWeightEditor" ItemsSource="{x:Static services:SubtitleFontCatalog.Weights}" SelectedItem="{Binding SubtitleFontWeight, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch" AutomationProperties.Name="Primary subtitle font weight" />
+            <TextBlock Text="Font style" />
+            <ComboBox Name="SubtitleFontStyleEditor" ItemsSource="{x:Static services:SubtitleFontCatalog.Styles}" SelectedItem="{Binding SubtitleFontStyle, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch" AutomationProperties.Name="Primary subtitle font style" />
+            <TextBlock Text="{Binding SubtitleFontStatus}" Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBlock Text="Secondary font" FontWeight="SemiBold" />
+            <CheckBox Name="SecondarySubtitleInheritsFontEditor" Content="Inherit primary font" IsChecked="{Binding SecondarySubtitleInheritsFont, Mode=TwoWay}"
+                      AutomationProperties.Name="Secondary subtitle inherits primary font" AutomationProperties.HelpText="Inherits only family, weight and style. Secondary size, scale, colors and outline remain independent. Turning this off restores retained secondary font overrides." />
+            <TextBlock Text="Font family" />
+            <ComboBox Name="SecondarySubtitleFontFamilyEditor" ItemsSource="{Binding SubtitleFontFamilies}" SelectedItem="{Binding SecondarySubtitleFontFamily, Mode=TwoWay}"
+                      ItemTemplate="{StaticResource FontFamilyTemplate}" HorizontalAlignment="Stretch" MaxDropDownHeight="240" IsEnabled="{Binding SecondaryFontOverridesEnabled}"
+                      AutomationProperties.Name="Secondary subtitle font family" />
+            <TextBlock Text="Font weight" />
+            <ComboBox Name="SecondarySubtitleFontWeightEditor" ItemsSource="{x:Static services:SubtitleFontCatalog.Weights}" SelectedItem="{Binding SecondarySubtitleFontWeight, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch" IsEnabled="{Binding SecondaryFontOverridesEnabled}" AutomationProperties.Name="Secondary subtitle font weight" />
+            <TextBlock Text="Font style" />
+            <ComboBox Name="SecondarySubtitleFontStyleEditor" ItemsSource="{x:Static services:SubtitleFontCatalog.Styles}" SelectedItem="{Binding SecondarySubtitleFontStyle, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch" IsEnabled="{Binding SecondaryFontOverridesEnabled}" AutomationProperties.Name="Secondary subtitle font style" />
+            <TextBlock Text="{Binding SecondarySubtitleFontStatus}" Classes="dialog-description" TextWrapping="Wrap" />
+            <Button Name="CopyPrimaryFontButton" Content="Copy Primary" Classes="outline" Command="{Binding CopyPrimaryFontCommand}" HorizontalAlignment="Stretch"
+                    AutomationProperties.HelpText="Copies the requested primary family, weight and style into secondary and turns inheritance off. This is a snapshot." />
+            <Button Name="ResetSecondaryFontButton" Content="Reset Secondary" Classes="outline" Command="{Binding ResetSecondaryFontCommand}" HorizontalAlignment="Stretch"
+                    AutomationProperties.HelpText="Enables font inheritance and retains the secondary overrides. Other subtitle settings stay as they are." />
+            <Button Name="ResetSubtitleFontsButton" Content="Reset Fonts" Classes="outline" Command="{Binding ResetSubtitleFontsCommand}" HorizontalAlignment="Stretch"
+                    AutomationProperties.HelpText="Resets the two font tuples and inheritance only. Sizes, scale, colors, outline and position stay as they are." />
+            <TextBlock Text="Font preview" FontWeight="SemiBold" />
+            <TextBlock Text="Preview of font family, weight and style. Save &amp; Close applies the settings to the player." Classes="dialog-description" TextWrapping="Wrap" />
+            <Border Padding="12" Background="#202020" CornerRadius="4">
+              <StackPanel Spacing="8">
+                <c:SubtitleText Name="SubtitleFontPreview" Text="Primary subtitle" IsHitTestVisible="False" Focusable="False"
+                                FontFamily="{Binding PreviewSubtitleFontFamily}" FontWeight="{Binding PreviewSubtitleFontWeight}" FontStyle="{Binding PreviewSubtitleFontStyle}"
+                                FontSize="{Binding SubtitleFontSize}" Fill="{Binding SubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SubtitleOutlineThickness}"
+                                AutomationProperties.Name="Primary subtitle font preview" />
+                <c:SubtitleText Name="SecondarySubtitleFontPreview" Text="Secondary subtitle" Slot="1" IsHitTestVisible="False" Focusable="False"
+                                FontFamily="{Binding PreviewSecondarySubtitleFontFamily}" FontWeight="{Binding PreviewSecondarySubtitleFontWeight}" FontStyle="{Binding PreviewSecondarySubtitleFontStyle}"
+                                FontSize="{Binding PreviewSecondarySubtitleFontSize}" Fill="{Binding SecondarySubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SecondarySubtitleOutlineThickness}"
+                                AutomationProperties.Name="Secondary subtitle font preview" />
+              </StackPanel>
+            </Border>
             <TextBlock Text="Primary font size (12–96 DIP)" />
             <NumericUpDown Name="FontSizeEditor" Minimum="12" Maximum="96" Increment="2" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitleFontSizeText, Mode=TwoWay}" FormatString="0.#" />
             <TextBlock Text="Secondary font scale (0.4–1.5 × primary)" TextWrapping="Wrap" />

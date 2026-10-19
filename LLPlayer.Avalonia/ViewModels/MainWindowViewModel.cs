@@ -45,6 +45,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     readonly IPlaybackController player;
     readonly AppPrefs prefs;
+    readonly SubtitleFontCatalog fonts = new();
     readonly Action<AppPrefs> savePrefs;
     readonly IAppShell shell;
     readonly TimeProvider time;
@@ -88,6 +89,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             RecentFiles.Add(recent);
         RecentFiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentFiles));
 
+        SubtitleFontSelection primaryFont = fonts.Resolve(prefs.SubtitleFontFamily, prefs.SubtitleFontWeight, prefs.SubtitleFontStyle);
+        SubtitleFontSelection secondaryFont = prefs.SecondarySubtitleInheritsFont ? primaryFont
+            : fonts.Resolve(prefs.SecondarySubtitleFontFamily, prefs.SecondarySubtitleFontWeight, prefs.SecondarySubtitleFontStyle);
+        ApplySubtitleFonts(primaryFont, secondaryFont);
         SubtitleFontSize = prefs.SubtitleFontSize;
         SubtitleBottomOffset = prefs.SubtitleBottomOffset;
         SubtitleOutlineThickness = prefs.SubtitleOutlineThickness;
@@ -145,6 +150,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Clone the fresh current record, including unrelated values changed while the modal draft was open.
         AppPrefs candidate = JsonSerializer.Deserialize<AppPrefs>(JsonSerializer.Serialize(prefs, PrefsStore.JsonOptions), PrefsStore.JsonOptions)!;
         candidate.Theme = draft.Theme;
+        candidate.SubtitleFontFamily = draft.SubtitleFontFamily;
+        candidate.SubtitleFontWeight = draft.SubtitleFontWeight;
+        candidate.SubtitleFontStyle = draft.SubtitleFontStyle;
+        candidate.SecondarySubtitleFontFamily = draft.SecondarySubtitleFontFamily;
+        candidate.SecondarySubtitleFontWeight = draft.SecondarySubtitleFontWeight;
+        candidate.SecondarySubtitleFontStyle = draft.SecondarySubtitleFontStyle;
+        candidate.SecondarySubtitleInheritsFont = draft.SecondarySubtitleInheritsFont;
         candidate.SubtitleFontSize = draft.SubtitleFontSize;
         candidate.SecondaryFontScale = draft.SecondaryFontScale;
         candidate.SubtitleBottomOffset = draft.SubtitleBottomOffset;
@@ -156,9 +168,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitlesVisible = draft.SubtitlesVisible;
         candidate.SidebarVisible = draft.SidebarVisible;
         candidate.SidebarWidth = draft.SidebarWidth;
+        // Resolve font resources and parse brushes before persistence, so live application only assigns prepared values.
+        SubtitleFontSelection primaryFont = fonts.Resolve(candidate.SubtitleFontFamily, candidate.SubtitleFontWeight, candidate.SubtitleFontStyle);
+        SubtitleFontSelection secondaryFont = candidate.SecondarySubtitleInheritsFont ? primaryFont
+            : fonts.Resolve(candidate.SecondarySubtitleFontFamily, candidate.SecondarySubtitleFontWeight, candidate.SecondarySubtitleFontStyle);
+        if (global::Avalonia.Application.Current != null)
+        {
+            _ = SubtitleFontCatalog.DescribeFace(primaryFont);
+            _ = SubtitleFontCatalog.DescribeFace(secondaryFont);
+        }
+        ImmutableSolidColorBrush primaryBrush = new(Color.Parse(candidate.SubtitleTextColor));
+        ImmutableSolidColorBrush secondaryBrush = new(Color.Parse(candidate.SecondarySubtitleTextColor));
+        ImmutableSolidColorBrush outlineBrush = new(Color.Parse(candidate.SubtitleOutlineColor));
         savePrefs(candidate); // may throw; nothing live has changed yet
 
         prefs.Theme = candidate.Theme;
+        prefs.SubtitleFontFamily = candidate.SubtitleFontFamily;
+        prefs.SubtitleFontWeight = candidate.SubtitleFontWeight;
+        prefs.SubtitleFontStyle = candidate.SubtitleFontStyle;
+        prefs.SecondarySubtitleFontFamily = candidate.SecondarySubtitleFontFamily;
+        prefs.SecondarySubtitleFontWeight = candidate.SecondarySubtitleFontWeight;
+        prefs.SecondarySubtitleFontStyle = candidate.SecondarySubtitleFontStyle;
+        prefs.SecondarySubtitleInheritsFont = candidate.SecondarySubtitleInheritsFont;
+        ApplySubtitleFonts(primaryFont, secondaryFont);
         prefs.SecondaryFontScale = candidate.SecondaryFontScale;
         prefs.SubtitleFontSize = candidate.SubtitleFontSize;
         prefs.SubtitleBottomOffset = candidate.SubtitleBottomOffset;
@@ -174,9 +206,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
         SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
-        SubtitleTextBrush = new(Color.Parse(candidate.SubtitleTextColor));
-        SecondarySubtitleTextBrush = new(Color.Parse(candidate.SecondarySubtitleTextColor));
-        SubtitleOutlineBrush = new(Color.Parse(candidate.SubtitleOutlineColor));
+        SubtitleTextBrush = primaryBrush;
+        SecondarySubtitleTextBrush = secondaryBrush;
+        SubtitleOutlineBrush = outlineBrush;
         // A scale-only edit does not invoke OnSubtitleFontSizeChanged.
         SecondaryFontSize = Math.Round(candidate.SubtitleFontSize * candidate.SecondaryFontScale, 1);
         SidebarWidth = candidate.SidebarWidth;
@@ -185,6 +217,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         player.SubtitlesVisible = candidate.SubtitlesVisible;
         IsDarkTheme = candidate.Theme == "Dark";
         shell.ApplyTheme(candidate.Theme);
+    }
+
+    void ApplySubtitleFonts(SubtitleFontSelection primary, SubtitleFontSelection secondary)
+    {
+        SubtitleFontFamily = primary.Family;
+        SubtitleFontWeight = primary.Weight;
+        SubtitleFontStyle = primary.Style;
+        SecondarySubtitleFontFamily = secondary.Family;
+        SecondarySubtitleFontWeight = secondary.Weight;
+        SecondarySubtitleFontStyle = secondary.Style;
     }
 
     public void OpenSettingsTool(SettingsLink link)
@@ -278,6 +320,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial SubtitleImage? PrimaryImage { get; private set; }
     [ObservableProperty] public partial SubtitleImage? SecondaryImage { get; private set; }
     [ObservableProperty] public partial bool SubtitlesVisible { get; private set; } = true;
+    [ObservableProperty] public partial FontFamily SubtitleFontFamily { get; private set; } = SubtitleFontCatalog.DefaultFamily;
+    [ObservableProperty] public partial FontWeight SubtitleFontWeight { get; private set; } = FontWeight.SemiBold;
+    [ObservableProperty] public partial FontStyle SubtitleFontStyle { get; private set; } = FontStyle.Normal;
+    [ObservableProperty] public partial FontFamily SecondarySubtitleFontFamily { get; private set; } = SubtitleFontCatalog.DefaultFamily;
+    [ObservableProperty] public partial FontWeight SecondarySubtitleFontWeight { get; private set; } = FontWeight.SemiBold;
+    [ObservableProperty] public partial FontStyle SecondarySubtitleFontStyle { get; private set; } = FontStyle.Normal;
     [ObservableProperty] public partial double SubtitleFontSize { get; private set; }
     [ObservableProperty] public partial double SecondaryFontSize { get; private set; }
     [ObservableProperty] public partial double SubtitleBottomOffset { get; private set; } = AppPrefs.DefaultSubtitleBottomOffset;
