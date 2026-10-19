@@ -64,17 +64,17 @@
                     AutomationProperties.HelpText="Enables font inheritance and retains the secondary overrides. Other subtitle settings stay as they are." />
             <Button Name="ResetSubtitleFontsButton" Content="Reset Fonts" Classes="outline" Command="{Binding ResetSubtitleFontsCommand}" HorizontalAlignment="Stretch"
                     AutomationProperties.HelpText="Resets the two font tuples and inheritance only. Sizes, scale, colors, outline and position stay as they are." />
-            <TextBlock Text="Font preview" FontWeight="SemiBold" />
-            <TextBlock Text="Preview of font family, weight and style. Save &amp; Close applies the settings to the player." Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBlock Text="Font and background preview" FontWeight="SemiBold" />
+            <TextBlock Text="Preview of font family, weight, style and background. Save &amp; Close applies the settings to the player." Classes="dialog-description" TextWrapping="Wrap" />
             <Border Padding="12" Background="#202020" CornerRadius="4">
               <StackPanel Spacing="8">
                 <c:SubtitleText Name="SubtitleFontPreview" Text="Primary subtitle" IsHitTestVisible="False" Focusable="False"
                                 FontFamily="{Binding PreviewSubtitleFontFamily}" FontWeight="{Binding PreviewSubtitleFontWeight}" FontStyle="{Binding PreviewSubtitleFontStyle}"
-                                FontSize="{Binding SubtitleFontSize}" Fill="{Binding SubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SubtitleOutlineThickness}"
+                                FontSize="{Binding SubtitleFontSize}" Fill="{Binding SubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SubtitleOutlineThickness}" Background="{Binding SubtitleBackgroundBrush}"
                                 AutomationProperties.Name="Primary subtitle font preview" />
                 <c:SubtitleText Name="SecondarySubtitleFontPreview" Text="Secondary subtitle" Slot="1" IsHitTestVisible="False" Focusable="False"
                                 FontFamily="{Binding PreviewSecondarySubtitleFontFamily}" FontWeight="{Binding PreviewSecondarySubtitleFontWeight}" FontStyle="{Binding PreviewSecondarySubtitleFontStyle}"
-                                FontSize="{Binding PreviewSecondarySubtitleFontSize}" Fill="{Binding SecondarySubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SecondarySubtitleOutlineThickness}"
+                                FontSize="{Binding PreviewSecondarySubtitleFontSize}" Fill="{Binding SecondarySubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SecondarySubtitleOutlineThickness}" Background="{Binding SecondarySubtitleBackgroundBrush}"
                                 AutomationProperties.Name="Secondary subtitle font preview" />
               </StackPanel>
             </Border>
@@ -120,6 +120,28 @@
             </Grid>
             <TextBlock Text="Use #RRGGBB (for example #FFFFFF). Colors apply to text subtitle overlays."
                        Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBlock Text="Text subtitle background color (primary and secondary)" TextWrapping="Wrap" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+              <TextBox Name="SubtitleBackgroundColorEditor" Text="{Binding SubtitleBackgroundColor, Mode=TwoWay}"
+                       AutomationProperties.Name="Text subtitle background color (primary and secondary)"
+                       AutomationProperties.HelpText="Use #RRGGBB, for example #000000. Applies to both primary and secondary text subtitle backgrounds." />
+              <Border Name="SubtitleBackgroundColorSwatch" Grid.Column="1" Width="36" Height="36"
+                      Background="{Binding SubtitleBackgroundColorBrush}" BorderThickness="1" BorderBrush="{DynamicResource Shadcn.BorderBrush}"
+                      CornerRadius="4" VerticalAlignment="Center" />
+            </Grid>
+            <TextBlock Text="Primary text subtitle background opacity (0–100%)" TextWrapping="Wrap" />
+            <TextBox Name="PrimaryBackgroundOpacityEditor" Text="{Binding SubtitleBackgroundOpacityPercentText, Mode=TwoWay}"
+                     AutomationProperties.Name="Primary text subtitle background opacity (0–100%)"
+                     AutomationProperties.HelpText="Use a whole number from 0 to 100. Zero removes the background without changing the text or outline." />
+            <TextBlock Text="Secondary text subtitle background opacity (0–100%)" TextWrapping="Wrap" />
+            <TextBox Name="SecondaryBackgroundOpacityEditor" Text="{Binding SecondarySubtitleBackgroundOpacityPercentText, Mode=TwoWay}"
+                     AutomationProperties.Name="Secondary text subtitle background opacity (0–100%)"
+                     AutomationProperties.HelpText="Use a whole number from 0 to 100. Independent of primary opacity and font inheritance." />
+            <TextBlock Text="Use #RRGGBB (for example #000000) and whole opacity percentages from 0 to 100. Zero removes the background. Font inheritance does not change background opacity."
+                       Classes="dialog-description" TextWrapping="Wrap" />
+            <Button Name="ResetSubtitleBackgroundButton" Content="Reset Background" Classes="outline" Command="{Binding ResetSubtitleBackgroundCommand}" HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="Reset text subtitle backgrounds"
+                    AutomationProperties.HelpText="Resets the shared background color to black and both background opacities to zero. Other settings stay as they are." />
           </StackPanel>
           <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
             <TextBlock Text="Tools" Classes="dialog-title" />

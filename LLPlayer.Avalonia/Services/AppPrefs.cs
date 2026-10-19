@@ -26,6 +26,7 @@ public sealed class AppPrefs
     public const string DefaultSubtitleTextColor = "#FFFFFF";
     public const string DefaultSecondarySubtitleTextColor = "#E8E8E8";
     public const string DefaultSubtitleOutlineColor = "#000000";
+    public const string DefaultSubtitleBackgroundColor = "#000000";
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -55,6 +56,12 @@ public sealed class AppPrefs
     public string SecondarySubtitleTextColor { get; set; } = DefaultSecondarySubtitleTextColor;
     /// <summary>Opaque outline color shared by both text subtitle overlays in canonical #RRGGBB format.</summary>
     public string SubtitleOutlineColor { get; set; } = DefaultSubtitleOutlineColor;
+    /// <summary>Opaque background RGB shared by both text subtitle overlays in canonical #RRGGBB format.</summary>
+    public string SubtitleBackgroundColor { get; set; } = DefaultSubtitleBackgroundColor;
+    /// <summary>Primary text subtitle background opacity in whole percent; zero draws no background.</summary>
+    public int SubtitleBackgroundOpacityPercent { get; set; }
+    /// <summary>Secondary text subtitle background opacity, independent of font inheritance.</summary>
+    public int SecondarySubtitleBackgroundOpacityPercent { get; set; }
     public bool SubtitlesVisible { get; set; } = true;
 
     public bool SidebarVisible { get; set; }
@@ -102,6 +109,9 @@ public sealed class AppPrefs
         SubtitleTextColor = TryNormalizeSubtitleTextColor(SubtitleTextColor, out string primaryColor) ? primaryColor : DefaultSubtitleTextColor;
         SecondarySubtitleTextColor = TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string secondaryColor) ? secondaryColor : DefaultSecondarySubtitleTextColor;
         SubtitleOutlineColor = TryNormalizeSubtitleTextColor(SubtitleOutlineColor, out string outlineColor) ? outlineColor : DefaultSubtitleOutlineColor;
+        SubtitleBackgroundColor = TryNormalizeSubtitleTextColor(SubtitleBackgroundColor, out string backgroundColor) ? backgroundColor : DefaultSubtitleBackgroundColor;
+        SubtitleBackgroundOpacityPercent = Math.Clamp(SubtitleBackgroundOpacityPercent, 0, 100);
+        SecondarySubtitleBackgroundOpacityPercent = Math.Clamp(SecondarySubtitleBackgroundOpacityPercent, 0, 100);
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
