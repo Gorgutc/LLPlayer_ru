@@ -211,7 +211,8 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   Names, short HEX, alpha forms, non-HEX digits and other malformed raw input must visibly block Save. Missing,
   null and invalid stored strings must fall back to black; malformed whole-file JSON and wrong JSON types retain
   their existing policy. Close/Esc must discard the detached draft; a persistence failure must preserve live and
-  persisted values and keep Settings open for retry. Save must preserve the other eleven Settings fields and
+  persisted values and keep Settings open for retry. Save must preserve the other current Settings fields (eleven
+  at this stage's historical checkpoint) and
   unrelated volume/mute/recents. Inspect both overlays, long cues, word clicks, minimum-window usability and
   100%/150%/200% DPI with distinct foreground colors and independent outline thicknesses, including zero.
   Only the common text `Outline` color changes; `Fill`, thickness, shadow, positioning, bitmap/sidebar styling,
@@ -226,7 +227,7 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   trimmed/canonicalized valid weight/style spellings. A missing `SecondarySubtitleInheritsFont` key defaults true.
   A null/wrongly typed flag or wrong JSON type for any of the six strings must keep the existing malformed-input
   whole-file behavior: load warning, original file retained, best-effort `.bad` copy, and whole-file defaults.
-  Confirm no migration of the other twelve Settings fields or WPF settings.
+  Confirm no migration of the other Settings fields (twelve preceding the font block) or WPF settings.
   Select an installed family, each offered weight (`Normal`, `SemiBold`, `Bold`) and style (`Normal`, `Italic`).
   Inspect both draft-preview lines before Save: they must show draft primary and effective secondary without
   changing live overlays or writing preferences. Family lists may differ by OS. A valid unavailable requested
@@ -253,6 +254,41 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   public candidate/main CI and exact-main delivery/merge remain PENDING at that local checkpoint. WPF `ship.ps1`
   is NOT_RUN and WPF packaging is unchanged. These source/headless/package results do not close this native row;
   see [the font checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-fonts).
+- **Text-subtitle background block, separately owner-approved 2026-10-19 — native acceptance NOT_RUN / DEFERRED BY OWNER:**
+  when native acceptance is separately authorized, use the new package and an isolated profile on each native
+  Windows/Linux host. An older file without the three background keys must retain black (`#000000`) and zero
+  primary/secondary opacity, preserving the previous appearance. Check the common raw RGB editor and swatch:
+  outer whitespace trims and lowercase six-digit HEX canonicalizes to uppercase; names, short/alpha HEX and
+  malformed values visibly block Save. Missing/null/invalid stored color strings independently fall back to black;
+  a wrong JSON type retains the whole-file malformed-input policy. Loaded integer opacities clamp to `0..100`,
+  absent keys default zero, and fractional/null/wrong-type/overflowing JSON must keep the existing load warning,
+  preserved original, best-effort `.bad` copy and whole-file defaults. No silent fractional conversion is allowed.
+  Edit each raw percentage `TextBox`: valid whole `0..100` input previews that slot; fractional, non-finite,
+  malformed, overflowing and out-of-range raw text blocks Save without changing live/persisted state. Check
+  asymmetric primary/secondary opacity with font inheritance both on and off; neither opacity may follow the
+  other or the font flag. This deliberately adapts WPF's `SubsUseSeparateFonts` background coupling and leaves
+  WPF itself unchanged. Reset Background resets only the three draft fields to black and `0/0`, including invalid
+  raw text. Copy Primary, Reset Secondary and Reset Fonts preserve backgrounds and retain their font-only scope.
+  The existing two-line detached font-and-background preview must show draft backgrounds without applying to
+  live overlays or writing preferences; its size/scale behavior remains unchanged and it is not a full appearance
+  preview. Save & Close merges the twenty-two owned fields into fresh current preferences, resolves candidate
+  fonts/brushes, persists and only then applies live settings. Close/Esc discards the draft; write failure preserves
+  live/persisted values and leaves Settings open for retry. Reopen/restart restores all three saved fields and
+  concurrent unrelated volume/mute/recents/last-folder/provider state survives Save.
+  Inspect both video text overlays with wrapped and unequal-length centered lines: each gets one compact
+  axis-aligned whole-block rectangle from the union of the existing `TextLayout` line boxes, expanded only by
+  existing outline pad, without host-width fill, per-line rectangles, new padding or rounded corners. Zero opacity
+  must skip drawing entirely; empty, whitespace-only and hidden subtitles show no fill. Warm-cache color/alpha
+  edits, outline-pad changes and resize must match a fresh control. Only the background alpha changes; glyph Fill,
+  outline, shadow, measure/layout and word-hit geometry must retain their existing behavior. Compare actual
+  `InputHitTest`, routed `e.Source`, word taps, video taps and double taps off/on for glyphs, spaces, inter-line and
+  off-text regions, including popup dismissal and fullscreen. The custom background draw operation must remain
+  non-hit-testable. Inspect dark/light/minimum-window usability and 100%/150%/200% DPI when separately authorized.
+  Background binding is limited to the two video overlays and the two detached preview lines; sidebar/bitmap
+  subtitles, Core/engine/native runtime, WPF settings, assets/dependencies and packaging retain their contracts.
+  No Computer Use, application/launcher launch, WSL or model/provider run is authorized by this row. Headless
+  render/input tests and static package checks do not close native GUI/DPI/exact-desktop acceptance or full F-13
+  parity. Evidence and pending gates are separate in [the background checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-background).
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
