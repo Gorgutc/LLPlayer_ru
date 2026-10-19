@@ -10,6 +10,9 @@ namespace LLPlayer.Avalonia.Services;
 public sealed class AppPrefs
 {
     public const int MaxRecentFiles = 10;
+    public const string DefaultSubtitleFontFamily = "";
+    public const string DefaultSubtitleFontWeight = "SemiBold";
+    public const string DefaultSubtitleFontStyle = "Normal";
     public const double MinSubtitleFontSize = 12;
     public const double MaxSubtitleFontSize = 96;
     public const double DefaultSubtitleFontSize = 34;
@@ -31,6 +34,15 @@ public sealed class AppPrefs
     /// <summary>Primary overlay font size in DIPs; the secondary line uses <see cref="SecondaryFontScale"/> of it.</summary>
     public double SubtitleFontSize { get; set; } = DefaultSubtitleFontSize;
     public double SecondaryFontScale { get; set; } = 0.8;
+    /// <summary>Requested plain family name; empty preserves the existing app Inter font.</summary>
+    public string SubtitleFontFamily { get; set; } = DefaultSubtitleFontFamily;
+    public string SubtitleFontWeight { get; set; } = DefaultSubtitleFontWeight;
+    public string SubtitleFontStyle { get; set; } = DefaultSubtitleFontStyle;
+    public string SecondarySubtitleFontFamily { get; set; } = DefaultSubtitleFontFamily;
+    public string SecondarySubtitleFontWeight { get; set; } = DefaultSubtitleFontWeight;
+    public string SecondarySubtitleFontStyle { get; set; } = DefaultSubtitleFontStyle;
+    /// <summary>Inherit only family, weight and style; retain the secondary overrides while enabled.</summary>
+    public bool SecondarySubtitleInheritsFont { get; set; } = true;
     /// <summary>Distance of the text subtitle overlay from the bottom edge in DIPs.</summary>
     public double SubtitleBottomOffset { get; set; } = DefaultSubtitleBottomOffset;
     /// <summary>Primary text subtitle outline thickness in DIPs; zero leaves the existing shadow.</summary>
@@ -77,6 +89,12 @@ public sealed class AppPrefs
     public AppPrefs Normalize()
     {
         Volume = Math.Clamp(Volume, 0, 1000);
+        SubtitleFontFamily = TryNormalizeSubtitleFontFamily(SubtitleFontFamily, out string family) ? family : DefaultSubtitleFontFamily;
+        SubtitleFontWeight = TryNormalizeSubtitleFontWeight(SubtitleFontWeight, out string weight) ? weight : DefaultSubtitleFontWeight;
+        SubtitleFontStyle = TryNormalizeSubtitleFontStyle(SubtitleFontStyle, out string style) ? style : DefaultSubtitleFontStyle;
+        SecondarySubtitleFontFamily = TryNormalizeSubtitleFontFamily(SecondarySubtitleFontFamily, out string secondaryFamily) ? secondaryFamily : DefaultSubtitleFontFamily;
+        SecondarySubtitleFontWeight = TryNormalizeSubtitleFontWeight(SecondarySubtitleFontWeight, out string secondaryWeight) ? secondaryWeight : DefaultSubtitleFontWeight;
+        SecondarySubtitleFontStyle = TryNormalizeSubtitleFontStyle(SecondarySubtitleFontStyle, out string secondaryStyle) ? secondaryStyle : DefaultSubtitleFontStyle;
         SubtitleFontSize = double.IsFinite(SubtitleFontSize) ? Math.Clamp(SubtitleFontSize, MinSubtitleFontSize, MaxSubtitleFontSize) : DefaultSubtitleFontSize;
         SubtitleBottomOffset = double.IsFinite(SubtitleBottomOffset) ? Math.Clamp(SubtitleBottomOffset, MinSubtitleBottomOffset, MaxSubtitleBottomOffset) : DefaultSubtitleBottomOffset;
         SubtitleOutlineThickness = double.IsFinite(SubtitleOutlineThickness) ? Math.Clamp(SubtitleOutlineThickness, MinSubtitleOutlineThickness, MaxSubtitleOutlineThickness) : DefaultSubtitleOutlineThickness;
@@ -91,6 +109,46 @@ public sealed class AppPrefs
         if (string.IsNullOrWhiteSpace(WordTranslationService))
             WordTranslationService = "GoogleV1";
         return this;
+    }
+
+    /// <summary>Accepts a single plain family name, never a font URI, path or fallback expression.</summary>
+    public static bool TryNormalizeSubtitleFontFamily(string? raw, out string normalized)
+    {
+        normalized = "";
+        if (raw == null || raw.Any(char.IsControl))
+            return false;
+        string value = raw.Trim();
+        if (value.IndexOfAny([':', '/', '\\', '#', ',', '$', '<', '>', '"', '|', '*', '?']) >= 0
+            || value is "." or "..")
+            return false;
+        normalized = value;
+        return true;
+    }
+
+    public static bool TryNormalizeSubtitleFontWeight(string? raw, out string normalized)
+    {
+        normalized = "";
+        string? value = raw?.Trim();
+        foreach (string supported in new[] { "Normal", "SemiBold", "Bold" })
+            if (string.Equals(value, supported, StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = supported;
+                return true;
+            }
+        return false;
+    }
+
+    public static bool TryNormalizeSubtitleFontStyle(string? raw, out string normalized)
+    {
+        normalized = "";
+        string? value = raw?.Trim();
+        foreach (string supported in new[] { "Normal", "Italic" })
+            if (string.Equals(value, supported, StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = supported;
+                return true;
+            }
+        return false;
     }
 
     /// <summary>Accepts only an opaque RGB hex string, ignoring surrounding whitespace.</summary>

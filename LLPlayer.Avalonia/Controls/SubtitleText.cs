@@ -50,6 +50,9 @@ public sealed class SubtitleText : Control
     public static readonly StyledProperty<FontWeight> FontWeightProperty =
         TextElement.FontWeightProperty.AddOwner<SubtitleText>();
 
+    public static readonly StyledProperty<FontStyle> FontStyleProperty =
+        AvaloniaProperty.Register<SubtitleText, FontStyle>(nameof(FontStyle), FontStyle.Normal);
+
     public static readonly StyledProperty<IBrush?> FillProperty =
         AvaloniaProperty.Register<SubtitleText, IBrush?>(nameof(Fill), Brushes.White);
 
@@ -73,7 +76,7 @@ public sealed class SubtitleText : Control
 
     static SubtitleText()
     {
-        AffectsMeasure<SubtitleText>(TextProperty, FontSizeProperty, FontFamilyProperty, FontWeightProperty, OutlineThicknessProperty);
+        AffectsMeasure<SubtitleText>(TextProperty, FontSizeProperty, FontFamilyProperty, FontWeightProperty, FontStyleProperty, OutlineThicknessProperty);
         AffectsRender<SubtitleText>(FillProperty, OutlineProperty);
         FontWeightProperty.OverrideDefaultValue<SubtitleText>(FontWeight.SemiBold);
     }
@@ -106,6 +109,12 @@ public sealed class SubtitleText : Control
     {
         get => GetValue(FontWeightProperty);
         set => SetValue(FontWeightProperty, value);
+    }
+
+    public FontStyle FontStyle
+    {
+        get => GetValue(FontStyleProperty);
+        set => SetValue(FontStyleProperty, value);
     }
 
     public IBrush? Fill
@@ -143,7 +152,7 @@ public sealed class SubtitleText : Control
     {
         base.OnPropertyChanged(change);
         if (change.Property == TextProperty || change.Property == FontSizeProperty || change.Property == FontFamilyProperty
-            || change.Property == FontWeightProperty || change.Property == OutlineThicknessProperty)
+            || change.Property == FontWeightProperty || change.Property == FontStyleProperty || change.Property == OutlineThicknessProperty)
         {
             Invalidate();
         }
@@ -268,7 +277,7 @@ public sealed class SubtitleText : Control
         layoutWidth = -1;
     }
 
-    Typeface CurrentTypeface => new(FontFamily, FontStyle.Normal, FontWeight);
+    Typeface CurrentTypeface => new(FontFamily, FontStyle, FontWeight);
 
     TextLayout EnsureLayout(double maxWidth)
     {
