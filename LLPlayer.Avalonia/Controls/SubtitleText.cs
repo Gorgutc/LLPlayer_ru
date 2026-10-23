@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
+using Avalonia.Rendering.SceneGraph;
 
 namespace LLPlayer.Avalonia.Controls;
 
@@ -59,6 +60,9 @@ public sealed class SubtitleText : Control
     public static readonly StyledProperty<IBrush?> OutlineProperty =
         AvaloniaProperty.Register<SubtitleText, IBrush?>(nameof(Outline), Brushes.Black);
 
+    public static readonly StyledProperty<IBrush?> BackgroundProperty =
+        AvaloniaProperty.Register<SubtitleText, IBrush?>(nameof(Background));
+
     public static readonly StyledProperty<double> OutlineThicknessProperty =
         AvaloniaProperty.Register<SubtitleText, double>(nameof(OutlineThickness), 3);
 
@@ -77,7 +81,7 @@ public sealed class SubtitleText : Control
     static SubtitleText()
     {
         AffectsMeasure<SubtitleText>(TextProperty, FontSizeProperty, FontFamilyProperty, FontWeightProperty, FontStyleProperty, OutlineThicknessProperty);
-        AffectsRender<SubtitleText>(FillProperty, OutlineProperty);
+        AffectsRender<SubtitleText>(FillProperty, OutlineProperty, BackgroundProperty);
         FontWeightProperty.OverrideDefaultValue<SubtitleText>(FontWeight.SemiBold);
     }
 
@@ -127,6 +131,12 @@ public sealed class SubtitleText : Control
     {
         get => GetValue(OutlineProperty);
         set => SetValue(OutlineProperty, value);
+    }
+
+    public IBrush? Background
+    {
+        get => GetValue(BackgroundProperty);
+        set => SetValue(BackgroundProperty, value);
     }
 
     public double OutlineThickness
@@ -187,6 +197,7 @@ public sealed class SubtitleText : Control
             return;
 
         double pad = OutlineThickness;
+        DrawBackground(context, pad);
         using (context.PushTransform(Matrix.CreateTranslation(pad + 2, pad + 2.5)))
             context.DrawGeometry(ShadowBrush, new Pen(ShadowBrush, OutlineThickness * 2 + 2, lineJoin: PenLineJoin.Round), geometry);
 
@@ -196,6 +207,36 @@ public sealed class SubtitleText : Control
                 context.DrawGeometry(null, new Pen(Outline, OutlineThickness * 2, lineJoin: PenLineJoin.Round), geometry);
             context.DrawGeometry(Fill, null, geometry);
         }
+    }
+
+    void DrawBackground(DrawingContext context, double pad)
+    {
+        IBrush? background = Background;
+        if (layout == null || string.IsNullOrWhiteSpace(Text) || background == null || background.Opacity <= 0
+            || background is ISolidColorBrush { Color.A: 0 })
+            return;
+
+        Rect bounds = default;
+        double top = pad;
+        foreach (TextLine line in layout.TextLines)
+        {
+            bounds = bounds.Union(new Rect(line.Start + pad, top, line.WidthIncludingTrailingWhitespace, line.Height));
+            top += line.Height;
+        }
+
+        // Snapshot on the UI thread; only this paint operation ignores input, leaving the existing glyph hits intact.
+        context.Custom(new BackgroundDrawOperation(bounds.Inflate(pad), background.ToImmutable()));
+    }
+
+    sealed class BackgroundDrawOperation(Rect bounds, IImmutableBrush brush) : ICustomDrawOperation
+    {
+        readonly IImmutableBrush backgroundBrush = brush;
+        public Rect Bounds { get; } = bounds;
+        public bool HitTest(Point p) => false;
+        public void Render(ImmediateDrawingContext context) => context.DrawRectangle(backgroundBrush, null, Bounds);
+        public bool Equals(ICustomDrawOperation? other)
+            => other is BackgroundDrawOperation operation && Bounds == operation.Bounds && backgroundBrush.Equals(operation.backgroundBrush);
+        public void Dispose() { }
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)

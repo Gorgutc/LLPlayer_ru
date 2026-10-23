@@ -37,6 +37,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitleTextColor = current.SubtitleTextColor;
         SecondarySubtitleTextColor = current.SecondarySubtitleTextColor;
         SubtitleOutlineColor = current.SubtitleOutlineColor;
+        SubtitleBackgroundColor = current.SubtitleBackgroundColor;
+        SubtitleBackgroundOpacityPercent = current.SubtitleBackgroundOpacityPercent;
+        SecondarySubtitleBackgroundOpacityPercent = current.SecondarySubtitleBackgroundOpacityPercent;
+        // Default zero values also need raw editor text when no generated change hook runs.
+        SubtitleBackgroundOpacityPercentText = current.SubtitleBackgroundOpacityPercent.ToString(NumberFormat);
+        SecondarySubtitleBackgroundOpacityPercentText = current.SecondarySubtitleBackgroundOpacityPercent.ToString(NumberFormat);
         // Loaded zero thickness also needs text when the generated change hook does not run.
         SubtitleOutlineThicknessText = current.SubtitleOutlineThickness.ToString(NumberFormat);
         SecondarySubtitleOutlineThicknessText = current.SecondarySubtitleOutlineThickness.ToString(NumberFormat);
@@ -69,6 +75,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial string SecondarySubtitleTextColor { get; set; } = AppPrefs.DefaultSecondarySubtitleTextColor;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SubtitleOutlineBrush))]
     public partial string SubtitleOutlineColor { get; set; } = AppPrefs.DefaultSubtitleOutlineColor;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SubtitleBackgroundColorBrush)), NotifyPropertyChangedFor(nameof(SubtitleBackgroundBrush)), NotifyPropertyChangedFor(nameof(SecondarySubtitleBackgroundBrush))]
+    public partial string SubtitleBackgroundColor { get; set; } = AppPrefs.DefaultSubtitleBackgroundColor;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SubtitleBackgroundBrush))]
+    public partial int SubtitleBackgroundOpacityPercent { get; set; }
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SecondarySubtitleBackgroundBrush))]
+    public partial int SecondarySubtitleBackgroundOpacityPercent { get; set; }
     [ObservableProperty] public partial bool SubtitlesVisible { get; set; }
     [ObservableProperty] public partial bool SidebarVisible { get; set; }
     [ObservableProperty] public partial double SidebarWidth { get; set; }
@@ -77,6 +89,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string SubtitleBottomOffsetText { get; set; } = "";
     [ObservableProperty] public partial string SubtitleOutlineThicknessText { get; set; } = "";
     [ObservableProperty] public partial string SecondarySubtitleOutlineThicknessText { get; set; } = "";
+    [ObservableProperty] public partial string SubtitleBackgroundOpacityPercentText { get; set; } = "";
+    [ObservableProperty] public partial string SecondarySubtitleBackgroundOpacityPercentText { get; set; } = "";
     [ObservableProperty] public partial string SidebarWidthText { get; set; } = "";
     [ObservableProperty] public partial int SelectedSection { get; set; }
     [ObservableProperty] public partial string? Error { get; private set; }
@@ -86,6 +100,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ImmutableSolidColorBrush SubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleTextColor, out string color) ? color : AppPrefs.DefaultSubtitleTextColor));
     public ImmutableSolidColorBrush SecondarySubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string color) ? color : AppPrefs.DefaultSecondarySubtitleTextColor));
     public ImmutableSolidColorBrush SubtitleOutlineBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleOutlineColor, out string color) ? color : AppPrefs.DefaultSubtitleOutlineColor));
+    public ImmutableSolidColorBrush SubtitleBackgroundColorBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleBackgroundColor, out string color) ? color : AppPrefs.DefaultSubtitleBackgroundColor));
+    public ImmutableSolidColorBrush SubtitleBackgroundBrush => new(SubtitleBackgroundColorBrush.Color, Math.Clamp(SubtitleBackgroundOpacityPercent, 0, 100) / 100d);
+    public ImmutableSolidColorBrush SecondarySubtitleBackgroundBrush => new(SubtitleBackgroundColorBrush.Color, Math.Clamp(SecondarySubtitleBackgroundOpacityPercent, 0, 100) / 100d);
     // Keep the ItemsSource stable: replacing it clears ComboBox selection during a two-way family edit.
     public ObservableCollection<string> SubtitleFontFamilies => subtitleFontFamilies ??= new(fonts.GetFamilies(SubtitleFontFamily, SecondarySubtitleFontFamily));
     SubtitleFontSelection PrimaryPreview => fonts.Resolve(SubtitleFontFamily, SubtitleFontWeight, SubtitleFontStyle);
@@ -110,6 +127,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnSubtitleBottomOffsetChanged(double value) => SubtitleBottomOffsetText = value.ToString(NumberFormat);
     partial void OnSubtitleOutlineThicknessChanged(double value) => SubtitleOutlineThicknessText = value.ToString(NumberFormat);
     partial void OnSecondarySubtitleOutlineThicknessChanged(double value) => SecondarySubtitleOutlineThicknessText = value.ToString(NumberFormat);
+    partial void OnSubtitleBackgroundOpacityPercentChanged(int value) => SubtitleBackgroundOpacityPercentText = value.ToString(NumberFormat);
+    partial void OnSecondarySubtitleBackgroundOpacityPercentChanged(int value) => SecondarySubtitleBackgroundOpacityPercentText = value.ToString(NumberFormat);
+    partial void OnSubtitleBackgroundOpacityPercentTextChanged(string value)
+    {
+        if (TryReadOpacity(value, out int opacity)) SubtitleBackgroundOpacityPercent = opacity;
+    }
+    partial void OnSecondarySubtitleBackgroundOpacityPercentTextChanged(string value)
+    {
+        if (TryReadOpacity(value, out int opacity)) SecondarySubtitleBackgroundOpacityPercent = opacity;
+    }
     partial void OnSidebarWidthChanged(double value) => SidebarWidthText = value.ToString(NumberFormat);
 
     partial void OnSubtitleFontFamilyChanged(string value) { IncludeRequestedFamily(value); NotifyFontPreviewChanged(); }
@@ -164,6 +191,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         SecondarySubtitleInheritsFont = true;
     }
 
+    [RelayCommand] void ResetSubtitleBackground()
+    {
+        SubtitleBackgroundColor = AppPrefs.DefaultSubtitleBackgroundColor;
+        SubtitleBackgroundOpacityPercent = 0;
+        SecondarySubtitleBackgroundOpacityPercent = 0;
+        // Replace invalid raw text too, even when the accepted numeric value was already zero.
+        SubtitleBackgroundOpacityPercentText = 0.ToString(NumberFormat);
+        SecondarySubtitleBackgroundOpacityPercentText = 0.ToString(NumberFormat);
+    }
+
     partial void OnSelectedSectionChanged(int value)
     {
         OnPropertyChanged(nameof(AppearanceSelected));
@@ -196,6 +233,17 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = "Use #RRGGBB for the primary and secondary text subtitle outline color (for example #000000).";
             return;
         }
+        if (!AppPrefs.TryNormalizeSubtitleTextColor(SubtitleBackgroundColor, out string backgroundColor))
+        {
+            Error = "Use #RRGGBB for the primary and secondary text subtitle background color (for example #000000).";
+            return;
+        }
+        if (!TryReadOpacity(SubtitleBackgroundOpacityPercentText, out int backgroundOpacity)
+            || !TryReadOpacity(SecondarySubtitleBackgroundOpacityPercentText, out int secondaryBackgroundOpacity))
+        {
+            Error = "Use a whole number from 0 to 100 for each text subtitle background opacity. Zero removes the background.";
+            return;
+        }
         if (!AppPrefs.TryNormalizeSubtitleFontFamily(SubtitleFontFamily, out string family)
             || !AppPrefs.TryNormalizeSubtitleFontWeight(SubtitleFontWeight, out string weight)
             || !AppPrefs.TryNormalizeSubtitleFontStyle(SubtitleFontStyle, out string style)
@@ -215,6 +263,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitleTextColor = primaryColor;
         SecondarySubtitleTextColor = secondaryColor;
         SubtitleOutlineColor = outlineColor;
+        SubtitleBackgroundColor = backgroundColor;
+        SubtitleBackgroundOpacityPercent = backgroundOpacity;
+        SecondarySubtitleBackgroundOpacityPercent = secondaryBackgroundOpacity;
+        SubtitleBackgroundOpacityPercentText = backgroundOpacity.ToString(NumberFormat);
+        SecondarySubtitleBackgroundOpacityPercentText = secondaryBackgroundOpacity.ToString(NumberFormat);
         SubtitleFontSize = fontSize;
         SecondaryFontScale = scale;
         SubtitleBottomOffset = offset;
@@ -236,6 +289,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         value = (double)parsed;
         return value >= min && value <= max;
     }
+    bool TryReadOpacity(string text, out int value)
+        => int.TryParse(text, NumberStyles.Integer, NumberFormat, out value) && value is >= 0 and <= 100;
     [RelayCommand] void Close() => CloseRequested?.Invoke();
     [RelayCommand] void OpenTool(SettingsLink link)
     {
