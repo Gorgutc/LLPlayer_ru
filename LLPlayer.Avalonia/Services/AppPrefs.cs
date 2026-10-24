@@ -27,6 +27,16 @@ public sealed class AppPrefs
     public const string DefaultSecondarySubtitleTextColor = "#E8E8E8";
     public const string DefaultSubtitleOutlineColor = "#000000";
     public const string DefaultSubtitleBackgroundColor = "#000000";
+    public const int MinSubtitleWidthPercent = 1;
+    public const int MaxSubtitleWidthPercent = 100;
+    public const int DefaultSubtitleWidthPercent = 100;
+    public const double MinSubtitleMaxWidth = 0;
+    public const double MaxSubtitleMaxWidth = 4000;
+    public const double DefaultSubtitleMaxWidth = 0;
+    public const double MinSubtitlePrimarySecondaryDistance = 0;
+    public const double MaxSubtitlePrimarySecondaryDistance = 200;
+    public const double DefaultSubtitlePrimarySecondaryDistance = 2;
+    public const string DefaultSubtitleLineAlignment = "Center";
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -62,6 +72,19 @@ public sealed class AppPrefs
     public int SubtitleBackgroundOpacityPercent { get; set; }
     /// <summary>Secondary text subtitle background opacity, independent of font inheritance.</summary>
     public int SecondarySubtitleBackgroundOpacityPercent { get; set; }
+    /// <summary>Text subtitle box width as a percentage (1..100) of the padded video width.</summary>
+    public int SubtitleWidthPercent { get; set; } = DefaultSubtitleWidthPercent;
+    /// <summary>Optional box width cap in DIPs; zero means no cap.</summary>
+    public double SubtitleMaxWidth { get; set; } = DefaultSubtitleMaxWidth;
+    /// <summary>
+    /// Flatten cue text with the canonical portable <see cref="FlyleafLib.SubtitleTextUtil.FlattenText"/> semantics used
+    /// by WPF: dash lists keep their line breaks, other cue text becomes one line with single spaces.
+    /// </summary>
+    public bool SubtitleIgnoreLineBreak { get; set; }
+    /// <summary>Horizontal alignment of each subtitle line: Center, Left or Right.</summary>
+    public string SubtitleLineAlignment { get; set; } = DefaultSubtitleLineAlignment;
+    /// <summary>Gap between the secondary and primary text lines in DIPs.</summary>
+    public double SubtitlePrimarySecondaryDistance { get; set; } = DefaultSubtitlePrimarySecondaryDistance;
     public bool SubtitlesVisible { get; set; } = true;
 
     public bool SidebarVisible { get; set; }
@@ -112,6 +135,12 @@ public sealed class AppPrefs
         SubtitleBackgroundColor = TryNormalizeSubtitleTextColor(SubtitleBackgroundColor, out string backgroundColor) ? backgroundColor : DefaultSubtitleBackgroundColor;
         SubtitleBackgroundOpacityPercent = Math.Clamp(SubtitleBackgroundOpacityPercent, 0, 100);
         SecondarySubtitleBackgroundOpacityPercent = Math.Clamp(SecondarySubtitleBackgroundOpacityPercent, 0, 100);
+        SubtitleWidthPercent = Math.Clamp(SubtitleWidthPercent, MinSubtitleWidthPercent, MaxSubtitleWidthPercent);
+        SubtitleMaxWidth = double.IsFinite(SubtitleMaxWidth) ? Math.Clamp(SubtitleMaxWidth, MinSubtitleMaxWidth, MaxSubtitleMaxWidth) : DefaultSubtitleMaxWidth;
+        SubtitlePrimarySecondaryDistance = double.IsFinite(SubtitlePrimarySecondaryDistance)
+            ? Math.Clamp(SubtitlePrimarySecondaryDistance, MinSubtitlePrimarySecondaryDistance, MaxSubtitlePrimarySecondaryDistance)
+            : DefaultSubtitlePrimarySecondaryDistance;
+        SubtitleLineAlignment = TryNormalizeSubtitleLineAlignment(SubtitleLineAlignment, out string alignment) ? alignment : DefaultSubtitleLineAlignment;
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
@@ -153,6 +182,20 @@ public sealed class AppPrefs
         normalized = "";
         string? value = raw?.Trim();
         foreach (string supported in new[] { "Normal", "Italic" })
+            if (string.Equals(value, supported, StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = supported;
+                return true;
+            }
+        return false;
+    }
+
+    /// <summary>Accepts the supported horizontal line alignments, ignoring surrounding whitespace.</summary>
+    public static bool TryNormalizeSubtitleLineAlignment(string? raw, out string normalized)
+    {
+        normalized = "";
+        string? value = raw?.Trim();
+        foreach (string supported in SubtitleLayoutOptions.LineAlignments)
             if (string.Equals(value, supported, StringComparison.OrdinalIgnoreCase))
             {
                 normalized = supported;

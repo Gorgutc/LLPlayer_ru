@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -111,7 +111,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.PointerWheelChanged += OnVideoWheel;
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => PositionWordPopup();
-        TransportBar.SizeChanged += (_, _) => UpdateSubtitleMargin();
+        VideoHost.SizeChanged += (_, _) => UpdateSubtitleLayout();
+        TransportBar.SizeChanged += (_, _) => UpdateSubtitleLayout();
         ContentGrid.SizeChanged += (_, _) => UpdateSidebarColumn();
         SidebarSplitter.SizeChanged += (_, _) => UpdateSidebarColumn();
         CueList.Tapped += OnCueTapped;
@@ -149,7 +150,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         viewModel.Sidebar.FocusFilterRequested += () => Dispatcher.UIThread.Post(() => FilterBox.Focus(NavigationMethod.Tab));
 
         Video.Renderer = renderer;
-        UpdateSubtitleMargin();
+        UpdateSubtitleLayout();
         UpdateSidebarColumn();
         idleTimer.Start();
     }
@@ -274,7 +275,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         Grid.SetRowSpan(VideoHost, fullScreen ? 2 : 1);
         Grid.SetRow(TransportBar, fullScreen ? 0 : 1);
         TransportBar.Classes.Set("overlay", fullScreen);
-        UpdateSubtitleMargin();
+        UpdateSubtitleLayout();
     }
 
     /// <summary>The sidebar column gets the remembered width (the splitter resizes it); hidden = collapsed.</summary>
@@ -299,13 +300,15 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         }
     }
 
-    void UpdateSubtitleMargin()
+    /// <summary>Keeps the bottom clearance and the box width percent/max width on one UI geometry seam.</summary>
+    void UpdateSubtitleLayout()
     {
         if (vm == null)
             return;
 
         double extra = IsFullScreen && vm.ControlsVisible ? TransportBar.Bounds.Height : 0;
-        SubtitleOverlay.Margin = new Thickness(48, 0, 48, vm.SubtitleBottomOffset + extra);
+        SubtitleOverlay.Margin = new Thickness(0, 0, 0, vm.SubtitleBottomOffset + extra);
+        SubtitleOverlay.Width = MainWindowViewModel.ComputeSubtitleBoxWidth(VideoHost.Bounds.Width, vm.SubtitleWidthPercent, vm.SubtitleMaxWidth);
     }
 
     void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -314,7 +317,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         {
             case nameof(MainWindowViewModel.SubtitleBottomOffset):
             case nameof(MainWindowViewModel.ControlsVisible):
-                UpdateSubtitleMargin();
+            case nameof(MainWindowViewModel.SubtitleWidthPercent):
+            case nameof(MainWindowViewModel.SubtitleMaxWidth):
+                UpdateSubtitleLayout();
                 break;
             case nameof(MainWindowViewModel.CursorHidden):
                 VideoHost.Cursor = vm!.CursorHidden ? new Cursor(StandardCursorType.None) : Cursor.Default;

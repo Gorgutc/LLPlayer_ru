@@ -1358,6 +1358,28 @@ Linux локально **NOT_RUN**; published-source CI, merge и exact-main del
 Native GUI/DPI/audible A-B приёмка — **NOT_RUN / DEFERRED BY OWNER**. Waveform-половина F-12, персист A/B и редактор
 хоткеев — вне этапа; полный F-13 parity и следующий продуктовый этап не заявлены.
 [Статус блока и receipts](f13-status-2026-10-18.md#bounded-a-b-repeat-parity-f-12).
+**2026-10-24 owner-approved text-layout design transfer — IMPLEMENTED (local checkpoint, ветка `codex/f13-subtitle-layout`).**
+Product `baa6dc162e2a7363e55a1217224a1c4b585e0054` адаптирует текстовую половину WPF `Subtitles > Position / Size`
+в общий Windows/Linux Avalonia транспорт; горизонтальное выравнивание строк — additive Avalonia-расширение (в WPF
+строки жёстко центрированы). Пять additive-настроек `SubtitleWidthPercent` (1–100, default 100), `SubtitleMaxWidth`
+(0–4000 DIP, 0 = нет лимита), `SubtitleIgnoreLineBreak`, `SubtitleLineAlignment` (Center/Left/Right) и
+`SubtitlePrimarySecondaryDistance` (0–200 DIP); Settings владеет **27 полями**. Ширина бокса считается от
+video-column за вычетом существующих 48-DIP боковых полей, кепится max width и не опускается ниже 1 DIP; при 100 %
+геометрия прежняя, вертикальный DIP-offset сохраняется. Игнорирование переносов использует канонный
+`FlyleafLib.SubtitleTextUtil.FlattenText` (dash-списки и blank-series семантика как в WPF); alignment и текст общие
+для measure/layout/word-hit; изменения инвалидируют measure и visual; отрисовка Left/Center/Right покрыта
+pixel-тестом. Save мержит 27 полей в fresh candidate, persists before apply, сохраняет failure/Close/Esc/restart
+контракт; двухстрочный preview показывает alignment и line-break поведение. WPF Position/Size, bitmap
+scale/position, dual separator и dual-alignment — вне этапа; engine/WPF/Core/package не менялись; config —
+аддитивные 5 `AppPrefs`. Compiled RED: **59 total, 39 failed, 20 passed**; focused GREEN **59/59** (два
+диагностированных attempt; failed first full Avalonia gate 741/21/1 и BOM-нормализация раскрыты в статусе);
+review-fix round **105/105** (74 layout + 31 position). Полные WPF (1440/0 skipped) и Windows Avalonia (engine
+1622/13 skipped, UI 777/1 skipped, 778) gates, FINAL3 regression (113/113), 53 offline package fixtures и
+publisher/content/CRC (ZIP 180 424 428 bytes, SHA-256 `51ad8c95…`) — **PASS**, actual exit 0. Linux локально
+**NOT_RUN**; published-source CI, merge и exact-main delivery — **PENDING**. Native GUI/DPI приёмка — **NOT_RUN /
+DEFERRED BY OWNER**. Полный F-13 parity и следующий этап не заявлены.
+[Статус блока и receipts](f13-status-2026-10-18.md#bounded-text-subtitle-layout-wpf-position--size-text-half).
+
 Предыдущий font checkpoint `37fbe776e556e26ce6e55fb841ebedf7637c8a2a` сохраняет свои receipts и исторические 19 полей; прежние position/outline/text-color milestones не переписываются. PR № 173 Linux first-cue attempt 1 **FAILURE** и один unchanged-main full diagnostic retry **SUCCESS** сохраняют **UNKNOWN** причину, отдельно от recognition timeout PR № 172 и audio observation PR № 170; исправление queue/timeout/audio не заявлено. Новая native GUI/exact-desktop/glyph/DPI-приёмка — **NOT_RUN / DEFERRED BY OWNER**, без Computer Use, запуска приложения/launcher, WSL или model/provider runs. Sidebar/bitmap/Core/engine/native dependencies сохраняют контракты; полный F-13 parity и следующий продуктовый этап не заявлены.
 Полный Linux/WPF parity остаётся открытым; сохранять WPF и его gates до приёмки замены.
 

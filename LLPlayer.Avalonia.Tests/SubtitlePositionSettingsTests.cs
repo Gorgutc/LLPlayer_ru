@@ -133,7 +133,12 @@ public class SubtitlePositionSettingsTests
                 Assert.Equal(["new.mp4"], saved.RecentFiles); Assert.Equal("Off", saved.WordTranslationService);
                 Assert.Equal("Russian", saved.TranslateTargetLanguage);
                 var overlay = window.FindControl<StackPanel>("SubtitleOverlay")!;
-                Assert.Equal(new Thickness(48, 0, 48, 80.5), overlay.Margin);
+                // The 48-DIP side margins now live inside the computed box width (overlay is centered and sized),
+                // so only the vertical base distance remains in the margin; geometry at 100% is unchanged.
+                Assert.Equal(new Thickness(0, 0, 0, 80.5), overlay.Margin);
+                var videoHost = window.FindControl<Panel>("VideoHost")!;
+                double expectedWidth = MainWindowViewModel.ComputeSubtitleBoxWidth(videoHost.Bounds.Width, 100, 0);
+                Assert.InRange(overlay.Width, expectedWidth - 1, expectedWidth + 1);
 
                 main.ToggleFullScreen(); Dispatcher.UIThread.RunJobs();
                 var bar = window.FindControl<Border>("TransportBar")!;

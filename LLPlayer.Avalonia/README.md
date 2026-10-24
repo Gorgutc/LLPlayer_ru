@@ -119,6 +119,16 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
   regressions 19 (18 plus one env-gated real-engine case that the Windows Avalonia gate runs) and the full
   WPF/Windows Avalonia source, package-contract, local publish/content and independent-review checks passed at product
   `075dd4e4`; Linux CI and native desktop acceptance are separate.
+- Text subtitle layout (WPF Position / Size, text half): Settings offers box width 1–100 %, an optional max width
+  (0–4000 DIP, 0 = no limit), Center/Left/Right line alignment (an additive Avalonia option; WPF keeps subtitle lines
+  centered), Ignore line breaks and a 0–200 DIP primary/secondary distance. The overlay box is centered inside the
+  existing 48-DIP side margins and never narrower than 1 DIP; the approved vertical DIP offset is unchanged. Alignment
+  and line-break flattening (canonical `SubtitleTextUtil.FlattenText`) share one normalized text with measurement,
+  outline/background geometry and word hits, and pixel tests cover the rendered alignment. Five additive `AppPrefs`
+  values default to the previous look (100 %, no cap, hard breaks, centered, 2 DIP). Waveform, bitmap scale/position and
+  the dual separator remain separate work. Review-fix 105/105 and the final full WPF/Windows Avalonia (UI 777 passed/one skipped, 778),
+  package-contract, regression and local publish checks passed at product `baa6dc1`; Linux CI and native desktop
+  acceptance are separate.
 - Menus: Media (open media / subtitles, recent, exit), Playback, Subtitles (primary + secondary track for embedded and
   external tracks, size, position, copy), Translation (word/sentence providers and primary/secondary sentence toggles), View (sidebar, search, fullscreen, dark/light theme, Settings…), Help (shortcuts).
 - Words ▸ Word Manager opens a singleton list. Filter the five saved-word fields; select a row to edit Reading,

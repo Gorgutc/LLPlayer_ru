@@ -27,9 +27,9 @@ public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, s
 }
 
 /// <summary>
-/// Subtitle line drawn over video: centred, wrapped, filled text with a solid outline and a soft drop shadow so it stays
-/// readable on any frame. A left click on a word raises <see cref="WordClicked"/> (word hit-test through the same
-/// <see cref="TextLayout"/> used for measuring).
+/// Subtitle line drawn over video: wrapped, filled text with a solid outline and a soft drop shadow so it stays
+/// readable on any frame. Lines follow the configured horizontal alignment. A left click on a word raises
+/// <see cref="WordClicked"/> (word hit-test through the same <see cref="TextLayout"/> used for measuring).
 /// </summary>
 public sealed class SubtitleText : Control
 {
@@ -68,6 +68,14 @@ public sealed class SubtitleText : Control
 
     public static readonly StyledProperty<int> SlotProperty =
         AvaloniaProperty.Register<SubtitleText, int>(nameof(Slot));
+
+    // Both text-layout options participate in layout, geometry and word-hit mapping (see DisplayText and
+    // EnsureLayout/BuildGeometry below); changing either invalidates the cached layout, measure and visual.
+    public static readonly StyledProperty<TextAlignment> TextAlignmentProperty =
+        AvaloniaProperty.Register<SubtitleText, TextAlignment>(nameof(TextAlignment), TextAlignment.Center);
+
+    public static readonly StyledProperty<bool> IgnoreLineBreaksProperty =
+        AvaloniaProperty.Register<SubtitleText, bool>(nameof(IgnoreLineBreaks));
 
     public static readonly RoutedEvent<WordClickedEventArgs> WordClickedEvent =
         RoutedEvent.Register<SubtitleText, WordClickedEventArgs>(nameof(WordClicked), RoutingStrategies.Bubble);
@@ -152,6 +160,24 @@ public sealed class SubtitleText : Control
         set => SetValue(SlotProperty, value);
     }
 
+    /// <summary>Horizontal alignment of each drawn line inside the box (Center by default).</summary>
+    public TextAlignment TextAlignment
+    {
+        get => GetValue(TextAlignmentProperty);
+        set => SetValue(TextAlignmentProperty, value);
+    }
+
+    /// <summary>
+    /// Apply the canonical portable <see cref="FlyleafLib.SubtitleTextUtil.FlattenText"/> semantics used by WPF when its
+    /// equivalent option is on: dash lists keep their line breaks, other cue text collapses to one line with single
+    /// spaces.
+    /// </summary>
+    public bool IgnoreLineBreaks
+    {
+        get => GetValue(IgnoreLineBreaksProperty);
+        set => SetValue(IgnoreLineBreaksProperty, value);
+    }
+
     public event EventHandler<WordClickedEventArgs>? WordClicked
     {
         add => AddHandler(WordClickedEvent, value);
@@ -162,7 +188,8 @@ public sealed class SubtitleText : Control
     {
         base.OnPropertyChanged(change);
         if (change.Property == TextProperty || change.Property == FontSizeProperty || change.Property == FontFamilyProperty
-            || change.Property == FontWeightProperty || change.Property == FontStyleProperty || change.Property == OutlineThicknessProperty)
+            || change.Property == FontWeightProperty || change.Property == FontStyleProperty || change.Property == OutlineThicknessProperty
+            || change.Property == TextAlignmentProperty || change.Property == IgnoreLineBreaksProperty)
         {
             Invalidate();
         }
@@ -249,7 +276,7 @@ public sealed class SubtitleText : Control
         if (TryGetWordAt(p, out string word))
         {
             e.Handled = true;
-            RaiseEvent(new WordClickedEventArgs(WordClickedEvent, word, Text ?? "", Slot, p, IsTranslated, SourceLanguage, TargetLanguage));
+            RaiseEvent(new WordClickedEventArgs(WordClickedEvent, word, DisplayText, Slot, p, IsTranslated, SourceLanguage, TargetLanguage));
         }
     }
 
@@ -257,12 +284,12 @@ public sealed class SubtitleText : Control
     public bool TryGetWordAt(Point point, out string word)
     {
         word = "";
-        string? text = Text;
+        string text = DisplayText;
         if (string.IsNullOrEmpty(text) || layout == null)
             return false;
 
-        // TextLayout.HitTestPoint's IsInside ignores the line's alignment offset (centred text), so the line and the
-        // horizontal extent are checked here; GetCharacterHitFromDistance does apply the offset.
+        // TextLayout.HitTestPoint's IsInside ignores the line's alignment offset, so the line and the horizontal extent
+        // are checked here; GetCharacterHitFromDistance does apply the offset.
         double x = point.X - OutlineThickness, y = point.Y - OutlineThickness;
         if (y < 0)
             return false;
@@ -316,9 +343,20 @@ public sealed class SubtitleText : Control
         layout = null;
         geometry = null;
         layoutWidth = -1;
+        // Alignment / line-break handling change the measured size too, and a real overlay must re-measure after an
+        // option change; a cached TextLayout alone is not enough.
+        InvalidateMeasure();
+        InvalidateVisual();
     }
 
     Typeface CurrentTypeface => new(FontFamily, FontStyle, FontWeight);
+
+    /// <summary>
+    /// The string that is laid out, drawn and hit-tested. When <see cref="IgnoreLineBreaks"/> is on this reuses the
+    /// canonical portable <see cref="FlyleafLib.SubtitleTextUtil.FlattenText"/> (the same helper WPF applies for the
+    /// equivalent option), so dash lists and blank-line series keep the engine-defined semantics.
+    /// </summary>
+    string DisplayText => IgnoreLineBreaks && Text is { } raw ? FlyleafLib.SubtitleTextUtil.FlattenText(raw) : Text ?? "";
 
     TextLayout EnsureLayout(double maxWidth)
     {
@@ -328,7 +366,7 @@ public sealed class SubtitleText : Control
         layout?.Dispose();
         geometry = null;
         layoutWidth = maxWidth;
-        layout = new TextLayout(Text ?? "", CurrentTypeface, FontSize, Fill, TextAlignment.Center, TextWrapping.Wrap,
+        layout = new TextLayout(DisplayText, CurrentTypeface, FontSize, Fill, TextAlignment, TextWrapping.Wrap,
             maxWidth: maxWidth);
         return layout;
     }
@@ -338,10 +376,13 @@ public sealed class SubtitleText : Control
         if (layout == null)
             return null;
 
-        FormattedText ft = new(Text ?? "", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, CurrentTypeface, FontSize, Fill)
+        FormattedText ft = new(DisplayText, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, CurrentTypeface, FontSize, Fill)
         {
-            TextAlignment = TextAlignment.Center,
+            TextAlignment = TextAlignment,
             MaxTextWidth = double.IsInfinity(layoutWidth) ? 0 : layoutWidth,
+            // Keep the drawn geometry wrapping exactly like the measured TextLayout instead of the default ellipsis /
+            // overflow behaviour of FormattedText.
+            Trimming = TextTrimming.None,
         };
         return ft.BuildGeometry(new Point(0, 0));
     }
