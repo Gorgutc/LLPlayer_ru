@@ -49,6 +49,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitlesVisible = current.SubtitlesVisible;
         SidebarVisible = current.SidebarVisible;
         SidebarWidth = current.SidebarWidth;
+        SubtitleWidthPercent = current.SubtitleWidthPercent;
+        SubtitleWidthPercentText = current.SubtitleWidthPercent.ToString(NumberFormat);
+        SubtitleMaxWidth = current.SubtitleMaxWidth;
+        SubtitleMaxWidthText = current.SubtitleMaxWidth.ToString(NumberFormat);
+        SubtitlePrimarySecondaryDistance = current.SubtitlePrimarySecondaryDistance;
+        SubtitlePrimarySecondaryDistanceText = current.SubtitlePrimarySecondaryDistance.ToString(NumberFormat);
+        SubtitleIgnoreLineBreak = current.SubtitleIgnoreLineBreak;
+        SubtitleLineAlignment = current.SubtitleLineAlignment;
     }
 
     public static IReadOnlyList<string> Themes { get; } = ["Dark", "Light"];
@@ -82,6 +90,20 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SecondarySubtitleBackgroundBrush))]
     public partial int SecondarySubtitleBackgroundOpacityPercent { get; set; }
     [ObservableProperty] public partial bool SubtitlesVisible { get; set; }
+    public static IReadOnlyList<string> LineAlignments { get; } = SubtitleLayoutOptions.LineAlignments;
+
+    /// <summary>The draft alignment mapped for the shared preview control.</summary>
+    public TextAlignment PreviewTextAlignment => SubtitleLayoutOptions.ToTextAlignment(SubtitleLineAlignment);
+
+    partial void OnSubtitleLineAlignmentChanged(string value) => OnPropertyChanged(nameof(PreviewTextAlignment));
+    [ObservableProperty] public partial int SubtitleWidthPercent { get; set; }
+    [ObservableProperty] public partial double SubtitleMaxWidth { get; set; }
+    [ObservableProperty] public partial bool SubtitleIgnoreLineBreak { get; set; }
+    [ObservableProperty] public partial string SubtitleLineAlignment { get; set; } = AppPrefs.DefaultSubtitleLineAlignment;
+    [ObservableProperty] public partial double SubtitlePrimarySecondaryDistance { get; set; }
+    [ObservableProperty] public partial string SubtitleWidthPercentText { get; set; } = "";
+    [ObservableProperty] public partial string SubtitleMaxWidthText { get; set; } = "";
+    [ObservableProperty] public partial string SubtitlePrimarySecondaryDistanceText { get; set; } = "";
     [ObservableProperty] public partial bool SidebarVisible { get; set; }
     [ObservableProperty] public partial double SidebarWidth { get; set; }
     [ObservableProperty] public partial string SubtitleFontSizeText { get; set; } = "";
@@ -138,6 +160,9 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (TryReadOpacity(value, out int opacity)) SecondarySubtitleBackgroundOpacityPercent = opacity;
     }
     partial void OnSidebarWidthChanged(double value) => SidebarWidthText = value.ToString(NumberFormat);
+    partial void OnSubtitleWidthPercentChanged(int value) => SubtitleWidthPercentText = value.ToString(NumberFormat);
+    partial void OnSubtitleMaxWidthChanged(double value) => SubtitleMaxWidthText = value.ToString(NumberFormat);
+    partial void OnSubtitlePrimarySecondaryDistanceChanged(double value) => SubtitlePrimarySecondaryDistanceText = value.ToString(NumberFormat);
 
     partial void OnSubtitleFontFamilyChanged(string value) { IncludeRequestedFamily(value); NotifyFontPreviewChanged(); }
     partial void OnSubtitleFontWeightChanged(string value) => NotifyFontPreviewChanged();
@@ -254,6 +279,25 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = "Choose a plain font family name, Normal / SemiBold / Bold weight and Normal / Italic style for both subtitles.";
             return;
         }
+        if (!TryReadWhole(SubtitleWidthPercentText, AppPrefs.MinSubtitleWidthPercent, AppPrefs.MaxSubtitleWidthPercent, out int widthPercent)
+            || !TryRead(SubtitleMaxWidthText, AppPrefs.MinSubtitleMaxWidth, AppPrefs.MaxSubtitleMaxWidth, out double maxWidth)
+            || !TryRead(SubtitlePrimarySecondaryDistanceText, AppPrefs.MinSubtitlePrimarySecondaryDistance, AppPrefs.MaxSubtitlePrimarySecondaryDistance, out double distance))
+        {
+            Error = "Use a whole-number subtitle width 1–100, a max width 0–4000 DIP and a primary/secondary distance 0–200 DIP.";
+            return;
+        }
+        if (!AppPrefs.TryNormalizeSubtitleLineAlignment(SubtitleLineAlignment, out string alignment))
+        {
+            Error = "Choose Center, Left or Right for subtitle line alignment.";
+            return;
+        }
+        SubtitleWidthPercent = widthPercent;
+        SubtitleWidthPercentText = widthPercent.ToString(NumberFormat);
+        SubtitleMaxWidth = maxWidth;
+        SubtitleMaxWidthText = maxWidth.ToString(NumberFormat);
+        SubtitlePrimarySecondaryDistance = distance;
+        SubtitlePrimarySecondaryDistanceText = distance.ToString(NumberFormat);
+        SubtitleLineAlignment = alignment;
         SubtitleFontFamily = family;
         SubtitleFontWeight = weight;
         SubtitleFontStyle = style;
@@ -291,6 +335,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
     bool TryReadOpacity(string text, out int value)
         => int.TryParse(text, NumberStyles.Integer, NumberFormat, out value) && value is >= 0 and <= 100;
+    bool TryReadWhole(string text, int min, int max, out int value)
+        => int.TryParse(text, NumberStyles.Integer, NumberFormat, out value) && value >= min && value <= max;
     [RelayCommand] void Close() => CloseRequested?.Invoke();
     [RelayCommand] void OpenTool(SettingsLink link)
     {

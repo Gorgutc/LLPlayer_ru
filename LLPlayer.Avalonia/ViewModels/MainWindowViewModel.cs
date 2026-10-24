@@ -1,4 +1,4 @@
-using LLPlayer.Core.Services;
+﻿using LLPlayer.Core.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -97,6 +97,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SubtitleBottomOffset = prefs.SubtitleBottomOffset;
         SubtitleOutlineThickness = prefs.SubtitleOutlineThickness;
         SecondarySubtitleOutlineThickness = prefs.SecondarySubtitleOutlineThickness;
+        SubtitleWidthPercent = prefs.SubtitleWidthPercent;
+        SubtitleMaxWidth = prefs.SubtitleMaxWidth;
+        SubtitleIgnoreLineBreak = prefs.SubtitleIgnoreLineBreak;
+        SubtitleLineAlignment = prefs.SubtitleLineAlignment;
+        SubtitlePrimarySecondaryDistance = prefs.SubtitlePrimarySecondaryDistance;
         SubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SubtitleTextColor, out string primaryColor) ? primaryColor : AppPrefs.DefaultSubtitleTextColor));
         SecondarySubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SecondarySubtitleTextColor, out string secondaryColor) ? secondaryColor : AppPrefs.DefaultSecondarySubtitleTextColor));
         SubtitleOutlineBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SubtitleOutlineColor, out string outlineColor) ? outlineColor : AppPrefs.DefaultSubtitleOutlineColor));
@@ -174,6 +179,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitlesVisible = draft.SubtitlesVisible;
         candidate.SidebarVisible = draft.SidebarVisible;
         candidate.SidebarWidth = draft.SidebarWidth;
+        candidate.SubtitleWidthPercent = draft.SubtitleWidthPercent;
+        candidate.SubtitleMaxWidth = draft.SubtitleMaxWidth;
+        candidate.SubtitleIgnoreLineBreak = draft.SubtitleIgnoreLineBreak;
+        candidate.SubtitleLineAlignment = draft.SubtitleLineAlignment;
+        candidate.SubtitlePrimarySecondaryDistance = draft.SubtitlePrimarySecondaryDistance;
         // Resolve font resources and parse brushes before persistence, so live application only assigns prepared values.
         SubtitleFontSelection primaryFont = fonts.Resolve(candidate.SubtitleFontFamily, candidate.SubtitleFontWeight, candidate.SubtitleFontStyle);
         SubtitleFontSelection secondaryFont = candidate.SecondarySubtitleInheritsFont ? primaryFont
@@ -214,10 +224,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SidebarVisible = candidate.SidebarVisible;
         prefs.SidebarWidth = candidate.SidebarWidth;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
+        prefs.SubtitleWidthPercent = candidate.SubtitleWidthPercent;
+        prefs.SubtitleMaxWidth = candidate.SubtitleMaxWidth;
+        prefs.SubtitleIgnoreLineBreak = candidate.SubtitleIgnoreLineBreak;
+        prefs.SubtitleLineAlignment = candidate.SubtitleLineAlignment;
+        prefs.SubtitlePrimarySecondaryDistance = candidate.SubtitlePrimarySecondaryDistance;
         SubtitleFontSize = candidate.SubtitleFontSize;
         SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
         SecondarySubtitleOutlineThickness = candidate.SecondarySubtitleOutlineThickness;
+        SubtitleWidthPercent = candidate.SubtitleWidthPercent;
+        SubtitleMaxWidth = candidate.SubtitleMaxWidth;
+        SubtitleIgnoreLineBreak = candidate.SubtitleIgnoreLineBreak;
+        SubtitleLineAlignment = candidate.SubtitleLineAlignment;
+        SubtitlePrimarySecondaryDistance = candidate.SubtitlePrimarySecondaryDistance;
         SubtitleTextBrush = primaryBrush;
         SecondarySubtitleTextBrush = secondaryBrush;
         SubtitleOutlineBrush = outlineBrush;
@@ -350,6 +370,36 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial ImmutableSolidColorBrush SubtitleOutlineBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSubtitleOutlineColor));
     [ObservableProperty] public partial ImmutableSolidColorBrush SubtitleBackgroundBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSubtitleBackgroundColor), 0);
     [ObservableProperty] public partial ImmutableSolidColorBrush SecondarySubtitleBackgroundBrush { get; private set; } = new(Color.Parse(AppPrefs.DefaultSubtitleBackgroundColor), 0);
+
+    // ---- text subtitle layout (WPF Position / Size, text half) ---------------------------------------------------
+    // The vertical base offset keeps its approved DIP model; bitmap scale/position, the dual separator and a
+    // dual-specific alignment remain separate later work.
+
+    [ObservableProperty] public partial int SubtitleWidthPercent { get; private set; } = AppPrefs.DefaultSubtitleWidthPercent;
+    [ObservableProperty] public partial double SubtitleMaxWidth { get; private set; } = AppPrefs.DefaultSubtitleMaxWidth;
+    [ObservableProperty] public partial bool SubtitleIgnoreLineBreak { get; private set; }
+    [ObservableProperty] public partial string SubtitleLineAlignment { get; private set; } = AppPrefs.DefaultSubtitleLineAlignment;
+    [ObservableProperty] public partial double SubtitlePrimarySecondaryDistance { get; private set; } = AppPrefs.DefaultSubtitlePrimarySecondaryDistance;
+
+    public TextAlignment SubtitleTextAlignment => SubtitleLayoutOptions.ToTextAlignment(SubtitleLineAlignment);
+
+    partial void OnSubtitleLineAlignmentChanged(string value) => OnPropertyChanged(nameof(SubtitleTextAlignment));
+
+    // The box uses the approved 48-DIP side margins, then the requested percentage of that padded width, capped by an
+    // optional max width (0 = no cap). A squeezed window never yields a zero/negative box.
+    public const double SubtitleSideMargin = 48;
+
+    public static double ComputeSubtitleBoxWidth(double videoWidth, int widthPercent, double maxWidth)
+    {
+        if (!double.IsFinite(videoWidth) || videoWidth <= 0)
+            return 1;
+        double padded = Math.Max(0, videoWidth - 2 * SubtitleSideMargin);
+        int percent = Math.Clamp(widthPercent, AppPrefs.MinSubtitleWidthPercent, AppPrefs.MaxSubtitleWidthPercent);
+        double box = padded * percent / 100d;
+        if (double.IsFinite(maxWidth) && maxWidth > AppPrefs.MinSubtitleMaxWidth)
+            box = Math.Min(box, Math.Clamp(maxWidth, AppPrefs.MinSubtitleMaxWidth, AppPrefs.MaxSubtitleMaxWidth));
+        return Math.Max(1, box);
+    }
 
     // ---- sidebar -----------------------------------------------------------------------------------------------
 

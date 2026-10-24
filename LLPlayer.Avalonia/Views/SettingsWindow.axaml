@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:c="using:LLPlayer.Avalonia.Controls" xmlns:services="using:LLPlayer.Avalonia.Services" x:Class="LLPlayer.Avalonia.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel" Title="Settings — LLPlayer" Width="760" Height="550"
         MinWidth="560" MinHeight="440" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
@@ -68,11 +68,13 @@
             <TextBlock Text="Preview of font family, weight, style and background. Save &amp; Close applies the settings to the player." Classes="dialog-description" TextWrapping="Wrap" />
             <Border Padding="12" Background="#202020" CornerRadius="4">
               <StackPanel Spacing="8">
-                <c:SubtitleText Name="SubtitleFontPreview" Text="Primary subtitle" IsHitTestVisible="False" Focusable="False"
+                <c:SubtitleText Name="SubtitleFontPreview" Text="Primary subtitle&#10;Second line" IsHitTestVisible="False" Focusable="False"
+                                TextAlignment="{Binding PreviewTextAlignment}" IgnoreLineBreaks="{Binding SubtitleIgnoreLineBreak}"
                                 FontFamily="{Binding PreviewSubtitleFontFamily}" FontWeight="{Binding PreviewSubtitleFontWeight}" FontStyle="{Binding PreviewSubtitleFontStyle}"
                                 FontSize="{Binding SubtitleFontSize}" Fill="{Binding SubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SubtitleOutlineThickness}" Background="{Binding SubtitleBackgroundBrush}"
                                 AutomationProperties.Name="Primary subtitle font preview" />
-                <c:SubtitleText Name="SecondarySubtitleFontPreview" Text="Secondary subtitle" Slot="1" IsHitTestVisible="False" Focusable="False"
+                <c:SubtitleText Name="SecondarySubtitleFontPreview" Text="Secondary subtitle&#10;Second line" Slot="1" IsHitTestVisible="False" Focusable="False"
+                                TextAlignment="{Binding PreviewTextAlignment}" IgnoreLineBreaks="{Binding SubtitleIgnoreLineBreak}"
                                 FontFamily="{Binding PreviewSecondarySubtitleFontFamily}" FontWeight="{Binding PreviewSecondarySubtitleFontWeight}" FontStyle="{Binding PreviewSecondarySubtitleFontStyle}"
                                 FontSize="{Binding PreviewSecondarySubtitleFontSize}" Fill="{Binding SecondarySubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SecondarySubtitleOutlineThickness}" Background="{Binding SecondarySubtitleBackgroundBrush}"
                                 AutomationProperties.Name="Secondary subtitle font preview" />
@@ -142,6 +144,22 @@
             <Button Name="ResetSubtitleBackgroundButton" Content="Reset Background" Classes="outline" Command="{Binding ResetSubtitleBackgroundCommand}" HorizontalAlignment="Stretch"
                     AutomationProperties.Name="Reset text subtitle backgrounds"
                     AutomationProperties.HelpText="Resets the shared background color to black and both background opacities to zero. Other settings stay as they are." />
+            <TextBlock Text="Text subtitle box size" FontWeight="SemiBold" />
+            <TextBlock Text="Subtitle width (1–100 % of the video column width after the 48-DIP side margins)" TextWrapping="Wrap" />
+            <NumericUpDown Name="SubtitleWidthEditor" Minimum="1" Maximum="100" Increment="5" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitleWidthPercentText, Mode=TwoWay}" FormatString="0"
+                           AutomationProperties.Name="Text subtitle box width percentage" />
+            <TextBlock Text="Max width (0–4000 DIP, 0 = no limit)" TextWrapping="Wrap" />
+            <NumericUpDown Name="SubtitleMaxWidthEditor" Minimum="0" Maximum="4000" Increment="50" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitleMaxWidthText, Mode=TwoWay}" FormatString="0.#"
+                           AutomationProperties.Name="Text subtitle max width in DIP" />
+            <TextBlock Text="Primary/secondary distance (0–200 DIP)" TextWrapping="Wrap" />
+            <NumericUpDown Name="SubtitleDistanceEditor" Minimum="0" Maximum="200" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitlePrimarySecondaryDistanceText, Mode=TwoWay}" FormatString="0.#"
+                           AutomationProperties.Name="Distance between primary and secondary subtitles" />
+            <CheckBox Name="IgnoreLineBreakEditor" Content="Ignore line breaks" IsChecked="{Binding SubtitleIgnoreLineBreak}"
+                      AutomationProperties.HelpText="Draw cue line breaks as spaces; wrapping still applies." />
+            <TextBlock Text="Line alignment" />
+            <ComboBox Name="SubtitleAlignmentEditor" ItemsSource="{x:Static vm:SettingsViewModel.LineAlignments}" SelectedItem="{Binding SubtitleLineAlignment, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                      AutomationProperties.Name="Text subtitle line alignment" />
+            <TextBlock Text="The two-line preview shows alignment and line-break handling; width, max width and the primary/secondary distance apply to the video overlay." Classes="dialog-description" TextWrapping="Wrap" />
           </StackPanel>
           <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
             <TextBlock Text="Tools" Classes="dialog-title" />
