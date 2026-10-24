@@ -1,4 +1,4 @@
-﻿using LLPlayer.Core.Services;
+using LLPlayer.Core.Services;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -372,6 +372,92 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnIsOpenedChanged(bool value) => OnPropertyChanged(nameof(ShowEmptyState));
     partial void OnIsOpeningChanged(bool value) => OnPropertyChanged(nameof(ShowEmptyState));
+
+    // ---- A-B repeat (F-12 parity) ------------------------------------------------------------------------------
+
+    public const string AbLoopToastTitle = "A-B repeat";
+
+    /// <summary>At least one A-B point is set: the seek-bar markers are shown and the button is lit.</summary>
+    public bool AbLoopActive => player.ABLoopActive;
+    /// <summary>Both points are set with A &lt; B: the engine loops playback.</summary>
+    public bool AbLoopEnabled => player.ABLoopEnabled;
+    public bool HasAbLoopA => player.HasABLoopA;
+    public bool HasAbLoopB => player.HasABLoopB;
+    /// <summary>Point A in seconds; NaN when unset (bound to the seek-bar marker).</summary>
+    public double AbLoopStartSeconds => ToMarkerSeconds(player.ABLoopA);
+    /// <summary>Point B in seconds; NaN when unset (bound to the seek-bar marker).</summary>
+    public double AbLoopEndSeconds => ToMarkerSeconds(player.ABLoopB);
+
+    static double ToMarkerSeconds(long ticks) => ticks < 0 ? double.NaN : TimeSpan.FromTicks(ticks).TotalSeconds;
+
+    /// <summary>Left-click cycle of the player bar: Set A → Set B → Clear (the WPF A-B button).</summary>
+    [RelayCommand]
+    public void ToggleAbLoop()
+    {
+        if (!IsOpened)
+            return;
+
+        bool hadA = HasAbLoopA, hadB = HasAbLoopB;
+        player.ToggleABLoop();
+        bool hasA = HasAbLoopA, hasB = HasAbLoopB;
+
+        if (!hadA && hasA)
+            ShowToast(AbLoopToastTitle, "A set");
+        else if (hadA && !hadB && hasB)
+            ShowToast(AbLoopToastTitle, "B set");
+        else if (hadA && !hadB)
+            ShowToast(AbLoopToastTitle, "B must be after A");
+        else if (hadA && hadB && !hasA && !hasB)
+            ShowToast(AbLoopToastTitle, "A-B cleared");
+    }
+
+    [RelayCommand]
+    public void SetAbLoopStart()
+    {
+        if (!IsOpened)
+            return;
+        player.SetABLoopStart();
+        if (HasAbLoopA)
+            ShowToast(AbLoopToastTitle, "A set");
+    }
+
+    [RelayCommand]
+    public void SetAbLoopEnd()
+    {
+        if (!IsOpened)
+            return;
+        long previousB = player.ABLoopB;
+        long sampledPosition = player.CurTime;
+        bool hadA = HasAbLoopA;
+        long sampledA = player.ABLoopA;
+        player.SetABLoopEnd();
+        // The engine keeps a previously accepted B when it rejects the new one; judge by the outcome plus the
+        // pre-sampled position, so a playhead that advances past A cannot turn an accepted point into a rejection.
+        bool rejected = hadA && sampledPosition <= sampledA && player.ABLoopB == previousB;
+        ShowToast(AbLoopToastTitle, rejected ? "B must be after A" : "B set");
+    }
+
+    [RelayCommand]
+    public void ClearAbLoop()
+    {
+        if (!IsOpened)
+            return;
+        bool had = AbLoopActive;
+        player.ClearABLoop();
+        if (had && !AbLoopActive)
+            ShowToast(AbLoopToastTitle, "A-B cleared");
+    }
+
+    /// <summary>Mirrors every engine A-B change (commands, bound hotkeys, reset on open) into the bound properties.</summary>
+    void SyncAbLoop()
+    {
+        OnPropertyChanged(nameof(AbLoopActive));
+        OnPropertyChanged(nameof(AbLoopEnabled));
+        OnPropertyChanged(nameof(HasAbLoopA));
+        OnPropertyChanged(nameof(HasAbLoopB));
+        OnPropertyChanged(nameof(AbLoopStartSeconds));
+        OnPropertyChanged(nameof(AbLoopEndSeconds));
+    }
 
     // ---- commands ----------------------------------------------------------------------------------------------
 
@@ -894,6 +980,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case nameof(IPlaybackController.Speed):
                 RebuildSpeedItems();
                 break;
+            // F-12 A-B repeat: the engine re-raises all six properties (commands, bound hotkeys, reset on open); the
+            // markers/button/lit state read the same engine values.
+            case nameof(IPlaybackController.ABLoopA):
+            case nameof(IPlaybackController.ABLoopB):
+            case nameof(IPlaybackController.HasABLoopA):
+            case nameof(IPlaybackController.HasABLoopB):
+            case nameof(IPlaybackController.ABLoopEnabled):
+            case nameof(IPlaybackController.ABLoopActive):
+                SyncAbLoop();
+                break;
             case nameof(IPlaybackController.PrimaryText):
             case nameof(IPlaybackController.SecondaryText):
             case nameof(IPlaybackController.SubtitlesVisible):
@@ -921,6 +1017,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SyncTime();
         SyncVolume();
         SyncSubtitles();
+        SyncAbLoop();
         PrimaryImage = player.PrimaryImage;
         SecondaryImage = player.SecondaryImage;
     }

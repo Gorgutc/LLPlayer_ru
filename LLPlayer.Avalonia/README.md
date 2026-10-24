@@ -110,6 +110,15 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
 
 - Transport bar: open, play/pause, seek bar (no feedback loop while dragging), time, speed menu, volume + mute,
   subtitles toggle, sidebar toggle, fullscreen (bar and cursor auto-hide after 2.5 s idle in fullscreen).
+- A-B repeat (WPF F-12 parity): the transport's repeat button cycles Set A → Set B → Clear and lights while a point is
+  set; right-click it for the explicit Set A / Set B / Clear items. The seek bar shows one marker per point plus a
+  translucent band between them, and playback loops back to A through the engine's frame-accurate seek path (priority
+  over whole-file Loop Playback, inert for reverse playback and HLS-live streams). Points are transient, never
+  persisted, and drop when another file opens; a rejected Set B keeps the previous point and reports the message.
+  Waveform and rebindable hotkeys remain the separate F-12 follow-up. Shared Windows/Linux implementation; focused
+  regressions 19 (18 plus one env-gated real-engine case that the Windows Avalonia gate runs) and the full
+  WPF/Windows Avalonia source, package-contract, local publish/content and independent-review checks passed at product
+  `075dd4e4`; Linux CI and native desktop acceptance are separate.
 - Menus: Media (open media / subtitles, recent, exit), Playback, Subtitles (primary + secondary track for embedded and
   external tracks, size, position, copy), Translation (word/sentence providers and primary/secondary sentence toggles), View (sidebar, search, fullscreen, dark/light theme, Settings…), Help (shortcuts).
 - Words ▸ Word Manager opens a singleton list. Filter the five saved-word fields; select a row to edit Reading,

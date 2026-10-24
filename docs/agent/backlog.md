@@ -644,7 +644,7 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Идея от SubtitleEdit.** **Остаток (waveform):** рендер waveform из аудио FlyleafLib для визуального sync.
 **Рассуждение:** A-B повтор — заметный single-session UX-win для изучения языка; waveform — крупный effort, не топ.
 
-### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-19; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
+### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-24; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 SE5 и Buzz уже кросс-платформенны → Windows-only был конкурентным минусом. Владелец явно запросил Linux-порт;
 трек переведён из DEFERRED в IN PROGRESS.
 
@@ -1326,7 +1326,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-10-19 / F-13 active)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-10-24 / F-13 active)
 
 Owner-selected трек с 2026-09-24 — `F-13`; с 2026-10-18 приоритет — единый Avalonia UI для Windows/Linux. `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
 host-level lifetime и non-vacuous WPF WeakReference regression доказаны, а расширенный owner-smoke сознательно
@@ -1334,13 +1334,30 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
-**Активный трек (решение владельца 2026-09-24, обновление 2026-10-19):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
+**Активный трек (решение владельца 2026-09-24, обновление 2026-10-24):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
 Октябрьский исходный срез синхронизирован; Windows Avalonia build/package baseline реализован на общем UI/Core.
 Локальные WPF/Windows Avalonia gates, rebuilt ZIP и ограниченный dark/light native smoke прошли;
 published source candidate `93c5e31` прошёл Windows/Linux CI и независимый review в
 [PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168). Последующие docs/merge checks фиксируются в PR timeline.
-Текущий одобренный шаг от 2026-10-19 — общий фон primary/secondary текстовых overlay — **IMPLEMENTED** на product `558e4c5eb730eba27633559a57256a471e6aa46c`. Три preferences добавляют общий RGB `#000000` и независимые целые проценты непрозрачности `0/0`; Settings теперь владеет **22 полями**, включая прежние 19. Raw RGB/percent editors, Reset Background только трёх полей и detached font-and-background preview сохраняют транзакцию fresh merge/resolve → persist → live apply. Компактный фон объединяет centered line boxes с существующим outline pad; custom draw `HitTest=false` сохраняет actual input, popup/fullscreen и геометрию текста. Наследование шрифта не связывает непрозрачности; это отдельная адаптация WPF без изменения WPF behavior. [Статус блока и точные receipts](f13-status-2026-10-18.md#bounded-text-subtitle-background).
+Предыдущий одобренный шаг от 2026-10-19 — общий фон primary/secondary текстовых overlay — **IMPLEMENTED** на product `558e4c5eb730eba27633559a57256a471e6aa46c`. Три preferences добавляют общий RGB `#000000` и независимые целые проценты непрозрачности `0/0`; Settings теперь владеет **22 полями**, включая прежние 19. Raw RGB/percent editors, Reset Background только трёх полей и detached font-and-background preview сохраняют транзакцию fresh merge/resolve → persist → live apply. Компактный фон объединяет centered line boxes с существующим outline pad; custom draw `HitTest=false` сохраняет actual input, popup/fullscreen и геометрию текста. Наследование шрифта не связывает непрозрачности; это отдельная адаптация WPF без изменения WPF behavior. [Статус блока и точные receipts](f13-status-2026-10-18.md#bounded-text-subtitle-background).
 Focused GREEN: **133 passed, 0 failed/skipped**. Чистый intentional Settings/render RED: 123 failures и один pixel-oracle pass; отдельный чистый input RED не заявлен. Первый focused product run содержал две диагностированные ошибки inter-line fixture при outline 8; bubbling event oracle исправлен отдельно, итоговый actual-input GREEN получен после исправлений тестов. Полные WPF/Windows Avalonia gates, 53 offline package fixtures и локальный publisher/content/CRC **PASS**, actual exit 0. Итоговый девятифайловый product `/review` и domain reviews: **0 Critical / 0 Important**, использованы все десять ролей. Независимый QA-package review — **PASS, 0 Critical / 0 Important**; docs/handoff review ещё **PENDING на локальном checkpoint**. Локальный ZIP собран до app commit из базы плюс reviewed edits и не служит exact-main delivery. Linux локально **NOT_RUN**; public candidate/main Windows/Linux CI, merge и exact-main delivery/readback **PENDING** на этом checkpoint. WPF `ship.ps1` **NOT_RUN**, WPF packaging unchanged.
+**2026-10-24 owner-approved A-B repeat stage — IMPLEMENTED (local checkpoint, новая ветка `codex/f13-ab-repeat`; независимые reviews PASS после фиксов).**
+Product `075dd4e464e7cdc7d2c686fe49dec8794037d776` переносит WPF F-12 A-B repeat в общий Windows/Linux Avalonia
+транспорт: кнопка в player bar с циклом Set A → Set B → Clear, context-меню трёх явных действий, lit-иконка,
+non-hit-test overlay маркеров A/B с полосой между точками и thumb-inset выравниванием; тосты следуют WPF engine
+OSD-сообщениям (clear показан как «A-B cleared»). Отклонённый явный Set B сохраняет прежнюю точку и сообщает
+«B must be after A»; сообщение решается по результату движка и сэмплу позиции, поэтому ни прежний B, ни playhead,
+ушедший за A во время вызова, не дают ложного текста (ложный «B set» и гонка на границе A закрыты по review).
+Состояние транзиентное, сбрасывается при открытии файла; A-B сохраняет приоритет над whole-file Loop Playback и
+inert для reverse/HLS-live. Engine/WPF/Core/config/package не менялись. Focused GREEN **19 total: 18 passed, один
+env-gated real-engine skip, 0 failed**; compiled RED 14 failed / 2 stub-trivial passes из 16; отдельные review-fix RED —
+по 1 failed (старый B и гонка playhead). Полные WPF (1440/0 skipped) и Windows Avalonia (engine 1622/13 skipped,
+UI 703/1 skipped) gates, 53 offline package fixtures и локальный publisher/content/CRC (ZIP 180 417 579 bytes,
+SHA-256 `6f2abddf…`) — **PASS**, actual exit 0; real-engine A-B integration выполнен внутри Windows Avalonia gate.
+Linux локально **NOT_RUN**; published-source CI, merge и exact-main delivery — **PENDING** на этом checkpoint.
+Native GUI/DPI/audible A-B приёмка — **NOT_RUN / DEFERRED BY OWNER**. Waveform-половина F-12, персист A/B и редактор
+хоткеев — вне этапа; полный F-13 parity и следующий продуктовый этап не заявлены.
+[Статус блока и receipts](f13-status-2026-10-18.md#bounded-a-b-repeat-parity-f-12).
 Предыдущий font checkpoint `37fbe776e556e26ce6e55fb841ebedf7637c8a2a` сохраняет свои receipts и исторические 19 полей; прежние position/outline/text-color milestones не переписываются. PR № 173 Linux first-cue attempt 1 **FAILURE** и один unchanged-main full diagnostic retry **SUCCESS** сохраняют **UNKNOWN** причину, отдельно от recognition timeout PR № 172 и audio observation PR № 170; исправление queue/timeout/audio не заявлено. Новая native GUI/exact-desktop/glyph/DPI-приёмка — **NOT_RUN / DEFERRED BY OWNER**, без Computer Use, запуска приложения/launcher, WSL или model/provider runs. Sidebar/bitmap/Core/engine/native dependencies сохраняют контракты; полный F-13 parity и следующий продуктовый этап не заявлены.
 Полный Linux/WPF parity остаётся открытым; сохранять WPF и его gates до приёмки замены.
 
@@ -1382,7 +1399,7 @@ Focused GREEN: **133 passed, 0 failed/skipped**. Чистый intentional Settin
 > Историческая пометка: на 2026-07-01 (v0.3.38) живыми считались T-03/F-03/F-16/F-13/F-02-full;
 > `T-10` и `F-15` уже были DONE. Текущий выбор работы определяется только активной таблицей выше.
 
-## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-10-19 / F-13 active)
+## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-10-24 / F-13 active)
 
 Активный крупный трек — `F-13`; общий Windows/Linux Avalonia build/package baseline реализован. Локальные
 WPF/Windows Avalonia gates, ZIP и ограниченный dark/light native smoke прошли. Published source candidate
