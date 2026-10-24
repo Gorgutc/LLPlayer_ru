@@ -1358,6 +1358,29 @@ Linux локально **NOT_RUN**; published-source CI, merge и exact-main del
 Native GUI/DPI/audible A-B приёмка — **NOT_RUN / DEFERRED BY OWNER**. Waveform-половина F-12, персист A/B и редактор
 хоткеев — вне этапа; полный F-13 parity и следующий продуктовый этап не заявлены.
 [Статус блока и receipts](f13-status-2026-10-18.md#bounded-a-b-repeat-parity-f-12).
+**2026-10-24 owner-approved bitmap/separator/alignment follow-up — IMPLEMENTED (local checkpoint, ветка `codex/f13-bitmap-subtitle-layout`).**
+Product `8d8d7049888597d253fd7a3824316de3946efd57` дополняет WPF `Subtitles > Position / Size` в общем
+Windows/Linux Avalonia-транспорте: четыре additive-настройки `SubtitleSeparatorMaxWidth` (0–2000 DIP, default 280),
+`SubtitleSeparatorOpacityPercent` (0–100, default 30), `SubtitlePositionAlignment` и
+`SubtitlePositionAlignmentWhenDual` (Top/Center/Bottom); Settings владеет **31 полем**. Separator — реальная
+отрисованная центрированная линия (stretch + MaxWidth) высотой `SubtitlePrimarySecondaryDistance`: primary не
+смещается, линия видна только при secondary-cue, non-hit-testing; дефолтный dual-вид получает WPF-линию 280/30 %,
+single-вид и раскладка прежние. Блок якорится краем/центром на утверждённой DIP-дистанции (Bottom = прежний вид;
+Center/Top сдвигают нижний margin, guard не даёт уйти ниже viewport и fullscreen transport clearance; dual
+выбирается по загруженным слотам, включая ASR, как в WPF, а не по текущему cue). Bitmap scale/position — live
+engine session state (`SubsBitmapPosition`), применяются на Save, не персистятся и сбрасываются при открытии медиа;
+`FlyleafPlaybackController.ToImage` пересчитывает геометрию в video coordinates через `BitmapSubtitleGeometry`.
+Engine/WPF/Core/package не менялись; WPF percentage/fix-overflow/IsAbsolute/inline bitmap split, DPI/native pixel
+acceptance и полный F-13 parity — вне этапа. История: checkpoint `0d6644d` прошёл гейты, но review-round нашёл
+нулевую ширину separator и инвертированный anchor; исправлено, round2 PASS, затем закрыты MINOR (ASR slot
+re-raise, fullscreen guard, dead notifications) в `8d8d704` с перезапуском FINAL3-гейтов. Compiled RED: **23 total,
+18 failed, 5 passed**; bitmap suite 29/29, affected 136/136, regression 175/175. Полные WPF (1440/0 skipped) и
+Windows Avalonia (engine 1622/13 skipped, UI 806/1 skipped, 807) gates, 53 package fixtures и publisher/content/CRC
+(ZIP 180 434 940 bytes, SHA-256 `d7f8424c…`) — **PASS**, actual exit 0. Linux локально **NOT_RUN**; published-source
+CI, merge и exact-main delivery — **PENDING**. Native GUI/DPI приёмка — **NOT_RUN / DEFERRED BY OWNER**. Полный F-13
+parity и следующий этап не заявлены.
+[Статус блока и receipts](f13-status-2026-10-18.md#bounded-bitmap-subtitle-layout-dual-separator-and-block-alignment-position--size-remainder).
+
 **2026-10-24 owner-approved text-layout design transfer — IMPLEMENTED (local checkpoint, ветка `codex/f13-subtitle-layout`).**
 Product `baa6dc162e2a7363e55a1217224a1c4b585e0054` адаптирует текстовую половину WPF `Subtitles > Position / Size`
 в общий Windows/Linux Avalonia транспорт; горизонтальное выравнивание строк — additive Avalonia-расширение (в WPF

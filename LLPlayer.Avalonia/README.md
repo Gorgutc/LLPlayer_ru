@@ -129,6 +129,15 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
   the dual separator remain separate work. Review-fix 105/105 and the final full WPF/Windows Avalonia (UI 777 passed/one skipped, 778),
   package-contract, regression and local publish checks passed at product `baa6dc1`; Linux CI and native desktop
   acceptance are separate.
+- Bitmap subtitles, dual separator and block alignment (rest of WPF Position / Size): Settings adds a rendered
+  separator max width/opacity, a Top/Center/Bottom block anchor (single and dual; Avalonia adapts it to its approved
+  DIP bottom model with a viewport/transport-clearance guard, and dual is selected by loaded slots — including ASR —
+  like WPF) and live engine bitmap scale/position (session-only, reset when media opens). Bitmap cues now apply the
+  engine's position/scale rules in video coordinates; the dual separator is non-hit-testing, supplies the existing
+  primary/secondary gap and adds the WPF 280-DIP/30 % line while single-subtitle layout is unchanged. Four additive
+  `AppPrefs` values raise Settings ownership to 31 fields; engine/WPF/Core are unchanged. Bitmap suite 29/29, affected
+  136/136, regression 175/175 and the full WPF/Windows Avalonia, package-contract and local publish checks passed at
+  product `8d8d704`; Linux CI and native DPI/bitmap acceptance are separate.
 - Menus: Media (open media / subtitles, recent, exit), Playback, Subtitles (primary + secondary track for embedded and
   external tracks, size, position, copy), Translation (word/sentence providers and primary/secondary sentence toggles), View (sidebar, search, fullscreen, dark/light theme, Settings…), Help (shortcuts).
 - Words ▸ Word Manager opens a singleton list. Filter the five saved-word fields; select a row to edit Reading,
