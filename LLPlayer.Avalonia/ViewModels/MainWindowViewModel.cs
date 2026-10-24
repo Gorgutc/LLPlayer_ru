@@ -71,6 +71,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         WordPopup = new WordPopupViewModel(translator, text => shell.SetClipboardText(text));
         WordPopup.OpenSettings = ShowTranslation;
         InvalidateTranslation = () => { WordPopup.Invalidate(); (translator as FlyleafWordTranslator)?.Invalidate(); };
+
+        // F-12 waveform: restore the persisted toggle and apply it to the engine before the first media open, so the
+        // OFF default performs no audio decode work. Peaks are engine-owned and transient (reset on open).
+        ShowWaveform = prefs.ShowWaveform;
+        player.WaveformEnabled = ShowWaveform;
+        WaveformPeaks = player.WaveformPeaks;
+        WaveformActive = player.WaveformActive;
         Shortcuts = new AppShortcutMap(new Dictionary<string, Action>
         {
             [AppShortcutMap.ToggleSidebar] = ToggleSidebar,
@@ -473,6 +480,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // ---- A-B repeat (F-12 parity) ------------------------------------------------------------------------------
 
     public const string AbLoopToastTitle = "A-B repeat";
+
+    /// <summary>F-12 waveform overlay requested by the user; persisted as <see cref="AppPrefs.ShowWaveform"/>.</summary>
+    public bool ShowWaveform { get; private set; }
+    /// <summary>Engine-owned peaks of the current file (null while off/not built).</summary>
+    public float[]? WaveformPeaks { get; private set; }
+    public bool WaveformActive { get; private set; }
+
+    [RelayCommand]
+    public void ToggleWaveform()
+    {
+        ShowWaveform = !ShowWaveform;
+        player.WaveformEnabled = ShowWaveform;
+        prefs.ShowWaveform = ShowWaveform;
+        OnPropertyChanged(nameof(ShowWaveform));
+        SavePrefs();
+    }
 
     /// <summary>At least one A-B point is set: the seek-bar markers are shown and the button is lit.</summary>
     public bool AbLoopActive => player.ABLoopActive;
@@ -1077,8 +1100,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case nameof(IPlaybackController.Speed):
                 RebuildSpeedItems();
                 break;
-            // F-12 A-B repeat: the engine re-raises all six properties (commands, bound hotkeys, reset on open); the
-            // markers/button/lit state read the same engine values.
+            // F-12 waveform: the engine raises Peaks and Active separately; mirror each notification 1:1 (the overlay
+            // visibility binds to WaveformActive, like WPF). Peaks also refresh the cached active flag silently.
+            case nameof(IPlaybackController.WaveformPeaks):
+                WaveformPeaks = player.WaveformPeaks;
+                WaveformActive = player.WaveformActive;
+                OnPropertyChanged(nameof(WaveformPeaks));
+                break;
+            case nameof(IPlaybackController.WaveformActive):
+                WaveformActive = player.WaveformActive;
+                OnPropertyChanged(nameof(WaveformActive));
+                break;
             case nameof(IPlaybackController.ABLoopA):
             case nameof(IPlaybackController.ABLoopB):
             case nameof(IPlaybackController.HasABLoopA):

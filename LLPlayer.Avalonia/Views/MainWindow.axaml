@@ -320,6 +320,10 @@
                 IsHitTestVisible="{Binding ControlsVisible}">
           <StackPanel Spacing="0">
             <Panel Margin="0,0,0,-4">
+              <!-- F-12 audio waveform: display-only envelope under the seek slider; paints nothing while off/unbuilt. -->
+              <c:WaveformEnvelope Name="WaveformEnvelope" Margin="6,0" IsHitTestVisible="False"
+                                  Peaks="{Binding WaveformPeaks}" IsVisible="{Binding WaveformActive}"
+                                  Fill="{DynamicResource Shadcn.PrimaryBrush}" Opacity="0.45" />
               <Slider Name="SeekSlider" Classes="thin" Minimum="0" Maximum="{Binding SeekMaximum}" Value="{Binding SeekValue}"
                       Focusable="False" IsEnabled="{Binding IsOpened}">
                 <Slider.Resources>
@@ -397,6 +401,18 @@
                                 Foreground="{DynamicResource Shadcn.PrimaryBrush}" />
                 </Panel>
               </Button>
+              <ToggleButton Name="WaveformButton" Classes="icon" IsChecked="{Binding ShowWaveform, Mode=OneWay}"
+                            Command="{Binding ToggleWaveformCommand}"
+                            AutomationProperties.Name="Show Waveform"
+                            AutomationProperties.HelpText="Show the audio waveform on the seek bar (decoded in the background)"
+                            ToolTip.Tip="Show audio waveform on the seek bar (decoded in the background)">
+                <Panel>
+                  <c:LucideIcon Data="{StaticResource Icon.AudioWaveform}" Size="18" IsVisible="{Binding !ShowWaveform}"
+                                Foreground="{DynamicResource Shadcn.MutedForegroundBrush}" />
+                  <c:LucideIcon Data="{StaticResource Icon.AudioWaveform}" Size="18" IsVisible="{Binding ShowWaveform}"
+                                Foreground="{DynamicResource Shadcn.PrimaryBrush}" />
+                </Panel>
+              </ToggleButton>
               <ToggleButton Classes="icon" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}"
                             Command="{Binding ToggleSubtitlesCommand}" ToolTip.Tip="Show subtitles (V)">
                 <c:LucideIcon Data="{StaticResource Icon.Captions}" Size="18" />

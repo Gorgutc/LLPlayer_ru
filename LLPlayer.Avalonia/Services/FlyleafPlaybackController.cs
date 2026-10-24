@@ -202,6 +202,15 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     public bool PrimarySlotEnabled => player.Subtitles[0].Enabled;
     public bool SecondarySlotEnabled => player.Subtitles[1].Enabled;
 
+    // F-12 audio waveform: the engine owns the peaks and the decode switch; this adapter only mirrors them.
+    public float[]? WaveformPeaks => player.WaveformPeaks;
+    public bool WaveformActive => player.WaveformActive;
+    public bool WaveformEnabled
+    {
+        get => player.WaveformEnabled;
+        set => player.WaveformEnabled = value;
+    }
+
     public bool PrimaryTranslationEnabled => player.Config.Subtitles[0].EnabledTranslated;
     public bool SecondaryTranslationEnabled => player.Config.Subtitles[1].EnabledTranslated;
     public Task ToggleTranslationAsync(int slot)
@@ -493,6 +502,13 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
             case nameof(Player.ABLoopEnabled):
             case nameof(Player.ABLoopActive):
                 Raise(name);
+                break;
+            // F-12 waveform: peaks arrive once per file build; Active flips with them (the engine raises both).
+            case nameof(Player.WaveformPeaks):
+                Raise(nameof(WaveformPeaks));
+                break;
+            case nameof(Player.WaveformActive):
+                Raise(nameof(WaveformActive));
                 break;
         }
     }

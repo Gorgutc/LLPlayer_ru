@@ -50,6 +50,39 @@ public class FakePlaybackController : IPlaybackController
     public double PrimaryBitmapPosition { get => primaryBitmapPosition; set => Set(ref primaryBitmapPosition, value); }
     public bool PrimarySlotEnabled { get; set => Set(ref field, value); }
     public bool SecondarySlotEnabled { get; set => Set(ref field, value); }
+
+    // F-12 waveform: engine-owned peaks and the master decode switch (persisted by the view model).
+    float[]? waveformPeaks;
+    public float[]? WaveformPeaks
+    {
+        get => waveformPeaks;
+        set
+        {
+            if (ReferenceEquals(waveformPeaks, value))
+                return;
+            waveformPeaks = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WaveformPeaks)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WaveformActive)));
+        }
+    }
+    public bool WaveformActive => waveformPeaks is not null;
+
+    // Engine parity: disabling the waveform clears the built peaks (WaveformEnabled=false => no overlay).
+    bool waveformEnabled;
+    public bool WaveformEnabled
+    {
+        get => waveformEnabled;
+        set
+        {
+            if (waveformEnabled == value)
+                return;
+            waveformEnabled = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(WaveformEnabled)));
+            if (!value)
+                WaveformPeaks = null;
+        }
+    }
+
     public int PrimaryCueIndex { get; set => Set(ref field, value); } = -1;
     public bool SubtitlesVisible { get; set => Set(ref field, value); } = true;
 

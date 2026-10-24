@@ -129,4 +129,20 @@ public interface IPlaybackController : INotifyPropertyChanged
     void ClearABLoop() { }
     /// <summary>Single-key cycle: no A → set A; A set / no B → set B; both set → clear.</summary>
     void ToggleABLoop() { }
+
+    // ---- F-12 audio waveform: engine-owned peaks and the off-by-default decode switch -------------------------------
+
+    /// <summary>Per-bucket 0..1 peaks of the currently opened file, or null while the waveform is off/not built.</summary>
+    float[]? WaveformPeaks => null;
+    /// <summary>True once the engine has built peaks for the current media; drives the overlay's visible state.</summary>
+    bool WaveformActive => false;
+    /// <summary>
+    /// Master switch: while false the engine must not decode audio for the waveform. Not transient: the view model
+    /// applies the persisted preference on startup and saves it when the user toggles the transport button.
+    /// </summary>
+    bool WaveformEnabled
+    {
+        get => false;
+        set { }
+    }
 }

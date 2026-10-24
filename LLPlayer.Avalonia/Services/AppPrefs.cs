@@ -98,6 +98,12 @@ public sealed class AppPrefs
     public string SubtitlePositionAlignmentWhenDual { get; set; } = DefaultSubtitlePositionAlignment;
     public bool SubtitlesVisible { get; set; } = true;
 
+    /// <summary>
+    /// F-12 waveform overlay in the transport seek bar. Off by default (like the WPF app), so no audio decode runs
+    /// and the engine keeps <c>WaveformEnabled=false</c> until the user asks for the envelope.
+    /// </summary>
+    public bool ShowWaveform { get; set; }
+
     public bool SidebarVisible { get; set; }
     public double SidebarWidth { get; set; } = 360;
 
