@@ -303,6 +303,21 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   No Computer Use, application/launcher launch, WSL or model/provider run is authorized by this row; headless and
   package checks do not close native GUI/DPI/audible acceptance. Evidence and pending gates:
   [the A-B checkpoint](f13-status-2026-10-18.md#bounded-a-b-repeat-parity-f-12).
+- **Text subtitle layout (WPF Position / Size text half, additive Avalonia line alignment), owner-approved 2026-10-24 —
+  native acceptance NOT_RUN / DEFERRED BY OWNER:** on each native Windows/Linux host, use the rebuilt package and an
+  isolated profile. With media open and both subtitle slots populated, edit width to 50 % and confirm the centered box
+  halves without touching the bottom offset; set a max width below the computed width and confirm the cap; resize the
+  window, toggle the sidebar and fullscreen and confirm the box never goes below 1 DIP and the vertical clearance
+  behavior is unchanged. Set alignment Left and Right (an additive Avalonia option; WPF stays centered) and confirm both
+  the drawn lines and clicked-word lookup follow; enable Ignore line breaks on a cue with hard breaks and confirm it
+  renders as one wrapped line with click targets aligned to the glyphs, and that a dash-list cue keeps its two lines
+  (canonical flatten semantics); set the primary/secondary distance and confirm the gap changes while each slot keeps its
+  own font/colors. Restart and confirm all five values; Close/Esc must discard edits, invalid raw width/max/distance must
+  block Save visibly, and a save failure must keep live/persisted state. Check 100 %/150 %/200 % DPI and the minimum
+  window. WPF's own Position / Size page, bitmap scale/position, the dual separator and a dual-specific alignment are
+  out of scope and must stay unchanged. No Computer Use or application launch is authorized by this row;
+  headless/package checks do not close native acceptance. Evidence:
+  [the layout checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-layout-wpf-position--size-text-half).
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
