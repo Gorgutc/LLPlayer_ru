@@ -129,6 +129,14 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
   the dual separator remain separate work. Review-fix 105/105 and the final full WPF/Windows Avalonia (UI 777 passed/one skipped, 778),
   package-contract, regression and local publish checks passed at product `baa6dc1`; Linux CI and native desktop
   acceptance are separate.
+- Audio waveform overlay (F-12 audio half): the transport bar draws the engine's peak envelope under the seek slider
+  with a persisted ShowWaveform toggle (default off, like WPF) next to the A-B button. OFF performs no audio decode;
+  disabling the toggle clears the engine peaks; peaks stay engine-owned and transient, and the display-only control
+  never hit-tests the slider and is visible only while peaks are active. Geometry mirrors WPF (one column per DIP,
+  auto-gain to the loudest bucket, symmetric fill, defensive sanitizing); no engine/WPF/Core change. The Settings hub
+  still edits 31 fields and the contract now owns 32 settings values (the file also keeps legacy keys). Waveform suite
+  12/12, regression 176/176 and the full WPF/Windows Avalonia, package-contract and local publish checks passed at
+  product `c7deb75`; Linux CI, hotkey rebinding and native DPI acceptance are separate.
 - Bitmap subtitles, dual separator and block alignment (rest of WPF Position / Size): Settings adds a rendered
   separator max width/opacity, a Top/Center/Bottom block anchor (single and dual; Avalonia adapts it to its approved
   DIP bottom model with a viewport/transport-clearance guard, and dual is selected by loaded slots — including ASR —
