@@ -112,6 +112,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => UpdateSubtitleLayout();
+        SubtitleOverlay.SizeChanged += (_, _) => UpdateSubtitleLayout();
         TransportBar.SizeChanged += (_, _) => UpdateSubtitleLayout();
         ContentGrid.SizeChanged += (_, _) => UpdateSidebarColumn();
         SidebarSplitter.SizeChanged += (_, _) => UpdateSidebarColumn();
@@ -300,14 +301,25 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         }
     }
 
-    /// <summary>Keeps the bottom clearance and the box width percent/max width on one UI geometry seam.</summary>
+    /// <summary>Keeps the bottom clearance, box width, separator gap and block-anchor alignment on one geometry seam.</summary>
     void UpdateSubtitleLayout()
     {
         if (vm == null)
             return;
 
         double extra = IsFullScreen && vm.ControlsVisible ? TransportBar.Bounds.Height : 0;
-        SubtitleOverlay.Margin = new Thickness(0, 0, 0, vm.SubtitleBottomOffset + extra);
+        // Center/Top reduce the margin by half/full height so that edge sits at the configured distance. WPF's
+        // percentage geometry allows off-screen overflow (with FixOverflowSubsPosition); the DIP model instead clamps
+        // the anchor, but never below the fullscreen transport clearance: exact while it fits, otherwise the block
+        // stops at the clearance/bottom edge without clipping.
+        double anchorShift = vm.EffectiveSubtitleVerticalAlignment switch
+        {
+            SubtitleVerticalAlignment.Center => -SubtitleOverlay.Bounds.Height / 2,
+            SubtitleVerticalAlignment.Top => -SubtitleOverlay.Bounds.Height,
+            _ => 0,
+        };
+        double bottom = Math.Max(extra, vm.SubtitleBottomOffset + extra + anchorShift);
+        SubtitleOverlay.Margin = new Thickness(0, 0, 0, bottom);
         SubtitleOverlay.Width = MainWindowViewModel.ComputeSubtitleBoxWidth(VideoHost.Bounds.Width, vm.SubtitleWidthPercent, vm.SubtitleMaxWidth);
     }
 
@@ -319,6 +331,11 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             case nameof(MainWindowViewModel.ControlsVisible):
             case nameof(MainWindowViewModel.SubtitleWidthPercent):
             case nameof(MainWindowViewModel.SubtitleMaxWidth):
+            case nameof(MainWindowViewModel.SubtitlePrimarySecondaryDistance):
+            case nameof(MainWindowViewModel.SubtitlePositionAlignment):
+            case nameof(MainWindowViewModel.SubtitlePositionAlignmentWhenDual):
+            case nameof(MainWindowViewModel.SecondaryVisible):
+            case nameof(MainWindowViewModel.EffectiveSubtitleVerticalAlignment):
                 UpdateSubtitleLayout();
                 break;
             case nameof(MainWindowViewModel.CursorHidden):

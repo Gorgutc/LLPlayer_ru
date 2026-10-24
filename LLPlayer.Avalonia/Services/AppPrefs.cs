@@ -37,6 +37,13 @@ public sealed class AppPrefs
     public const double MaxSubtitlePrimarySecondaryDistance = 200;
     public const double DefaultSubtitlePrimarySecondaryDistance = 2;
     public const string DefaultSubtitleLineAlignment = "Center";
+    public const double MinSubtitleSeparatorMaxWidth = 0;
+    public const double MaxSubtitleSeparatorMaxWidth = 2000;
+    public const double DefaultSubtitleSeparatorMaxWidth = 280;
+    public const int MinSubtitleSeparatorOpacityPercent = 0;
+    public const int MaxSubtitleSeparatorOpacityPercent = 100;
+    public const int DefaultSubtitleSeparatorOpacityPercent = 30;
+    public const string DefaultSubtitlePositionAlignment = "Bottom";
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -85,6 +92,10 @@ public sealed class AppPrefs
     public string SubtitleLineAlignment { get; set; } = DefaultSubtitleLineAlignment;
     /// <summary>Gap between the secondary and primary text lines in DIPs.</summary>
     public double SubtitlePrimarySecondaryDistance { get; set; } = DefaultSubtitlePrimarySecondaryDistance;
+    public double SubtitleSeparatorMaxWidth { get; set; } = DefaultSubtitleSeparatorMaxWidth;
+    public int SubtitleSeparatorOpacityPercent { get; set; } = DefaultSubtitleSeparatorOpacityPercent;
+    public string SubtitlePositionAlignment { get; set; } = DefaultSubtitlePositionAlignment;
+    public string SubtitlePositionAlignmentWhenDual { get; set; } = DefaultSubtitlePositionAlignment;
     public bool SubtitlesVisible { get; set; } = true;
 
     public bool SidebarVisible { get; set; }
@@ -141,6 +152,12 @@ public sealed class AppPrefs
             ? Math.Clamp(SubtitlePrimarySecondaryDistance, MinSubtitlePrimarySecondaryDistance, MaxSubtitlePrimarySecondaryDistance)
             : DefaultSubtitlePrimarySecondaryDistance;
         SubtitleLineAlignment = TryNormalizeSubtitleLineAlignment(SubtitleLineAlignment, out string alignment) ? alignment : DefaultSubtitleLineAlignment;
+        SubtitleSeparatorMaxWidth = double.IsFinite(SubtitleSeparatorMaxWidth)
+            ? Math.Clamp(SubtitleSeparatorMaxWidth, MinSubtitleSeparatorMaxWidth, MaxSubtitleSeparatorMaxWidth)
+            : DefaultSubtitleSeparatorMaxWidth;
+        SubtitleSeparatorOpacityPercent = Math.Clamp(SubtitleSeparatorOpacityPercent, MinSubtitleSeparatorOpacityPercent, MaxSubtitleSeparatorOpacityPercent);
+        SubtitlePositionAlignment = TryNormalizeSubtitlePositionAlignment(SubtitlePositionAlignment, out string positionAlignment) ? positionAlignment : DefaultSubtitlePositionAlignment;
+        SubtitlePositionAlignmentWhenDual = TryNormalizeSubtitlePositionAlignment(SubtitlePositionAlignmentWhenDual, out string dualAlignment) ? dualAlignment : DefaultSubtitlePositionAlignment;
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
@@ -196,6 +213,20 @@ public sealed class AppPrefs
         normalized = "";
         string? value = raw?.Trim();
         foreach (string supported in SubtitleLayoutOptions.LineAlignments)
+            if (string.Equals(value, supported, StringComparison.OrdinalIgnoreCase))
+            {
+                normalized = supported;
+                return true;
+            }
+        return false;
+    }
+
+    /// <summary>Accepts the supported vertical block alignments, ignoring surrounding whitespace.</summary>
+    public static bool TryNormalizeSubtitlePositionAlignment(string? raw, out string normalized)
+    {
+        normalized = "";
+        string? value = raw?.Trim();
+        foreach (string supported in SubtitleLayoutOptions.PositionAlignments)
             if (string.Equals(value, supported, StringComparison.OrdinalIgnoreCase))
             {
                 normalized = supported;

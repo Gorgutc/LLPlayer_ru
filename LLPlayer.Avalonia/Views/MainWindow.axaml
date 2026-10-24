@@ -203,12 +203,14 @@
           <c:SubtitleImageView Name="PrimaryImageView" IsVisible="{Binding SubtitlesVisible}" Image="{Binding PrimaryImage}" Video="{Binding #Video}" />
           <c:SubtitleImageView Name="SecondaryImageView" IsVisible="{Binding SubtitlesVisible}" Image="{Binding SecondaryImage}" Video="{Binding #Video}" />
 
-          <!-- dual subtitle overlay: secondary above primary; box width/distance/alignment follow the layout prefs -->
-          <StackPanel Name="SubtitleOverlay" VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                      Spacing="{Binding SubtitlePrimarySecondaryDistance}" Margin="0,0,0,24">
+          <!-- dual subtitle overlay: secondary above primary; the separator supplies the primary/secondary gap when dual -->
+          <StackPanel Name="SubtitleOverlay" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24">
             <c:SubtitleText Name="SecondarySubtitle" IsTranslated="{Binding SecondaryTextTranslated}" Slot="1" Text="{Binding SecondaryText}" IsVisible="{Binding SecondaryVisible}"
                             TextAlignment="{Binding SubtitleTextAlignment}" IgnoreLineBreaks="{Binding SubtitleIgnoreLineBreak}"
                             FontSize="{Binding SecondaryFontSize}" FontFamily="{Binding SecondarySubtitleFontFamily}" FontWeight="{Binding SecondarySubtitleFontWeight}" FontStyle="{Binding SecondarySubtitleFontStyle}" Fill="{Binding SecondarySubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SecondarySubtitleOutlineThickness}" Background="{Binding SecondarySubtitleBackgroundBrush}" />
+            <Border Name="SubtitleSeparator" IsVisible="{Binding SecondaryVisible}" Height="{Binding SubtitlePrimarySecondaryDistance}"
+                    MaxWidth="{Binding SubtitleSeparatorMaxWidth}" Opacity="{Binding SubtitleSeparatorOpacity}"
+                    Background="White" IsHitTestVisible="False" />
             <c:SubtitleText Name="PrimarySubtitle" IsTranslated="{Binding PrimaryTextTranslated}" Slot="0" Text="{Binding PrimaryText}" IsVisible="{Binding PrimaryVisible}"
                             TextAlignment="{Binding SubtitleTextAlignment}" IgnoreLineBreaks="{Binding SubtitleIgnoreLineBreak}"
                             FontSize="{Binding SubtitleFontSize}" FontFamily="{Binding SubtitleFontFamily}" FontWeight="{Binding SubtitleFontWeight}" FontStyle="{Binding SubtitleFontStyle}" Fill="{Binding SubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SubtitleOutlineThickness}" Background="{Binding SubtitleBackgroundBrush}" />

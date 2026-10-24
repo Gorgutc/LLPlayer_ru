@@ -1,4 +1,4 @@
-using FlyleafLib.MediaPlayer.Translation;
+﻿using FlyleafLib.MediaPlayer.Translation;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using FlyleafLib;
@@ -24,7 +24,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     readonly IUIDispatcher? ui;
     readonly CollectionSyncBridge bridge;
     readonly IDisposable?[] cueWatchers = new IDisposable?[2];
-    readonly PropertyChangedEventHandler playerChanged, audioChanged, primaryDataChanged, secondaryDataChanged, primaryManagerChanged, secondaryManagerChanged, recognitionSlotChanged, subConfigChanged;
+    readonly PropertyChangedEventHandler playerChanged, audioChanged, primaryDataChanged, secondaryDataChanged, primaryManagerChanged, secondaryManagerChanged, recognitionSlotChanged, subConfigChanged, primaryBitmapPositionChanged, secondaryBitmapPositionChanged;
     readonly HashSet<SubtitleData>[] observedCues = [[], []];
     readonly int[] cueNotificationPending = new int[2];
     readonly PropertyChangedEventHandler[] cueChanged = new PropertyChangedEventHandler[2];
@@ -67,7 +67,13 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
             if (e.PropertyName == nameof(SubManager.IsLoading)) Raise(nameof(RecognitionStatus));
             if (e.PropertyName == nameof(SubManager.Language)) Raise("SubtitleLanguage");
         };
-        recognitionSlotChanged = (_, e) => { if (e.PropertyName == "EnabledASR") Raise(nameof(RecognitionStatus)); };
+        recognitionSlotChanged = (sender, e) =>
+        {
+            if (e.PropertyName == nameof(Subtitle.EnabledASR)) Raise(nameof(RecognitionStatus));
+            // Subtitle.Enabled = IsOpened || EnabledASR; ASR subtitles also make a slot "loaded" for the dual anchor.
+            if (e.PropertyName is nameof(Subtitle.IsOpened) or nameof(Subtitle.EnabledASR))
+                Raise(ReferenceEquals(sender, player.Subtitles[0]) ? nameof(PrimarySlotEnabled) : nameof(SecondarySlotEnabled));
+        };
         subConfigChanged = (_, e) =>
         {
             if (e.PropertyName == nameof(Config.SubConfig.EnabledTranslated))
@@ -80,6 +86,8 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
             if (e.PropertyName == nameof(Config.SubConfig.Visible))
                 Raise(nameof(SubtitlesVisible));
         };
+        primaryBitmapPositionChanged = (_, e) => OnBitmapPositionChanged(0, e.PropertyName);
+        secondaryBitmapPositionChanged = (_, e) => OnBitmapPositionChanged(1, e.PropertyName);
 
         player.PropertyChanged += playerChanged;
         player.Audio.PropertyChanged += audioChanged;
@@ -91,6 +99,8 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         player.Subtitles[1].PropertyChanged += recognitionSlotChanged;
         player.Config.Subtitles[0].PropertyChanged += subConfigChanged;
         player.Config.Subtitles[1].PropertyChanged += subConfigChanged;
+        player.Subtitles[0].Data.BitmapPosition.PropertyChanged += primaryBitmapPositionChanged;
+        player.Subtitles[1].Data.BitmapPosition.PropertyChanged += secondaryBitmapPositionChanged;
         player.OpenCompleted += OnOpenCompleted;
         player.Opening += OnOpening;
         player.KnownErrorOccurred += OnKnownError;
@@ -167,6 +177,30 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     public void SetABLoopEnd() => player.SetABLoopEnd();
     public void ClearABLoop() => player.ClearABLoop();
     public void ToggleABLoop() => player.ToggleABLoop();
+
+    // Bitmap subtitle layout: the engine owns ConfScale/ConfPos and clamps them; the adapter mirrors them for the
+    // settings draft. These are live session values (the engine resets them when media opens), not preferences.
+    public double PrimaryBitmapScale
+    {
+        get => player.Subtitles[0].Data.BitmapPosition.ConfScale;
+        set => player.Subtitles[0].Data.BitmapPosition.ConfScale = value;
+    }
+
+    public double SecondaryBitmapScale
+    {
+        get => player.Subtitles[1].Data.BitmapPosition.ConfScale;
+        set => player.Subtitles[1].Data.BitmapPosition.ConfScale = value;
+    }
+
+    public double PrimaryBitmapPosition
+    {
+        get => player.Subtitles[0].Data.BitmapPosition.ConfPos;
+        set => player.Subtitles[0].Data.BitmapPosition.ConfPos = value;
+    }
+
+    // WPF selects the dual block alignment from the loaded slots, not from the current cue text.
+    public bool PrimarySlotEnabled => player.Subtitles[0].Enabled;
+    public bool SecondarySlotEnabled => player.Subtitles[1].Enabled;
 
     public bool PrimaryTranslationEnabled => player.Config.Subtitles[0].EnabledTranslated;
     public bool SecondaryTranslationEnabled => player.Config.Subtitles[1].EnabledTranslated;
@@ -384,6 +418,8 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         player.Subtitles[1].PropertyChanged -= recognitionSlotChanged;
         player.Config.Subtitles[0].PropertyChanged -= subConfigChanged;
         player.Config.Subtitles[1].PropertyChanged -= subConfigChanged;
+        player.Subtitles[0].Data.BitmapPosition.PropertyChanged -= primaryBitmapPositionChanged;
+        player.Subtitles[1].Data.BitmapPosition.PropertyChanged -= secondaryBitmapPositionChanged;
         for (int slot = 0; slot < 2; slot++) foreach (var cue in observedCues[slot]) cue.PropertyChanged -= cueChanged[slot];
         player.OpenCompleted -= OnOpenCompleted;
         player.Opening -= OnOpening;
@@ -401,7 +437,31 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
             return null;
 
         SubManager manager = player.SubtitlesManager[slot];
-        return new SubtitleImage(bmp.Source, bmp.X, bmp.Y, bmp.Width, bmp.Height, manager.Width, manager.Height);
+        // Apply the engine's bitmap position/scale values (the WPF Position / Size page edits the same live state)
+        // in video coordinates; the host maps the resulting rectangle through the video destination rectangle.
+        SubsBitmapPosition position = player.Subtitles[slot].Data.BitmapPosition;
+        BitmapSubtitleGeometry geometry = BitmapSubtitleGeometry.Compute(
+            bmp.X, bmp.Y, bmp.Width, bmp.Height, manager.Width, manager.Height, position.ConfScale, position.ConfPos);
+        return new SubtitleImage(bmp.Source,
+            (int)Math.Round(geometry.X), (int)Math.Round(geometry.Y),
+            Math.Max(1, (int)Math.Round(geometry.Width)), Math.Max(1, (int)Math.Round(geometry.Height)),
+            manager.Width, manager.Height);
+    }
+
+    void OnBitmapPositionChanged(int slot, string? name)
+    {
+        if (name is not (nameof(SubsBitmapPosition.ConfScale) or nameof(SubsBitmapPosition.ConfPos)))
+            return;
+        Raise(slot == 0 ? nameof(PrimaryImage) : nameof(SecondaryImage));
+        if (slot == 0)
+        {
+            Raise(nameof(PrimaryBitmapScale));
+            Raise(nameof(PrimaryBitmapPosition));
+        }
+        else
+        {
+            Raise(nameof(SecondaryBitmapScale));
+        }
     }
 
     void OnPlayerChanged(string? name)

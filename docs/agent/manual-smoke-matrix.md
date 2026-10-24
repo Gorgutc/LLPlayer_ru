@@ -318,6 +318,23 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   out of scope and must stay unchanged. No Computer Use or application launch is authorized by this row;
   headless/package checks do not close native acceptance. Evidence:
   [the layout checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-layout-wpf-position--size-text-half).
+- **Bitmap subtitles, dual separator and block alignment (rest of Position / Size), owner-approved 2026-10-24 —
+  native acceptance NOT_RUN / DEFERRED BY OWNER:** use the rebuilt package and an isolated profile. Open a bitmap
+  subtitle track (PGS/VobSub) and set primary/secondary bitmap scale and primary bitmap position; confirm the drawn
+  cue scales around its centre and shifts vertically only for normal horizontal cues, and that values reset after
+  reopening media. With dual text subtitles confirm the rendered centred separator line appears only while the
+  secondary cue is displayed, its width/opacity follow Settings (default 280 DIP / 30 %), its height equals the
+  primary/secondary distance and the primary line does not move. Load both subtitle slots (regular track or ASR) and
+  switch block alignment Bottom/Center/Top for single and dual subtitles: the single anchor applies with one loaded
+  slot, the when-dual anchor as soon as both slots are loaded (no jump when a secondary cue appears), and the chosen
+  edge sits at the configured bottom distance while it fits; otherwise the block is guarded at the viewport bottom and,
+  in fullscreen with visible controls, above the transport clearance instead of clipping. Check Close/Esc discard,
+  invalid separator/alignment/bitmap input blocks Save, restart restores the four persisted fields while bitmap values
+  reset, and 100 %/150 %/200 % DPI plus the minimum window. WPF percentage geometry, fix-overflow margin and the
+  inline/absolute bitmap split remain out of scope and unchanged. No Computer Use or application launch is authorized
+  by this row. Evidence:
+  [the bitmap layout checkpoint](f13-status-2026-10-18.md#bounded-bitmap-subtitle-layout-dual-separator-and-block-alignment-position--size-remainder).
+
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open

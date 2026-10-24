@@ -102,6 +102,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SubtitleIgnoreLineBreak = prefs.SubtitleIgnoreLineBreak;
         SubtitleLineAlignment = prefs.SubtitleLineAlignment;
         SubtitlePrimarySecondaryDistance = prefs.SubtitlePrimarySecondaryDistance;
+        SubtitleSeparatorMaxWidth = prefs.SubtitleSeparatorMaxWidth;
+        SubtitleSeparatorOpacityPercent = prefs.SubtitleSeparatorOpacityPercent;
+        SubtitlePositionAlignment = prefs.SubtitlePositionAlignment;
+        SubtitlePositionAlignmentWhenDual = prefs.SubtitlePositionAlignmentWhenDual;
         SubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SubtitleTextColor, out string primaryColor) ? primaryColor : AppPrefs.DefaultSubtitleTextColor));
         SecondarySubtitleTextBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SecondarySubtitleTextColor, out string secondaryColor) ? secondaryColor : AppPrefs.DefaultSecondarySubtitleTextColor));
         SubtitleOutlineBrush = new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(prefs.SubtitleOutlineColor, out string outlineColor) ? outlineColor : AppPrefs.DefaultSubtitleOutlineColor));
@@ -151,7 +155,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     void ShowSettings() => shell.ShowSettings(CreateSettings());
 
-    public SettingsViewModel CreateSettings() => new(prefs, CommitSettings);
+    public SettingsViewModel CreateSettings() => new(prefs, CommitSettings,
+        new BitmapSubtitleRuntimeState(player.PrimaryBitmapScale, player.SecondaryBitmapScale, player.PrimaryBitmapPosition));
 
     void CommitSettings(SettingsViewModel draft)
     {
@@ -184,6 +189,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitleIgnoreLineBreak = draft.SubtitleIgnoreLineBreak;
         candidate.SubtitleLineAlignment = draft.SubtitleLineAlignment;
         candidate.SubtitlePrimarySecondaryDistance = draft.SubtitlePrimarySecondaryDistance;
+        candidate.SubtitleSeparatorMaxWidth = draft.SubtitleSeparatorMaxWidth;
+        candidate.SubtitleSeparatorOpacityPercent = draft.SubtitleSeparatorOpacityPercent;
+        candidate.SubtitlePositionAlignment = draft.SubtitlePositionAlignment;
+        candidate.SubtitlePositionAlignmentWhenDual = draft.SubtitlePositionAlignmentWhenDual;
         // Resolve font resources and parse brushes before persistence, so live application only assigns prepared values.
         SubtitleFontSelection primaryFont = fonts.Resolve(candidate.SubtitleFontFamily, candidate.SubtitleFontWeight, candidate.SubtitleFontStyle);
         SubtitleFontSelection secondaryFont = candidate.SecondarySubtitleInheritsFont ? primaryFont
@@ -229,6 +238,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SubtitleIgnoreLineBreak = candidate.SubtitleIgnoreLineBreak;
         prefs.SubtitleLineAlignment = candidate.SubtitleLineAlignment;
         prefs.SubtitlePrimarySecondaryDistance = candidate.SubtitlePrimarySecondaryDistance;
+        prefs.SubtitleSeparatorMaxWidth = candidate.SubtitleSeparatorMaxWidth;
+        prefs.SubtitleSeparatorOpacityPercent = candidate.SubtitleSeparatorOpacityPercent;
+        prefs.SubtitlePositionAlignment = candidate.SubtitlePositionAlignment;
+        prefs.SubtitlePositionAlignmentWhenDual = candidate.SubtitlePositionAlignmentWhenDual;
         SubtitleFontSize = candidate.SubtitleFontSize;
         SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
@@ -238,6 +251,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SubtitleIgnoreLineBreak = candidate.SubtitleIgnoreLineBreak;
         SubtitleLineAlignment = candidate.SubtitleLineAlignment;
         SubtitlePrimarySecondaryDistance = candidate.SubtitlePrimarySecondaryDistance;
+        SubtitleSeparatorMaxWidth = candidate.SubtitleSeparatorMaxWidth;
+        SubtitleSeparatorOpacityPercent = candidate.SubtitleSeparatorOpacityPercent;
+        SubtitlePositionAlignment = candidate.SubtitlePositionAlignment;
+        SubtitlePositionAlignmentWhenDual = candidate.SubtitlePositionAlignmentWhenDual;
+        // Bitmap scale/position are live session state (WPF Position / Size edits the same engine values); Save applies
+        // them to the engine but never writes them to AppPrefs.
+        player.PrimaryBitmapScale = draft.PrimaryBitmapScale;
+        player.SecondaryBitmapScale = draft.SecondaryBitmapScale;
+        player.PrimaryBitmapPosition = draft.PrimaryBitmapPosition;
         SubtitleTextBrush = primaryBrush;
         SecondarySubtitleTextBrush = secondaryBrush;
         SubtitleOutlineBrush = outlineBrush;
@@ -380,10 +402,35 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool SubtitleIgnoreLineBreak { get; private set; }
     [ObservableProperty] public partial string SubtitleLineAlignment { get; private set; } = AppPrefs.DefaultSubtitleLineAlignment;
     [ObservableProperty] public partial double SubtitlePrimarySecondaryDistance { get; private set; } = AppPrefs.DefaultSubtitlePrimarySecondaryDistance;
+    [ObservableProperty] public partial double SubtitleSeparatorMaxWidth { get; private set; } = AppPrefs.DefaultSubtitleSeparatorMaxWidth;
+    [ObservableProperty] public partial int SubtitleSeparatorOpacityPercent { get; private set; } = AppPrefs.DefaultSubtitleSeparatorOpacityPercent;
+    [ObservableProperty] public partial string SubtitlePositionAlignment { get; private set; } = AppPrefs.DefaultSubtitlePositionAlignment;
+    [ObservableProperty] public partial string SubtitlePositionAlignmentWhenDual { get; private set; } = AppPrefs.DefaultSubtitlePositionAlignment;
+    public double SubtitleSeparatorOpacity => SubtitleSeparatorOpacityPercent / 100d;
+
+    // WPF selects the dual block alignment when both subtitle slots have a loaded track, not per displayed cue, so the
+    // block does not jump between single and dual anchors whenever the secondary cue changes.
+    [ObservableProperty] public partial bool PrimarySlotEnabled { get; private set; }
+    [ObservableProperty] public partial bool SecondarySlotEnabled { get; private set; }
+    public bool SubtitleDualLayoutActive => PrimarySlotEnabled && SecondarySlotEnabled;
 
     public TextAlignment SubtitleTextAlignment => SubtitleLayoutOptions.ToTextAlignment(SubtitleLineAlignment);
 
+    /// <summary>Which edge of the text block is anchored at the configured bottom distance.</summary>
+    public SubtitleVerticalAlignment EffectiveSubtitleVerticalAlignment
+        => SubtitleLayoutOptions.ToVerticalAlignment(SubtitleDualLayoutActive ? SubtitlePositionAlignmentWhenDual : SubtitlePositionAlignment);
+
     partial void OnSubtitleLineAlignmentChanged(string value) => OnPropertyChanged(nameof(SubtitleTextAlignment));
+    partial void OnSubtitlePositionAlignmentChanged(string value) => OnPropertyChanged(nameof(EffectiveSubtitleVerticalAlignment));
+    partial void OnSubtitlePositionAlignmentWhenDualChanged(string value) => OnPropertyChanged(nameof(EffectiveSubtitleVerticalAlignment));
+    partial void OnSubtitleSeparatorOpacityPercentChanged(int value) => OnPropertyChanged(nameof(SubtitleSeparatorOpacity));
+    partial void OnPrimarySlotEnabledChanged(bool value) => OnDualLayoutChanged();
+    partial void OnSecondarySlotEnabledChanged(bool value) => OnDualLayoutChanged();
+    void OnDualLayoutChanged()
+    {
+        OnPropertyChanged(nameof(SubtitleDualLayoutActive));
+        OnPropertyChanged(nameof(EffectiveSubtitleVerticalAlignment));
+    }
 
     // The box uses the approved 48-DIP side margins, then the requested percentage of that padded width, capped by an
     // optional max width (0 = no cap). A squeezed window never yields a zero/negative box.
@@ -1045,6 +1092,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case nameof(IPlaybackController.SubtitlesVisible):
                 SyncSubtitles();
                 break;
+            case nameof(IPlaybackController.PrimarySlotEnabled):
+                PrimarySlotEnabled = player.PrimarySlotEnabled;
+                break;
+            case nameof(IPlaybackController.SecondarySlotEnabled):
+                SecondarySlotEnabled = player.SecondarySlotEnabled;
+                break;
             case nameof(IPlaybackController.PrimaryImage):
                 PrimaryImage = player.PrimaryImage;
                 break;
@@ -1143,5 +1196,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SecondaryText = player.SecondaryText;
         PrimaryVisible = SubtitlesVisible && !string.IsNullOrWhiteSpace(PrimaryText);
         SecondaryVisible = SubtitlesVisible && !string.IsNullOrWhiteSpace(SecondaryText);
+        PrimarySlotEnabled = player.PrimarySlotEnabled;
+        SecondarySlotEnabled = player.SecondarySlotEnabled;
     }
 }
