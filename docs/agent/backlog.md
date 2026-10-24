@@ -1341,6 +1341,28 @@ published source candidate `93c5e31` прошёл Windows/Linux CI и неза�
 [PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168). Последующие docs/merge checks фиксируются в PR timeline.
 Предыдущий одобренный шаг от 2026-10-19 — общий фон primary/secondary текстовых overlay — **IMPLEMENTED** на product `558e4c5eb730eba27633559a57256a471e6aa46c`. Три preferences добавляют общий RGB `#000000` и независимые целые проценты непрозрачности `0/0`; Settings теперь владеет **22 полями**, включая прежние 19. Raw RGB/percent editors, Reset Background только трёх полей и detached font-and-background preview сохраняют транзакцию fresh merge/resolve → persist → live apply. Компактный фон объединяет centered line boxes с существующим outline pad; custom draw `HitTest=false` сохраняет actual input, popup/fullscreen и геометрию текста. Наследование шрифта не связывает непрозрачности; это отдельная адаптация WPF без изменения WPF behavior. [Статус блока и точные receipts](f13-status-2026-10-18.md#bounded-text-subtitle-background).
 Focused GREEN: **133 passed, 0 failed/skipped**. Чистый intentional Settings/render RED: 123 failures и один pixel-oracle pass; отдельный чистый input RED не заявлен. Первый focused product run содержал две диагностированные ошибки inter-line fixture при outline 8; bubbling event oracle исправлен отдельно, итоговый actual-input GREEN получен после исправлений тестов. Полные WPF/Windows Avalonia gates, 53 offline package fixtures и локальный publisher/content/CRC **PASS**, actual exit 0. Итоговый девятифайловый product `/review` и domain reviews: **0 Critical / 0 Important**, использованы все десять ролей. Независимый QA-package review — **PASS, 0 Critical / 0 Important**; docs/handoff review ещё **PENDING на локальном checkpoint**. Локальный ZIP собран до app commit из базы плюс reviewed edits и не служит exact-main delivery. Linux локально **NOT_RUN**; public candidate/main Windows/Linux CI, merge и exact-main delivery/readback **PENDING** на этом checkpoint. WPF `ship.ps1` **NOT_RUN**, WPF packaging unchanged.
+**2026-10-24 owner-approved waveform half of F-12 — IMPLEMENTED (local checkpoint, ветка `codex/f13-waveform`).**
+Product `c7deb751547e86e6eab05ffa23e1072b15193743` (8 app + 2 test files) выводит аудио-волну поверх seek bar
+общего Avalonia-транспорта. `AppPrefs.ShowWaveform` (bool, default `false`, как в WPF) — transport-only тумблер:
+контрактно-owned значений теперь 32 (31 поле Settings hub + этот тумблер); `AppPrefs` дополнительно сериализует
+legacy/unowned поля (volume, mute, recents, last folder и т.п.), поэтому в JSON-файле ключей больше. На старте VM
+применяет `WaveformEnabled` из preference, на каждый toggle сохраняет её и включает/выключает engine decode; OFF по
+умолчанию не запускает декод и не даёт peaks, а выключение очищает peaks (engine parity). Adapter зеркалит три
+engine-свойства и форвардит нотификации Peaks/Active 1:1 (`WaveformEnabled` — pass-through без форварда); peaks
+транзиентны и сбрасываются при открытии файла. Control `WaveformEnvelope` — display-only, не hit-test'ит, видим только
+при активных peaks (как WPF `WaveformActive`), рисует ту же симметричную auto-gain геометрию, что WPF-конвертер
+(колонка на DIP, max-within-column, gain 0.95, 5 % headroom; тишина → центр; non-finite/out-of-range peaks
+санитизируются). Транспорт получает кнопку-тумблер (Lucide `audio-lines`, accessibility name/help) рядом с A-B;
+envelope лежит под seek slider и **под** A-B markers (маркеры остаются сверху). Engine/WPF/Core/package не менялись;
+WPF `FlyleafBar`/конвертер, waveform-colors, per-channel режимы, hotkey persistence (отдельный блок), env-gated
+real-engine тест, DPI/native pixel acceptance — вне этапа. Compiled RED: **9 total, 6 failed, 3 passed**; focused
+GREEN 12/12 (после review-фиксов); FINAL5-гейты: WPF 1440/0 skipped, engine 1622/13 skipped, UI 818/1 skipped (819),
+regression 176, package 53 + readback 38, publish ZIP 180 438 298 bytes `7aa71776…`, fast exit 0 — все **PASS**,
+actual exit 0. Отдельный review-round нашёл docs FAIL и потерю BOM у `MainWindow.axaml`; BOM восстановлен,
+формулировки сужены, FINAL5 перегнан на финальном `c7deb75`. Linux локально **NOT_RUN**; published-source CI, merge и
+exact-main delivery — **PENDING**. Native GUI/DPI приёмка — **NOT_RUN / DEFERRED BY OWNER**.
+[Статус блока и receipts](f13-status-2026-10-18.md#bounded-audio-waveform-overlay-f-12-audio-half).
+
 **2026-10-24 owner-approved A-B repeat stage — IMPLEMENTED (local checkpoint, новая ветка `codex/f13-ab-repeat`; независимые reviews PASS после фиксов).**
 Product `075dd4e464e7cdc7d2c686fe49dec8794037d776` переносит WPF F-12 A-B repeat в общий Windows/Linux Avalonia
 транспорт: кнопка в player bar с циклом Set A → Set B → Clear, context-меню трёх явных действий, lit-иконка,

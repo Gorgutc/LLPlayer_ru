@@ -1,10 +1,11 @@
-<!--
+﻿<!--
   Lucide icons (ISC licence, https://lucide.dev, lucide-icons/lucide @ 66d8f9fc394b8530377e5f6112f0b8908ba01280) as
   24x24 stroke geometries (rect/circle/line elements converted to path data). Draw them with controls:LucideIcon
   (2-unit round-capped stroke, like the lucide-react default used by shadcn/ui). See THIRD-PARTY-NOTICES.md.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StreamGeometry x:Key="Icon.AudioWaveform">M2 10v3 M6 6v11 M10 3v18 M14 8v7 M18 5v13 M22 10v3</StreamGeometry>
   <StreamGeometry x:Key="Icon.Captions">M5,5 H19 A2,2 0 0 1 21,7 V17 A2,2 0 0 1 19,19 H5 A2,2 0 0 1 3,17 V7 A2,2 0 0 1 5,5 Z M7 15h4M15 15h2M7 11h2M13 11h4</StreamGeometry>
   <StreamGeometry x:Key="Icon.Check">M20 6 9 17l-5-5</StreamGeometry>
   <StreamGeometry x:Key="Icon.ChevronDown">M6 9 l6 6 6-6</StreamGeometry>

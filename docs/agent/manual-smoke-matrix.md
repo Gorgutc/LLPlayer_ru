@@ -318,6 +318,20 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   out of scope and must stay unchanged. No Computer Use or application launch is authorized by this row;
   headless/package checks do not close native acceptance. Evidence:
   [the layout checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-layout-wpf-position--size-text-half).
+- **Audio waveform overlay (F-12 audio half), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY
+  OWNER:** use the rebuilt package and an isolated profile. Open media with audio and confirm the waveform toggle sits
+  next to the A-B button, starts off, and toggling it on builds the envelope over the seek bar without moving the
+  slider thumb; peaks must appear over the whole file and the envelope must be symmetric around the centre line. Seek
+  by clicking/dragging the bar and confirm the slider still owns every pointer action (the envelope never blocks it),
+  A-B markers remain visible above the envelope, and the envelope respects the current theme/accent. Toggle it off and
+  confirm the overlay disappears and no further decode work is requested; toggle it on/off for a silent video and
+  confirm it collapses to the centre line; reopen another file and confirm the envelope rebuilds for the new media;
+  restart the app with the toggle on and confirm it is restored and the envelope builds on the next open. Check
+  Close/Esc isn't affected, windowed/fullscreen and 100 %/150 %/200 % DPI. WPF's own waveform, colours/per-channel
+  modes and hotkey rebinding are separate and unchanged. No Computer Use or application launch is authorized by this
+  row. Evidence:
+  [the waveform checkpoint](f13-status-2026-10-18.md#bounded-audio-waveform-overlay-f-12-audio-half).
+
 - **Bitmap subtitles, dual separator and block alignment (rest of Position / Size), owner-approved 2026-10-24 —
   native acceptance NOT_RUN / DEFERRED BY OWNER:** use the rebuilt package and an isolated profile. Open a bitmap
   subtitle track (PGS/VobSub) and set primary/secondary bitmap scale and primary bitmap position; confirm the drawn
