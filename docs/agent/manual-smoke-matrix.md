@@ -289,6 +289,20 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   No Computer Use, application/launcher launch, WSL or model/provider run is authorized by this row. Headless
   render/input tests and static package checks do not close native GUI/DPI/exact-desktop acceptance or full F-13
   parity. Evidence and pending gates are separate in [the background checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-background).
+- **A-B repeat (F-12 parity), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY OWNER:** on each
+  native Windows/Linux host, use the rebuilt package and an isolated profile. Open a media file and confirm the
+  transport's A-B button is enabled only with an open file. Left-click it: the first click sets A at the current
+  position (the icon lights and one marker appears on the seek bar); play forward, click again to set B (the second
+  marker and a translucent band between the points appear, and playback loops back to A when it reaches B, with audio
+  and subtitles in sync and no audible gap beyond the existing seek path). Click a third time to clear both points and
+  the band; the icon returns to its normal state. Right-click the button and exercise the explicit Set point A /
+  Set point B / Clear A-B items: with A set, Set point B at an earlier position must keep the previous B and report
+  the "B must be after A" message; Set point B alone (no A) is accepted but does not loop; and A moved past an
+  existing B drops that B. Confirm A-B takes priority over whole-file Loop Playback at end-of-file
+  and is inert during reverse playback and for HLS-live media; open another file and confirm both points drop.
+  No Computer Use, application/launcher launch, WSL or model/provider run is authorized by this row; headless and
+  package checks do not close native GUI/DPI/audible acceptance. Evidence and pending gates:
+  [the A-B checkpoint](f13-status-2026-10-18.md#bounded-a-b-repeat-parity-f-12).
 - **2026-10-18 follow-up:** local WPF/Windows Avalonia source gates, focused regressions, package contracts,
   ZIP validation/CRC readback and cumulative independent review passed. Published-source Windows/Linux CI
   is tracked in [PR #169](https://github.com/Gorgutc/LLPlayer_ru/pull/169). On the original main `f71ed59` Windows package, picker cancellation, Unicode/spaces media open
