@@ -89,4 +89,31 @@ public interface IPlaybackController : INotifyPropertyChanged
 
     /// <summary>ISO 639-1 language of a subtitle slot (null when unknown).</summary>
     string? GetSubtitleLanguage(int slot);
+
+    // ---- F-12 A-B repeat: transient runtime state shared by the WPF app and this one ---------------------------------
+    // The engine owns the truth table (both points set AND A < B => enabled; points reset when a new file opens) and
+    // raises PropertyChanged for all six properties below, so the view models only mirror it.
+
+    /// <summary>A-B repeat point A in 100ns ticks, or -1 when unset. Never persisted.</summary>
+    long ABLoopA => -1;
+    /// <summary>A-B repeat point B in 100ns ticks, or -1 when unset. Never persisted.</summary>
+    long ABLoopB => -1;
+    /// <summary>True when point A is set (drives the A marker).</summary>
+    bool HasABLoopA => false;
+    /// <summary>True when point B is set (drives the B marker).</summary>
+    bool HasABLoopB => false;
+    /// <summary>True when both points are set with A &lt; B and playback loops.</summary>
+    bool ABLoopEnabled => false;
+    /// <summary>True when at least one point is set (drives the seek-bar marker overlay visibility).</summary>
+    bool ABLoopActive => false;
+
+    /// <summary>Sets point A to the current position; drops B when it would no longer follow A.</summary>
+    void SetABLoopStart() { }
+    /// <summary>Sets point B to the current position; when A is set the position must fall after A, otherwise the
+    /// engine keeps any previously accepted B and reports the rejection. With A unset, B is accepted on its own.</summary>
+    void SetABLoopEnd() { }
+    /// <summary>Clears both points.</summary>
+    void ClearABLoop() { }
+    /// <summary>Single-key cycle: no A → set A; A set / no B → set B; both set → clear.</summary>
+    void ToggleABLoop() { }
 }

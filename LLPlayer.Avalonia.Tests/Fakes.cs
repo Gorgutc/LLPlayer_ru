@@ -47,6 +47,80 @@ public class FakePlaybackController : IPlaybackController
     public int PrimaryCueIndex { get; set => Set(ref field, value); } = -1;
     public bool SubtitlesVisible { get; set => Set(ref field, value); } = true;
 
+    // F-12 A-B repeat: the fake mirrors the engine truth table (both points set AND A < B => looping; the points are
+    // transient and drop when a new file opens). It deliberately does NOT repeat the engine's canPlay guard: the
+    // view-model guards are what the headless tests isolate (the engine-side guard is covered by FlyleafLibTests).
+    long abLoopA = -1, abLoopB = -1;
+    public long ABLoopA => abLoopA;
+    public long ABLoopB => abLoopB;
+    public bool HasABLoopA => abLoopA >= 0;
+    public bool HasABLoopB => abLoopB >= 0;
+    public bool ABLoopEnabled => HasABLoopA && HasABLoopB && abLoopA < abLoopB;
+    public bool ABLoopActive => HasABLoopA || HasABLoopB;
+    public List<string> AbLoopCalls { get; } = [];
+
+    /// <summary>Runs at the start of <see cref="SetABLoopEnd"/> so a test can move the playhead between the view
+    /// model's pre-sample and the engine call (the playback-advances-past-A race).</summary>
+    public Action? BeforeSetABLoopEnd { get; set; }
+
+    public void SetABLoopStart()
+    {
+        AbLoopCalls.Add("setA");
+        abLoopA = CurTime;
+        if (abLoopB >= 0 && abLoopB <= abLoopA)
+            abLoopB = -1;
+        RaiseAbLoopChanged();
+    }
+
+    public void SetABLoopEnd()
+    {
+        BeforeSetABLoopEnd?.Invoke();
+        AbLoopCalls.Add("setB");
+        if (abLoopA >= 0 && CurTime <= abLoopA)
+            return;
+        abLoopB = CurTime;
+        RaiseAbLoopChanged();
+    }
+
+    public void ClearABLoop()
+    {
+        if (!ABLoopActive)
+            return;
+        AbLoopCalls.Add("clear");
+        abLoopA = abLoopB = -1;
+        RaiseAbLoopChanged();
+    }
+
+    public void ToggleABLoop()
+    {
+        if (abLoopA < 0)
+            SetABLoopStart();
+        else if (abLoopB < 0)
+            SetABLoopEnd();
+        else
+            ClearABLoop();
+    }
+
+    /// <summary>Simulates the engine dropping the A-B points when a new file opens; the engine re-raises even when
+    /// the points were already unset, so this raises unconditionally.</summary>
+    public void ResetAbLoopForNewMedia()
+    {
+        abLoopA = abLoopB = -1;
+        RaiseAbLoopChanged();
+    }
+
+    void RaiseAbLoopChanged()
+    {
+        RaiseAb(nameof(ABLoopA));
+        RaiseAb(nameof(ABLoopB));
+        RaiseAb(nameof(HasABLoopA));
+        RaiseAb(nameof(HasABLoopB));
+        RaiseAb(nameof(ABLoopEnabled));
+        RaiseAb(nameof(ABLoopActive));
+    }
+
+    void RaiseAb(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
     public IReadOnlyList<CueInfo> GetCues(int slot) => [.. Cues[slot]];
     public IReadOnlyList<SubtitleTrack> GetSubtitleTracks() => [.. Tracks];
     public void SelectSubtitleTrack(int slot, SubtitleTrack? track) => SelectedTracks.Add((slot, track));

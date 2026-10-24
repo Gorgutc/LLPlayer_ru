@@ -315,16 +315,24 @@
         <Border Name="TransportBar" Grid.Row="1" Opacity="{Binding ControlsVisible, Converter={x:Static c:ViewConverters.BoolToOpacity}}"
                 IsHitTestVisible="{Binding ControlsVisible}">
           <StackPanel Spacing="0">
-            <Slider Name="SeekSlider" Classes="thin" Minimum="0" Maximum="{Binding SeekMaximum}" Value="{Binding SeekValue}"
-                    Focusable="False" IsEnabled="{Binding IsOpened}" Margin="0,0,0,-4">
-              <Slider.Resources>
-                <x:Double x:Key="SliderTrackThemeHeight">4</x:Double>
-                <x:Double x:Key="SliderHorizontalThumbWidth">12</x:Double>
-                <x:Double x:Key="SliderHorizontalThumbHeight">12</x:Double>
-                <CornerRadius x:Key="SliderThumbCornerRadius">6</CornerRadius>
-                <x:Double x:Key="SliderHorizontalHeight">20</x:Double>
-              </Slider.Resources>
-            </Slider>
+            <Panel Margin="0,0,0,-4">
+              <Slider Name="SeekSlider" Classes="thin" Minimum="0" Maximum="{Binding SeekMaximum}" Value="{Binding SeekValue}"
+                      Focusable="False" IsEnabled="{Binding IsOpened}">
+                <Slider.Resources>
+                  <x:Double x:Key="SliderTrackThemeHeight">4</x:Double>
+                  <x:Double x:Key="SliderHorizontalThumbWidth">12</x:Double>
+                  <x:Double x:Key="SliderHorizontalThumbHeight">12</x:Double>
+                  <CornerRadius x:Key="SliderThumbCornerRadius">6</CornerRadius>
+                  <x:Double x:Key="SliderHorizontalHeight">20</x:Double>
+                </Slider.Resources>
+              </Slider>
+              <!-- F-12 A-B repeat: markers + band overlay; never hit-tests, so the slider keeps owning all seeking. -->
+              <c:AbLoopMarkers Name="AbLoopMarkers" IsHitTestVisible="False" IsVisible="{Binding AbLoopActive}"
+                               Maximum="{Binding SeekMaximum}" ValueA="{Binding AbLoopStartSeconds}" ValueB="{Binding AbLoopEndSeconds}"
+                               Inset="6" LineThickness="2" BandOpacity="0.18"
+                               LineBrush="{DynamicResource Shadcn.PrimaryBrush}"
+                               BandBrush="{DynamicResource Shadcn.PrimaryBrush}" />
+            </Panel>
             <v:TransportPanel>
               <Button Name="PlayPauseButton" Classes="ghost icon" Command="{Binding TogglePlayPauseCommand}"
                       IsEnabled="{Binding IsOpened}" ToolTip.Tip="Play / Pause (Space)">
@@ -366,6 +374,25 @@
               <Slider Name="VolumeSlider" Width="96" Minimum="0" Maximum="{Binding VolumeMax}"
                       Value="{Binding Volume}" Focusable="False" VerticalAlignment="Center" Margin="0,0,8,0"
                       ToolTip.Tip="{Binding Volume, StringFormat='Volume {0}%'}" />
+              <!-- F-12 A-B repeat: left click cycles Set A -> Set B -> Clear; right click opens the explicit actions. -->
+              <Button Name="AbLoopButton" Classes="ghost icon" Command="{Binding ToggleAbLoopCommand}"
+                      IsEnabled="{Binding IsOpened}"
+                      AutomationProperties.Name="A-B Repeat"
+                      ToolTip.Tip="A-B Repeat — click to set A, then B (loops); click again to clear. Right-click for options">
+                <Button.ContextFlyout>
+                  <MenuFlyout Placement="Top">
+                    <MenuItem Header="Set point A" Command="{Binding SetAbLoopStartCommand}" IsEnabled="{Binding IsOpened}" />
+                    <MenuItem Header="Set point B" Command="{Binding SetAbLoopEndCommand}" IsEnabled="{Binding IsOpened}" />
+                    <MenuItem Header="Clear A-B" Command="{Binding ClearAbLoopCommand}" IsEnabled="{Binding AbLoopActive}" />
+                  </MenuFlyout>
+                </Button.ContextFlyout>
+                <Panel>
+                  <c:LucideIcon Name="AbLoopIconIdle" Data="{StaticResource Icon.Repeat}" Size="18" IsVisible="{Binding !AbLoopActive}"
+                                Foreground="{DynamicResource Shadcn.MutedForegroundBrush}" />
+                  <c:LucideIcon Name="AbLoopIconActive" Data="{StaticResource Icon.Repeat}" Size="18" IsVisible="{Binding AbLoopActive}"
+                                Foreground="{DynamicResource Shadcn.PrimaryBrush}" />
+                </Panel>
+              </Button>
               <ToggleButton Classes="icon" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}"
                             Command="{Binding ToggleSubtitlesCommand}" ToolTip.Tip="Show subtitles (V)">
                 <c:LucideIcon Data="{StaticResource Icon.Captions}" Size="18" />

@@ -22,6 +22,7 @@
   <StreamGeometry x:Key="Icon.PanelRight">M5,3 H19 A2,2 0 0 1 21,5 V19 A2,2 0 0 1 19,21 H5 A2,2 0 0 1 3,19 V5 A2,2 0 0 1 5,3 Z M15 3v18</StreamGeometry>
   <StreamGeometry x:Key="Icon.Pause">M15,3 H18 A1,1 0 0 1 19,4 V20 A1,1 0 0 1 18,21 H15 A1,1 0 0 1 14,20 V4 A1,1 0 0 1 15,3 Z M6,3 H9 A1,1 0 0 1 10,4 V20 A1,1 0 0 1 9,21 H6 A1,1 0 0 1 5,20 V4 A1,1 0 0 1 6,3 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.Play">M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z</StreamGeometry>
+  <StreamGeometry x:Key="Icon.Repeat">M17 2 l4 4 -4 4 M3 11 v-1 a4 4 0 0 1 4-4 h14 M7 22 l-4 -4 4-4 M21 13 v1 a4 4 0 0 1 -4 4 H3</StreamGeometry>
   <StreamGeometry x:Key="Icon.Search">M21 21 l-4.34-4.34 M3,11 A8,8 0 1 1 19,11 A8,8 0 1 1 3,11 Z</StreamGeometry>
   <StreamGeometry x:Key="Icon.SkipBack">M17.971 4.285A2 2 0 0 1 21 6v12a2 2 0 0 1-3.029 1.715l-9.997-5.998a2 2 0 0 1-.003-3.432z M3 20V4</StreamGeometry>
   <StreamGeometry x:Key="Icon.SkipForward">M21 4v16 M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z</StreamGeometry>

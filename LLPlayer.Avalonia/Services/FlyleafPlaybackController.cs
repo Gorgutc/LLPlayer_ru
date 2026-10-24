@@ -155,6 +155,19 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         set => player.Audio.Mute = value;
     }
 
+    // F-12 A-B repeat: the engine owns the points, the truth table and the reset-on-open; this adapter only exposes
+    // them and re-raises the engine notifications (OnPlayerChanged) so the view model mirrors them.
+    public long ABLoopA => player.ABLoopA;
+    public long ABLoopB => player.ABLoopB;
+    public bool HasABLoopA => player.HasABLoopA;
+    public bool HasABLoopB => player.HasABLoopB;
+    public bool ABLoopEnabled => player.ABLoopEnabled;
+    public bool ABLoopActive => player.ABLoopActive;
+    public void SetABLoopStart() => player.SetABLoopStart();
+    public void SetABLoopEnd() => player.SetABLoopEnd();
+    public void ClearABLoop() => player.ClearABLoop();
+    public void ToggleABLoop() => player.ToggleABLoop();
+
     public bool PrimaryTranslationEnabled => player.Config.Subtitles[0].EnabledTranslated;
     public bool SecondaryTranslationEnabled => player.Config.Subtitles[1].EnabledTranslated;
     public Task ToggleTranslationAsync(int slot)
@@ -411,6 +424,15 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
                 break;
             case nameof(Player.Speed):
                 Raise(nameof(Speed));
+                break;
+            // F-12 A-B repeat: one notification per engine property; the view model groups them into SyncAbLoop().
+            case nameof(Player.ABLoopA):
+            case nameof(Player.ABLoopB):
+            case nameof(Player.HasABLoopA):
+            case nameof(Player.HasABLoopB):
+            case nameof(Player.ABLoopEnabled):
+            case nameof(Player.ABLoopActive):
+                Raise(name);
                 break;
         }
     }
