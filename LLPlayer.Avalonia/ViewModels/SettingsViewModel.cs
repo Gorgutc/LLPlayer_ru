@@ -16,7 +16,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     readonly Action<SettingsViewModel> commit;
     readonly SubtitleFontCatalog fonts = new();
     ObservableCollection<string>? subtitleFontFamilies;
-    public SettingsViewModel(AppPrefs current, Action<SettingsViewModel> commit)
+    public SettingsViewModel(AppPrefs current, Action<SettingsViewModel> commit, BitmapSubtitleRuntimeState bitmapState)
     {
         this.commit = commit;
         Theme = current.Theme;
@@ -57,6 +57,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitlePrimarySecondaryDistanceText = current.SubtitlePrimarySecondaryDistance.ToString(NumberFormat);
         SubtitleIgnoreLineBreak = current.SubtitleIgnoreLineBreak;
         SubtitleLineAlignment = current.SubtitleLineAlignment;
+        SubtitleSeparatorMaxWidthText = current.SubtitleSeparatorMaxWidth.ToString(NumberFormat);
+        SubtitleSeparatorOpacityPercentText = current.SubtitleSeparatorOpacityPercent.ToString(NumberFormat);
+        SubtitleSeparatorMaxWidth = current.SubtitleSeparatorMaxWidth;
+        SubtitleSeparatorOpacityPercent = current.SubtitleSeparatorOpacityPercent;
+        SubtitlePositionAlignment = current.SubtitlePositionAlignment;
+        SubtitlePositionAlignmentWhenDual = current.SubtitlePositionAlignmentWhenDual;
+        PrimaryBitmapScale = bitmapState.PrimaryScale;
+        SecondaryBitmapScale = bitmapState.SecondaryScale;
+        PrimaryBitmapPosition = bitmapState.PrimaryPosition;
+        PrimaryBitmapScaleText = bitmapState.PrimaryScale.ToString(NumberFormat);
+        SecondaryBitmapScaleText = bitmapState.SecondaryScale.ToString(NumberFormat);
+        PrimaryBitmapPositionText = bitmapState.PrimaryPosition.ToString(NumberFormat);
     }
 
     public static IReadOnlyList<string> Themes { get; } = ["Dark", "Light"];
@@ -91,6 +103,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial int SecondarySubtitleBackgroundOpacityPercent { get; set; }
     [ObservableProperty] public partial bool SubtitlesVisible { get; set; }
     public static IReadOnlyList<string> LineAlignments { get; } = SubtitleLayoutOptions.LineAlignments;
+    public static IReadOnlyList<string> PositionAlignments { get; } = SubtitleLayoutOptions.PositionAlignments;
+    [ObservableProperty] public partial string SubtitleSeparatorMaxWidthText { get; set; } = "";
+    [ObservableProperty] public partial string SubtitleSeparatorOpacityPercentText { get; set; } = "";
+    [ObservableProperty] public partial double SubtitleSeparatorMaxWidth { get; set; }
+    [ObservableProperty] public partial int SubtitleSeparatorOpacityPercent { get; set; }
+    [ObservableProperty] public partial string SubtitlePositionAlignment { get; set; } = AppPrefs.DefaultSubtitlePositionAlignment;
+    [ObservableProperty] public partial string SubtitlePositionAlignmentWhenDual { get; set; } = AppPrefs.DefaultSubtitlePositionAlignment;
+    [ObservableProperty] public partial double PrimaryBitmapScale { get; set; }
+    [ObservableProperty] public partial double SecondaryBitmapScale { get; set; }
+    [ObservableProperty] public partial double PrimaryBitmapPosition { get; set; }
+    [ObservableProperty] public partial string PrimaryBitmapScaleText { get; set; } = "";
+    [ObservableProperty] public partial string SecondaryBitmapScaleText { get; set; } = "";
+    [ObservableProperty] public partial string PrimaryBitmapPositionText { get; set; } = "";
 
     /// <summary>The draft alignment mapped for the shared preview control.</summary>
     public TextAlignment PreviewTextAlignment => SubtitleLayoutOptions.ToTextAlignment(SubtitleLineAlignment);
@@ -163,6 +188,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnSubtitleWidthPercentChanged(int value) => SubtitleWidthPercentText = value.ToString(NumberFormat);
     partial void OnSubtitleMaxWidthChanged(double value) => SubtitleMaxWidthText = value.ToString(NumberFormat);
     partial void OnSubtitlePrimarySecondaryDistanceChanged(double value) => SubtitlePrimarySecondaryDistanceText = value.ToString(NumberFormat);
+    partial void OnSubtitleSeparatorMaxWidthChanged(double value) => SubtitleSeparatorMaxWidthText = value.ToString(NumberFormat);
+    partial void OnSubtitleSeparatorOpacityPercentChanged(int value) => SubtitleSeparatorOpacityPercentText = value.ToString(NumberFormat);
+    partial void OnPrimaryBitmapScaleChanged(double value) => PrimaryBitmapScaleText = value.ToString(NumberFormat);
+    partial void OnSecondaryBitmapScaleChanged(double value) => SecondaryBitmapScaleText = value.ToString(NumberFormat);
+    partial void OnPrimaryBitmapPositionChanged(double value) => PrimaryBitmapPositionText = value.ToString(NumberFormat);
 
     partial void OnSubtitleFontFamilyChanged(string value) { IncludeRequestedFamily(value); NotifyFontPreviewChanged(); }
     partial void OnSubtitleFontWeightChanged(string value) => NotifyFontPreviewChanged();
@@ -291,6 +321,25 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = "Choose Center, Left or Right for subtitle line alignment.";
             return;
         }
+        if (!TryRead(SubtitleSeparatorMaxWidthText, AppPrefs.MinSubtitleSeparatorMaxWidth, AppPrefs.MaxSubtitleSeparatorMaxWidth, out double separatorWidth)
+            || !TryReadWhole(SubtitleSeparatorOpacityPercentText, AppPrefs.MinSubtitleSeparatorOpacityPercent, AppPrefs.MaxSubtitleSeparatorOpacityPercent, out int separatorOpacity))
+        {
+            Error = "Use a separator max width 0–2000 and a whole-number separator opacity 0–100.";
+            return;
+        }
+        if (!AppPrefs.TryNormalizeSubtitlePositionAlignment(SubtitlePositionAlignment, out string positionAlignment)
+            || !AppPrefs.TryNormalizeSubtitlePositionAlignment(SubtitlePositionAlignmentWhenDual, out string dualPositionAlignment))
+        {
+            Error = "Choose Top, Center or Bottom for the subtitle position alignment and the dual position alignment.";
+            return;
+        }
+        if (!TryRead(PrimaryBitmapScaleText, 0.1, 8, out double primaryBitmapScale)
+            || !TryRead(SecondaryBitmapScaleText, 0.1, 8, out double secondaryBitmapScale)
+            || !TryRead(PrimaryBitmapPositionText, 0, 150, out double primaryBitmapPosition))
+        {
+            Error = "Use a bitmap subtitle scale 0.1–8 for both slots and a primary bitmap position 0–150.";
+            return;
+        }
         SubtitleWidthPercent = widthPercent;
         SubtitleWidthPercentText = widthPercent.ToString(NumberFormat);
         SubtitleMaxWidth = maxWidth;
@@ -298,6 +347,18 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitlePrimarySecondaryDistance = distance;
         SubtitlePrimarySecondaryDistanceText = distance.ToString(NumberFormat);
         SubtitleLineAlignment = alignment;
+        SubtitleSeparatorMaxWidth = separatorWidth;
+        SubtitleSeparatorMaxWidthText = separatorWidth.ToString(NumberFormat);
+        SubtitleSeparatorOpacityPercent = separatorOpacity;
+        SubtitleSeparatorOpacityPercentText = separatorOpacity.ToString(NumberFormat);
+        SubtitlePositionAlignment = positionAlignment;
+        SubtitlePositionAlignmentWhenDual = dualPositionAlignment;
+        PrimaryBitmapScale = primaryBitmapScale;
+        PrimaryBitmapScaleText = primaryBitmapScale.ToString(NumberFormat);
+        SecondaryBitmapScale = secondaryBitmapScale;
+        SecondaryBitmapScaleText = secondaryBitmapScale.ToString(NumberFormat);
+        PrimaryBitmapPosition = primaryBitmapPosition;
+        PrimaryBitmapPositionText = primaryBitmapPosition.ToString(NumberFormat);
         SubtitleFontFamily = family;
         SubtitleFontWeight = weight;
         SubtitleFontStyle = style;

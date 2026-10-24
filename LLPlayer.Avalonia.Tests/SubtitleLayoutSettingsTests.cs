@@ -315,7 +315,8 @@ public class SubtitleLayoutSettingsTests
                 "the computed box width only keeps the old geometry while the box is centered");
             double expected = MainWindowViewModel.ComputeSubtitleBoxWidth(videoHost.Bounds.Width, 100, 0);
             overlay.Width.Should().BeApproximately(expected, 0.5);
-            overlay.Spacing.Should().Be(2);
+            Border separator = window.FindControl<Border>("SubtitleSeparator")!;
+            separator.Height.Should().Be(2, "the dual separator supplies the primary/secondary distance");
             SubtitleText primary = window.FindControl<SubtitleText>("PrimarySubtitle")!;
             primary.TextAlignment.Should().Be(TextAlignment.Center);
             primary.IgnoreLineBreaks.Should().BeFalse();
@@ -331,7 +332,7 @@ public class SubtitleLayoutSettingsTests
 
             double half = MainWindowViewModel.ComputeSubtitleBoxWidth(videoHost.Bounds.Width, 50, 0);
             overlay.Width.Should().BeApproximately(half, 0.5);
-            overlay.Spacing.Should().Be(14);
+            separator.Height.Should().Be(14);
             primary.TextAlignment.Should().Be(TextAlignment.Right);
             primary.IgnoreLineBreaks.Should().BeTrue();
 

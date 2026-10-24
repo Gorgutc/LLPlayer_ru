@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using FlyleafLib.MediaPlayer;
 using WpfKey = System.Windows.Input.Key;
 
@@ -12,6 +12,12 @@ public sealed record SubtitleTrack(string Label, bool IsExternal, bool IsPrimary
 
 /// <summary>Bitmap subtitle placed in video coordinates (<see cref="VideoWidth"/> x <see cref="VideoHeight"/>).</summary>
 public sealed record SubtitleImage(BgraBitmap Bitmap, int X, int Y, int Width, int Height, int VideoWidth, int VideoHeight);
+
+/// <summary>
+/// Live bitmap-subtitle layout state: engine runtime values, not persisted preferences. They mirror the WPF
+/// Position / Size page controls and reset when a media opens.
+/// </summary>
+public readonly record struct BitmapSubtitleRuntimeState(double PrimaryScale, double SecondaryScale, double PrimaryPosition);
 
 /// <summary>
 /// What the Avalonia UI needs from the FlyleafLib player. <see cref="FlyleafPlaybackController"/> adapts a real
@@ -46,6 +52,13 @@ public interface IPlaybackController : INotifyPropertyChanged
     string SecondaryText { get; }
     SubtitleImage? PrimaryImage { get; }
     SubtitleImage? SecondaryImage { get; }
+    // Live session-only bitmap layout (engine BitmapPosition), not persisted preferences.
+    double PrimaryBitmapScale { get; set; }
+    double SecondaryBitmapScale { get; set; }
+    double PrimaryBitmapPosition { get; set; }
+    /// <summary>A subtitle track is loaded in the primary/secondary slot (Flyleaf <c>Subtitles[i].Enabled</c>).</summary>
+    bool PrimarySlotEnabled { get; }
+    bool SecondarySlotEnabled { get; }
 
     /// <summary>Index into <see cref="GetCues"/>(0) of the cue being shown, or -1.</summary>
     int PrimaryCueIndex { get; }

@@ -159,7 +159,29 @@
             <TextBlock Text="Line alignment" />
             <ComboBox Name="SubtitleAlignmentEditor" ItemsSource="{x:Static vm:SettingsViewModel.LineAlignments}" SelectedItem="{Binding SubtitleLineAlignment, Mode=TwoWay}" HorizontalAlignment="Stretch"
                       AutomationProperties.Name="Text subtitle line alignment" />
-            <TextBlock Text="The two-line preview shows alignment and line-break handling; width, max width and the primary/secondary distance apply to the video overlay." Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBlock Text="Separator max width (0–2000 DIP, 0 = no line)" TextWrapping="Wrap" />
+            <NumericUpDown Name="SubtitleSeparatorWidthEditor" Minimum="0" Maximum="2000" Increment="20" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitleSeparatorMaxWidthText, Mode=TwoWay}" FormatString="0.#"
+                           AutomationProperties.Name="Dual subtitle separator max width in DIP" />
+            <TextBlock Text="Separator opacity (0–100 %)" TextWrapping="Wrap" />
+            <NumericUpDown Name="SubtitleSeparatorOpacityEditor" Minimum="0" Maximum="100" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding SubtitleSeparatorOpacityPercentText, Mode=TwoWay}" FormatString="0"
+                           AutomationProperties.Name="Dual subtitle separator opacity percentage" />
+            <TextBlock Text="Position alignment (block edge anchored at the bottom distance)" TextWrapping="Wrap" />
+            <ComboBox Name="PositionAlignmentEditor" ItemsSource="{x:Static vm:SettingsViewModel.PositionAlignments}" SelectedItem="{Binding SubtitlePositionAlignment, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                      AutomationProperties.Name="Subtitle position alignment" />
+            <TextBlock Text="Position alignment when dual subtitles are shown" TextWrapping="Wrap" />
+            <ComboBox Name="PositionAlignmentDualEditor" ItemsSource="{x:Static vm:SettingsViewModel.PositionAlignments}" SelectedItem="{Binding SubtitlePositionAlignmentWhenDual, Mode=TwoWay}" HorizontalAlignment="Stretch"
+                      AutomationProperties.Name="Subtitle position alignment when dual subtitles are shown" />
+            <TextBlock Text="Bitmap subtitles (live session values; reset when a media opens)" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="Bitmap scale primary (0.1–8)" TextWrapping="Wrap" />
+            <NumericUpDown Name="PrimaryBitmapScaleEditor" Minimum="0.1" Maximum="8" Increment="0.05" NumberFormat="{Binding NumberFormat}" Text="{Binding PrimaryBitmapScaleText, Mode=TwoWay}" FormatString="0.##"
+                           AutomationProperties.Name="Primary bitmap subtitle scale" />
+            <TextBlock Text="Bitmap scale secondary (0.1–8)" TextWrapping="Wrap" />
+            <NumericUpDown Name="SecondaryBitmapScaleEditor" Minimum="0.1" Maximum="8" Increment="0.05" NumberFormat="{Binding NumberFormat}" Text="{Binding SecondaryBitmapScaleText, Mode=TwoWay}" FormatString="0.##"
+                           AutomationProperties.Name="Secondary bitmap subtitle scale" />
+            <TextBlock Text="Bitmap position primary (0–150 %)" TextWrapping="Wrap" />
+            <NumericUpDown Name="PrimaryBitmapPositionEditor" Minimum="0" Maximum="150" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding PrimaryBitmapPositionText, Mode=TwoWay}" FormatString="0"
+                           AutomationProperties.Name="Primary bitmap subtitle position percentage" />
+            <TextBlock Text="The two-line preview shows alignment and line-break handling; box, separator and alignment values apply to the video overlay, bitmap values to the engine session." Classes="dialog-description" TextWrapping="Wrap" />
           </StackPanel>
           <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
             <TextBlock Text="Tools" Classes="dialog-title" />

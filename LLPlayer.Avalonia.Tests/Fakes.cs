@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
@@ -44,6 +44,12 @@ public class FakePlaybackController : IPlaybackController
     public string SecondaryText { get; set => Set(ref field, value); } = "";
     public SubtitleImage? PrimaryImage { get; set => Set(ref field, value); }
     public SubtitleImage? SecondaryImage { get; set => Set(ref field, value); }
+    double primaryBitmapScale = 1, secondaryBitmapScale = 1, primaryBitmapPosition = 100;
+    public double PrimaryBitmapScale { get => primaryBitmapScale; set => Set(ref primaryBitmapScale, value); }
+    public double SecondaryBitmapScale { get => secondaryBitmapScale; set => Set(ref secondaryBitmapScale, value); }
+    public double PrimaryBitmapPosition { get => primaryBitmapPosition; set => Set(ref primaryBitmapPosition, value); }
+    public bool PrimarySlotEnabled { get; set => Set(ref field, value); }
+    public bool SecondarySlotEnabled { get; set => Set(ref field, value); }
     public int PrimaryCueIndex { get; set => Set(ref field, value); } = -1;
     public bool SubtitlesVisible { get; set => Set(ref field, value); } = true;
 
