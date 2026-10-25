@@ -191,6 +191,25 @@
             <Button Name="RecognitionLink" Content="Recognition (ASR / OCR)…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Recognition}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Keyboard" FontWeight="SemiBold" />
             <Button Name="ShortcutsLink" Content="Keyboard shortcuts…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Shortcuts}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="App shortcuts (draft; Save applies them; engine key bindings are unchanged in this stage)"
+                       Classes="dialog-description" TextWrapping="Wrap" />
+            <ItemsControl Name="ShortcutRows" ItemsSource="{Binding ShortcutRows}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ShortcutEditRow">
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,2">
+                    <TextBlock Text="{Binding Description}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <c:ChordCaptureButton Grid.Column="1" Chord="{Binding Chord, Mode=TwoWay}" Content="{Binding Chord}"
+                                          Classes="outline" MinWidth="140"
+                                          AutomationProperties.Name="{Binding Description}"
+                                          AutomationProperties.HelpText="{Binding Chord, StringFormat='Current chord {0}. Click, then press the new chord; Esc cancels.'}"
+                                          ToolTip.Tip="Click, then press the new chord; Esc cancels" />
+                    <Button Grid.Column="2" Content="Reset" Classes="ghost sm" Command="{Binding ResetCommand}"
+                            AutomationProperties.Name="{Binding Description, StringFormat='Reset {0} to its default chord'}"
+                            ToolTip.Tip="Restore the default chord" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
         </StackPanel>
       </ScrollViewer>

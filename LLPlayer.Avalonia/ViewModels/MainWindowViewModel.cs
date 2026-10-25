@@ -78,19 +78,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         player.WaveformEnabled = ShowWaveform;
         WaveformPeaks = player.WaveformPeaks;
         WaveformActive = player.WaveformActive;
-        Shortcuts = new AppShortcutMap(new Dictionary<string, Action>
-        {
-            [AppShortcutMap.ToggleSidebar] = ToggleSidebar,
-            [AppShortcutMap.ActivateSubsSearch] = ActivateSubsSearch,
-            [AppShortcutMap.OpenWindowCheatSheet] = ShowCheatSheet,
-            [AppShortcutMap.SubsSizeIncrease] = IncreaseSubtitleSize,
-            [AppShortcutMap.SubsSizeDecrease] = DecreaseSubtitleSize,
-            [AppShortcutMap.SubsPositionUp] = SubtitlesUp,
-            [AppShortcutMap.SubsPositionDown] = SubtitlesDown,
-            [AppShortcutMap.SubsPrimaryTextCopy] = CopyPrimaryText,
-            [AppShortcutMap.OpenSubtitles] = () => _ = OpenSubtitlesAsync(),
-            [AppShortcutMap.ToggleTheme] = ToggleTheme,
-        });
+        Shortcuts = CreateShortcutMap();
 
         foreach (string recent in prefs.RecentFiles)
             RecentFiles.Add(recent);
@@ -200,6 +188,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitleSeparatorOpacityPercent = draft.SubtitleSeparatorOpacityPercent;
         candidate.SubtitlePositionAlignment = draft.SubtitlePositionAlignment;
         candidate.SubtitlePositionAlignmentWhenDual = draft.SubtitlePositionAlignmentWhenDual;
+        candidate.AppShortcutOverrides = new Dictionary<string, string>(draft.AppShortcuts, StringComparer.Ordinal);
         // Resolve font resources and parse brushes before persistence, so live application only assigns prepared values.
         SubtitleFontSelection primaryFont = fonts.Resolve(candidate.SubtitleFontFamily, candidate.SubtitleFontWeight, candidate.SubtitleFontStyle);
         SubtitleFontSelection secondaryFont = candidate.SecondarySubtitleInheritsFont ? primaryFont
@@ -249,6 +238,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SubtitleSeparatorOpacityPercent = candidate.SubtitleSeparatorOpacityPercent;
         prefs.SubtitlePositionAlignment = candidate.SubtitlePositionAlignment;
         prefs.SubtitlePositionAlignmentWhenDual = candidate.SubtitlePositionAlignmentWhenDual;
+        ApplyAppShortcutOverrides(candidate.AppShortcutOverrides);
         SubtitleFontSize = candidate.SubtitleFontSize;
         SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
@@ -309,7 +299,36 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (TranslationDialog is { } create) shell.ShowTranslation(create());
     }
-    public AppShortcutMap Shortcuts { get; }
+    public AppShortcutMap Shortcuts { get; private set; }
+
+    /// <summary>Applies validated app-shortcut overrides live and persists them; engine key bindings stay at defaults.</summary>
+    public void ApplyAppShortcuts(IReadOnlyDictionary<string, string> overrides)
+    {
+        ApplyAppShortcutOverrides(overrides);
+        SavePrefs();
+    }
+
+    void ApplyAppShortcutOverrides(IReadOnlyDictionary<string, string> overrides)
+    {
+        _ = AppShortcutMap.TryNormalizeOverrides(overrides, out Dictionary<string, string> normalized);
+        prefs.AppShortcutOverrides = normalized;
+        Shortcuts = CreateShortcutMap();
+        OnPropertyChanged(nameof(Shortcuts));
+    }
+
+    AppShortcutMap CreateShortcutMap() => new(new Dictionary<string, Action>
+    {
+        [AppShortcutMap.ToggleSidebar] = ToggleSidebar,
+        [AppShortcutMap.ActivateSubsSearch] = ActivateSubsSearch,
+        [AppShortcutMap.OpenWindowCheatSheet] = ShowCheatSheet,
+        [AppShortcutMap.SubsSizeIncrease] = IncreaseSubtitleSize,
+        [AppShortcutMap.SubsSizeDecrease] = DecreaseSubtitleSize,
+        [AppShortcutMap.SubsPositionUp] = SubtitlesUp,
+        [AppShortcutMap.SubsPositionDown] = SubtitlesDown,
+        [AppShortcutMap.SubsPrimaryTextCopy] = CopyPrimaryText,
+        [AppShortcutMap.OpenSubtitles] = () => _ = OpenSubtitlesAsync(),
+        [AppShortcutMap.ToggleTheme] = ToggleTheme,
+    }, prefs.AppShortcutOverrides);
     public IPlaybackController Player => player;
     public AppPrefs Prefs => prefs;
 

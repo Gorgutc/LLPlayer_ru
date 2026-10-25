@@ -104,6 +104,9 @@ public sealed class AppPrefs
     /// </summary>
     public bool ShowWaveform { get; set; }
 
+    /// <summary>App-level shortcut overrides (action name -> canonical chord, e.g. Ctrl+Shift+B).</summary>
+    public Dictionary<string, string> AppShortcutOverrides { get; set; } = [];
+
     public bool SidebarVisible { get; set; }
     public double SidebarWidth { get; set; } = 360;
 
@@ -167,6 +170,8 @@ public sealed class AppPrefs
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
         SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
+        _ = AppShortcutMap.TryNormalizeOverrides(AppShortcutOverrides, out Dictionary<string, string> shortcuts);
+        AppShortcutOverrides = shortcuts;
         RecentFiles = (RecentFiles ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).Take(MaxRecentFiles).ToList();
         if (string.IsNullOrWhiteSpace(WordTranslationService))
             WordTranslationService = "GoogleV1";

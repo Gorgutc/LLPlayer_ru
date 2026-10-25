@@ -5,6 +5,7 @@ using Avalonia.Media.Immutable;
 using LLPlayer.Avalonia.Services;
 using System.Globalization;
 using System.Collections.ObjectModel;
+using WpfKey = System.Windows.Input.Key;
 
 namespace LLPlayer.Avalonia.ViewModels;
 
@@ -15,10 +16,22 @@ public sealed partial class SettingsViewModel : ObservableObject
 {
     readonly Action<SettingsViewModel> commit;
     readonly SubtitleFontCatalog fonts = new();
+    public ObservableCollection<ShortcutEditRow> ShortcutRows { get; } = [];
+    public IReadOnlyDictionary<string, string> AppShortcuts { get; private set; } = new Dictionary<string, string>();
     ObservableCollection<string>? subtitleFontFamilies;
     public SettingsViewModel(AppPrefs current, Action<SettingsViewModel> commit, BitmapSubtitleRuntimeState bitmapState)
     {
         this.commit = commit;
+        foreach (string action in AppShortcutMap.ActionNames)
+        {
+            AppShortcut first = AppShortcutMap.Defaults.First(s => s.ActionName == action);
+            string defaultChord = AppShortcutMap.FormatChord(first.Key, first.Ctrl, first.Alt, first.Shift);
+            string chord = current.AppShortcutOverrides.TryGetValue(action, out string? saved)
+                && AppShortcutMap.TryParseChord(saved, out WpfKey key, out bool ctrl, out bool alt, out bool shift)
+                ? AppShortcutMap.FormatChord(key, ctrl, alt, shift)
+                : defaultChord;
+            ShortcutRows.Add(new ShortcutEditRow(action, first.Description, defaultChord, chord));
+        }
         Theme = current.Theme;
         SubtitleFontFamily = current.SubtitleFontFamily;
         SubtitleFontWeight = current.SubtitleFontWeight;
@@ -379,6 +392,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitleOutlineThickness = outline;
         SecondarySubtitleOutlineThickness = secondaryOutline;
         SidebarWidth = width;
+        if (!TryBuildAppShortcuts(out Dictionary<string, string> appShortcuts, out string shortcutError))
+        {
+            Error = shortcutError;
+            return;
+        }
+        AppShortcuts = appShortcuts;
         try { commit(this); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -387,6 +406,28 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         CloseRequested?.Invoke();
     }
+    bool TryBuildAppShortcuts(out Dictionary<string, string> overrides, out string error)
+    {
+        overrides = new Dictionary<string, string>(StringComparer.Ordinal);
+        error = "";
+        foreach (ShortcutEditRow row in ShortcutRows)
+        {
+            if (!AppShortcutMap.TryParseChord(row.Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift))
+            {
+                error = $"Use a key chord such as Ctrl+Shift+B for \"{row.Description}\" (a modifier alone is not a chord).";
+                return false;
+            }
+            string canonical = AppShortcutMap.FormatChord(key, ctrl, alt, shift);
+            // Untouched rows keep no override, so actions with several default chords (the cheat sheet has F1 and
+            // Shift+OemQuestion) keep all of them; Reset therefore really restores the defaults.
+            if (canonical != row.DefaultChord)
+                overrides[row.ActionName] = canonical;
+        }
+
+        AppShortcutMap map = new(new Dictionary<string, Action>(), overrides);
+        return map.TryValidateEffective(out error);
+    }
+
     bool TryRead(string text, double min, double max, out double value)
     {
         value = 0;
@@ -404,4 +445,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         RequestedLink = link;
         CloseRequested?.Invoke();
     }
+}
+
+public sealed partial class ShortcutEditRow(string actionName, string description, string defaultChord, string chord)
+    : ObservableObject
+{
+    public string ActionName { get; } = actionName;
+    public string Description { get; } = description;
+    public string DefaultChord { get; } = defaultChord;
+    [ObservableProperty] public partial string Chord { get; set; } = chord;
+    [RelayCommand] void Reset() => Chord = DefaultChord;
 }
