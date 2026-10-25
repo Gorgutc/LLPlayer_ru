@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "purpose": "Blue Windows Avalonia desktop-test shortcut icon only; original WPF/shared application branding remains unchanged.",
+  "source": {
+    "path": "LLPlayer.png",
+    "sha256": "574dc84b7acf1127f3cc251b74694269424aac75018916821e5e39534e61903b",
+    "width": 256,
+    "height": 256
+  },
+  "method": "Built-in image_gen edit; one targeted transparent-exterior cleanup iteration. No CLI/API fallback.",
+  "prompts": [
+    "Use case: precise-object-edit. Asset type: native Windows desktop shortcut icon. Image 1 is the exact edit target, the existing LLPlayer logo. Change ONLY the pink/magenta colored speech-bubble gradient to a clear royal-blue gradient (main blue around #2563EB or #2F80ED, darker blue at the bottom). Preserve the exact existing 2D silhouette, circular bubble outline, lower-left speech tail, white play triangle, triangle position/proportions, soft drop shadow, edge antialiasing, composition, framing and transparent alpha background. Keep the white/gray triangle and neutral shadow unchanged. No redesign, no extra elements, no text, no outline, no border, no badge, no 3D, no background rectangle. Return a clean square transparent PNG suitable for a multi-size Windows ICO; maintain the original icon's proportions and alignment.",
+    "Use case: precise-object-edit, transparent Windows application icon cleanup. Image 1 is the BLUE edit target. Image 2 is the original LLPlayer geometry reference only. Keep Image 1's blue speech bubble, white play triangle, shadow, exact relative shape, size and alignment unchanged. Make one narrowly targeted correction: eliminate every isolated blue fleck, speck, blob, halo or disconnected fragment outside the bubble. The complete exterior around the bubble must be clean fully transparent alpha, with only a smooth antialiased boundary. Preserve the lower-left speech tail and the original silhouette of Image 2. Keep the blue gradient, white triangle and neutral triangle drop shadow; do not add texture or change design, zoom, proportions, canvas framing or colors. No background rectangle, border, text or extra object. Return one clean square transparent PNG ready for an ICO."
+  ],
+  "conversion": "Pillow 12.3.0: LANCZOS downsample of selected generated RGBA PNG to256x256, then multiframe ICO encoding. No manual recolor, alpha masking, cropping or redraw.",
+  "selected_generation": "exec-f6facec4-0f63-4cd4-a5cd-d8aff7c874fc.png",
+  "png": {
+    "path": "llplayer-avalonia-blue.png",
+    "width": 256,
+    "height": 256,
+    "mode": "RGBA",
+    "bytes": 53896,
+    "sha256": "474960f286db35aac7f195387c135d11bbca7e1c794ebad22758c8195b58c654"
+  },
+  "ico": {
+    "path": "llplayer-avalonia-blue.ico",
+    "bytes": 85025,
+    "sha256": "4eb3cf36e8106f58576da7cc493e02bb7629bb1b00aedfd7c0a512c36cc15230",
+    "frames": [
+      16,
+      24,
+      32,
+      48,
+      64,
+      128,
+      256
+    ]
+  },
+  "verification": {
+    "ico_256_pixels_equal_png": true,
+    "alpha_range": [
+      0,
+      255
+    ],
+    "original_unchanged": true,
+    "qualitative": "Speech bubble, tail, centered white play triangle, neutral triangle shadow and blue gradient visually inspected at desktop-icon size. Generative edit is not claimed pixel-identical to original."
+  }
+}

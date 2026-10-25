@@ -70,6 +70,13 @@ establish acceptance of the current imported tree. Change product decisions only
 - Make product changes as narrowly as possible. Preserve unrelated frozen contracts unless the user explicitly requests a broader redesign.
 - Ask or notify the user when requirements are unclear or when an assumption could change the delivered behavior.
 - Always run `/review` before final handoff. In this environment, that means spawn a review subagent and address Critical/Important findings.
+- On Windows, after every completed LLPlayer task/stage, including docs/tooling, run `scripts/windows/update-desktop-test-build.ps1`
+  before handoff. Use its default fresh-publish mode and verify receipt `sourceCommit` matches actual final `HEAD` and the
+  newly published payload. The stable Desktop shortcut `LLPlayer Avalonia (Windows)` must use the local launcher/current
+  metadata and blue icon. Preserve earlier payloads and the original WPF shortcut; the updater never launches or stops
+  the player. See [Windows desktop test build](docs/agent/windows-desktop-test-build.md). Direct user read-only/no-build
+  or other explicit execution constraints override refresh. If refresh cannot run, report `NOT_RUN` with the reason and
+  do not claim the icon is current; on other hosts, report the actual Windows-refresh status.
 
 ## Verification Gates
 
