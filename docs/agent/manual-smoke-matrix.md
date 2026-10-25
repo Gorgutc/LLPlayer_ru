@@ -318,6 +318,20 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   out of scope and must stay unchanged. No Computer Use or application launch is authorized by this row;
   headless/package checks do not close native acceptance. Evidence:
   [the layout checkpoint](f13-status-2026-10-18.md#bounded-text-subtitle-layout-wpf-position--size-text-half).
+- **App shortcut rebinding (hotkeys half, part 1), owner-approved 2026-10-25 — native acceptance NOT_RUN / DEFERRED
+  BY OWNER:** use the rebuilt package and an isolated profile. Open Settings → Tools and confirm the app shortcuts
+  section lists every app action with its current chord, a capture button and Reset; click a capture button and press a
+  new chord (for example Ctrl+Shift+B), then Save and confirm the new chord triggers the action in the main window while
+  the default chord no longer does. Confirm a second click, Esc or clicking elsewhere cancels capture and leaves the
+  chord unchanged, a modifier-only press does not become a chord, assigning the same chord to two app actions blocks
+  Save with a readable error, and Reset restores the default chord(s). Save without touching any shortcut row and
+  confirm nothing is persisted as an override and the cheat sheet still opens with both default chords (F1 and Shift+/);
+  restart and confirm the saved chords are restored and the cheat sheet shows them. Close/Esc without Save discards the
+  draft. Confirm engine actions (play/pause, arrows, A/S/D, F, Ctrl+O) still use their built-in chords; binding an app
+  action to an engine-reserved chord is not rejected in this part (documented boundary, next block). Check
+  windowed/fullscreen and 100 %/150 %/200 % DPI. No Computer Use or application launch is authorized by this row.
+  Evidence: [the hotkey checkpoint](f13-status-2026-10-18.md#bounded-app-shortcut-rebinding-hotkeys-half-part-1).
+
 - **Audio waveform overlay (F-12 audio half), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY
   OWNER:** use the rebuilt package and an isolated profile. Open media with audio and confirm the waveform toggle sits
   next to the A-B button, starts off, and toggling it on builds the envelope over the seek bar without moving the

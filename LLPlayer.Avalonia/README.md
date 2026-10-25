@@ -129,6 +129,15 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
   the dual separator remain separate work. Review-fix 105/105 and the final full WPF/Windows Avalonia (UI 777 passed/one skipped, 778),
   package-contract, regression and local publish checks passed at product `baa6dc1`; Linux CI and native desktop
   acceptance are separate.
+- App shortcut rebinding (hotkeys half, part 1): the ten app-level shortcuts (sidebar, subtitles search, cheat sheet,
+  subtitle size/position, copy primary text, open subtitles, theme) are editable in Settings → Tools with a capture
+  button and Reset; clicking starts capture, a second click/Esc/lost focus cancels, the next chord is stored canonically
+  and modifier-only keys are ignored. Only changed rows persist as overrides, so untouched actions keep every default
+  chord (including both cheat-sheet chords), invalid, duplicate or first-default-equal entries fall back to defaults, Save blocks
+  duplicate chords, and restart restores the saved chords. The engine key bindings stay at their defaults in this part
+  (the engine editor and app-vs-engine collision check are the next block). Suite 17/17, regression 492/492 and the full
+  WPF/Windows Avalonia, package-contract and local publish checks passed at product `24ec18f`; Linux CI and native
+  keyboard acceptance are separate.
 - Audio waveform overlay (F-12 audio half): the transport bar draws the engine's peak envelope under the seek slider
   with a persisted ShowWaveform toggle (default off, like WPF) next to the A-B button. OFF performs no audio decode;
   disabling the toggle clears the engine peaks; peaks stay engine-owned and transient, and the display-only control
