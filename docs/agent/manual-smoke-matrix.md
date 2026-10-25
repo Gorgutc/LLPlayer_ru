@@ -346,8 +346,12 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   failure must leave both routing and displayed chords unchanged. No Computer Use or application launch is authorized
   by this row. Compiled pre-production RED observed 29 failures and 37 passes (66 total, 0 skipped, exit 1); the same
   focused command then passed GREEN (66 passed, 0 failed/skipped, exit 0). Fresh local WPF and Windows Avalonia full
-  gates, package-contract checks and local publish/content validation passed, actual exit 0. Final verification/document
-  review, fresh Windows/Linux CI and publication remain pending. Old PR #180 receipts do not accept
+  gates, package-contract checks and local publish/content validation passed, actual exit 0. Published PR #181 has a
+  VERIFIED PREMERGE CHECKPOINT at last-checked head `56117ee774d97f8014926e684e7c860978fa7f4a`: Windows run 40193094026
+  and Linux run 40193094196, attempt 1 SUCCESS including package publish/artifact uploads. Prior document review had
+  zero Critical/Important findings; this docs-only delta awaits independent infrastructure review. Check live PR/vault
+  handoff for latest head, merge/main and final handoff receipts; this checkpoint does not claim post-merge acceptance.
+  Old PR #180 receipts do not accept
   this correction; see [the current correction status](f13-status-2026-10-18.md#current-bounded-correction-and-proposed-continuation--2026-10-25).
 
 - **Audio waveform overlay (F-12 audio half), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY

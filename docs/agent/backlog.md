@@ -1341,7 +1341,7 @@ published source candidate `93c5e31` прошёл Windows/Linux CI и неза�
 [PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168). Последующие docs/merge checks фиксируются в PR timeline.
 Предыдущий одобренный шаг от 2026-10-19 — общий фон primary/secondary текстовых overlay — **IMPLEMENTED** на product `558e4c5eb730eba27633559a57256a471e6aa46c`. Три preferences добавляют общий RGB `#000000` и независимые целые проценты непрозрачности `0/0`; Settings теперь владеет **22 полями**, включая прежние 19. Raw RGB/percent editors, Reset Background только трёх полей и detached font-and-background preview сохраняют транзакцию fresh merge/resolve → persist → live apply. Компактный фон объединяет centered line boxes с существующим outline pad; custom draw `HitTest=false` сохраняет actual input, popup/fullscreen и геометрию текста. Наследование шрифта не связывает непрозрачности; это отдельная адаптация WPF без изменения WPF behavior. [Статус блока и точные receipts](f13-status-2026-10-18.md#bounded-text-subtitle-background).
 Focused GREEN: **133 passed, 0 failed/skipped**. Чистый intentional Settings/render RED: 123 failures и один pixel-oracle pass; отдельный чистый input RED не заявлен. Первый focused product run содержал две диагностированные ошибки inter-line fixture при outline 8; bubbling event oracle исправлен отдельно, итоговый actual-input GREEN получен после исправлений тестов. Полные WPF/Windows Avalonia gates, 53 offline package fixtures и локальный publisher/content/CRC **PASS**, actual exit 0. Итоговый девятифайловый product `/review` и domain reviews: **0 Critical / 0 Important**, использованы все десять ролей. Независимый QA-package review — **PASS, 0 Critical / 0 Important**; docs/handoff review ещё **PENDING на локальном checkpoint**. Локальный ZIP собран до app commit из базы плюс reviewed edits и не служит exact-main delivery. Linux локально **NOT_RUN**; public candidate/main Windows/Linux CI, merge и exact-main delivery/readback **PENDING** на этом checkpoint. WPF `ship.ps1` **NOT_RUN**, WPF packaging unchanged.
-**2026-10-25: текущий корректирующий блок app-hotkeys — IMPLEMENTED, локальные gates PASS; финальные review/CI PENDING.**
+**2026-10-25: корректирующий блок app-hotkeys — IMPLEMENTED; VERIFIED PREMERGE CHECKPOINT PR № 181 на head `56117ee`.**
 После PR № 180 (main `e5b1d05baff0aaf5acb197bb9403d8387fd97f7d`) владелец одобрил три исправления
 на общем Windows/Linux Avalonia UI: отклонять Meta/Win/Super и неизвестные modifier bits без изменения сочетания,
 оставляя capture активным (Esc сохраняет отмену даже с неподдерживаемыми modifiers); принимать только одиночное определённое имя клавиши или известный alias, отклоняя
@@ -1353,8 +1353,16 @@ actual exit 1; SHA-256 лога `28fb8c827c33e69636653b7c500df3539b436aff7dbad41
 **PASS**, actual exit 0: WPF 1440 passed/0 skipped; Windows Avalonia engine 1622 passed/13 skipped и UI 901 passed/1 skipped,
 0 failed; package fixtures 53/readback 38; publisher 479-file readback, ZIP 180 445 676 bytes, SHA-256
 `d80c923f220d7dfdb5768a836968d4c9e7a0985634d1ca5eb461eca3bf0cc8a5`. Это local QA package.
-Финальный verification/document `/review`, свежий published-source Windows/Linux CI, публикация/merge и exact-main
-delivery пока **PENDING**. Source-review отчёты UI/runtime/.NET/reuse/native и package-boundary содержат
+Опубликован [PR № 181](https://github.com/Gorgutc/LLPlayer_ru/pull/181). Последний проверенный premerge head —
+`56117ee774d97f8014926e684e7c860978fa7f4a`: Windows [run 40193094026](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/40193094026)
+и Linux [run 40193094196](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/40193094196), attempt 1 **SUCCESS**,
+включая package publish и artifact upload. Windows: WPF 1440/0 skipped, engine 1622/13 skipped, UI 901/1 skipped;
+Linux full xvfb `verify.sh`: engine 1621/14 skipped, UI 900/2 skipped. Windows CI ZIP 180 445 362 bytes, SHA-256
+`bc7ad520d5a742cc72150d53f626001aa02864542577f5b7edf7815303ab0339`; Linux TAR 180 287 106 bytes, SHA-256
+`8e8bf399dab62fe18269a496d3a83c847db49f2b0101a68162a5e517381eb76a`. Это проверенный premerge checkpoint:
+latest head, merge/main и post-merge receipts нужно сверять с живым PR и vault handoff; будущий merge не заявлен.
+Предыдущее document review: 0 Critical / 0 Important; эта новая docs-only delta ожидает независимого infrastructure
+review и не меняет source/tests. Source-review отчёты UI/runtime/.NET/reuse/native и package-boundary содержат
 0 Critical / 0 Important на своих закреплённых input-файлах. Старые receipts не подтверждают исправления.
 Точные log/source hashes находятся в [текущем статусе](f13-status-2026-10-18.md#current-bounded-correction-and-proposed-continuation--2026-10-25).
 Native GUI/DPI/keyboard и real model/provider/GPU

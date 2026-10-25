@@ -144,8 +144,12 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
   after Save or Reset followed by Save while preserving its filter. Product `c45fd958` implements the repairs; compiled
   pre-production RED observed 29 failures/37 passes (66 total, 0 skipped, exit 1), then the same focused command passed
   GREEN (66 passed, 0 failed/skipped, exit 0). Fresh local WPF, Windows Avalonia, package-contract and publish/content
-  gates passed at that product checkpoint. Final verification/document review, fresh Windows/Linux CI and publication remain PENDING; the
-  preceding PR #180 checkpoint does not accept these repairs. Native desktop/DPI/keyboard acceptance remains
+  gates passed at that product checkpoint. Published [PR #181](https://github.com/Gorgutc/LLPlayer_ru/pull/181) has a
+  VERIFIED PREMERGE CHECKPOINT at last-checked head `56117ee774d97f8014926e684e7c860978fa7f4a`: Windows run 40193094026
+  and Linux run 40193094196, attempt 1 SUCCESS including package publish/artifact uploads. The prior document review
+  reported zero Critical/Important findings; this docs-only delta awaits independent infrastructure review. Check the
+  live PR/vault handoff for latest head, merge/main and final handoff receipts; no post-merge acceptance is claimed here.
+  The preceding PR #180 checkpoint does not accept these repairs. Native desktop/DPI/keyboard acceptance remains
   NOT_RUN / DEFERRED BY OWNER. F-13 remains IN PROGRESS. Proposed next work, pending owner approval to implement, is
   Settings parity for the WPF Subtitles Sidebar page: seven new preferences (`SidebarLeft`, `SidebarTextMask`,
   `SidebarShowOriginalText`, `SidebarSubPadding`, `SidebarFontFamily`, `SidebarFontSize`, `SidebarFontWeight`), with

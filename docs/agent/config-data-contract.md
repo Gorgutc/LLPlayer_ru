@@ -91,9 +91,13 @@ The owner approved the following corrections to app-shortcut part 1, committed i
 `c45fd9583b691c41842d8f8c5a1f36572bf080cb`. The pre-production compiled focused RED observed 66 total, 29 failed, 37 passed, zero skipped,
 actual exit 1 (log SHA-256 `28fb8c827c33e69636653b7c500df3539b436aff7dbad41263536dd35ae6e989`).
 The same focused command then passed GREEN: 66 passed, zero failed/skipped, actual exit 0. Fresh local WPF, Windows
-Avalonia, package-contract and publish/content gates passed at that product checkpoint; final verification/document
-review, fresh published-source Windows/Linux CI and publication remain **PENDING**. Exact local receipts are recorded
-in the linked current status below. The PR #180 checkpoint does not prove these cases:
+Avalonia, package-contract and publish/content gates passed at that product checkpoint. Published PR #181 has a
+VERIFIED PREMERGE CHECKPOINT at last-checked head `56117ee774d97f8014926e684e7c860978fa7f4a`: Windows run 40193094026
+and Linux run 40193094196, attempt 1 SUCCESS including package publish/artifact uploads. The prior documentation
+review reported zero Critical/Important findings; this docs-only delta awaits independent infrastructure review.
+Latest head/merge/main and final handoff receipts must be checked in the live PR and vault handoff. Exact local and
+premerge receipts are recorded in the linked current status below; no later merge acceptance is claimed here.
+The PR #180 checkpoint does not prove these cases:
 
 - The supported modifier set is exactly Ctrl/Alt/Shift. Meta/Win/Super or unknown modifier bits must reject capture
   without modifying the draft chord or leaving capture mode. Escape remains an explicit cancel even when unsupported
