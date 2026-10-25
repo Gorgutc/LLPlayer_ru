@@ -1,4 +1,4 @@
-using LLPlayer.Core.Services;
+﻿using LLPlayer.Core.Services;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -93,7 +93,7 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
             draft => controller.SaveTranslationAsync(() => translator.SaveAndApplyAsync(draft, translationStore,
                 () => dispatcher.Post(viewModel.WordPopup.Invalidate), controller.ApplyTranslationSettings)), translationStore.LoadWarning);
         window.ShutdownRequested = ShutdownAsync;
-        window.Attach(viewModel, player.Renderer, () => AppShortcutMap.BuildCheatSheet(player.Config.Player.KeyBindings.Keys));
+        window.Attach(viewModel, player.Renderer, () => viewModel.Shortcuts.BuildCheatSheet(player.Config.Player.KeyBindings.Keys));
         player.Host = window;
         MainWindow = window;
 

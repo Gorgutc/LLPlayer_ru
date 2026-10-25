@@ -1341,6 +1341,33 @@ published source candidate `93c5e31` прошёл Windows/Linux CI и неза�
 [PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168). Последующие docs/merge checks фиксируются в PR timeline.
 Предыдущий одобренный шаг от 2026-10-19 — общий фон primary/secondary текстовых overlay — **IMPLEMENTED** на product `558e4c5eb730eba27633559a57256a471e6aa46c`. Три preferences добавляют общий RGB `#000000` и независимые целые проценты непрозрачности `0/0`; Settings теперь владеет **22 полями**, включая прежние 19. Raw RGB/percent editors, Reset Background только трёх полей и detached font-and-background preview сохраняют транзакцию fresh merge/resolve → persist → live apply. Компактный фон объединяет centered line boxes с существующим outline pad; custom draw `HitTest=false` сохраняет actual input, popup/fullscreen и геометрию текста. Наследование шрифта не связывает непрозрачности; это отдельная адаптация WPF без изменения WPF behavior. [Статус блока и точные receipts](f13-status-2026-10-18.md#bounded-text-subtitle-background).
 Focused GREEN: **133 passed, 0 failed/skipped**. Чистый intentional Settings/render RED: 123 failures и один pixel-oracle pass; отдельный чистый input RED не заявлен. Первый focused product run содержал две диагностированные ошибки inter-line fixture при outline 8; bubbling event oracle исправлен отдельно, итоговый actual-input GREEN получен после исправлений тестов. Полные WPF/Windows Avalonia gates, 53 offline package fixtures и локальный publisher/content/CRC **PASS**, actual exit 0. Итоговый девятифайловый product `/review` и domain reviews: **0 Critical / 0 Important**, использованы все десять ролей. Независимый QA-package review — **PASS, 0 Critical / 0 Important**; docs/handoff review ещё **PENDING на локальном checkpoint**. Локальный ZIP собран до app commit из базы плюс reviewed edits и не служит exact-main delivery. Linux локально **NOT_RUN**; public candidate/main Windows/Linux CI, merge и exact-main delivery/readback **PENDING** на этом checkpoint. WPF `ship.ps1` **NOT_RUN**, WPF packaging unchanged.
+**2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED (local checkpoint, ветка `codex/f13-hotkeys`).**
+Product `24ec18f08b23d0f452003606cb772bb793aa9dd1` (7 app + 1 test files) делает десять app-level шорткатов
+(sidebar, subtitles search, cheat sheet, size/position, copy primary text, open subtitles, theme) редактируемыми и
+персистентными. `AppPrefs.AppShortcutOverrides` (action → canonical `[Ctrl+][Alt+][Shift+]Key`) — единственное новое
+persisted-значение: контракт владеет 33 settings-значениями (31 hub + waveform toggle + эта map), hub по-прежнему
+редактирует 31 поле, а `CommitSettings` мержит 32 значения (waveform toggle остаётся transport-only). Override'ы
+пишутся только для реально изменённых строк, default-equal отбрасывается при нормализации — поэтому untouched action
+сохраняет все дефолтные аккорды (включая F1 и Shift+OemQuestion cheat sheet), а Reset действительно возвращает
+дефолты. Unknown/unparsable/duplicate/default-equal аккорды отбрасываются при загрузке (fallback к дефолтам).
+Settings → Tools показывает строку на каждое действие: текущий аккорд, capture-кнопка (click стартует; второй click,
+Esc или потеря фокуса отменяют; кнопка тускнеет на время capture; modifier-only игнорируются), accessibility
+name/help и Reset. Save валидирует дубли с понятной ошибкой, персистит изменённую map через detached candidate до
+live-применения и перестраивает routing/cheat sheet; restart восстанавливает; two-way binding в строку и единственный
+SavePrefs покрыты тестом. Engine key bindings (`Player.KeyBindings`) намеренно не тронуты в этой части: engine-действия
+пока используют встроенные аккорды; app-аккорды маршрутизируются раньше engine и collision с engine-reserved не
+проверяется (Space на app-action затенит play/pause) — engine editor и collision-check это следующий блок. WPF
+`SettingsKeys` grid/custom actions/enable-disable/key-up не портированы. Engine/WPF/Core/package не менялись.
+Compiled RED: **10 total, 9 failed, 1 passed**; focused GREEN 17/17 (после review-фиксов); plain UI attempts: 36 failed
+(product double-save, исправлен) → 1 failed (row order, product XAML, исправлен) → 829/816/13 pass → 836/823/13 final;
+FINAL6-гейты на committed tree: WPF 1440/0 skipped, engine 1622/13 skipped, UI 835/1 skipped (836), regression 492,
+package 53 + readback 38, publish ZIP 180 445 532 bytes `fdf81661…`, fast exit 0 — все **PASS**, actual exit 0. Первая
+попытка Windows-гейта упала на несвязанном intermittent OpenAL A/V-desync тесте (max 120.3 ms > 100, mean 19.1 ms,
+0 underruns); после EOF-нормализации retry прошёл, root cause UNKNOWN, без flaky/fixed claim. Linux локально
+**NOT_RUN**; published-source CI, merge и exact-main delivery — **PENDING**. Native GUI/DPI/keyboard приёмка —
+**NOT_RUN / DEFERRED BY OWNER**.
+[Статус блока и receipts](f13-status-2026-10-18.md#bounded-app-shortcut-rebinding-hotkeys-half-part-1).
+
 **2026-10-24 owner-approved waveform half of F-12 — IMPLEMENTED (local checkpoint, ветка `codex/f13-waveform`).**
 Product `c7deb751547e86e6eab05ffa23e1072b15193743` (8 app + 2 test files) выводит аудио-волну поверх seek bar
 общего Avalonia-транспорта. `AppPrefs.ShowWaveform` (bool, default `false`, как в WPF) — transport-only тумблер:
