@@ -327,6 +327,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     {
         switch (e.PropertyName)
         {
+            case nameof(MainWindowViewModel.Shortcuts):
+                if (cheatSheet?.DataContext is CheatSheetViewModel current)
+                    cheatSheet.DataContext = new CheatSheetViewModel(cheatSheetRows()) { FilterText = current.FilterText };
+                break;
             case nameof(MainWindowViewModel.SubtitleBottomOffset):
             case nameof(MainWindowViewModel.ControlsVisible):
             case nameof(MainWindowViewModel.SubtitleWidthPercent):

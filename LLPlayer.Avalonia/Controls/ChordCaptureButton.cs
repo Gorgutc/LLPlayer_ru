@@ -50,6 +50,10 @@ public sealed class ChordCaptureButton : Button
     /// <summary>Chord string for a key press (null for modifier-only/unmapped keys). Shared with the tests.</summary>
     public static string? FromKey(Key key, KeyModifiers modifiers)
     {
+        const KeyModifiers supportedModifiers = KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Shift;
+        if ((modifiers & ~supportedModifiers) != KeyModifiers.None)
+            return null;
+
         WpfKey wpf = KeyMapper.ToWpf(key);
         if (wpf is WpfKey.None or WpfKey.LeftCtrl or WpfKey.RightCtrl or WpfKey.LeftAlt or WpfKey.RightAlt
             or WpfKey.LeftShift or WpfKey.RightShift or WpfKey.LWin or WpfKey.RWin)

@@ -115,7 +115,7 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
   translucent band between them, and playback loops back to A through the engine's frame-accurate seek path (priority
   over whole-file Loop Playback, inert for reverse playback and HLS-live streams). Points are transient, never
   persisted, and drop when another file opens; a rejected Set B keeps the previous point and reports the message.
-  Waveform and rebindable hotkeys remain the separate F-12 follow-up. Shared Windows/Linux implementation; focused
+  Waveform and app-shortcut rebinding were separate follow-ups, recorded below. Shared Windows/Linux implementation; focused
   regressions 19 (18 plus one env-gated real-engine case that the Windows Avalonia gate runs) and the full
   WPF/Windows Avalonia source, package-contract, local publish/content and independent-review checks passed at product
   `075dd4e4`; Linux CI and native desktop acceptance are separate.
@@ -135,9 +135,28 @@ acceptance was not performed, and the work does not claim full F-13 parity. See
   and modifier-only keys are ignored. Only changed rows persist as overrides, so untouched actions keep every default
   chord (including both cheat-sheet chords), invalid, duplicate or first-default-equal entries fall back to defaults, Save blocks
   duplicate chords, and restart restores the saved chords. The engine key bindings stay at their defaults in this part
-  (the engine editor and app-vs-engine collision check are the next block). Suite 17/17, regression 492/492 and the full
+  (the engine editor and app-vs-engine collision check are a separate later block). Suite 17/17, regression 492/492 and the full
   WPF/Windows Avalonia, package-contract and local publish checks passed at product `24ec18f`; Linux CI and native
   keyboard acceptance are separate.
+- App-hotkey correction, owner-approved 2026-10-25: reject unsupported modifiers while capture stays active (Escape
+  still cancels with those modifiers), reject
+  numeric/comma-combined/undefined key tokens with default restoration at load, and refresh an already-open cheat sheet
+  after Save or Reset followed by Save while preserving its filter. Product `c45fd958` implements the repairs; compiled
+  pre-production RED observed 29 failures/37 passes (66 total, 0 skipped, exit 1), then the same focused command passed
+  GREEN (66 passed, 0 failed/skipped, exit 0). Fresh local WPF, Windows Avalonia, package-contract and publish/content
+  gates passed at that product checkpoint. Published [PR #181](https://github.com/Gorgutc/LLPlayer_ru/pull/181) has a
+  VERIFIED PREMERGE CHECKPOINT at last-checked head `56117ee774d97f8014926e684e7c860978fa7f4a`: Windows run 40193094026
+  and Linux run 40193094196, attempt 1 SUCCESS including package publish/artifact uploads. The prior document review
+  reported zero Critical/Important findings; this docs-only delta awaits independent infrastructure review. Check the
+  live PR/vault handoff for latest head, merge/main and final handoff receipts; no post-merge acceptance is claimed here.
+  The preceding PR #180 checkpoint does not accept these repairs. Native desktop/DPI/keyboard acceptance remains
+  NOT_RUN / DEFERRED BY OWNER. F-13 remains IN PROGRESS. Proposed next work, pending owner approval to implement, is
+  Settings parity for the WPF Subtitles Sidebar page: seven new preferences (`SidebarLeft`, `SidebarTextMask`,
+  `SidebarShowOriginalText`, `SidebarSubPadding`, `SidebarFontFamily`, `SidebarFontSize`, `SidebarFontWeight`), with
+  visibility/width already present. Proposed WPF defaults are padding `5`, `Segoe UI`, size `16`, `Normal`, versus current
+  Avalonia size `14` and padding `8,6`; Linux uses available font fallback without installing fonts. These default
+  changes still need owner approval. See
+  [current status and the dated review erratum](../docs/agent/f13-status-2026-10-18.md#current-bounded-correction-and-proposed-continuation--2026-10-25).
 - Audio waveform overlay (F-12 audio half): the transport bar draws the engine's peak envelope under the seek slider
   with a persisted ShowWaveform toggle (default off, like WPF) next to the A-B button. OFF performs no audio decode;
   disabling the toggle clears the engine peaks; peaks stay engine-owned and transient, and the display-only control

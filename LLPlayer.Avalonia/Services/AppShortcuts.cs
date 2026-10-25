@@ -57,6 +57,8 @@ public sealed class AppShortcutMap
         new(ToggleTheme,          WpfKey.T,     true,  false, true,  "Toggle Dark / Light Theme"),
     ];
 
+    static readonly HashSet<string> KeyNames = new(Enum.GetNames<WpfKey>(), StringComparer.OrdinalIgnoreCase);
+
     static readonly IReadOnlyDictionary<string, string> Aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
         ["Esc"] = nameof(WpfKey.Escape),
@@ -141,7 +143,7 @@ public sealed class AppShortcutMap
             return false;
         if (Aliases.TryGetValue(token, out string? canonical))
             token = canonical;
-        if (!Enum.TryParse(token, true, out WpfKey parsed) || parsed is WpfKey.None)
+        if (!KeyNames.Contains(token) || !Enum.TryParse(token, true, out WpfKey parsed) || parsed is WpfKey.None)
             return false;
         if (parsed is WpfKey.LeftCtrl or WpfKey.RightCtrl or WpfKey.LeftAlt or WpfKey.RightAlt
             or WpfKey.LeftShift or WpfKey.RightShift or WpfKey.LWin or WpfKey.RWin)
