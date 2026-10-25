@@ -12,7 +12,7 @@
     "Use case: precise-object-edit. Asset type: native Windows desktop shortcut icon. Image 1 is the exact edit target, the existing LLPlayer logo. Change ONLY the pink/magenta colored speech-bubble gradient to a clear royal-blue gradient (main blue around #2563EB or #2F80ED, darker blue at the bottom). Preserve the exact existing 2D silhouette, circular bubble outline, lower-left speech tail, white play triangle, triangle position/proportions, soft drop shadow, edge antialiasing, composition, framing and transparent alpha background. Keep the white/gray triangle and neutral shadow unchanged. No redesign, no extra elements, no text, no outline, no border, no badge, no 3D, no background rectangle. Return a clean square transparent PNG suitable for a multi-size Windows ICO; maintain the original icon's proportions and alignment.",
     "Use case: precise-object-edit, transparent Windows application icon cleanup. Image 1 is the BLUE edit target. Image 2 is the original LLPlayer geometry reference only. Keep Image 1's blue speech bubble, white play triangle, shadow, exact relative shape, size and alignment unchanged. Make one narrowly targeted correction: eliminate every isolated blue fleck, speck, blob, halo or disconnected fragment outside the bubble. The complete exterior around the bubble must be clean fully transparent alpha, with only a smooth antialiased boundary. Preserve the lower-left speech tail and the original silhouette of Image 2. Keep the blue gradient, white triangle and neutral triangle drop shadow; do not add texture or change design, zoom, proportions, canvas framing or colors. No background rectangle, border, text or extra object. Return one clean square transparent PNG ready for an ICO."
   ],
-  "conversion": "Pillow 12.3.0: LANCZOS downsample of selected generated RGBA PNG to256x256, then multiframe ICO encoding. No manual recolor, alpha masking, cropping or redraw.",
+  "conversion": "Pillow 12.3.0: original selected generated RGBA PNG downsampled to 256x256 with LANCZOS. Existing unchanged 256x256 PNG encoded as 32-bit DIB/BMP ICO frames using bitmap_format=bmp. No manual recolor, alpha masking, cropping or redraw.",
   "selected_generation": "exec-f6facec4-0f63-4cd4-a5cd-d8aff7c874fc.png",
   "png": {
     "path": "llplayer-avalonia-blue.png",
@@ -24,8 +24,8 @@
   },
   "ico": {
     "path": "llplayer-avalonia-blue.ico",
-    "bytes": 85025,
-    "sha256": "4eb3cf36e8106f58576da7cc493e02bb7629bb1b00aedfd7c0a512c36cc15230",
+    "bytes": 361102,
+    "sha256": "8354c6f8a8a42e6f9038a93a80afc96d8db2dbc1e300cbb7309990b058bdb72d",
     "frames": [
       16,
       24,
@@ -34,7 +34,11 @@
       64,
       128,
       256
-    ]
+    ],
+    "encoding": "32-bit uncompressed DIB/BMP",
+    "dib_header_bytes": 40,
+    "and_mask": "No 1-bpp AND mask follows any frame: bytesInRes is 40+4*w*h and biHeight is twice the frame height, so Windows must rely on the 32-bpp alpha channel. Windows 10/11 renders these frames correctly (verified by CreateIconFromResourceEx loading all seven and by the user-confirmed blue Desktop icon). This is a container-format deviation, not an established cause of the earlier white icon.",
+    "prior_png_encoded_sha256": "4eb3cf36e8106f58576da7cc493e02bb7629bb1b00aedfd7c0a512c36cc15230"
   },
   "verification": {
     "ico_256_pixels_equal_png": true,
@@ -43,6 +47,109 @@
       255
     ],
     "original_unchanged": true,
-    "qualitative": "Speech bubble, tail, centered white play triangle, neutral triangle shadow and blue gradient visually inspected at desktop-icon size. Generative edit is not claimed pixel-identical to original."
+    "qualitative": "Speech bubble, tail, centered white play triangle, neutral triangle shadow and blue gradient visually inspected at desktop-icon size. Generative edit is not claimed pixel-identical to original.",
+    "dib_frames": [
+      {
+        "size": 16,
+        "bit_depth": 32,
+        "format": "DIB",
+        "header_bytes": 40,
+        "bytes": 1064,
+        "alpha_range": [
+          0,
+          255
+        ]
+      },
+      {
+        "size": 24,
+        "bit_depth": 32,
+        "format": "DIB",
+        "header_bytes": 40,
+        "bytes": 2344,
+        "alpha_range": [
+          0,
+          255
+        ]
+      },
+      {
+        "size": 32,
+        "bit_depth": 32,
+        "format": "DIB",
+        "header_bytes": 40,
+        "bytes": 4136,
+        "alpha_range": [
+          0,
+          255
+        ]
+      },
+      {
+        "size": 48,
+        "bit_depth": 32,
+        "format": "DIB",
+        "header_bytes": 40,
+        "bytes": 9256,
+        "alpha_range": [
+          0,
+          255
+        ]
+      },
+      {
+        "size": 64,
+        "bit_depth": 32,
+        "format": "DIB",
+        "header_bytes": 40,
+        "bytes": 16424,
+        "alpha_range": [
+          0,
+          255
+        ]
+      },
+      {
+        "size": 128,
+        "bit_depth": 32,
+        "format": "DIB",
+        "header_bytes": 40,
+        "bytes": 65576,
+        "alpha_range": [
+          0,
+          255
+        ]
+      },
+      {
+        "size": 256,
+        "bit_depth": 32,
+        "format": "DIB",
+        "header_bytes": 40,
+        "bytes": 262184,
+        "alpha_range": [
+          0,
+          255
+        ]
+      }
+    ],
+    "system_drawing": {
+      "per_frame_decode": "PASS: all seven frames isolated in memory as single-frame ICOs decode at their exact dimensions with Format32bppArgb and alpha range 0..255.",
+      "multiframe_size_selection": "Exact 16/24/32/48/64/128 requests select matching frames. System.Drawing.Icon(path, Size(256,256)) selects 128px, while the isolated 256px frame decodes correctly. This selection behavior does not establish Explorer rendering.",
+      "app_launch_or_desktop_ui": "NOT_RUN by the asset conversion worker at the earlier DIB-conversion checkpoint. Subsequent user manual results are recorded separately below."
+    }
+  },
+  "compatibility_conversion": {
+    "reason": "At the earlier DIB-conversion checkpoint, the user reported that the direct executable shortcut launched correctly, while Explorer Desktop displayed a generic paper icon. Re-encoding the same PNG with DIB/BMP frames was a compatibility experiment; at that checkpoint no proven root cause or Explorer acceptance was claimed.",
+    "png_unchanged": true,
+    "desktop_retest": "NOT_RUN at the earlier DIB-conversion checkpoint; superseded for the old 4756 payload repair only by the subsequent manual checkpoint below.",
+    "checkpoint": "Earlier DIB-conversion checkpoint on 2026-10-25; the statements below describe evidence available before the subsequent path diagnosis and manual retest."
+  },
+  "subsequent_path_diagnosis_and_manual_checkpoint": {
+    "date": "2026-10-25",
+    "payload": "4756c2ea357a-20261025T135110782Z-57b566a3",
+    "evidence": "artifacts/windows-avalonia-desktop-test-build-2026-10-25/desktop-msix-path-fix.json",
+    "user_manual_evidence": "artifacts/windows-avalonia-desktop-test-build-2026-10-25/user-manual-checkpoint.json",
+    "diagnosis": "Native GetFinalPathNameByHandle resolved the logical AppData executable and ICO paths inside the Codex MSIX virtualized filesystem to physical OpenAI.Codex LocalCache paths. Explorer could not access the icon through its logical AppData name. The actual shortcut IconLocation was changed to the physical ICO path; its target also used the physical executable path.",
+    "earlier_user_manual_result": "PASS for direct executable shortcut startup and Open File Location; at that time the icon still appeared generic. User reported: приложение и папка открылись но иконка все еще дефолтовая",
+    "subsequent_user_manual_result": "PASS for the repaired shortcut displaying the blue icon. User reported: Иконка стала синей",
+    "scope": "These manual results apply only to the old 4756 payload and its physical-path shortcut repair. They do not prove that DIB encoding caused or fixed the original Explorer behavior.",
+    "future_deployment_at_this_checkpoint": "PENDING: a fresh schema-2 deployment under the new default %USERPROFILE%/Applications/LLPlayer-Avalonia-TestBuild with a directly targeted physical executable still requires separate deployment and receipt verification.",
+    "not_accepted": "Full GUI behavior, DPI variants, media playback, subtitle rendering, real ASR/OCR models, GPU behavior and broader Windows/Linux parity are not accepted by this icon checkpoint.",
+    "automation_launched_player": false
   }
 }

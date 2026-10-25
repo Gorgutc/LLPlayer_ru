@@ -83,7 +83,7 @@ $ffmpeg = @('avcodec-62.dll','avdevice-62.dll','avfilter-11.dll','avformat-62.dl
 $publishSucceeded = $false
 Push-Location $repoRoot
 try {
-    & dotnet publish 'LLPlayer.Avalonia/LLPlayer.Avalonia.csproj' -c Release -r win-x64 --self-contained false -warnaserror -o $package
+    & dotnet publish 'LLPlayer.Avalonia/LLPlayer.Avalonia.csproj' -c Release -r win-x64 --self-contained false -warnaserror -o $package | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Avalonia publish failed with exit code $LASTEXITCODE." }
     Assert-NormalPath $package
     # TesseractOCR's transitive targets copy both Windows native folders. Portable OCR remains Linux-only.
