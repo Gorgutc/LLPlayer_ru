@@ -500,6 +500,7 @@ try {
     $afterMigration = & $updater -InstallRoot $migratedInstall -DesktopPath $migrationDesktop -IconPath $icon -PackageDir $packageB
     $afterOwner = Read-Json (Join-Path $migratedInstall 'owner.json')
     Assert-True ($afterOwner.schema -eq 2 -and -not $afterMigration.legacyVariant -and $afterOwner.legacy.variant -eq 'direct-current-source-icon') 'A later refresh lost or overwrote the recorded schema-1 migration provenance.'
+    Assert-True ($afterOwner.PSObject.Properties['migratedFromSchema'] -and $afterOwner.migratedFromSchema -eq 1) 'A later refresh dropped the permanent migratedFromSchema ownership marker.'
     Assert-True ((Hash $legacyDirect.launcher) -ceq $legacyDirectBefore.launcher -and (Hash $legacyDirect.exe) -ceq $legacyDirectBefore.exe) 'A later refresh modified the retained schema-1 installation.'
     Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $migratedInstall 'builds') -Directory).Count -eq 2) 'A later refresh did not retain the migrated build.'
 

@@ -111,7 +111,7 @@ function Get-CleanCommit {
     if ($LASTEXITCODE -ne 0 -or $dirty.Count -ne 0) { throw 'Commit the reviewed task before refreshing the desktop build; the source tree must be clean.' }
     return $commit
 }
-function Resolve-GlobalRuntime([version]$Minimum) {
+function Get-RegisteredRuntimeRoots {
     $candidates = @()
     foreach ($base in @($env:ProgramW6432,$env:ProgramFiles)) { if ($base) { $candidates += Join-Path $base 'dotnet' } }
     $registration = 'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\dotnet\Setup\InstalledVersions\x64'
@@ -119,18 +119,28 @@ function Resolve-GlobalRuntime([version]$Minimum) {
         $registered = Get-ItemProperty -LiteralPath $registration -ErrorAction SilentlyContinue
         if ($registered -and $registered.PSObject.Properties['InstallLocation']) { $candidates += [string]$registered.InstallLocation }
     }
-    $candidateRoots = @($candidates | Select-Object -Unique | ForEach-Object { Get-NormalPath $_ })
-    # A persistent override is acceptable only when it names the same registered installation; any other
-    # value would make the direct apphost depend on environment not controlled by this refresh.
+    return @($candidates | Select-Object -Unique | ForEach-Object { Get-NormalPath $_ })
+}
+function Get-PersistentRuntimeOverrides([string[]]$RegisteredRoots) {
+    $result = New-Object 'System.Collections.Generic.List[string]'
     foreach ($scope in @('User','Machine')) {
         foreach ($variable in @('DOTNET_ROOT_X64','DOTNET_ROOT')) {
             $value = [Environment]::GetEnvironmentVariable($variable, $scope)
             if (-not $value) { continue }
             $overrideRoot = Get-NormalPath $value
-            $matched = @($candidateRoots | Where-Object { $overrideRoot -ieq $_ })
-            if (-not $matched.Count) { throw "Direct desktop launch requires no persistent $scope $variable override outside the registered x64 .NET installation; no global environment is changed automatically." }
+            if (-not @($RegisteredRoots | Where-Object { $overrideRoot -ieq $_ }).Count) {
+                throw "Direct desktop launch requires no persistent $scope $variable override outside the registered x64 .NET installation; no global environment is changed automatically."
+            }
+            if (-not $result.Contains($overrideRoot)) { $result.Add($overrideRoot) }
         }
     }
+    return @($result)
+}
+function Resolve-GlobalRuntime([version]$Minimum) {
+    $registeredRoots = Get-RegisteredRuntimeRoots
+    $overrideRoots = Get-PersistentRuntimeOverrides $registeredRoots
+    # An apphost prefers DOTNET_ROOT_<ARCH>/DOTNET_ROOT when it is set, so those roots are searched first.
+    $candidateRoots = @(@($overrideRoots) + @($registeredRoots) | Select-Object -Unique)
     $found = New-Object 'System.Collections.Generic.List[object]'
     foreach ($root in $candidateRoots) {
         $shared = Join-Path $root 'shared/Microsoft.NETCore.App'
@@ -273,6 +283,8 @@ if ($LegacyRootsForTests -or $FailAfterReceiptForTests) {
     if (-not $PackageDir) { throw 'The contract-fixture inputs require -PackageDir; a normal refresh only migrates the bound known legacy roots.' }
     if ($LegacyRootsForTests) { $script:testLegacyRootAllowlist = @($LegacyRootsForTests | ForEach-Object { Get-NormalPath $_ }) }
 }
+# Fail fast on an unusable persistent runtime override before any publish work starts.
+$null = Get-PersistentRuntimeOverrides (Get-RegisteredRuntimeRoots)
 $iconBytes = [IO.File]::ReadAllBytes($IconPath)
 if ($iconBytes.Length -lt 22 -or [BitConverter]::ToUInt16($iconBytes,0) -ne 0 -or [BitConverter]::ToUInt16($iconBytes,2) -ne 1 -or [BitConverter]::ToUInt16($iconBytes,4) -eq 0) { throw 'IconPath must contain a Windows ICO image.' }
 $iconHash = Get-BytesHash $iconBytes
@@ -386,7 +398,8 @@ try {
         if ($oldOwner.schema -eq 2) {
             $oldBlue = Get-NormalPath (Join-Path $oldBuild 'blue.ico')
             if ($oldReceipt.iconPath -ine $oldBlue -or (Get-Hash $oldBlue) -cne $oldReceipt.iconSha256) { throw 'The selected per-build icon was edited.' }
-            if ($oldReceipt.PSObject.Properties['workingDirectory'] -and [string]$oldReceipt.workingDirectory -ine $oldPayload) { throw 'The existing build receipt working directory differs from its payload.' }
+            if (-not $oldReceipt.PSObject.Properties['workingDirectory']) { throw 'The existing build receipt is missing its working directory identity.' }
+            if ([string]$oldReceipt.workingDirectory -ine $oldPayload) { throw 'The existing build receipt working directory differs from its payload.' }
             if (Test-Path -LiteralPath $shortcut) {
                 Assert-DirectLink $shortcut $oldExe $oldPayload $oldBlue
                 if ((Get-Hash $shortcut) -cne $oldReceipt.shortcutSha256) { throw 'The selected build shortcut differs from its receipt.' }
@@ -522,7 +535,10 @@ try {
             $newOwner['migratedFromSchema'] = 1
             $newOwner['legacy'] = $legacyMigration
         }
-        elseif ($oldOwner -and $oldOwner.PSObject.Properties['legacy']) { $newOwner['legacy'] = $oldOwner.legacy }
+        elseif ($oldOwner -and $oldOwner.PSObject.Properties['legacy']) {
+            $newOwner['legacy'] = $oldOwner.legacy
+            if ($oldOwner.PSObject.Properties['migratedFromSchema']) { $newOwner['migratedFromSchema'] = $oldOwner.migratedFromSchema }
+        }
         $ownerBytes = $utf8.GetBytes(($newOwner | ConvertTo-Json -Depth 4) + [Environment]::NewLine)
         $receipt = [ordered]@{
             schema=2; owner=$ownerTag; buildId=$buildId; buildMode=$buildMode; sourceCommit=$sourceCommit

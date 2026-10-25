@@ -75,7 +75,9 @@ to the physical direct form first and record that as a separate action. Migratio
 legacy roots, the retained owner/current/shortcut byte hashes, the previous
 build id and the launcher/icon identities in `owner.json` and in the new receipt. Foreign or edited ownership/link
 content must be rejected rather than overwritten; the default refresh also refuses a schema-1-shaped root outside the
-bound legacy locations. Record an owned migration in the update evidence and handoff.
+bound legacy locations. The migrating build's receipt carries `legacyMigration`; later refresh receipts describe only
+their own build, while `owner.json` keeps `legacy` and `migratedFromSchema` as the permanent ownership provenance.
+Record an owned migration in the update evidence and handoff.
 
 Persist only physical paths for the link target, working directory, icon, payload, receipts and current metadata.
 The updater validates existing filesystem paths through handles and rejects logical aliases. The install destination is
@@ -118,7 +120,9 @@ icon file, so extraction inside the virtualizing host did not establish cross-pr
 cause is the logical/physical path mismatch; neither stale display/cache nor ICO encoding is established as its cause.
 
 The system x64 runtime present on this machine is .NET `10.0.7`, which satisfies the package's declared `10.0.0`
-framework requirement; no application execution on `10.0.7` is recorded. One separately authorized `--version` trace
+framework requirement. The user-confirmed direct-EXE startup of the retained payload presumably resolved that
+registered runtime (it is the only eligible `10.x` installation), but the runtime identity was not instrumented, so
+execution on `10.0.7` is inferred rather than measured. One separately authorized `--version` trace
 exited 0 using an explicit temporary `DOTNET_ROOT_X64` runtime `10.0.13`, not the registered `10.0.7` runtime, and
 proves only that non-GUI host resolution. At the 2026-10-25 bounded manual checkpoint, the user confirmed application
 startup and **Open File Location** on the earlier direct link (while its `IconLocation` still named the logical AppData
@@ -171,8 +175,9 @@ all three verified schema 1 shortcut forms (the PowerShell form through a subst 
 logical-to-physical record translation) and preserved legacy bytes; refusal of edited/foreign owner, pointer, receipt,
 payload, icon, launcher and link identities; refusal of missing pointer identity fields, unbound/aliased legacy roots,
 foreign install roots, foreign shortcuts, reparse points, redirected drive aliases, overlapping inputs, invalid icons,
-plural/roll-forward/dev/non-matching deps runtimeconfig and broken/locked packages; publisher archive derivation from
-the known `-OutDir`; injected post-receipt cleanup for pre-existing empty and new roots; compensating pointer/owner
+plural/roll-forward/dev/non-matching deps runtimeconfig and broken/locked packages; static checks of the fresh publish
+branch, clean-`HEAD` binding and publisher location; injected post-receipt cleanup for pre-existing empty and new roots;
+compensating pointer/owner
 failure rollback without temporary or staged link files; and the absence of process, runtime-install or persistent
 environment changes. The suite requires
 Windows, `subst` with a free drive letter and a registered x64 .NET 10 runtime; it is not part of CI. The real
