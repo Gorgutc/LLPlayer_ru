@@ -4,12 +4,12 @@ param(
     [string]$DotNetRoot,
     [string]$IconPath = (Join-Path $PSScriptRoot 'assets/llplayer-avalonia-blue.ico'),
     [string]$PackageDir,
-    [string[]]$LegacyRootsForTests
+    [string[]]$LegacyRootsForTests,
+    [switch]$FailAfterReceiptForTests
 )
 # Local test deployment only. Never starts/stops a player, installs a runtime or deletes old payloads.
-# -LegacyRootsForTests is a contract-fixture seam: it only extends the bound legacy-root allowlist and is
-# rejected without -PackageDir, so a normal refresh still has to resolve the shortcut into a bound root
-# and verify every owner/receipt/executable/icon/launcher/shortcut identity below.
+# -LegacyRootsForTests and -FailAfterReceiptForTests are contract-fixture seams: they require -PackageDir, do not
+# bypass identity checks, and are rejected before any fresh publish. A normal refresh cannot use them.
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'Desktop test builds require Windows.' }
@@ -160,8 +160,11 @@ function Resolve-GlobalRuntime([version]$Minimum) {
     # preferred; the lowest higher minor is used only when that minor is absent.
     $sameMinor = @($found | Where-Object { $_.version.Major -eq $Minimum.Major -and $_.version.Minor -eq $Minimum.Minor } | Sort-Object { $_.version } -Descending)
     if ($sameMinor.Count) { return [pscustomobject]@{ root=$sameMinor[0].root; version=$sameMinor[0].version.ToString() } }
-    $higher = @($found | Where-Object { $_.version.Major -eq $Minimum.Major -and $_.version.Minor -gt $Minimum.Minor } | Sort-Object { $_.version } -Descending)
-    if ($higher.Count) { return [pscustomobject]@{ root=$higher[0].root; version=$higher[0].version.ToString() } }
+    $higherMinor = @($found | Where-Object { $_.version.Major -eq $Minimum.Major -and $_.version.Minor -gt $Minimum.Minor } | ForEach-Object { $_.version.Minor } | Sort-Object | Select-Object -First 1)
+    if ($null -ne $higherMinor) {
+        $higher = @($found | Where-Object { $_.version.Minor -eq $higherMinor } | Sort-Object { $_.version } -Descending)
+        return [pscustomobject]@{ root=$higher[0].root; version=$higher[0].version.ToString() }
+    }
     throw "A globally installed x64 .NET 10 runtime compatible with $Minimum is required for direct launch. No runtime is installed or copied automatically."
 }
 if (-not ('LLPlayerDesktopTest.NativeShortcutV2' -as [type])) {
@@ -266,9 +269,9 @@ $IconPath = Assert-PhysicalPath $IconPath
 $repoRoot = Assert-PhysicalPath $repoRoot
 $InstallRoot = Resolve-PhysicalDestination $InstallRoot
 if ($InstallRoot -ieq $DesktopPath -or (Test-Within $InstallRoot $DesktopPath) -or (Test-Within $DesktopPath $InstallRoot)) { throw 'InstallRoot and DesktopPath must not overlap.' }
-if ($LegacyRootsForTests) {
-    if (-not $PackageDir) { throw '-LegacyRootsForTests is a contract-fixture input and requires -PackageDir; a normal refresh only migrates the bound known legacy roots.' }
-    $script:testLegacyRootAllowlist = @($LegacyRootsForTests | ForEach-Object { Get-NormalPath $_ })
+if ($LegacyRootsForTests -or $FailAfterReceiptForTests) {
+    if (-not $PackageDir) { throw 'The contract-fixture inputs require -PackageDir; a normal refresh only migrates the bound known legacy roots.' }
+    if ($LegacyRootsForTests) { $script:testLegacyRootAllowlist = @($LegacyRootsForTests | ForEach-Object { Get-NormalPath $_ }) }
 }
 $iconBytes = [IO.File]::ReadAllBytes($IconPath)
 if ($iconBytes.Length -lt 22 -or [BitConverter]::ToUInt16($iconBytes,0) -ne 0 -or [BitConverter]::ToUInt16($iconBytes,2) -ne 1 -or [BitConverter]::ToUInt16($iconBytes,4) -eq 0) { throw 'IconPath must contain a Windows ICO image.' }
@@ -346,6 +349,7 @@ try {
             $destinationOwner = Read-Json $ownerPath
             $ownerBound = $destinationOwner.installRoot -ieq $InstallRoot -or ($destinationOwner.schema -eq 1 -and (Test-KnownLegacyRoot $destinationOwner.installRoot) -and (Test-KnownLegacyRoot $InstallRoot))
             if ($destinationOwner.owner -ne $ownerTag -or $destinationOwner.schema -notin @(1,2) -or -not $ownerBound) { throw 'InstallRoot has a foreign or incompatible owner record.' }
+            if ($destinationOwner.schema -eq 2 -and [string]$destinationOwner.shortcutName -cne $shortcutName) { throw 'InstallRoot owner record names a different Desktop shortcut.' }
         }
         elseif (@(Get-ChildItem -LiteralPath $InstallRoot -Force).Count -gt 0) { throw 'Refusing to claim a non-empty foreign InstallRoot.' }
     }
@@ -430,14 +434,13 @@ try {
                 if (-not (Test-Path -LiteralPath (Join-Path $sdk 'dotnet.exe') -PathType Leaf)) { throw 'DotNetRoot must contain the build SDK host.' }
                 $env:DOTNET_ROOT = $sdk; $env:DOTNET_ROOT_X64 = $sdk; $env:PATH = $sdk + ';' + $savedPath
             }
-            # The publisher forwards native `dotnet publish` stdout into this pipeline; select its archive output.
-            $publishedRaw = @(& (Join-Path $PSScriptRoot 'publish-avalonia.ps1') -OutDir (Join-Path $job 'archive') -StagingDir $staging)
+            & (Join-Path $PSScriptRoot 'publish-avalonia.ps1') -OutDir (Join-Path $job 'archive') -StagingDir $staging | Out-Null
         }
         finally { $env:DOTNET_ROOT = $savedRoot; $env:DOTNET_ROOT_X64 = $savedRootX64; $env:PATH = $savedPath }
-        $published = @($publishedRaw | Where-Object { $_ -is [string] -and $_.Trim().EndsWith('.zip', [StringComparison]::OrdinalIgnoreCase) })
-        if ($published.Count -ne 1) { throw 'The Avalonia publisher did not return exactly one archive path.' }
+        $archiveCandidates = @(Get-ChildItem -LiteralPath (Join-Path $job 'archive') -File -Filter '*.zip')
+        if ($archiveCandidates.Count -ne 1) { throw 'The Avalonia publisher did not produce exactly one archive.' }
         if ((Get-CleanCommit) -cne $sourceCommit) { throw 'Source HEAD changed while publishing; desktop selection is unchanged.' }
-        $sourceArchive = Assert-PhysicalPath ([string]$published[0])
+        $sourceArchive = Assert-PhysicalPath $archiveCandidates[0].FullName
         $archiveHash = Get-Hash $sourceArchive
         $packages = @(Get-ChildItem -LiteralPath $staging -Directory | Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'LLPlayer.Avalonia.exe') -PathType Leaf })
         if ($packages.Count -ne 1) { throw 'The publisher did not produce one Avalonia package.' }
@@ -459,9 +462,9 @@ try {
     $runtime = Resolve-GlobalRuntime ([version]$config.runtimeOptions.framework.version)
     $installRootExisted = Test-Path -LiteralPath $InstallRoot
     $build = $null; $buildId = $null; $ownerBytes = $null; $pointerBytes = $null; $newLinkHash = $null; $receiptPath = $null
-    [IO.Directory]::CreateDirectory($InstallRoot) | Out-Null
-    $InstallRoot = Assert-PhysicalPath $InstallRoot
     try {
+        [IO.Directory]::CreateDirectory($InstallRoot) | Out-Null
+        $InstallRoot = Assert-PhysicalPath $InstallRoot
         $prefix = if ($sourceCommit) { $sourceCommit.Substring(0,12) } else { 'prebuilt' }
         $buildId = $prefix + '-' + [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8)
         $build = Get-NormalPath (Join-Path $InstallRoot ('builds/' + $buildId))
@@ -544,6 +547,7 @@ try {
         }
         $pointerBytes = $utf8.GetBytes(($pointer | ConvertTo-Json) + [Environment]::NewLine)
         Assert-Snapshot $beforeLink; Assert-Snapshot $beforePointer; Assert-Snapshot $beforeOwner
+        if ($FailAfterReceiptForTests) { throw 'Injected post-receipt failure for contract fixtures.' }
         if ($sourceCommit -and (Get-CleanCommit) -cne $sourceCommit) { throw 'Source HEAD changed before selection; the previous build is retained.' }
         if (Test-Path -LiteralPath $shortcut) { [IO.File]::Replace($stagedLink, $shortcut, [System.Management.Automation.Language.NullString]::Value) }
         else { [IO.File]::Move($stagedLink, $shortcut) }
@@ -570,8 +574,9 @@ try {
             $expectedBuild = Get-NormalPath (Join-Path $InstallRoot ('builds/' + $buildId))
             if ($safeBuild -cne $expectedBuild) { $rollbackFailures += 'Unsafe build rollback target.' }
             elseif ((Test-Path -LiteralPath $safeBuild -PathType Container) -and
-                (-not $installRootExisted -or -not (Test-Path -LiteralPath (Join-Path $safeBuild 'receipt.json') -PathType Leaf))) {
-                # A complete unselected build is retained as failed-refresh evidence only in an existing managed root.
+                (-not $destinationOwner -or -not (Test-Path -LiteralPath (Join-Path $safeBuild 'receipt.json') -PathType Leaf))) {
+                # Retain a complete unselected build as failed-refresh evidence only in an already managed root;
+                # incomplete builds and builds under a pre-existing empty/new destination are removed.
                 try { [IO.Directory]::Delete($safeBuild, $true) } catch { $rollbackFailures += $_.Exception.Message }
             }
         }

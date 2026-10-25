@@ -20,9 +20,10 @@ Normal refresh must omit `-PackageDir`: the updater freshly publishes the Window
 and after publication and before activating the payload. Do not make later task edits and still describe that receipt
 as the final build. Re-run refresh after the final source/docs/tooling commit changes `HEAD`.
 
-Use an already available .NET 10 SDK for publication and the existing registered system x64 .NET 10 runtime for the
-direct app target. The updater accepts `-DotNetRoot` for an existing SDK directory and also resolves the process's
-`DOTNET_ROOT` or the system installation. For example:
+Use an already available .NET 10 SDK for publication (pass it via `-DotNetRoot` when it is not the default `PATH` SDK
+and record the SDK version in the handoff; the updater never installs or selects an SDK itself) and the existing
+registered system x64 .NET 10 runtime for the direct app target. The updater accepts `-DotNetRoot` for an existing SDK
+directory and also resolves the process's `DOTNET_ROOT` or the system installation. For example:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\update-desktop-test-build.ps1 -DotNetRoot 'C:\path\to\existing\dotnet'
@@ -67,7 +68,11 @@ hash. `current.json` and the Desktop link must identify the same selected build.
 installation may be migrated safely to the direct schema 2 link; its legacy launcher/icon files and previous payloads
 are retained. Three verified schema 1 shortcut forms are accepted: the original PowerShell launcher, the direct
 physical-icon repair (`desktop-blue-dib.ico`), and the intermediate direct link still using the old `blue.ico`.
-Migration records the physical and recorded legacy roots, the retained owner/current/shortcut byte hashes, the previous
+The PowerShell form records logical AppData paths for its arguments, working directory and icon; a refresh resolves it
+only where that logical view reaches the same physical root (the virtualizing host that created it, or an equivalent
+alias). On a host where the logical root is unavailable the updater refuses instead of guessing, so repair such a link
+to the physical direct form first and record that as a separate action. Migration records the physical and recorded
+legacy roots, the retained owner/current/shortcut byte hashes, the previous
 build id and the launcher/icon identities in `owner.json` and in the new receipt. Foreign or edited ownership/link
 content must be rejected rather than overwritten; the default refresh also refuses a schema-1-shaped root outside the
 bound legacy locations. Record an owned migration in the update evidence and handoff.
@@ -91,8 +96,10 @@ replacement and the pointer write, the next run refuses the delivery because the
 receipt. Recover by inspecting which retained build's receipt matches the installed link; the previous selection stays
 in `current.json`. A failed refresh keeps a complete unselected build as evidence only inside an already managed root
 (with a `current.json`); a failed first installation removes its new root, incomplete build directories are removed,
-and an emptied `builds` directory is pruned, so the next attempt can run cleanly. Report a failed refresh from its
-actual receipt and preserved prior state rather than claiming that a new payload became current.
+and an emptied `builds` directory is pruned, so the next attempt can run cleanly. These guarantees apply within a run
+that reaches its rollback path: a process killed mid-run can leave an incomplete build directory or temporary file
+for the next handoff to inspect, because there is no startup sweep. Report a failed refresh from its actual receipt and
+preserved prior state rather than claiming that a new payload became current.
 
 ## Evidence and recovery
 
@@ -129,11 +136,12 @@ repository guide, commit history and these digests are the tracked description o
 
 `-PackageDir` is an offline/prebuilt validation mode for contract tests or an explicitly requested republish of a
 verified earlier payload. Its receipt uses `buildMode=prebuilt-validated` and `sourceCommit=null`; it must never be
-reported as a fresh build of current `HEAD`. It is not the normal refresh command. In that mode only,
-`-LegacyRootsForTests` may add explicit fixture roots to the bound schema-1 legacy-root allowlist for the offline
-migration contracts; it is rejected without `-PackageDir` and does not skip shortcut discovery, handle-based physical
+reported as a fresh build of current `HEAD`. It is not the normal refresh command. In that mode only, two
+contract-fixture inputs exist: `-LegacyRootsForTests` adds explicit fixture roots to the bound schema-1 legacy-root
+allowlist, and `-FailAfterReceiptForTests` injects a post-receipt failure for cleanup contracts. Both require
+`-PackageDir` and are rejected before any fresh publish; they do not skip shortcut discovery, handle-based physical
 resolution or any owner/receipt/executable/icon/launcher/shortcut identity check. A normal refresh can therefore only
-migrate the bound known legacy locations. Both inputs are test or recovery seams, not alternate production paths.
+migrate the bound known legacy locations and cannot inject failures.
 
 Do not edit the pointer by hand, delete older payloads or restart the player to recover from an update failure.
 Keep the previous build/receipt and failed verification output. If the owner explicitly requests rollback, extract a
@@ -159,15 +167,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-deskt
 They build synthetic packages under ignored `artifacts/` and exercise, through the production code path: direct
 argument-free target/working-directory/per-build-icon COM and independent IShellLink/`ExtractIconEx` readback;
 physical/canonical stored paths; a fresh schema-2 root; repeated refresh with retained immutable payloads/receipts/icons;
-all three verified schema 1 shortcut forms including logical-to-physical record translation and preserved legacy bytes;
-refusal of edited/foreign owner, pointer, receipt, payload, icon, launcher and link identities; refusal of missing
-pointer identity fields, unbound/aliased legacy roots, foreign install roots, foreign shortcuts, reparse points,
-redirected drive aliases, overlapping inputs, invalid icons, plural/roll-forward/dev/non-matching deps runtimeconfig and
-broken/locked packages; publisher capture filtering; compensating pointer/owner failure rollback without temporary or
-staged link files; and the absence of process, runtime-install or persistent environment changes. The suite requires
-Windows, `subst` with a free drive letter and a registered x64 .NET 10 runtime; it is not part of CI. The offline suite
-always uses prebuilt fixtures, so it cannot prove the fresh-publish wiring, clean-`HEAD` binding or the actual
-deployment; only the real default refresh and its readback do that. Bind every reported suite result to the tested
-commit and script SHA-256 values and keep the actual log; report the actual result without a fixed passing-case count.
-Complete a spawned infrastructure/instruction review and final `/review` before handoff, and keep generated payloads,
-receipts and logs out of source Git.
+all three verified schema 1 shortcut forms (the PowerShell form through a subst logical alias, including
+logical-to-physical record translation) and preserved legacy bytes; refusal of edited/foreign owner, pointer, receipt,
+payload, icon, launcher and link identities; refusal of missing pointer identity fields, unbound/aliased legacy roots,
+foreign install roots, foreign shortcuts, reparse points, redirected drive aliases, overlapping inputs, invalid icons,
+plural/roll-forward/dev/non-matching deps runtimeconfig and broken/locked packages; publisher archive derivation from
+the known `-OutDir`; injected post-receipt cleanup for pre-existing empty and new roots; compensating pointer/owner
+failure rollback without temporary or staged link files; and the absence of process, runtime-install or persistent
+environment changes. The suite requires
+Windows, `subst` with a free drive letter and a registered x64 .NET 10 runtime; it is not part of CI. The real
+nominal/Codex-cache legacy-root regexes are exercised by the actual migration, not by the fixture allowlist. The
+offline suite always uses prebuilt fixtures, so it cannot prove the fresh-publish wiring, clean-`HEAD` binding or the
+actual deployment; only the real default refresh and its readback do that. Bind every reported suite result to the
+tested commit and script SHA-256 values and keep the actual log; report the actual result without a fixed passing-case
+count. Complete a spawned infrastructure/instruction review and final `/review` before handoff, and keep generated
+payloads, receipts and logs out of source Git.

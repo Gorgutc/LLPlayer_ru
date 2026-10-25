@@ -200,12 +200,26 @@ try {
 }
 finally { $writer.Dispose() }
 $iconHash = Hash $icon
-function New-LegacyInstall([string]$Name, [string]$Variant, [string]$Desktop) {
-    # Reproduces the verified 2026-10-25 schema-1 installation shape: owner/current/receipt record the logical
-    # AppData root while the files physically live in the resolved backing directory; the shortcut was repaired to
-    # the physical direct EXE with the physical blue icon (or still uses the original PowerShell launcher).
-    $physical = New-Desktop $Name
-    $logical = [IO.Path]::GetFullPath((Join-Path (Join-Path $work 'legacy-recorded') $Name))
+function Get-FreeDriveLetter {
+    foreach ($letter in @('X', 'Y', 'Z', 'W', 'V', 'U', 'T', 'S', 'R', 'Q', 'P', 'O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G', 'F', 'E', 'D')) {
+        if (-not (Test-Path -LiteralPath ($letter + ':\'))) { return $letter + ':' }
+    }
+    throw 'No free drive letter is available for the alias fixtures.'
+}
+function New-LegacyInstall([string]$Name, [string]$Variant, [string]$Desktop, [string]$LogicalAliasDrive = '') {
+    # Reproduces the verified 2026-10-25 schema-1 installation shape. The PowerShell form used logical AppData
+    # paths for arguments/working directory/icon; a subst drive recreates the host-visible logical->physical view.
+    if ($LogicalAliasDrive) {
+        $parent = New-Desktop ('alias-parent-' + $Name)
+        $physical = Join-Path $parent $Name
+        [IO.Directory]::CreateDirectory($physical) | Out-Null
+        & subst $LogicalAliasDrive $parent | Out-Null
+        $logical = Join-Path ($LogicalAliasDrive + '\') $Name
+    }
+    else {
+        $physical = New-Desktop $Name
+        $logical = [IO.Path]::GetFullPath((Join-Path (Join-Path $work 'legacy-recorded') $Name))
+    }
     $buildId = 'aaaaaaaaaaaa-20261025T000000000Z-11111111'
     $payload = Join-Path $physical ('builds/' + $buildId + '/payload')
     Write-File $payload 'LLPlayer.Avalonia.exe' ($Name + ':legacy executable')
@@ -236,7 +250,7 @@ function New-LegacyInstall([string]$Name, [string]$Variant, [string]$Desktop) {
     Write-Json (Join-Path $physical 'owner.json') $owner
     if ($Variant -eq 'powershell') {
         $arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $logical 'launcher.ps1') + '"'
-        New-Link $shortcut ([IO.Path]::GetFullPath((Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'))) $arguments $physical ($blueIco + ',0') 7
+        New-Link $shortcut ([IO.Path]::GetFullPath((Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'))) $arguments $logical ((Join-Path $logical 'blue.ico') + ',0') 7
     }
     elseif ($Variant -eq 'legacy-icon') {
         New-Link $shortcut $exe '' $payload ($blueIco + ',0') 1
@@ -295,6 +309,8 @@ function Assert-DesktopOnlyContract([string]$DesktopPath, [string]$WpfPath, [str
     Assert-True (($names -join '|') -ceq ($expected -join '|')) $Message
 }
 $dotnetRootBefore = [Environment]::GetEnvironmentVariable('DOTNET_ROOT'); $dotnetRootX64Before = [Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64')
+$userDotnetRootBefore = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'User'); $userDotnetRootX64Before = [Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64', 'User')
+$machineDotnetRootBefore = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Machine'); $machineDotnetRootX64Before = [Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64', 'Machine')
 $pathBefore = $env:PATH
 $packageA = New-Package 'package-a'
 $packageB = New-Package 'package-b'
@@ -324,6 +340,7 @@ try {
     Assert-True ($updaterText -match [regex]::Escape('$savedRoot = $env:DOTNET_ROOT') -and
         $updaterText -match [regex]::Escape('finally { $env:DOTNET_ROOT = $savedRoot; $env:DOTNET_ROOT_X64 = $savedRootX64; $env:PATH = $savedPath }')) 'The fresh publish branch no longer saves/restores the process build environment.'
     Assert-True ($updaterText -match 'Get-CleanCommit' -and $updaterText -match 'sourceCommit = Get-CleanCommit') 'The fresh branch no longer binds the clean source HEAD.'
+    Assert-True ($updaterText -match [regex]::Escape('if ($DotNetRoot) { Get-NormalPath $DotNetRoot }') -and $updaterText -match 'DotNetRoot must contain the build SDK host') 'The fresh branch no longer validates -DotNetRoot as a build SDK only.'
     Assert-True ($updaterText -match '\$link\.TargetPath = \$exe; \$link\.Arguments = ''''') 'The new shortcut creation is no longer a direct argument-free executable target.'
 
     # --- 2. First direct selection and independent readback ----------------------------------------------
@@ -488,20 +505,25 @@ try {
 
     # --- 6. Safe migration from the original PowerShell-launcher schema-1 form ----------------------------
     $powershellDesktop = New-Desktop 'desktop-migration-powershell'
-    $legacyPowerShell = New-LegacyInstall 'legacy-powershell' 'powershell' $powershellDesktop
-    $legacyPowerShellBefore = Get-LegacyHashes $legacyPowerShell
-    $powershellInstall = Join-Path $work 'install-migrated-powershell'
-    $powershellMigrated = & $updater -InstallRoot $powershellInstall -DesktopPath $powershellDesktop -IconPath $icon -PackageDir $packageA -LegacyRootsForTests @($legacyPowerShell.logical, $legacyPowerShell.physical)
-    $powershellOwner = Read-Json (Join-Path $powershellInstall 'owner.json')
-    Assert-True ($powershellMigrated.legacyVariant -eq 'powershell') 'The original PowerShell-launcher schema-1 form was not recognized.'
-    Assert-True ($powershellOwner.legacy.variant -eq 'powershell' -and $powershellOwner.legacy.launcherSha256 -eq $legacyPowerShellBefore.launcher) 'The PowerShell migration record lost the retained launcher identity.'
-    Assert-LegacyRootUnchanged $legacyPowerShell $legacyPowerShellBefore 'PowerShell-form migration modified or deleted the retained schema-1 installation.'
-    $powershellLink = Get-Link (Join-Path $powershellDesktop $shortcutName)
-    Assert-True ($powershellLink.target -match '\\builds\\[^\\]+\\payload\\LLPlayer\.Avalonia\.exe$' -and $powershellLink.target.ToLowerInvariant().Contains($powershellInstall.ToLowerInvariant()) -and $powershellLink.arguments -ceq '') 'PowerShell-form migration did not install the direct new payload target.'
-    Assert-True ($powershellLink.working -ieq (Split-Path $powershellLink.target -Parent)) 'PowerShell-form migration did not set the payload directory as working directory.'
-    Assert-True (-not $powershellLink.target.ToLowerInvariant().EndsWith('powershell.exe')) 'PowerShell-form migration still launches through PowerShell.'
-    $powershellNative = Get-NativeLink (Join-Path $powershellDesktop $shortcutName)
-    Assert-True ($powershellNative.IconExtracted -and $powershellNative.IconIndex -eq 0 -and $powershellNative.Arguments -ceq '') 'PowerShell-form migration did not produce an extractable direct link icon/target.'
+    $powershellDrive = Get-FreeDriveLetter
+    $legacyPowerShell = New-LegacyInstall 'legacy-powershell' 'powershell' $powershellDesktop $powershellDrive
+    try {
+        $legacyPowerShellBefore = Get-LegacyHashes $legacyPowerShell
+        $powershellInstall = Join-Path $work 'install-migrated-powershell'
+        $powershellMigrated = & $updater -InstallRoot $powershellInstall -DesktopPath $powershellDesktop -IconPath $icon -PackageDir $packageA -LegacyRootsForTests @($legacyPowerShell.logical, $legacyPowerShell.physical)
+        $powershellOwner = Read-Json (Join-Path $powershellInstall 'owner.json')
+        Assert-True ($powershellMigrated.legacyVariant -eq 'powershell') 'The original PowerShell-launcher schema-1 form was not recognized.'
+        Assert-True ($powershellOwner.legacy.variant -eq 'powershell' -and $powershellOwner.legacy.launcherSha256 -eq $legacyPowerShellBefore.launcher) 'The PowerShell migration record lost the retained launcher identity.'
+        Assert-True ($powershellOwner.legacy.sourceInstallRoot -ieq $legacyPowerShell.physical -and $powershellOwner.legacy.sourceRecordedInstallRoot -ieq $legacyPowerShell.logical) 'PowerShell-form migration did not translate the aliased logical root to its physical root.'
+        Assert-LegacyRootUnchanged $legacyPowerShell $legacyPowerShellBefore 'PowerShell-form migration modified or deleted the retained schema-1 installation.'
+        $powershellLink = Get-Link (Join-Path $powershellDesktop $shortcutName)
+        Assert-True ($powershellLink.target -match '\\builds\\[^\\]+\\payload\\LLPlayer\.Avalonia\.exe$' -and $powershellLink.target.ToLowerInvariant().Contains($powershellInstall.ToLowerInvariant()) -and $powershellLink.arguments -ceq '') 'PowerShell-form migration did not install the direct new payload target.'
+        Assert-True ($powershellLink.working -ieq (Split-Path $powershellLink.target -Parent)) 'PowerShell-form migration did not set the payload directory as working directory.'
+        Assert-True (-not $powershellLink.target.ToLowerInvariant().EndsWith('powershell.exe')) 'PowerShell-form migration still launches through PowerShell.'
+        $powershellNative = Get-NativeLink (Join-Path $powershellDesktop $shortcutName)
+        Assert-True ($powershellNative.IconExtracted -and $powershellNative.IconIndex -eq 0 -and $powershellNative.Arguments -ceq '') 'PowerShell-form migration did not produce an extractable direct link icon/target.'
+    }
+    finally { & subst $powershellDrive /D | Out-Null }
 
     # The accepted intermediate direct form still had the old blue.ico (not the physical DIB repair).
     $legacyIconDesktop = New-Desktop 'desktop-migration-legacy-icon'
@@ -631,6 +653,20 @@ try {
     $retried = & $updater @retryParams -PackageDir $packageA
     $retriedState = Read-Json $retried.currentPath
     Assert-True ($retried.buildMode -eq 'prebuilt-validated' -and $retriedState.buildId -eq $retried.buildId -and (Test-Path -LiteralPath (Join-Path $retryDesktop $shortcutName) -PathType Leaf)) 'A retry after a failed first installation was refused or incomplete.'
+    # A post-receipt failure must not wedge a pre-existing empty destination, and a new root must be removed.
+    $receiptFailDesktop = New-Desktop 'receipt-fail-desktop'
+    $receiptFailRoot = New-Desktop 'receipt-fail-empty-root'
+    $receiptFailParams = @{ InstallRoot = $receiptFailRoot; DesktopPath = $receiptFailDesktop; IconPath = $icon }
+    Assert-Rejected { & $updater @receiptFailParams -PackageDir $packageA -FailAfterReceiptForTests } 'Injected post-receipt failure'
+    Assert-True (@(Get-ChildItem -LiteralPath $receiptFailRoot -Force).Count -eq 0) 'A post-receipt failure left managed state in a pre-existing empty install root.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $receiptFailDesktop $shortcutName))) 'A post-receipt failure left a Desktop shortcut behind.'
+    $receiptRetried = & $updater @receiptFailParams -PackageDir $packageA
+    Assert-True ($receiptRetried.buildMode -eq 'prebuilt-validated' -and (Test-Path -LiteralPath (Join-Path $receiptFailRoot 'current.json') -PathType Leaf)) 'A destination wedged by a post-receipt failure could not be reused.'
+    $newRootDesktop = New-Desktop 'receipt-fail-new-desktop'
+    $newRoot = Join-Path $work 'receipt-fail-new-root'
+    Assert-True (-not (Test-Path -LiteralPath $newRoot)) 'The new-root post-receipt fixture destination already exists.'
+    Assert-Rejected { & $updater -InstallRoot $newRoot -DesktopPath $newRootDesktop -IconPath $icon -PackageDir $packageA -FailAfterReceiptForTests } 'Injected post-receipt failure'
+    Assert-True (-not (Test-Path -LiteralPath $newRoot)) 'A failed first installation left its new install root behind.'
     Assert-NoAtomicTemps $install 'A rejected package/input left install-root temporary files behind.'
     Assert-NoAtomicTemps $desktop 'A rejected package/input left Desktop temporary files behind.'
     Assert-DesktopOnlyContract $desktop $wpf 'A rejected package/input changed the Desktop contents.'
@@ -664,16 +700,21 @@ try {
     # --- 9. Refusing foreign or edited legacy state -------------------------------------------------------
     function Test-LegacyRejection([string]$Name, [string]$Variant, [scriptblock]$Mutation, [string]$Pattern) {
         $desk = New-Desktop ('legacy-desk-' + $Name)
-        $legacy = New-LegacyInstall ('legacy-' + $Name) $Variant $desk
-        $before = Get-LegacyHashes $legacy
-        & $Mutation $legacy
-        $mutated = Get-LegacyHashes $legacy
-        $newInstall = Join-Path $work ('legacy-install-' + $Name)
-        Assert-Rejected { & $updater -InstallRoot $newInstall -DesktopPath $desk -IconPath $icon -PackageDir $packageA -LegacyRootsForTests @($legacy.logical, $legacy.physical) } $Pattern
-        Assert-True (-not (Test-Path -LiteralPath $newInstall)) "Rejected legacy fixture '$Name' wrote a new install root."
-        $after = Get-LegacyHashes $legacy
-        Assert-True ($after.owner -ceq $mutated.owner -and $after.current -ceq $mutated.current -and $after.receipt -ceq $mutated.receipt -and
-            $after.launcher -ceq $mutated.launcher -and $after.exe -ceq $mutated.exe) "Rejected legacy fixture '$Name' modified the old installation."
+        $drive = if ($Variant -eq 'powershell') { Get-FreeDriveLetter } else { '' }
+        $legacy = New-LegacyInstall ('legacy-' + $Name) $Variant $desk $drive
+        try {
+            $before = Get-LegacyHashes $legacy
+            & $Mutation $legacy
+            $mutated = Get-LegacyHashes $legacy
+            $newInstall = Join-Path $work ('legacy-install-' + $Name)
+            Assert-Rejected { & $updater -InstallRoot $newInstall -DesktopPath $desk -IconPath $icon -PackageDir $packageA -LegacyRootsForTests @($legacy.logical, $legacy.physical) } $Pattern
+            Assert-True (-not (Test-Path -LiteralPath $newInstall)) "Rejected legacy fixture '$Name' wrote a new install root."
+            $after = Get-LegacyHashes $legacy
+            Assert-True ($after.owner -ceq $mutated.owner -and $after.current -ceq $mutated.current -and $after.receipt -ceq $mutated.receipt -and
+                $after.launcher -ceq $mutated.launcher -and $after.exe -ceq $mutated.exe -and $after.blue -ceq $mutated.blue -and
+                $after.dib -ceq $mutated.dib -and $after.shortcut -ceq $mutated.shortcut) "Rejected legacy fixture '$Name' modified the old installation."
+        }
+        finally { if ($drive) { & subst $drive /D | Out-Null } }
         return $null
     }
     Test-LegacyRejection 'edited-launcher' 'powershell' { param($l) [IO.File]::AppendAllText($l.launcher, '# edited') } 'launcher or icon was edited'
@@ -689,7 +730,8 @@ try {
     $seamLegacy = New-LegacyInstall 'legacy-seam' 'direct' $seamDesktop
     $seamBefore = Get-LegacyHashes $seamLegacy
     $seamInstall = Join-Path $work 'legacy-install-seam'
-    Assert-Rejected { & $updater -InstallRoot $seamInstall -DesktopPath $seamDesktop -IconPath $icon -LegacyRootsForTests @($seamLegacy.logical, $seamLegacy.physical) } 'contract-fixture input'
+    Assert-Rejected { & $updater -InstallRoot $seamInstall -DesktopPath $seamDesktop -IconPath $icon -LegacyRootsForTests @($seamLegacy.logical, $seamLegacy.physical) } 'contract-fixture inputs require'
+    Assert-Rejected { & $updater -InstallRoot $seamInstall -DesktopPath $seamDesktop -IconPath $icon -FailAfterReceiptForTests } 'contract-fixture inputs require'
     Assert-True (-not (Test-Path -LiteralPath $seamInstall)) 'A fixture root input without -PackageDir wrote a new install root.'
     Assert-LegacyUnchanged $seamLegacy $seamBefore 'A fixture root input without -PackageDir modified the legacy installation.'
     # Without the fixture seam, a schema-1-shaped root outside the two bound legacy locations is foreign state.
@@ -720,11 +762,14 @@ try {
     $emptySdk = New-Desktop 'empty-sdk'
     $runtimeOnly = & $updater @params -DotNetRoot $emptySdk -PackageDir $packageA
     $runtimeReceipt = Read-Json $runtimeOnly.receiptPath
-    Assert-True ($runtimeOnly.buildMode -eq 'prebuilt-validated' -and $runtimeReceipt.globalRuntimeVersion -match '^10\.') 'A bogus build SDK blocked an already validated package or the recorded runtime is not .NET 10.'
+    Assert-True ($runtimeOnly.buildMode -eq 'prebuilt-validated') 'A bogus build SDK blocked an already validated prebuilt package.'
     Assert-Physical $runtimeReceipt.globalRuntimeRoot 'receipt.globalRuntimeRoot'
     Assert-True (Test-Path -LiteralPath (Join-Path $runtimeReceipt.globalRuntimeRoot ('shared/Microsoft.NETCore.App/' + $runtimeReceipt.globalRuntimeVersion + '/coreclr.dll')) -PathType Leaf) 'The recorded global runtime is not a resolvable x64 .NET host installation.'
     Assert-True ([Environment]::GetEnvironmentVariable('DOTNET_ROOT') -eq $dotnetRootBefore -and [Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64') -eq $dotnetRootX64Before -and $env:PATH -ceq $pathBefore) 'The prebuilt run changed the process environment.'
-    Assert-True ($null -eq ([Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'User')) -and $null -eq ([Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Machine')) -and $null -eq ([Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64', 'User')) -and $null -eq ([Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64', 'Machine'))) 'The updater created a persistent runtime environment override.'
+    Assert-True ([Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'User') -eq $userDotnetRootBefore -and
+        [Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64', 'User') -eq $userDotnetRootX64Before -and
+        [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'Machine') -eq $machineDotnetRootBefore -and
+        [Environment]::GetEnvironmentVariable('DOTNET_ROOT_X64', 'Machine') -eq $machineDotnetRootX64Before) 'The updater changed the persistent user/machine runtime environment.'
     $finalNative = Get-NativeLink $runtimeOnly.shortcutPath
     Assert-True ($finalNative.TargetPath -ieq $runtimeReceipt.executablePath -and $finalNative.WorkingDirectory -ieq $runtimeReceipt.payloadPath -and
         $finalNative.Arguments -ceq '' -and $finalNative.IconPath -ieq $runtimeReceipt.iconPath -and $finalNative.IconIndex -eq 0 -and $finalNative.IconExtracted) 'The final selected link failed the independent direct EXE/icon readback.'
