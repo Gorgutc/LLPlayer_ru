@@ -328,9 +328,27 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   confirm nothing is persisted as an override and the cheat sheet still opens with both default chords (F1 and Shift+/);
   restart and confirm the saved chords are restored and the cheat sheet shows them. Close/Esc without Save discards the
   draft. Confirm engine actions (play/pause, arrows, A/S/D, F, Ctrl+O) still use their built-in chords; binding an app
-  action to an engine-reserved chord is not rejected in this part (documented boundary, next block). Check
+  action to an engine-reserved chord is not rejected in this part (documented boundary, separate later block). Check
   windowed/fullscreen and 100 %/150 %/200 % DPI. No Computer Use or application launch is authorized by this row.
   Evidence: [the hotkey checkpoint](f13-status-2026-10-18.md#bounded-app-shortcut-rebinding-hotkeys-half-part-1).
+
+- **App-hotkey correction, owner-approved 2026-10-25 — product `c45fd958` implemented; local GREEN/full/package/publish gates PASS; native acceptance
+  NOT_RUN / DEFERRED BY OWNER:** use an isolated profile and, only when separately authorized, the rebuilt native
+  package. During capture, try Win/Super/Meta plus a key and an unsupported modifier combination; the existing chord
+  must stay unchanged and capture must remain active, then accept a supported Ctrl/Alt/Shift chord or cancel normally.
+  Escape must still cancel with unsupported modifiers present.
+  Desktop/OS interception of Win/Super keys is a separate observation; it does not replace the deterministic event
+  rejection test. In the isolated stored override map, try numeric keys (including defined enum numbers), an undefined
+  numeric value, comma-combined names and an unsupported name; restart must restore the affected action's defaults.
+  Confirm a defined key name and each supported display alias still work. Open the cheat sheet, apply a filter, then
+  change an app chord in Settings and Save: the existing window must show the new chord with the same filter. Reset
+  and Save must refresh that same window to defaults while retaining its filter. Close/Esc without Save and a save
+  failure must leave both routing and displayed chords unchanged. No Computer Use or application launch is authorized
+  by this row. Compiled pre-production RED observed 29 failures and 37 passes (66 total, 0 skipped, exit 1); the same
+  focused command then passed GREEN (66 passed, 0 failed/skipped, exit 0). Fresh local WPF and Windows Avalonia full
+  gates, package-contract checks and local publish/content validation passed, actual exit 0. Final verification/document
+  review, fresh Windows/Linux CI and publication remain pending. Old PR #180 receipts do not accept
+  this correction; see [the current correction status](f13-status-2026-10-18.md#current-bounded-correction-and-proposed-continuation--2026-10-25).
 
 - **Audio waveform overlay (F-12 audio half), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY
   OWNER:** use the rebuilt package and an isolated profile. Open media with audio and confirm the waveform toggle sits

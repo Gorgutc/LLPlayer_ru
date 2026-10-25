@@ -59,7 +59,7 @@
 > **2026-09-24:** владелец активировал `F-13` (Linux-порт): Avalonia 12.1.3 + FluentTheme + своя тема из
 > shadcn-токенов; сохраняется Windows WPF-продукт. Этап 1 — draft PR #166; этап 2 закрыт 2026-09-26 (см. F-13).
 >
-> **Текущий фокус (2026-10-19):** `F-13` активен; цель владельца — один Avalonia UI и общий Core для нативных
+> **Текущий фокус (2026-10-25):** `F-13` активен; цель владельца — один Avalonia UI и общий Core для нативных
 > Windows и Linux. Windows Avalonia build/package baseline реализован на общем UI до полного Linux parity;
 > WPF сохраняется до приёмки замены. Октябрьский экспорт восстановлен через PR #167; свежие проверки нового
 > Windows-среза фиксируются отдельно от исторических receipts. Статус, происхождение и следующий срез:
@@ -1326,7 +1326,7 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ---
 
-## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-10-24 / F-13 active)
+## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-10-25 / F-13 active)
 
 Owner-selected трек с 2026-09-24 — `F-13`; с 2026-10-18 приоритет — единый Avalonia UI для Windows/Linux. `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
 host-level lifetime и non-vacuous WPF WeakReference regression доказаны, а расширенный owner-smoke сознательно
@@ -1334,14 +1334,42 @@ host-level lifetime и non-vacuous WPF WeakReference regression доказаны
 
 **Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
 
-**Активный трек (решение владельца 2026-09-24, обновление 2026-10-24):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
+**Активный трек (решение владельца 2026-09-24, обновление 2026-10-25):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
 Октябрьский исходный срез синхронизирован; Windows Avalonia build/package baseline реализован на общем UI/Core.
 Локальные WPF/Windows Avalonia gates, rebuilt ZIP и ограниченный dark/light native smoke прошли;
 published source candidate `93c5e31` прошёл Windows/Linux CI и независимый review в
 [PR #168](https://github.com/Gorgutc/LLPlayer_ru/pull/168). Последующие docs/merge checks фиксируются в PR timeline.
 Предыдущий одобренный шаг от 2026-10-19 — общий фон primary/secondary текстовых overlay — **IMPLEMENTED** на product `558e4c5eb730eba27633559a57256a471e6aa46c`. Три preferences добавляют общий RGB `#000000` и независимые целые проценты непрозрачности `0/0`; Settings теперь владеет **22 полями**, включая прежние 19. Raw RGB/percent editors, Reset Background только трёх полей и detached font-and-background preview сохраняют транзакцию fresh merge/resolve → persist → live apply. Компактный фон объединяет centered line boxes с существующим outline pad; custom draw `HitTest=false` сохраняет actual input, popup/fullscreen и геометрию текста. Наследование шрифта не связывает непрозрачности; это отдельная адаптация WPF без изменения WPF behavior. [Статус блока и точные receipts](f13-status-2026-10-18.md#bounded-text-subtitle-background).
 Focused GREEN: **133 passed, 0 failed/skipped**. Чистый intentional Settings/render RED: 123 failures и один pixel-oracle pass; отдельный чистый input RED не заявлен. Первый focused product run содержал две диагностированные ошибки inter-line fixture при outline 8; bubbling event oracle исправлен отдельно, итоговый actual-input GREEN получен после исправлений тестов. Полные WPF/Windows Avalonia gates, 53 offline package fixtures и локальный publisher/content/CRC **PASS**, actual exit 0. Итоговый девятифайловый product `/review` и domain reviews: **0 Critical / 0 Important**, использованы все десять ролей. Независимый QA-package review — **PASS, 0 Critical / 0 Important**; docs/handoff review ещё **PENDING на локальном checkpoint**. Локальный ZIP собран до app commit из базы плюс reviewed edits и не служит exact-main delivery. Linux локально **NOT_RUN**; public candidate/main Windows/Linux CI, merge и exact-main delivery/readback **PENDING** на этом checkpoint. WPF `ship.ps1` **NOT_RUN**, WPF packaging unchanged.
-**2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED (local checkpoint, ветка `codex/f13-hotkeys`).**
+**2026-10-25: текущий корректирующий блок app-hotkeys — IMPLEMENTED, локальные gates PASS; финальные review/CI PENDING.**
+После PR № 180 (main `e5b1d05baff0aaf5acb197bb9403d8387fd97f7d`) владелец одобрил три исправления
+на общем Windows/Linux Avalonia UI: отклонять Meta/Win/Super и неизвестные modifier bits без изменения сочетания,
+оставляя capture активным (Esc сохраняет отмену даже с неподдерживаемыми modifiers); принимать только одиночное определённое имя клавиши или известный alias, отклоняя
+числа/списки через запятую/undefined и возвращая defaults при невалидном loaded override; обновлять уже открытую
+шпаргалку после Save или Reset с последующим Save, сохраняя её фильтр. Три production-исправления зафиксированы
+в product `c45fd9583b691c41842d8f8c5a1f36572bf080cb`. До production-правок выполнен compiled intentional **RED**: 66 total, 29 failed, 37 passed, 0 skipped,
+actual exit 1; SHA-256 лога `28fb8c827c33e69636653b7c500df3539b436aff7dbad41263536dd35ae6e989`.
+Тот же focused command затем прошёл **GREEN**: 66 passed, 0 failed/skipped, actual exit 0. Свежие локальные gates
+**PASS**, actual exit 0: WPF 1440 passed/0 skipped; Windows Avalonia engine 1622 passed/13 skipped и UI 901 passed/1 skipped,
+0 failed; package fixtures 53/readback 38; publisher 479-file readback, ZIP 180 445 676 bytes, SHA-256
+`d80c923f220d7dfdb5768a836968d4c9e7a0985634d1ca5eb461eca3bf0cc8a5`. Это local QA package.
+Финальный verification/document `/review`, свежий published-source Windows/Linux CI, публикация/merge и exact-main
+delivery пока **PENDING**. Source-review отчёты UI/runtime/.NET/reuse/native и package-boundary содержат
+0 Critical / 0 Important на своих закреплённых input-файлах. Старые receipts не подтверждают исправления.
+Точные log/source hashes находятся в [текущем статусе](f13-status-2026-10-18.md#current-bounded-correction-and-proposed-continuation--2026-10-25).
+Native GUI/DPI/keyboard и real model/provider/GPU
+acceptance — **NOT_RUN / DEFERRED BY OWNER**.
+
+**NEXT — PROPOSED, реализация владельцем ещё не одобрена:** Settings parity → WPF **Subtitles Sidebar**.
+В предложении семь новых preferences: `SidebarLeft`, `SidebarTextMask`, `SidebarShowOriginalText`,
+`SidebarSubPadding`, `SidebarFontFamily`, `SidebarFontSize`, `SidebarFontWeight`. В WPF семь UI-строк, но visibility/width
+уже реализованы как `SidebarVisible`/`SidebarWidth`, а Fonts содержит три значения. Предложены WPF-defaults:
+padding `5`, family `Segoe UI`, size `16`, weight `Normal`; текущий Avalonia sidebar использует size `14` и padding
+`8,6`. Это видимое изменение defaults входит в предложение и требует одобрения владельца. На Linux при отсутствии
+Segoe UI используется доступный font fallback без установки шрифтов. Engine editor и app-vs-engine collision policy
+остаются отдельным более поздним блоком.
+
+**2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED, исторический local checkpoint ветки `codex/f13-hotkeys`.**
 Product `24ec18f08b23d0f452003606cb772bb793aa9dd1` (7 app + 1 test files) делает десять app-level шорткатов
 (sidebar, subtitles search, cheat sheet, size/position, copy primary text, open subtitles, theme) редактируемыми и
 персистентными. `AppPrefs.AppShortcutOverrides` (action → canonical `[Ctrl+][Alt+][Shift+]Key`) — единственное новое
@@ -1356,7 +1384,7 @@ name/help и Reset. Save валидирует дубли с понятной о�
 live-применения и перестраивает routing/cheat sheet; restart восстанавливает; two-way binding в строку и единственный
 SavePrefs покрыты тестом. Engine key bindings (`Player.KeyBindings`) намеренно не тронуты в этой части: engine-действия
 пока используют встроенные аккорды; app-аккорды маршрутизируются раньше engine и collision с engine-reserved не
-проверяется (Space на app-action затенит play/pause) — engine editor и collision-check это следующий блок. WPF
+проверяется (Space на app-action затенит play/pause); engine editor и collision-check отложены в отдельный более поздний блок. WPF
 `SettingsKeys` grid/custom actions/enable-disable/key-up не портированы. Engine/WPF/Core/package не менялись.
 Compiled RED: **10 total, 9 failed, 1 passed**; focused GREEN 17/17 (после review-фиксов); plain UI attempts: 36 failed
 (product double-save, исправлен) → 1 failed (row order, product XAML, исправлен) → 829/816/13 pass → 836/823/13 final;
@@ -1364,8 +1392,15 @@ FINAL6-гейты на committed tree: WPF 1440/0 skipped, engine 1622/13 skippe
 package 53 + readback 38, publish ZIP 180 445 532 bytes `fdf81661…`, fast exit 0 — все **PASS**, actual exit 0. Первая
 попытка Windows-гейта упала на несвязанном intermittent OpenAL A/V-desync тесте (max 120.3 ms > 100, mean 19.1 ms,
 0 underruns); после EOF-нормализации retry прошёл, root cause UNKNOWN, без flaky/fixed claim. Linux локально
-**NOT_RUN**; published-source CI, merge и exact-main delivery — **PENDING**. Native GUI/DPI/keyboard приёмка —
+**NOT_RUN**; published-source CI, merge и exact-main delivery были **PENDING на этом локальном checkpoint**. Native GUI/DPI/keyboard приёмка —
 **NOT_RUN / DEFERRED BY OWNER**.
+**Уточнение доказательств от 2026-10-25:** прежнее заявление DSH «финальный delta PASS у всех пяти» завышено.
+Пять независимых ревьюеров работали, но финальный product `24ec18f` подтвердили runtime/docs/verification;
+последние XAML PASS (sequence 7135) и .NET PASS (sequence 7172) относятся к более ранним checkpoints.
+После них менялись normalization, tests и XAML HelpText.
+Vault draft review завершился FAIL, повторного независимого PASS в исходной сессии нет. Эти исторические результаты
+сохраняются без приписывания финального PASS. Корреляция raw-журнала: ignored
+`artifacts/dsh-session-audit-2026-10-25/AUDIT.md`; [датированное уточнение и receipts](f13-status-2026-10-18.md#bounded-app-shortcut-rebinding-hotkeys-half-part-1).
 [Статус блока и receipts](f13-status-2026-10-18.md#bounded-app-shortcut-rebinding-hotkeys-half-part-1).
 
 **2026-10-24 owner-approved waveform half of F-12 — IMPLEMENTED (local checkpoint, ветка `codex/f13-waveform`).**
