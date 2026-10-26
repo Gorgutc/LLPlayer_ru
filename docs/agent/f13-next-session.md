@@ -3,14 +3,16 @@
 Сначала сверь фактический GitHub/source/Desktop/vault checkpoint, затем закрой только оставшуюся часть уже
 одобренного [корректирующего блока](plans/2026-10-26-settings-audit-fixes.md). Исправления числового UI и
 изоляции adapter-тестов **реализованы и локально проверены** на `116a4ba`; не реализовывай их заново.
-На этом code-stage checkpoint publication/CI/Desktop/vault ещё не выполнены; позднейшее состояние определяют
-фактические receipts, а не эта датированная запись. Если merge, delivery, новый разрешённый visual audit и vault
-closeout уже подтверждены, отчитайся и остановись перед новым функциональным scope; иначе продолжи первый
-невыполненный шаг. Полный F-13 parity остаётся **IN PROGRESS**.
+Свежий Desktop-кандидат `fcf4b49` прошёл [ограниченный native Windows audit](f13-native-visual-audit-2026-10-26.md)
+с отдельными PASS/mock/seed/NOT_RUN/NOT_ESTABLISHED; повторять его без новых изменений или метода проверки не нужно.
+На candidate checkpoint corrective PR/main CI, final-main Desktop и vault closeout ещё NOT_RUN; позднейшее состояние
+определяют actual receipts. Если merge, final delivery, bounded visual evidence и vault closeout подтверждены,
+отчитайся и остановись перед новым функциональным scope; иначе продолжи первый невыполненный шаг.
+Полный F-13 parity остаётся **IN PROGRESS**.
 
 Владелец явно разрешил исправления и технический closeout; повторное одобрение этого scope не требуется.
 Новым прямым сообщением он также разрешил Computer Use/запуск Windows GUI для визуальной проверки всех последних
-изменений с появления Desktop-иконки. На этой записи visual audit ещё **NOT_RUN / ожидает выполнения**.
+изменений с появления Desktop-иконки; наблюдавшиеся результаты и оставшиеся границы уже записаны в native audit.
 Переход к новым функциям требует отдельного задания.
 
 ## Источники и проверенная база
@@ -33,6 +35,12 @@ closeout уже подтверждены, отчитайся и останови
 `116a4baa7acb49aca7480634df8b6c998cc2b1aa`. Историческая candidate branch — `codex/f13-settings-audit-fixes`.
 Перед продолжением прочитай фактические branch/HEAD/status, GitHub PR/main/CI и live vault handoff: ветка могла
 быть смёржена после этой записи. Сохраняй чужие dirty-файлы, worktrees и artifacts.
+
+Visual candidate — `fcf4b4912c23f080f4db1a5a005e669d6372a566`, build
+`fcf4b4912c23-20261026T151130963Z-1aca0724`, receipt SHA-256
+`d0f05437168ad861cb31287c6e5eb37ef0539660ba4f6e9ec766b2eb3b2109f2`. Он fresh-published и проверен в изолированном
+профиле; application/test source с `116a4ba` не менялся. Приёмка этого кандидата не переносится автоматически
+на финальный merged-main payload.
 
 ## Уже сделано; повторно не реализовывать
 
@@ -105,10 +113,27 @@ Outline остаётся **UNKNOWN**. xUnit1031 в Windows/Linux runs 4032921993
 verification seq 7295/7297/7299; XAML PASS 7135 и .NET PASS 7172 относятся к более ранним inputs. Vault draft review
 7397/7409 был FAIL без последующего независимого PASS. Не переписывай старые session bodies; сохраняй errata.
 
+## Native audit: что уже наблюдалось и что остаётся открытым
+
+Выполнены generated-media open/play/end/seek, F/Esc, A-B/waveform, Sidebar left/mask/search/font22/padding9 Save
+и restart, dual overlay styling, native UIA invalid-number edit/focus + pointer Save, corrected 1/1000/64 persistence.
+Word Manager проверен с синтетическими словами: правки/metadata/filter, first-Clear arm/disarm без удаления,
+deck draft discard/session ownership; default-path TSV/APKG имеют три записи, позднее popup Save добавил четвёртую.
+F1/filter и Main H/Ctrl+B, native Enabled H Save и Reset+Save проверены; тот же открытый sheet 461 сохранил фильтр.
+
+Loopback mock показал RU overlay с English Original Sidebar, word/cue clipboard и popup `world`→`мир`/Save.
+Режимы Word и font tuples seeded только в закрытом изолированном профиле: это не GUI ComboBox acceptance.
+Primary Bold/Italic отрисован; seeded secondary Consolas только прочитан, его render не подтверждён.
+Два resize attempts оставили 1282×792; minimum-size/high-DPI NOT_ESTABLISHED/NOT_RUN. Native capture/rebind/
+collision/held-key-up, physical typing в owned dialog, custom export path, новый RU SRT picker и destructive Clear
+не приняты. Реальные providers/models/ASR/OCR/GPU/audible output/AnkiConnect/native Linux NOT_RUN.
+P3 Light-sidebar black shadow отложен в отдельный bounded styling proposal; здесь его не исправляй и не меняй
+overlay defaults. Owned windows и mock закрыты, пользовательский профиль не использовался.
+
 ## Как закрыть оставшийся publication/delivery tail
 
-Сначала установи текущие результаты corrective PR/main CI, publish/Desktop и project-scoped vault closeout.
-На code-stage checkpoint выше они NOT_RUN; позже они могли быть выполнены. Не дублируй merge, уже актуальный
+Сначала установи текущие результаты corrective PR/main CI, final publish/Desktop и project-scoped vault closeout.
+На candidate checkpoint они NOT_RUN; позднее могли быть выполнены. Не дублируй merge, уже актуальный
 Desktop payload или завершённую vault session. Если код и receipts совпадают с проверенными inputs, продолжи
 с первого невыполненного шага. Новый semantic delta требует подходящих повторных gates и независимого review.
 
@@ -135,20 +160,19 @@ focused-тестами. Перед сдачей нужен отдельный sp
 receipt `sourceCommit=HEAD`, новый payload/manifest, физические paths и ярлык direct EXE/no args/cwd/blue ICO
 должны согласоваться. Сохрани предыдущие payload и WPF shortcut. Updater не запускает и не останавливает плеер.
 
-По новому прямому GO владелец разрешил визуальный Windows audit кандидата: Desktop updater/иконка, Sidebar,
-engine keys, Translation/Word/Anki и текущий numeric fix, плюс menus/open/fullscreen/subtitles regressions.
-Проверяй свежий candidate payload с доказанным sourceCommit, сохраняй screenshots и фактические результаты;
-не выдавай план визуальной проверки за PASS. Если воспроизведён дефект, исправь его в разрешённых границах,
-повтори подходящие gates/review и обнови candidate. Финальные publication/main/Desktop/vault должны соответствовать
-принятому source; visuals промежуточного кандидата связывай именно с его commit/payload.
+Визуальный Windows audit кандидата уже записан. Не выдавай его NOT_RUN/NOT_ESTABLISHED cells за PASS и не
+повторяй неудачные automation gestures вслепую. Если дальнейший разрешённый smoke воспроизведёт дефект,
+исправь его в согласованных границах, повтори подходящие gates/review и обнови candidate. Финальные
+publication/main/Desktop/vault должны соответствовать принятому source; candidate visuals сохраняют свою identity.
 
 Если project closeout ещё не завершён, обнови только project-scoped allowlist Second Brain по vault-протоколу: completed session, primary index,
 живой `_INDEX` с as-of/basis и одним продолжением, нужные Tests/snapshot, `session-close`, независимый review
 и изолированный vault commit. Публичный релиз и push vault из этого не следуют.
 
 Человеческий GO seq 4632 включал native acceptance и остальные Settings; seq 6047 уточнил три страницы.
-Прежний запрет Computer Use/автоматического GUI соблюдался до нового прямого визуального GO; теперь Windows
-GUI/CUA разрешены в указанном audit scope. Фактические visual/DPI/OS-keyboard результаты пока **NOT_RUN**.
+Прежний запрет Computer Use/автоматического GUI соблюдался до нового прямого визуального GO; Windows
+GUI/CUA разрешены в указанном audit scope. Bounded observations уже есть; отсутствующие native/DPI/key-phase
+результаты остаются открытыми по case matrix, а не получают общий PASS.
 Native Linux и real model/provider/Anki/GPU acceptance остаются отдельными: разрешение и результаты Windows
 visual audit не доказывают их приёмку. Headless/native-library evidence также не заменяет native-наблюдения.
 

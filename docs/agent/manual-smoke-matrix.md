@@ -483,3 +483,28 @@ null audio). These checks cover what the headless suite cannot.
 - **Audio hot-plug (owner, known gap):** unplug the USB/Bluetooth output during playback. Today audio stays silent
   until the file is reopened (the app does not call `AudioEngine.RefreshDevices()`; backlog F-13 parity item 14);
   record the result until that item lands.
+
+## Dated bounded Windows candidate receipt — 2026-10-26
+
+After the owner's explicit Windows Computer Use/visual GO, candidate
+`fcf4b4912c23f080f4db1a5a005e669d6372a566`, fresh build `fcf4b4912c23-20261026T151130963Z-1aca0724`,
+was exercised in an isolated synthetic profile. This supplements the historical rows above; it is not a blanket
+manual-smoke PASS, native Linux acceptance or acceptance of a later merged-main package.
+Full case matrix, artifact identities and limits: [native visual audit](f13-native-visual-audit-2026-10-26.md).
+
+- Observed native: generated-media open/play/end/seek, F/Esc fullscreen, A-B loop/clear and waveform toggle;
+  left Sidebar/mask/search/typography Save/restart; dual overlay color/outline/background/position;
+  numeric UIA inner-text edit/focus then pointer Save rejects raw `1.5`/`1001`/`0` and persists corrected 1/1000/64.
+- Word Manager/deck discard/session ownership, immediate word edits/read-only metadata, filter and non-destructive
+  first Clear/disarm; actual default-path TSV/APKG three-record bytes/SQLite verified. The later popup Save added
+  a fourth word after those exports. Custom picker path/filename NOT_ESTABLISHED; no product defect established.
+- Main H/Ctrl+B and F1 sheet; native disable-H Save left V working, reset+Save restored H/V in the same filtered
+  open sheet. Capture/rebind/collision/held-key-up native acceptance NOT_RUN; headless regressions remain separate.
+- Explicit loopback mock demonstrated translated overlay versus Original Sidebar, Clipboard/ClipboardAll and
+  word popup/save with modes seeded only in the closed isolated profile. Primary seeded Bold/Italic rendered;
+  secondary font tuple was read back only. Real providers and GUI mode/font ComboBox selection NOT_RUN.
+- Minimum-size/high-DPI unestablished (two resize attempts left ordinary 1282×792 unchanged); external RU SRT
+  selection, destructive Clear, native Linux, real models/ASR/OCR/GPU/audible output/AnkiConnect NOT_RUN.
+  Independent visual review: 0 Critical/Important, one P3 Light-sidebar shadow finding deferred to a separate
+  bounded styling proposal. Owned windows/mock closed; final four-word/profile and earlier three-note exports
+  have distinct receipts. Corrective PR/main CI, final-main Desktop and vault closeout require their own evidence.

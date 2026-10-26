@@ -14,7 +14,7 @@
 
 - Approved correction only: no new Settings features, schema/default changes, dependencies, WPF/engine behavior changes or next F-13 block.
 - Backward/forward counts remain integers 0–1000; concurrency remains an integer 1–64. Invalid input blocks Save with a readable error and no write/live apply; Close/Esc discards.
-- The prior no-CUA/no-launch restriction was honored through the local code/gate phase. The owner's new explicit GO authorizes a native Windows visual audit of Desktop updater/Sidebar/engine keys/Translation-Word-Anki/current correction and basic menus/open/fullscreen/subtitles. Outcomes are NOT_RUN until observed; Linux/model/provider/Anki/GPU acceptance remains separate. Full parity remains IN PROGRESS.
+- The prior no-CUA/no-launch restriction was honored through the local code/gate phase. The owner's later explicit GO authorized the bounded native Windows audit, now recorded against candidate `fcf4b49`; open cells/mock/seed limits remain explicit. Linux/model/provider/Anki/GPU/audible-output acceptance remains separate. Full parity remains IN PROGRESS.
 - Work on `codex/f13-settings-audit-fixes`; separate product/tests from documentation commits. Historical failures and UNKNOWN causes remain visible.
 
 ## Review focus
@@ -43,14 +43,14 @@
 
 ## Task 3: reconcile source docs, review and deliver (docs worker + coordinator)
 
-**Files:** this plan, `f13-status-2026-10-18.md`, `f13-next-session.md`, the current F-13 slice of `backlog.md`, and historical receipt clarification in `2026-10-26-settings-parity.md`.
+**Files:** this plan, `f13-status-2026-10-18.md`, `f13-next-session.md`, the current F-13 slice of `backlog.md`, historical receipt clarification in `2026-10-26-settings-parity.md`, `f13-native-visual-audit-2026-10-26.md` and a dated bounded-receipt appendix in `manual-smoke-matrix.md`.
 
 - [x] Record PR #185 MERGED at `d1f5427`; bind FINAL3 only to `6e73ad8`, with later `e28e76c` test-only xUnit1031 fix and final PR/exact-main CI recorded separately. Preserve last historical delta FAIL verdicts and absence of a later independent final-tree PASS.
 - [x] Replace the obsolete Sidebar/premerge continuation with this already-approved correction and actual remaining boundaries; keep historical checkpoints as links.
 - [x] Run unfiltered WPF `scripts/codex/verify.ps1`, Windows Avalonia `scripts/windows/verify-avalonia.ps1` and package contracts on clean committed `116a4ba`. Retain Windows attempt-1 FAIL and the one unchanged full diagnostic attempt-2 PASS; root cause UNKNOWN. Totals are observations, never a fixed-count gate.
 - [x] Run explicit spawned source `/review` covering the review matrix; address Critical/Important findings, fix the docs anchor Minor and verify the two-file BOM-only normalization. Record reviews against their actual source inputs.
 - [x] Commit product/tests (`b36655d`), BOM-only normalization (`0e4635a`) and initial source docs (`116a4ba`) separately.
-- [ ] Commit/review the candidate receipt docs, fresh-publish/install that clean candidate with sourceCommit readback, then perform the newly authorized Windows GUI/CUA visual audit. Bind screenshots/results to the actual candidate; a discovered bug requires its own correction/gates/review before final acceptance.
+- [x] Review/commit candidate docs as `fcf4b4912c23f080f4db1a5a005e669d6372a566`, fresh-publish/install with sourceCommit readback and perform the authorized bounded Windows GUI/CUA audit. Native case matrix preserves mock/seed/open cells; candidate evidence does not automatically accept a later final payload.
 - [ ] Review/commit this later docs receipt delta, then publish through the authorized GitHub flow. Require actual corrective PR/main Windows/Linux CI, Linux full `scripts/linux/verify.sh`, and publish/content verification; local Linux remains NOT_RUN on this host.
 - [ ] Run default fresh `scripts/windows/update-desktop-test-build.ps1` on the final clean source HEAD. Verify receipt `sourceCommit=HEAD`, payload/manifest and direct-EXE/no-args/working-directory/blue-icon shortcut readback; preserve prior payloads.
 - [ ] Coordinator updates the exact project-scoped Second Brain allowlist, runs `session-close`, commits the vault and writes the final handoff. No vault publication is implied.
@@ -65,4 +65,4 @@ WPF: 1440 passed/0 skipped, exit 0. Windows Avalonia attempt 1: FAIL, engine 162
 
 Independent .NET/UI/runtime/verification and docs instruction/architecture reviews report 0 Critical/Important; the historical-anchor Minor is fixed. Review later documentation deltas separately before commit. At this code-stage checkpoint corrective publication/CI, fresh publish/Desktop and vault closeout are NOT_RUN; for later completion, resolve actual GitHub main/candidate, Desktop sourceCommit/readback and the live vault handoff instead of repeating completed implementation. At the pre-fix audit Desktop/vault were on `0811f615` (PR #184); that observation does not establish their later state.
 
-The new direct Windows visual-audit GO follows this local code/gate phase. Visual execution/screenshots/results are NOT_RUN at this receipt checkpoint; preserve the earlier no-launch history and record later candidate/final evidence separately. Linux and real models/providers/Anki/GPU are not accepted by the Windows visual audit.
+After the local code/gate phase, fresh-published candidate `fcf4b49` was exercised under the new direct Windows visual GO. [Native audit](../f13-native-visual-audit-2026-10-26.md) records the observed case-level results, 29 JPEG-encoded screenshots with legacy `.png` names, separate three-note export/four-word final-profile snapshots and owned mock/window cleanup. Native Enabled/reset/live-sheet, numeric UIA Save and the bounded product paths passed; capture/rebind/collision/held phase, ComboBox choice, minimum-size/high-DPI/custom path and other listed cells remain unaccepted. Independent visual review: 0 Critical/Important, P3 Light-sidebar shadow deferred to a separate bounded styling proposal. Linux/real providers/models/Anki/GPU/audible-output are not accepted. Corrective PR/main CI, final-main Desktop and vault closeout remain NOT_RUN at this candidate checkpoint; resolve later actual receipts before repeating work.

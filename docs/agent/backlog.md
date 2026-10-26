@@ -1408,12 +1408,17 @@ no-native adapter: 6 skipped, что не доказывает dispatch. WPF 144
 package 53 fixtures/38-file ZIP — exit 0. Windows full attempt 1: FAIL (engine 1621/1 failed/13 skipped; UI NOT_RUN),
 новый OpenAL max 120.3333 ms при limit 100 ms; cause UNKNOWN, прежний slow-read sampler gap исключён.
 Один unchanged full diagnostic attempt 2: PASS engine 1622/13 skipped + UI 1031/1 skipped, exit 0; audio fix/flaky/host cause не заявлены.
-Независимые source/docs reviews: 0 Critical/Important, anchor Minor исправлен. На code-stage checkpoint публикация,
-corrective PR/main CI, fresh Desktop и vault closeout ещё NOT_RUN; позднейший итог сверяй по GitHub, Desktop receipt и live vault handoff.
+Независимые source/docs reviews: 0 Critical/Important, anchor Minor исправлен. После local gates свежий Desktop
+candidate `fcf4b49` прошёл [bounded native Windows audit](f13-native-visual-audit-2026-10-26.md): actual media,
+Sidebar/styling/numeric Save/restart, word/deck/default-path exports, engine Enabled/reset и live filtered sheet;
+mock/seed проверки отделены от real-provider/GUI-choice acceptance. Candidate audit не принимает final-main payload.
+Corrective PR/main CI, final-main Desktop и vault closeout на candidate checkpoint ещё NOT_RUN; позднейший итог
+сверяй по GitHub, Desktop receipt и live vault handoff.
 На момент pre-fix аудита Desktop/vault были на PR #184 `0811f615`; это историческое наблюдение, не актуальная приёмка нового payload.
-Полный F-13 parity остаётся IN PROGRESS. Новый прямой GO разрешает Windows CUA/GUI visual audit updater/Sidebar/
-engine keys/Settings/current fix и основных menus/open/fullscreen/subtitles; фактические visual/DPI/OS-keyboard
-результаты пока NOT_RUN. Прежний запрет соблюдался до этого GO; Linux/models/providers/Anki/GPU не принимаются из Windows visual evidence.
+Полный F-13 parity остаётся IN PROGRESS. Новое Windows CUA/GUI GO реализовано в bounded audit; native capture/
+rebind/collision/held phase, physical dialog typing/ComboBox editing, minimum-size/high-DPI/custom export path,
+external RU SRT и destructive Clear не приняты. Linux/models/providers/Anki/GPU/audible output NOT_RUN.
+P3 Light-sidebar shadow — отдельный future bounded styling proposal, не fix текущего scope.
 Исторические FAIL/UNKNOWN, точные source/log hashes и раздельные receipts: [F-13 status](f13-status-2026-10-18.md).
 
 **2026-10-26 owner-approved Settings parity Translation/Word/Anki — MERGED PR #185, main `d1f5427`; pre-fix checkpoint.**

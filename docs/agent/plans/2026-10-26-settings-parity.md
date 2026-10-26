@@ -31,4 +31,4 @@ The later read-only audit on `d1f5427` reproduced three numeric-control RED prob
 
 ## Limits
 
-At the original three-page stage: no real keypress/desktop acceptance, live provider/AnkiConnect/APKG import or Linux local gate; native GUI/DPI was NOT_RUN / DEFERRED BY OWNER and the player was not launched. The owner's later direct GO now permits the bounded Windows visual audit in the corrective plan; its results are NOT_RUN at that code-stage checkpoint. Linux/provider/model/Anki/GPU acceptance remains separate.
+At the original three-page stage: no real keypress/desktop acceptance, live provider/AnkiConnect/APKG import or Linux local gate; native GUI/DPI was NOT_RUN / DEFERRED BY OWNER and the player was not launched. The owner's later direct GO led to the [bounded candidate Windows audit](../f13-native-visual-audit-2026-10-26.md) on `fcf4b49`, with actual numeric UIA Save, deck/word/export behavior and explicit mock/seed/open-cell limits. Its results do not accept a later final-main payload or establish full Settings parity. Linux/provider/model/Anki/GPU/audible-output acceptance remains separate.
