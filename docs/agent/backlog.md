@@ -644,7 +644,7 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Идея от SubtitleEdit.** **Остаток (waveform):** рендер waveform из аудио FlyleafLib для визуального sync.
 **Рассуждение:** A-B повтор — заметный single-session UX-win для изучения языка; waveform — крупный effort, не топ.
 
-### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-24; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
+### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-26; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 SE5 и Buzz уже кросс-платформенны → Windows-only был конкурентным минусом. Владелец явно запросил Linux-порт;
 трек переведён из DEFERRED в IN PROGRESS.
 
@@ -688,6 +688,19 @@ Windows baseline разрешён до полного Linux parity. Для бу�
 2026-10-03; прежние планы и receipts сохраняют исторический scope. Текущие WPF compatibility contracts
 и Windows CI/build gates остаются обязательными. Текущий implementation/verification status:
 [`f13-status-2026-10-18.md`](f13-status-2026-10-18.md).
+
+**Одобренный блок надёжности тестов — IMPLEMENTED / LOCALLY VERIFIED, новый CI ожидается.**
+После PR № 186/main `9b717ef` Windows CI зафиксировал entry timeout в RecognitionSettingsTests и concurrent
+registry corruption в AvaloniaLocator. Test-only commit `76c7989` заменяет entry waits на async signals с
+прежними 5 секундами и unconditional release/drain; реальные VM/font users используют существующий headless
+dispatcher. Production, assertions, skips, runner/collection parallelism и зависимости не менялись.
+Focused GREEN: 23 recognition/cancellation и 27 UI tests; clean mechanism RED, первоначальный mixed analyzer RED
+и локальный stale-assembly FAIL сохранены отдельно. На clean `2e9a240842fcf2df8f104964d34827b37eeb8d2d`
+полные WPF и Windows Avalonia gates, 53 package fixtures/38-file contract ZIP и локальный publish (479 файлов) PASS.
+Local Linux NOT_RUN; новый Linux/PR/exact-main CI, final-HEAD Desktop и новый scoped Vault closeout ещё pending.
+Две исходные CI Important остаются OPEN до свежего required exact merged-main CI; исторические причины UNKNOWN.
+Computer Use запрещён; следующий функциональный блок не начат. План и точные receipts —
+[test isolation repair](plans/2026-10-26-windows-ci-test-isolation.md) и текущий status выше.
 
 Avalonia-приложение обязано оставаться платформенно-нейтральным (без Linux-only допущений): конфиг — XDG
 `~/.config/LLPlayer` на Linux и `%APPDATA%\LLPlayer` на Windows (состояние/логи — `~/.local/state/LLPlayer` /

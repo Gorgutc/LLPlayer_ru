@@ -1,4 +1,30 @@
-# Продолжение F-13: закрытие технического хвоста Settings — 2026-10-26
+# Продолжение F-13: завершить одобренный блок изоляции тестов — 2026-10-26
+
+Сначала сверь repo/vault AGENTS, branch/HEAD/status, GitHub PR/main/CI, Desktop receipt и live Vault.
+Текущий одобренный блок — [барьеры recognition-тестов и изоляция Avalonia UI-сервисов](plans/2026-10-26-windows-ci-test-isolation.md),
+база main `9b717ef`/PR № 186. **Computer Use и запуск плеера запрещены.** Старое разрешение native audit ниже
+историческое и не отменяет этот более поздний запрет. Повторное одобрение текущего тестового scope не требуется.
+Новые функции F-13, выделение текста, styling, провайдеры и модели в этот этап не входят.
+
+Test-only реализация — `76c7989`; полный local checkpoint — clean
+`2e9a240842fcf2df8f104964d34827b37eeb8d2d`: WPF 1442/0 skip, Windows portable engine 1624/13 skip и UI 1032/1 skip,
+package contracts (53 fixtures/один 38-file ZIP) и local publish (479 файлов) PASS, actual exit 0. Точные hashes, RED и локальный
+stale-build FAIL/rebuild — в [текущем status](f13-status-2026-10-18.md#current-owner-approved-windows-ci-test-isolation-repair--2026-10-26).
+Local Linux NOT_RUN; новые PR/Linux CI и exact merged-main CI ещё pending. Две исходные CI Important остаются
+OPEN до свежих required actual-main результатов; точные исторические scheduler/writer причины UNKNOWN.
+
+Продолжи только первый фактически незавершённый шаг: prepublication living-Vault snapshot и scoped session-close,
+затем PR/Linux/Windows CI с чтением полных logs, свежая premerge Vault-сверка/gate, merge/actual-main CI,
+fresh Desktop из final clean HEAD без запуска и финальный scoped Vault closeout.
+Эти этапы имеют отдельные receipts; local publish не означает, что новый payload уже выбран Desktop-иконкой.
+Не повторяй завершённые fixes/mechanism RED только из-за dated pending checkpoint. Сохраняй прежние assertions,
+5s и cancellation; не меняй production, skips или runner/collection parallelism ради зелёного теста.
+Если этот одобренный срез уже полностью подтверждён актуальными receipts, отчитайся и остановись перед новым
+функциональным блоком. Полный F-13 parity остаётся IN PROGRESS.
+
+## Предыдущий Settings audit checkpoint — исторический контекст
+
+Ниже сохранён прежний prompt и его датированные receipts. Это история Settings-closeout, а не активный план нового блока.
 
 Сначала сверь фактический GitHub/source/Desktop/vault checkpoint, затем закрой только оставшуюся часть уже
 одобренного [корректирующего блока](plans/2026-10-26-settings-audit-fixes.md). Исправления числового UI и
@@ -15,7 +41,7 @@
 изменений с появления Desktop-иконки; наблюдавшиеся результаты и оставшиеся границы уже записаны в native audit.
 Переход к новым функциям требует отдельного задания.
 
-## Источники и проверенная база
+## Источники и проверенная база Settings audit — история
 
 Прочитай vault `AGENTS.md`, project `_INDEX.md`, frozen `Conventions.md` и сессию по единственному указателю
 «▶ Продолжить здесь». Затем прочитай repo `AGENTS.md`, `docs/agent/subagent-review-matrix.md`, локальные
@@ -130,7 +156,7 @@ collision/held-key-up, physical typing в owned dialog, custom export path, но
 P3 Light-sidebar black shadow отложен в отдельный bounded styling proposal; здесь его не исправляй и не меняй
 overlay defaults. Owned windows и mock закрыты, пользовательский профиль не использовался.
 
-## Как закрыть оставшийся publication/delivery tail
+## Исторический маршрут Settings publication/delivery tail
 
 Сначала установи текущие результаты corrective PR/main CI, final publish/Desktop и project-scoped vault closeout.
 На candidate checkpoint они NOT_RUN; позднее могли быть выполнены. Не дублируй merge, уже актуальный
