@@ -1,4 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:LLPlayer.Avalonia.Controls"
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.TranslationWindow"
         x:DataType="vm:TranslationViewModel" Classes="dialog" Title="Translation — LLPlayer"
         SizeToContent="Manual" CanResize="True" Width="600" Height="640" MinWidth="400" MinHeight="360">
@@ -50,13 +51,13 @@
           </StackPanel>
           <TextBlock Text="Translation parameters" FontWeight="SemiBold" />
           <TextBlock Text="Max translate count backward (0–1000)" />
-          <NumericUpDown Name="TranslateCountBackwardBox" Minimum="0" Maximum="1000" Increment="1" FormatString="0"
+          <controls:IntegerNumericUpDown Name="TranslateCountBackwardBox" Minimum="0" Maximum="1000" Increment="1" FormatString="0"
                          Text="{Binding TranslateCountBackward, Mode=TwoWay}" AutomationProperties.Name="Max translate count backward" />
           <TextBlock Text="Max translate count forward (0–1000)" />
-          <NumericUpDown Name="TranslateCountForwardBox" Minimum="0" Maximum="1000" Increment="1" FormatString="0"
+          <controls:IntegerNumericUpDown Name="TranslateCountForwardBox" Minimum="0" Maximum="1000" Increment="1" FormatString="0"
                          Text="{Binding TranslateCountForward, Mode=TwoWay}" AutomationProperties.Name="Max translate count forward" />
           <TextBlock Text="Max translate concurrency (1–64)" />
-          <NumericUpDown Name="TranslateMaxConcurrencyBox" Minimum="1" Maximum="64" Increment="1" FormatString="0"
+          <controls:IntegerNumericUpDown Name="TranslateMaxConcurrencyBox" Minimum="1" Maximum="64" Increment="1" FormatString="0"
                          Text="{Binding TranslateMaxConcurrency, Mode=TwoWay}" AutomationProperties.Name="Max translate concurrency" />
           <Expander Name="ChatExpander" Header="LLM subtitle translation" HorizontalAlignment="Stretch">
             <StackPanel Spacing="10" Margin="0,8,0,0">
