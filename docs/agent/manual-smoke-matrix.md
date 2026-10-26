@@ -372,6 +372,21 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   discard the draft. No Computer Use or application launch is authorized by this row. Evidence:
   [the sidebar settings checkpoint](f13-status-2026-10-18.md#bounded-avalonia-subtitles-sidebar-settings-block).
 
+- **Engine key-binding editor and app↔engine collision policy, owner-approved 2026-10-26 — native acceptance
+  NOT_RUN / DEFERRED BY OWNER:** use the rebuilt package and an isolated profile. Open Settings → Tools and confirm the
+  engine editor lists every existing built-in engine binding with its current chord, Enabled and On release flags; capture a new
+  chord for one action, Save, reopen and restart, then confirm the saved chord is active and the old one is not. Confirm
+  Reset to engine defaults restores all rows in the draft and after Save. Try saving two enabled rows with the same
+  chord, an engine chord equal to a default or overridden app shortcut, and an app shortcut changed to an engine chord:
+  each must block Save with a readable error naming both actions and change nothing live or persisted; a disabled engine
+  row with the same chord must be allowed. Delete a row and confirm it stops firing after Save; Save must keep at least
+  one engine row. Trigger duplicated/app-colliding keys by hand-editing the isolated prefs file and confirm the start-up
+  conflict toast appears. Confirm the cheat sheet updates an open window after Save, friendly chord names are shown,
+  screen readers announce action+chord, and the editor controls stay reachable at the minimum window width and
+  100 %/150 %/200 % DPI. A write failure must keep live keys/preferences and Settings unchanged with retry working;
+  Close/Esc discard. No Computer Use or application launch is authorized by this row. Evidence:
+  [the engine-key checkpoint](f13-status-2026-10-18.md#bounded-avalonia-engine-key-binding-editor-and-appengine-collisions).
+
 - **Audio waveform overlay (F-12 audio half), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY
   OWNER:** use the rebuilt package and an isolated profile. Open media with audio and confirm the waveform toggle sits
   next to the A-B button, starts off, and toggling it on builds the envelope over the seek bar without moving the

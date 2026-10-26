@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using FlyleafLib.MediaPlayer;
 using LLPlayer.Avalonia.Services;
 using System.Globalization;
 using System.Collections.ObjectModel;
@@ -18,6 +19,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     readonly SubtitleFontCatalog fonts = new();
     public ObservableCollection<ShortcutEditRow> ShortcutRows { get; } = [];
     public IReadOnlyDictionary<string, string> AppShortcuts { get; private set; } = new Dictionary<string, string>();
+    public ObservableCollection<EngineKeyEditRow> EngineKeyRows { get; } = [];
+    /// <summary>True while the engine editor has at least one draft row (drives the empty-state text).</summary>
+    public bool HasEngineKeyRows => EngineKeyRows.Count > 0;
+    /// <summary>Validated engine key list built by Save (committed atomically with the other preferences).</summary>
+    public IReadOnlyList<EngineKeyBindingPref> EngineKeyBindingPrefs { get; private set; } = [];
+    /// <summary>False means the profile keeps the engine's built-in defaults.</summary>
+    public bool EngineKeysCustomized { get; private set; }
     ObservableCollection<string>? subtitleFontFamilies;
     public SettingsViewModel(AppPrefs current, Action<SettingsViewModel> commit, BitmapSubtitleRuntimeState bitmapState)
     {
@@ -32,6 +40,11 @@ public sealed partial class SettingsViewModel : ObservableObject
                 : defaultChord;
             ShortcutRows.Add(new ShortcutEditRow(action, first.Description, defaultChord, chord));
         }
+        IReadOnlyList<EngineKeyBindingInfo> engineBindings = current.EngineKeysCustomized
+            ? EngineKeyBindings.FromPrefs(current.EngineKeyBindings)
+            : EngineKeyBindings.Defaults();
+        foreach (EngineKeyBindingInfo binding in engineBindings)
+            EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow));
         Theme = current.Theme;
         SubtitleFontFamily = current.SubtitleFontFamily;
         SubtitleFontWeight = current.SubtitleFontWeight;
@@ -445,12 +458,19 @@ public sealed partial class SettingsViewModel : ObservableObject
         SidebarFontSizeText = sidebarFontSize.ToString(NumberFormat);
         SidebarFontFamily = sidebarFamily;
         SidebarFontWeight = sidebarWeight;
-        if (!TryBuildAppShortcuts(out Dictionary<string, string> appShortcuts, out string shortcutError))
+        if (!TryBuildAppShortcuts(out Dictionary<string, string> appShortcuts, out AppShortcutMap appMap, out string shortcutError))
         {
             Error = shortcutError;
             return;
         }
+        if (!TryBuildEngineKeys(appMap, out List<EngineKeyBindingPref> engineKeyPrefs, out bool engineKeysCustomized, out string engineKeyError))
+        {
+            Error = engineKeyError;
+            return;
+        }
         AppShortcuts = appShortcuts;
+        EngineKeyBindingPrefs = engineKeyPrefs;
+        EngineKeysCustomized = engineKeysCustomized;
         try { commit(this); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -459,7 +479,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
         CloseRequested?.Invoke();
     }
-    bool TryBuildAppShortcuts(out Dictionary<string, string> overrides, out string error)
+    bool TryBuildAppShortcuts(out Dictionary<string, string> overrides, out AppShortcutMap map, out string error)
     {
         overrides = new Dictionary<string, string>(StringComparer.Ordinal);
         error = "";
@@ -468,6 +488,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             if (!AppShortcutMap.TryParseChord(row.Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift))
             {
                 error = $"Use a key chord such as Ctrl+Shift+B for \"{row.Description}\" (a modifier alone is not a chord).";
+                map = new AppShortcutMap(new Dictionary<string, Action>());
                 return false;
             }
             string canonical = AppShortcutMap.FormatChord(key, ctrl, alt, shift);
@@ -477,8 +498,64 @@ public sealed partial class SettingsViewModel : ObservableObject
                 overrides[row.ActionName] = canonical;
         }
 
-        AppShortcutMap map = new(new Dictionary<string, Action>(), overrides);
+        map = new AppShortcutMap(new Dictionary<string, Action>(), overrides);
         return map.TryValidateEffective(out error);
+    }
+
+    /// <summary>Validates the engine draft: parseable chords, no duplicate enabled chords, no app↔engine collision.</summary>
+    bool TryBuildEngineKeys(AppShortcutMap appMap, out List<EngineKeyBindingPref> prefs, out bool customized, out string error)
+    {
+        prefs = [];
+        customized = false;
+        error = "";
+        if (EngineKeyRows.Count == 0)
+        {
+            error = "Keep at least one engine key binding; use Reset to restore the engine defaults.";
+            return false;
+        }
+
+        List<EngineKeyBindingInfo> bindings = [];
+        foreach (EngineKeyEditRow row in EngineKeyRows)
+        {
+            if (!AppShortcutMap.TryParseChord(row.Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift))
+            {
+                error = $"Use a key chord such as Ctrl+Shift+B for engine action \"{row.Description}\".";
+                return false;
+            }
+            bindings.Add(new EngineKeyBindingInfo(row.Action, key, ctrl, alt, shift, row.IsKeyUp, row.IsEnabled));
+        }
+
+        // The same shared policy runs at start-up (warning toast) and here (blocking error).
+        if (!EngineKeyBindings.TryValidate(bindings, appMap.Shortcuts, out error))
+            return false;
+
+        prefs = bindings.Select(binding => new EngineKeyBindingPref
+        {
+            Action = binding.Action.ToString(),
+            Key = binding.Key.ToString(),
+            Ctrl = binding.Ctrl,
+            Alt = binding.Alt,
+            Shift = binding.Shift,
+            IsKeyUp = binding.IsKeyUp,
+            IsEnabled = binding.IsEnabled,
+        }).ToList();
+        customized = !EngineKeyBindings.SameAsDefaults(prefs);
+        return true;
+    }
+
+    [RelayCommand]
+    void ResetEngineKeys()
+    {
+        EngineKeyRows.Clear();
+        foreach (EngineKeyBindingInfo binding in EngineKeyBindings.Defaults())
+            EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow));
+        OnPropertyChanged(nameof(HasEngineKeyRows));
+    }
+
+    void DeleteEngineKeyRow(EngineKeyEditRow row)
+    {
+        EngineKeyRows.Remove(row);
+        OnPropertyChanged(nameof(HasEngineKeyRows));
     }
 
     bool TryRead(string text, double min, double max, out double value)
@@ -498,6 +575,29 @@ public sealed partial class SettingsViewModel : ObservableObject
         RequestedLink = link;
         CloseRequested?.Invoke();
     }
+}
+
+/// <summary>One engine key-binding draft row (bounded WPF SettingsKeys equivalent: edit/disable/release/delete).</summary>
+public sealed partial class EngineKeyEditRow(EngineKeyBindingInfo binding, Action<EngineKeyEditRow> delete) : ObservableObject
+{
+    public KeyBindingAction Action { get; } = binding.Action;
+    public string ActionName => Action.ToString();
+    public string Description => EngineKeyBindings.Describe(Action);
+    [ObservableProperty] public partial string Chord { get; set; } = binding.FormatChord();
+    [ObservableProperty] public partial bool IsEnabled { get; set; } = binding.IsEnabled;
+    [ObservableProperty] public partial bool IsKeyUp { get; set; } = binding.IsKeyUp;
+    /// <summary>Friendly display form (Enter, +, Play/Pause) while <see cref="Chord"/> stays canonical for persistence.</summary>
+    public string DisplayChord => AppShortcutMap.TryParseChord(Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift)
+        ? string.Join("+", KeyMapper.ChordParts(key, ctrl, alt, shift))
+        : Chord;
+    /// <summary>Distinct screen-reader name: repeated actions differ by their current chord.</summary>
+    public string AccessibleName => $"{Description} ({DisplayChord})";
+    partial void OnChordChanged(string value)
+    {
+        OnPropertyChanged(nameof(DisplayChord));
+        OnPropertyChanged(nameof(AccessibleName));
+    }
+    [RelayCommand] void Delete() => delete(this);
 }
 
 public sealed partial class ShortcutEditRow(string actionName, string description, string defaultChord, string chord)

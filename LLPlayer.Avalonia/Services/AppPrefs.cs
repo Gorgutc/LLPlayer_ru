@@ -125,6 +125,12 @@ public sealed class AppPrefs
     /// <summary>App-level shortcut overrides (action name -> canonical chord, e.g. Ctrl+Shift+B).</summary>
     public Dictionary<string, string> AppShortcutOverrides { get; set; } = [];
 
+    /// <summary>True when the profile stores an explicit replacement list for the engine key bindings; false uses the
+    /// engine's built-in defaults (the list is ignored then). Additive/absent-defaulting.</summary>
+    public bool EngineKeysCustomized { get; set; }
+    /// <summary>Explicit engine key-binding list applied at start-up; only meaningful while <see cref="EngineKeysCustomized"/>.</summary>
+    public List<EngineKeyBindingPref> EngineKeyBindings { get; set; } = [];
+
     public bool SidebarVisible { get; set; }
     public double SidebarWidth { get; set; } = DefaultSidebarWidth;
     /// <summary>Dock the sidebar left of the video (WPF <c>SidebarLeft</c>); false keeps it on the right.</summary>
@@ -210,6 +216,16 @@ public sealed class AppPrefs
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
         _ = AppShortcutMap.TryNormalizeOverrides(AppShortcutOverrides, out Dictionary<string, string> shortcuts);
         AppShortcutOverrides = shortcuts;
+        if (EngineKeysCustomized)
+        {
+            EngineKeyBindings = global::LLPlayer.Avalonia.Services.EngineKeyBindings.NormalizePrefs(EngineKeyBindings);
+            // An empty customized list would silently disable every engine chord (e.g. actions renamed by an engine
+            // upgrade, or a hand-edited file). Save never persists an empty list, so fall back to the engine defaults.
+            if (EngineKeyBindings.Count == 0)
+                EngineKeysCustomized = false;
+        }
+        else
+            EngineKeyBindings = [];
         RecentFiles = (RecentFiles ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).Take(MaxRecentFiles).ToList();
         if (string.IsNullOrWhiteSpace(WordTranslationService))
             WordTranslationService = "GoogleV1";

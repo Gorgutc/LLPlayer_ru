@@ -105,6 +105,15 @@ public interface IPlaybackController : INotifyPropertyChanged
     /// <summary>ISO 639-1 language of a subtitle slot (null when unknown).</summary>
     string? GetSubtitleLanguage(int slot);
 
+    // ---- engine key bindings (Avalonia editor) ------------------------------------------------------------------
+    // The engine owns the default list; the app persists an optional full replacement list and applies it here.
+
+    /// <summary>Snapshot of the engine's current key bindings (editor rows), in engine config order.</summary>
+    IReadOnlyList<EngineKeyBindingInfo> GetEngineKeyBindings();
+
+    /// <summary>Replaces the engine key bindings with the given list; callers pass validated canonical entries.</summary>
+    void ApplyEngineKeyBindings(IReadOnlyList<EngineKeyBindingInfo> bindings);
+
     // ---- F-12 A-B repeat: transient runtime state shared by the WPF app and this one ---------------------------------
     // The engine owns the truth table (both points set AND A < B => enabled; points reset when a new file opens) and
     // raises PropertyChanged for all six properties below, so the view models only mirror it.

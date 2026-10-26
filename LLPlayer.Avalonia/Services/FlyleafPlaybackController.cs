@@ -394,6 +394,36 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     public bool KeyDown(WpfKey key) => Player.KeyDown(player, key);
     public bool KeyUp(WpfKey key) => Player.KeyUp(player, key);
 
+    public IReadOnlyList<EngineKeyBindingInfo> GetEngineKeyBindings()
+        => [.. player.Config.Player.KeyBindings.Keys.Select(binding => new EngineKeyBindingInfo(
+            binding.Action, binding.Key, binding.Ctrl, binding.Alt, binding.Shift, binding.IsKeyUp, binding.IsEnabled))];
+
+    public void ApplyEngineKeyBindings(IReadOnlyList<EngineKeyBindingInfo> bindings)
+    {
+        KeysConfig keys = player.Config.Player.KeyBindings;
+        List<KeyBinding> customBindings = [.. keys.Keys.Where(binding => binding.Action == KeyBindingAction.Custom)];
+        keys.Keys.Clear();
+        keys.Keys.AddRange(customBindings);
+        foreach (EngineKeyBindingInfo info in bindings)
+        {
+            if (info.Action == KeyBindingAction.Custom || info.Key == WpfKey.None)
+                continue;
+
+            KeyBinding binding = new()
+            {
+                Action = info.Action,
+                Key = info.Key,
+                Ctrl = info.Ctrl,
+                Alt = info.Alt,
+                Shift = info.Shift,
+                IsKeyUp = info.IsKeyUp,
+                IsEnabled = info.IsEnabled,
+            };
+            binding.SetAction(keys.GetKeyBindingAction(info.Action), info.IsKeyUp);
+            keys.Keys.Add(binding);
+        }
+    }
+
     public string? GetSubtitleLanguage(int slot)
     {
         Language? lang = player.SubtitlesManager[slot].Language;
