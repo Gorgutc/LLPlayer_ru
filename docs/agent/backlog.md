@@ -1383,9 +1383,21 @@ Left/right docking меняет колонки sidebar/video, сохраняя s
 video и fullscreen. Detached draft Save валидирует raw-значения, сохраняет candidate до live-применения;
 ошибка записи не меняет live state; Close/Esc отбрасывают. Локальные гейты: Avalonia suite 918 passed /
 13 skipped, verify-fast exit 0, `verify.ps1` 1440 passed, `verify-avalonia` engine 1622/13 и UI 930/1,
-package 53 fixtures + 38-file ZIP readback. Native desktop/GUI/DPI acceptance — NOT_RUN. Engine editor,
-app-vs-engine collisions, secondary-sidebar selection, новые search modes и другие страницы Settings остаются
-отдельными более поздними блоками.
+package 53 fixtures + 38-file ZIP readback. Native desktop/GUI/DPI acceptance — NOT_RUN. Secondary-sidebar
+selection, новые search modes и другие страницы Settings остаются отдельными более поздними блоками.
+
+**2026-10-26 owner-approved engine key-binding editor и app-vs-engine collisions — IMPLEMENTED, local gates PASS; PR/CI receipts tracked separately.**
+Product commits `8e8c9cc7d11182cbda30d403ae49eb343a24b176` и `9d45a622956a8fbbf6fe7c108240c2c9aa350014` на ветке `codex/f13-engine-keys` добавляют в Settings → Tools редактор
+существующих engine-биндингов (chord capture, Enabled, On Release, delete, reset) и два additive `AppPrefs`:
+`EngineKeysCustomized` + `EngineKeyBindings`. Полный replacement list применяется к live `Player.Config.Player.KeyBindings`
+и на старте только при customized; WPF `PlayerConfig`/`SettingsKeys`, engine/WPF/Core/package не менялись.
+Двусторонняя collision policy: дубли enabled engine-строк и совпадения enabled engine-аккорда с эффективным app
+shortcut блокируют Save (disabled строки игнорируются); пустой draft и пустой нормализованный список отклоняются/падают
+на engine defaults; стартовый конфликт показывается destructive toast. Адаптер сохраняет engine-owned custom rows;
+открытая cheat sheet перестраивается из live engine keys. Add-row/action-assignment/custom actions — вне stage.
+Локальные FINAL3-гейты на committed code tree: Avalonia 935 passed/14 skipped; `verify.ps1` 1440; Windows Avalonia
+engine 1622/13 и UI 948/1; package 53 fixtures + 38-file readback; exit 0. Real-player adapter test env-gated и
+выполняется в Windows Avalonia gate. Native desktop/GUI/DPI acceptance — NOT_RUN.
 
 **2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED, исторический local checkpoint ветки `codex/f13-hotkeys`.**
 Product `24ec18f08b23d0f452003606cb772bb793aa9dd1` (7 app + 1 test files) делает десять app-level шорткатов
