@@ -20,6 +20,8 @@ public sealed partial class SettingsViewModel : ObservableObject
     public ObservableCollection<ShortcutEditRow> ShortcutRows { get; } = [];
     public IReadOnlyDictionary<string, string> AppShortcuts { get; private set; } = new Dictionary<string, string>();
     public ObservableCollection<EngineKeyEditRow> EngineKeyRows { get; } = [];
+    /// <summary>True while the engine editor has at least one draft row (drives the empty-state text).</summary>
+    public bool HasEngineKeyRows => EngineKeyRows.Count > 0;
     /// <summary>Validated engine key list built by Save (committed atomically with the other preferences).</summary>
     public IReadOnlyList<EngineKeyBindingPref> EngineKeyBindingPrefs { get; private set; } = [];
     /// <summary>False means the profile keeps the engine's built-in defaults.</summary>
@@ -506,7 +508,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         prefs = [];
         customized = false;
         error = "";
-        List<(EngineKeyEditRow Row, WpfKey Key, bool Ctrl, bool Alt, bool Shift)> parsed = [];
+        if (EngineKeyRows.Count == 0)
+        {
+            error = "Keep at least one engine key binding; use Reset to restore the engine defaults.";
+            return false;
+        }
+
+        List<EngineKeyBindingInfo> bindings = [];
         foreach (EngineKeyEditRow row in EngineKeyRows)
         {
             if (!AppShortcutMap.TryParseChord(row.Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift))
@@ -514,40 +522,22 @@ public sealed partial class SettingsViewModel : ObservableObject
                 error = $"Use a key chord such as Ctrl+Shift+B for engine action \"{row.Description}\".";
                 return false;
             }
-            parsed.Add((row, key, ctrl, alt, shift));
+            bindings.Add(new EngineKeyBindingInfo(row.Action, key, ctrl, alt, shift, row.IsKeyUp, row.IsEnabled));
         }
 
-        foreach (IGrouping<(WpfKey Key, bool Ctrl, bool Alt, bool Shift), (EngineKeyEditRow Row, WpfKey Key, bool Ctrl, bool Alt, bool Shift)> group in
-                 parsed.Where(item => item.Row.IsEnabled).GroupBy(item => (item.Key, item.Ctrl, item.Alt, item.Shift)))
-        {
-            if (group.Count() > 1)
-            {
-                error = $"Engine chord {group.First().Row.Chord} is assigned to several actions: " +
-                    string.Join(", ", group.Select(item => $"\"{item.Row.Description}\"")).Replace("\"", "'") + ".";
-                return false;
-            }
-        }
+        // The same shared policy runs at start-up (warning toast) and here (blocking error).
+        if (!EngineKeyBindings.TryValidate(bindings, appMap.Shortcuts, out error))
+            return false;
 
-        foreach ((EngineKeyEditRow row, WpfKey key, bool ctrl, bool alt, bool shift) in parsed.Where(item => item.Row.IsEnabled))
+        prefs = bindings.Select(binding => new EngineKeyBindingPref
         {
-            AppShortcut? collision = appMap.Shortcuts.FirstOrDefault(shortcut => shortcut.Matches(key, ctrl, alt, shift));
-            if (collision != null)
-            {
-                error = $"Engine chord {row.Chord} for \"{row.Description}\" collides with the app shortcut " +
-                    $"\"{collision.Description}\"; change one of them.";
-                return false;
-            }
-        }
-
-        prefs = parsed.Select(item => new EngineKeyBindingPref
-        {
-            Action = item.Row.ActionName,
-            Key = item.Key.ToString(),
-            Ctrl = item.Ctrl,
-            Alt = item.Alt,
-            Shift = item.Shift,
-            IsKeyUp = item.Row.IsKeyUp,
-            IsEnabled = item.Row.IsEnabled,
+            Action = binding.Action.ToString(),
+            Key = binding.Key.ToString(),
+            Ctrl = binding.Ctrl,
+            Alt = binding.Alt,
+            Shift = binding.Shift,
+            IsKeyUp = binding.IsKeyUp,
+            IsEnabled = binding.IsEnabled,
         }).ToList();
         customized = !EngineKeyBindings.SameAsDefaults(prefs);
         return true;
@@ -559,9 +549,14 @@ public sealed partial class SettingsViewModel : ObservableObject
         EngineKeyRows.Clear();
         foreach (EngineKeyBindingInfo binding in EngineKeyBindings.Defaults())
             EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow));
+        OnPropertyChanged(nameof(HasEngineKeyRows));
     }
 
-    void DeleteEngineKeyRow(EngineKeyEditRow row) => EngineKeyRows.Remove(row);
+    void DeleteEngineKeyRow(EngineKeyEditRow row)
+    {
+        EngineKeyRows.Remove(row);
+        OnPropertyChanged(nameof(HasEngineKeyRows));
+    }
 
     bool TryRead(string text, double min, double max, out double value)
     {
@@ -591,6 +586,17 @@ public sealed partial class EngineKeyEditRow(EngineKeyBindingInfo binding, Actio
     [ObservableProperty] public partial string Chord { get; set; } = binding.FormatChord();
     [ObservableProperty] public partial bool IsEnabled { get; set; } = binding.IsEnabled;
     [ObservableProperty] public partial bool IsKeyUp { get; set; } = binding.IsKeyUp;
+    /// <summary>Friendly display form (Enter, +, Play/Pause) while <see cref="Chord"/> stays canonical for persistence.</summary>
+    public string DisplayChord => AppShortcutMap.TryParseChord(Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift)
+        ? string.Join("+", KeyMapper.ChordParts(key, ctrl, alt, shift))
+        : Chord;
+    /// <summary>Distinct screen-reader name: repeated actions differ by their current chord.</summary>
+    public string AccessibleName => $"{Description} ({DisplayChord})";
+    partial void OnChordChanged(string value)
+    {
+        OnPropertyChanged(nameof(DisplayChord));
+        OnPropertyChanged(nameof(AccessibleName));
+    }
     [RelayCommand] void Delete() => delete(this);
 }
 

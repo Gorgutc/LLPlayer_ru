@@ -401,7 +401,9 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     public void ApplyEngineKeyBindings(IReadOnlyList<EngineKeyBindingInfo> bindings)
     {
         KeysConfig keys = player.Config.Player.KeyBindings;
+        List<KeyBinding> customBindings = [.. keys.Keys.Where(binding => binding.Action == KeyBindingAction.Custom)];
         keys.Keys.Clear();
+        keys.Keys.AddRange(customBindings);
         foreach (EngineKeyBindingInfo info in bindings)
         {
             if (info.Action == KeyBindingAction.Custom || info.Key == WpfKey.None)

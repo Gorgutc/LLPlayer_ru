@@ -74,7 +74,11 @@ public static class EngineKeyBindings
             if (pref == null
                 || !Enum.TryParse(pref.Action, false, out KeyBindingAction action)
                 || action == KeyBindingAction.Custom
+                || !Enum.IsDefined(action)
+                || pref.Action != action.ToString()
                 || !Enum.TryParse(pref.Key, false, out WpfKey key)
+                || !Enum.IsDefined(key)
+                || pref.Key != key.ToString()
                 || key == WpfKey.None
                 || key is WpfKey.LeftCtrl or WpfKey.RightCtrl or WpfKey.LeftAlt or WpfKey.RightAlt
                     or WpfKey.LeftShift or WpfKey.RightShift or WpfKey.LWin or WpfKey.RWin)
@@ -139,6 +143,41 @@ public static class EngineKeyBindings
                 || pref.IsKeyUp != binding.IsKeyUp
                 || pref.IsEnabled != binding.IsEnabled)
                 return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Shared collision policy for Settings Save and the start-up check: duplicate chords among enabled engine rows and
+    /// enabled engine↔app chord overlaps are rejected. Disabled engine rows are ignored; key-up flags are irrelevant.
+    /// </summary>
+    public static bool TryValidate(IReadOnlyList<EngineKeyBindingInfo> bindings, IReadOnlyList<AppShortcut> appShortcuts, out string error)
+    {
+        error = "";
+        List<EngineKeyBindingInfo> enabled = bindings.Where(binding => binding.IsEnabled).ToList();
+
+        foreach (IGrouping<(WpfKey Key, bool Ctrl, bool Alt, bool Shift), EngineKeyBindingInfo> group in
+                 enabled.GroupBy(binding => (binding.Key, binding.Ctrl, binding.Alt, binding.Shift)))
+        {
+            if (group.Count() > 1)
+            {
+                error = $"Engine chord {group.First().FormatChord()} is assigned to several actions: " +
+                    string.Join(", ", group.Select(binding => $"\"{Describe(binding.Action)}\"")) + ".";
+                return false;
+            }
+        }
+
+        foreach (EngineKeyBindingInfo binding in enabled)
+        {
+            AppShortcut? collision = appShortcuts.FirstOrDefault(shortcut =>
+                shortcut.Matches(binding.Key, binding.Ctrl, binding.Alt, binding.Shift));
+            if (collision != null)
+            {
+                error = $"Engine chord {binding.FormatChord()} for \"{Describe(binding.Action)}\" collides with the app " +
+                    $"shortcut \"{collision.Description}\"; change one of them.";
+                return false;
+            }
         }
 
         return true;

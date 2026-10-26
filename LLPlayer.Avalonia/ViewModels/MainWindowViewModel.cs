@@ -120,6 +120,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // The engine owns the default chords; only an explicit replacement list is applied at start-up.
         if (prefs.EngineKeysCustomized)
             player.ApplyEngineKeyBindings(EngineKeyBindings.FromPrefs(prefs.EngineKeyBindings));
+        IReadOnlyList<EngineKeyBindingInfo> activeEngineKeys = prefs.EngineKeysCustomized
+            ? EngineKeyBindings.FromPrefs(prefs.EngineKeyBindings)
+            : EngineKeyBindings.Defaults();
+        if (!EngineKeyBindings.TryValidate(activeEngineKeys, Shortcuts.Shortcuts, out string keyConflict))
+            ShowToast("Key binding conflict", keyConflict, ToastVariant.Destructive);
         IsDarkTheme = prefs.Theme != "Light";
 
         player.Volume = Math.Min(prefs.Volume, player.VolumeMax);

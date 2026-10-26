@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
 using LLPlayer.Avalonia.Views;
@@ -224,7 +225,26 @@ public class SettingsWindowTests
         {
             window.FindControl<ListBox>("SettingsNavigation")!.SelectedIndex = 2; Dispatcher.UIThread.RunJobs();
             Assert.Equal(EngineKeyBindings.Defaults().Count, model.EngineKeyRows.Count);
-            Click(window, window.FindControl<Button>("ResetEngineKeysButton")!);
+
+            // The editor rows keep their Delete/Enabled controls reachable at the minimum window width.
+            window.Width = 560; window.Height = 550; Dispatcher.UIThread.RunJobs();
+            ItemsControl engineList = window.FindControl<ItemsControl>("EngineKeyRows")!;
+            Control firstRow = engineList.GetRealizedContainers().First();
+            firstRow.BringIntoView(); Dispatcher.UIThread.RunJobs();
+            foreach (Button rowButton in firstRow.GetVisualDescendants().OfType<Button>().Where(b => b.Content as string == "Delete"))
+            {
+                Point origin = rowButton.TranslatePoint(default, window)!.Value;
+                Assert.True(origin.X >= 0 && origin.Y >= 0 && origin.X + rowButton.Bounds.Width <= window.Bounds.Width + 1
+                    && origin.Y + rowButton.Bounds.Height <= window.Bounds.Height + 1, $"engine row Delete must stay reachable at MinWidth: {origin}");
+            }
+
+            // Reset is non-vacuous: delete a row first, then restore it through the button.
+            model.EngineKeyRows[0].DeleteCommand.Execute(null); Dispatcher.UIThread.RunJobs();
+            int afterDelete = model.EngineKeyRows.Count;
+            Assert.Equal(EngineKeyBindings.Defaults().Count - 1, afterDelete);
+            Button reset = window.FindControl<Button>("ResetEngineKeysButton")!;
+            reset.BringIntoView(); Dispatcher.UIThread.RunJobs();
+            Click(window, reset);
             Assert.Equal(EngineKeyBindings.Defaults().Count, model.EngineKeyRows.Count);
 
             EngineKeyEditRow pause = model.EngineKeyRows.First(r => r.ActionName == "TogglePlayPause");

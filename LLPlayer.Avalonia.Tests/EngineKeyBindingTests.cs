@@ -194,6 +194,79 @@ public class EngineKeyBindingTests
     }
 
     [Fact]
+    public void Normalize_rejects_numeric_enum_names_in_stored_engine_keys()
+    {
+        AppPrefs prefs = new()
+        {
+            EngineKeysCustomized = true,
+            EngineKeyBindings =
+            [
+                new EngineKeyBindingPref { Action = "999", Key = "A" },
+                new EngineKeyBindingPref { Action = "ToggleMute", Key = "999" },
+                new EngineKeyBindingPref { Action = "TogglePlayPause", Key = "Enter" },
+            ],
+        };
+        prefs.Normalize();
+        prefs.EngineKeyBindings.Should().ContainSingle();
+        prefs.EngineKeyBindings[0].Action.Should().Be("TogglePlayPause");
+        prefs.EngineKeyBindings[0].Key.Should().Be("Enter");
+    }
+
+    [Fact]
+    public void Invalid_only_customized_engine_keys_fall_back_to_engine_defaults()
+    {
+        AppPrefs prefs = new()
+        {
+            EngineKeysCustomized = true,
+            EngineKeyBindings =
+            [
+                new EngineKeyBindingPref { Action = "NotAnAction", Key = "A" },
+                new EngineKeyBindingPref { Action = "ToggleMute", Key = "NotAKey" },
+            ],
+        };
+        prefs.Normalize();
+        prefs.EngineKeysCustomized.Should().BeFalse("a corrupt replacement list must not silently disable all engine chords");
+        prefs.EngineKeyBindings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Empty_engine_draft_is_rejected_instead_of_disabling_every_engine_chord()
+    {
+        var (main, player, _, prefs, saved) = TestVm.Create(); using var owned = main;
+        SettingsViewModel draft = main.CreateSettings();
+        draft.EngineKeyRows.Clear();
+        draft.SaveCommand.Execute(null);
+        Assert.NotNull(draft.Error);
+        Assert.Contains("at least one", draft.Error!);
+        Assert.Empty(saved);
+        player.AppliedEngineKeyBindings.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Startup_surfaces_a_persisted_app_engine_collision_as_a_toast()
+    {
+        AppPrefs prefs = new AppPrefs().Normalize();
+        prefs.AppShortcutOverrides[AppShortcutMap.ToggleSidebar] = "Space";
+        using var main = new MainWindowViewModel(new FakePlaybackController(), prefs, _ => { }, new FakeTranslator(), new FakeShell());
+        main.Toasts.Should().Contain(toast => toast.Title == "Key binding conflict");
+    }
+
+    [Fact]
+    public void Engine_row_shows_a_friendly_chord_but_persists_the_canonical_key_name()
+    {
+        var (main, _, _, _, saved) = TestVm.Create(); using var owned = main;
+        SettingsViewModel draft = main.CreateSettings();
+        EngineKeyEditRow fullScreen = draft.EngineKeyRows.First(r => r.Action == KeyBindingAction.ToggleFullScreen);
+        fullScreen.Chord = "Return";
+        fullScreen.DisplayChord.Should().Be("Enter");
+        draft.SaveCommand.Execute(null);
+        Assert.Null(draft.Error);
+        Assert.Null(draft.Error);
+        draft.EngineKeyBindingPrefs.Should().Contain(b => b.Action == "ToggleFullScreen" && b.Key == "Enter");
+        saved[0].EngineKeyBindings.Should().Contain(b => b.Action == "ToggleFullScreen" && b.Key == "Enter");
+    }
+
+    [Fact]
     public void Write_failure_does_not_apply_engine_keys_live()
     {
         FakePlaybackController player = new();

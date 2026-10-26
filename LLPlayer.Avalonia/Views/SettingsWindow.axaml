@@ -236,26 +236,33 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <TextBlock Text="Engine key bindings (draft; Save applies them; duplicate or app-colliding chords are rejected)"
+            <TextBlock Text="Engine key bindings" FontWeight="SemiBold" />
+            <TextBlock Text="Draft only: Save applies these rows. Only the engine's existing bindings are listed, and duplicate or app-colliding chords are rejected. Adding new action rows is outside this stage."
                        Classes="dialog-description" TextWrapping="Wrap" />
             <Button Name="ResetEngineKeysButton" Content="Reset engine keys to defaults" Classes="outline"
-                    Command="{Binding ResetEngineKeysCommand}" HorizontalAlignment="Stretch" />
+                    Command="{Binding ResetEngineKeysCommand}" HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="Reset engine key bindings to engine defaults"
+                    AutomationProperties.HelpText="Replaces the draft rows with the engine's built-in bindings; Save is still required to apply them." />
+            <TextBlock Text="No engine bindings in this draft; Reset restores the engine defaults." Classes="dialog-description"
+                       TextWrapping="Wrap" IsVisible="{Binding !HasEngineKeyRows}" />
             <ItemsControl Name="EngineKeyRows" ItemsSource="{Binding EngineKeyRows}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:EngineKeyEditRow">
-                  <Grid ColumnDefinitions="*,150,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,2">
+                  <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,3">
                     <TextBlock Text="{Binding Description}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                    <c:ChordCaptureButton Grid.Column="1" Chord="{Binding Chord, Mode=TwoWay}" Content="{Binding Chord}"
-                                          Classes="outline" MinWidth="140"
-                                          AutomationProperties.Name="{Binding Description}"
-                                          AutomationProperties.HelpText="{Binding Chord, StringFormat='Current chord {0}. Click, then press the new chord; Esc cancels.'}"
-                                          ToolTip.Tip="Click, then press the new chord; Esc cancels" />
-                    <CheckBox Grid.Column="2" Content="Enabled" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center"
-                              AutomationProperties.Name="{Binding Description, StringFormat='Enable engine binding {0}'}" />
-                    <CheckBox Grid.Column="3" Content="On release" IsChecked="{Binding IsKeyUp}" VerticalAlignment="Center"
-                              AutomationProperties.Name="{Binding Description, StringFormat='Fire engine binding {0} on release'}" />
-                    <Button Grid.Column="4" Content="Delete" Classes="ghost sm" Command="{Binding DeleteCommand}"
-                            AutomationProperties.Name="{Binding Description, StringFormat='Delete engine binding {0}'}" />
+                    <c:ChordCaptureButton Grid.Column="1" Chord="{Binding Chord, Mode=TwoWay}" Content="{Binding DisplayChord}"
+                                          Classes="outline" MinWidth="120" MaxWidth="180"
+                                          AutomationProperties.Name="{Binding AccessibleName}"
+                                          AutomationProperties.HelpText="{Binding DisplayChord, StringFormat='Current chord {0}. Click, then press the new chord; Esc cancels.'}"
+                                          ToolTip.Tip="{Binding DisplayChord, StringFormat='Current chord: {0}. Click, then press the new chord; Esc cancels.'}" />
+                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="10">
+                      <CheckBox Content="Enabled" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center"
+                                AutomationProperties.Name="{Binding AccessibleName, StringFormat='Enable engine binding {0}'}" />
+                      <CheckBox Content="On release" IsChecked="{Binding IsKeyUp}" VerticalAlignment="Center"
+                                AutomationProperties.Name="{Binding AccessibleName, StringFormat='Fire engine binding {0} on release'}" />
+                      <Button Content="Delete" Classes="ghost sm" Command="{Binding DeleteCommand}"
+                              AutomationProperties.Name="{Binding AccessibleName, StringFormat='Delete engine binding {0}'}" />
+                    </StackPanel>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

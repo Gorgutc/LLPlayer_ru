@@ -217,7 +217,13 @@ public sealed class AppPrefs
         _ = AppShortcutMap.TryNormalizeOverrides(AppShortcutOverrides, out Dictionary<string, string> shortcuts);
         AppShortcutOverrides = shortcuts;
         if (EngineKeysCustomized)
+        {
             EngineKeyBindings = global::LLPlayer.Avalonia.Services.EngineKeyBindings.NormalizePrefs(EngineKeyBindings);
+            // An empty customized list would silently disable every engine chord (e.g. actions renamed by an engine
+            // upgrade, or a hand-edited file). Save never persists an empty list, so fall back to the engine defaults.
+            if (EngineKeyBindings.Count == 0)
+                EngineKeysCustomized = false;
+        }
         else
             EngineKeyBindings = [];
         RecentFiles = (RecentFiles ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).Take(MaxRecentFiles).ToList();
