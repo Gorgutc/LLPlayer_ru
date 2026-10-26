@@ -165,7 +165,7 @@ public class SettingsParityTests
     }
 
     [Fact]
-    public void Clear_confirmation_disarms_on_delete_export_and_empty_library()
+    public async Task Clear_confirmation_disarms_on_delete_export_and_empty_library()
     {
         using TempLibrary temp = new();
         Assert.True(temp.Library.TryAdd(Word("alpha")));
@@ -182,7 +182,7 @@ public class SettingsParityTests
         manager.ClearCommand.Execute(null);
         Assert.True(manager.ClearConfirming);
         manager.PickExportPath = _ => Task.FromResult<string?>(null);
-        manager.Start("apkg").GetAwaiter().GetResult();
+        await manager.Start("apkg");
         Assert.False(manager.ClearConfirming);
 
         manager.ClearCommand.Execute(null);
