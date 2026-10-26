@@ -147,6 +147,43 @@ public class CheatSheetHotkeyRefreshTests
         }
     }
 
+    [AvaloniaFact]
+    public void Engine_key_save_refreshes_the_open_sheet_with_engine_rows()
+    {
+        Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        FakePlaybackController player = new();
+        MainWindow main = new() { Width = 1000, Height = 600 };
+        using MainWindowViewModel model = new(player, new AppPrefs().Normalize(), _ => { }, new FakeTranslator(), main);
+        main.Attach(model, null, () => model.Shortcuts.BuildCheatSheet(player.EngineBindingsForCheatSheet));
+        main.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            model.ShowCheatSheet();
+            Dispatcher.UIThread.RunJobs();
+            CheatSheetWindow sheet = GetSheet(main);
+            TextBox search = sheet.FindControl<TextBox>("SearchBox")!;
+            search.Text = "TogglePlayPause";
+            Dispatcher.UIThread.RunJobs();
+            GetModel(sheet).HitText.Should().Be("0 of 10", "the fake engine starts without editor rows");
+
+            SettingsViewModel draft = model.CreateSettings();
+            draft.EngineKeyRows.First(r => r.ActionName == nameof(KeyBindingAction.TogglePlayPause)).Chord = "Enter";
+            draft.SaveCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            draft.Error.Should().BeNull();
+            GetSheet(main).Should().BeSameAs(sheet);
+            GetModel(sheet).FilterText.Should().Be("TogglePlayPause");
+            GetModel(sheet).HitText.Should().StartWith("1 of ", "the open sheet must rebuild from the live engine keys");
+            VisibleKeyCaps(sheet).Should().Contain("Enter", "the edited engine chord is shown on the same action row");
+        }
+        finally
+        {
+            main.Close();
+        }
+    }
+
     static (MainWindow Window, MainWindowViewModel Model) Build(AppPrefs? prefs = null)
     {
         Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;

@@ -157,7 +157,7 @@ public class SettingsWindowTests
                             "SidebarLeftEditor", "SidebarTextMaskEditor", "SidebarShowOriginalTextEditor", "SidebarSubPaddingEditor",
                             "SidebarFontFamilyEditor", "SidebarFontWeightEditor", "SidebarFontSizeEditor",
                         },
-                        _ => new[] { "TranslationLink", "RecognitionLink", "ShortcutsLink" }
+                        _ => new[] { "TranslationLink", "RecognitionLink", "ShortcutsLink", "ResetEngineKeysButton" }
                     })
                     {
                         var control = window.FindControl<Control>(name)!;
@@ -213,6 +213,42 @@ public class SettingsWindowTests
             reopened.Close(); await Task.Yield(); Dispatcher.UIThread.RunJobs();
         }
         finally { mainWindow.Close(); player.Recognition.Dispose(); }
+    }
+
+    [AvaloniaFact]
+    public void Engine_key_editor_roundtrips_and_blocks_an_app_collision()
+    {
+        var (main, player, _, prefs, saved) = TestVm.Create(); using var owned = main;
+        var model = main.CreateSettings(); var window = new SettingsWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            window.FindControl<ListBox>("SettingsNavigation")!.SelectedIndex = 2; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(EngineKeyBindings.Defaults().Count, model.EngineKeyRows.Count);
+            Click(window, window.FindControl<Button>("ResetEngineKeysButton")!);
+            Assert.Equal(EngineKeyBindings.Defaults().Count, model.EngineKeyRows.Count);
+
+            EngineKeyEditRow pause = model.EngineKeyRows.First(r => r.ActionName == "TogglePlayPause");
+            pause.Chord = "Enter";
+            Click(window, window.FindControl<Button>("SaveButton")!);
+            Assert.False(window.IsVisible, model.Error); Assert.Single(saved);
+            Assert.True(saved[0].EngineKeysCustomized);
+            Assert.Contains(saved[0].EngineKeyBindings, b => b.Action == "TogglePlayPause" && b.Key == "Enter");
+            Assert.Contains(player.CurrentEngineKeyBindings, b => b.Action.ToString() == "TogglePlayPause" && b.Key.ToString() == "Enter");
+        }
+        finally { if (window.IsVisible) window.Close(); }
+
+        var colliding = main.CreateSettings(); var collidingWindow = new SettingsWindow(colliding); collidingWindow.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            collidingWindow.FindControl<ListBox>("SettingsNavigation")!.SelectedIndex = 2; Dispatcher.UIThread.RunJobs();
+            EngineKeyEditRow fullscreen = colliding.EngineKeyRows.First(r => r.ActionName == "ToggleFullScreen");
+            fullscreen.Chord = "Ctrl+F"; // default ActivateSubsSearch app chord
+            Click(collidingWindow, collidingWindow.FindControl<Button>("SaveButton")!);
+            Assert.True(collidingWindow.IsVisible);
+            Assert.Contains("collide", colliding.Error!);
+            Assert.Single(saved);
+        }
+        finally { if (collidingWindow.IsVisible) collidingWindow.Close(); }
     }
 
     static void Click(Window window, Control control)

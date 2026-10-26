@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using FlyleafLib.MediaPlayer;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
 using WpfKey = System.Windows.Input.Key;
@@ -207,6 +208,20 @@ public class FakePlaybackController : IPlaybackController
     }
 
     public string? GetSubtitleLanguage(int slot) => Language;
+
+    // Engine key-binding editor seam: records the applied lists and serves them back as the current snapshot.
+    public List<EngineKeyBindingInfo> AppliedEngineKeyBindings { get; } = [];
+    public List<EngineKeyBindingInfo> CurrentEngineKeyBindings { get; set; } = [];
+
+    public IReadOnlyList<EngineKeyBindingInfo> GetEngineKeyBindings() => [.. CurrentEngineKeyBindings];
+    /// <summary>Engine config snapshot in Flyleaf form for the cheat-sheet builder closure.</summary>
+    public List<KeyBinding> EngineBindingsForCheatSheet => [.. CurrentEngineKeyBindings.Select(b => new KeyBinding { Action = b.Action, Key = b.Key, Ctrl = b.Ctrl, Alt = b.Alt, Shift = b.Shift, IsKeyUp = b.IsKeyUp, IsEnabled = b.IsEnabled })];
+
+    public void ApplyEngineKeyBindings(IReadOnlyList<EngineKeyBindingInfo> bindings)
+    {
+        CurrentEngineKeyBindings = [.. bindings];
+        AppliedEngineKeyBindings.AddRange(bindings);
+    }
 
     public void CompleteOpen(int requestIndex, string? error = null)
     {

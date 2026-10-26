@@ -117,6 +117,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SidebarFontWeight = prefs.SidebarFontWeight;
         SidebarFontSize = prefs.SidebarFontSize;
         ApplySidebarAppearance();
+        // The engine owns the default chords; only an explicit replacement list is applied at start-up.
+        if (prefs.EngineKeysCustomized)
+            player.ApplyEngineKeyBindings(EngineKeyBindings.FromPrefs(prefs.EngineKeyBindings));
         IsDarkTheme = prefs.Theme != "Light";
 
         player.Volume = Math.Min(prefs.Volume, player.VolumeMax);
@@ -204,6 +207,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitlePositionAlignment = draft.SubtitlePositionAlignment;
         candidate.SubtitlePositionAlignmentWhenDual = draft.SubtitlePositionAlignmentWhenDual;
         candidate.AppShortcutOverrides = new Dictionary<string, string>(draft.AppShortcuts, StringComparer.Ordinal);
+        candidate.EngineKeysCustomized = draft.EngineKeysCustomized;
+        candidate.EngineKeyBindings = draft.EngineKeysCustomized ? [.. draft.EngineKeyBindingPrefs] : [];
         // Resolve font resources and parse brushes before persistence, so live application only assigns prepared values.
         SubtitleFontSelection primaryFont = fonts.Resolve(candidate.SubtitleFontFamily, candidate.SubtitleFontWeight, candidate.SubtitleFontStyle);
         SubtitleFontSelection secondaryFont = candidate.SecondarySubtitleInheritsFont ? primaryFont
@@ -250,6 +255,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SidebarFontFamily = candidate.SidebarFontFamily;
         prefs.SidebarFontWeight = candidate.SidebarFontWeight;
         prefs.SidebarFontSize = candidate.SidebarFontSize;
+        prefs.EngineKeysCustomized = candidate.EngineKeysCustomized;
+        prefs.EngineKeyBindings = candidate.EngineKeyBindings;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
         prefs.SubtitleWidthPercent = candidate.SubtitleWidthPercent;
         prefs.SubtitleMaxWidth = candidate.SubtitleMaxWidth;
@@ -261,6 +268,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SubtitlePositionAlignment = candidate.SubtitlePositionAlignment;
         prefs.SubtitlePositionAlignmentWhenDual = candidate.SubtitlePositionAlignmentWhenDual;
         ApplyAppShortcutOverrides(candidate.AppShortcutOverrides);
+        player.ApplyEngineKeyBindings(candidate.EngineKeysCustomized
+            ? EngineKeyBindings.FromPrefs(candidate.EngineKeyBindings)
+            : EngineKeyBindings.Defaults());
+        // The cheat sheet builds its engine rows from the live config; an open sheet must follow this Save too.
+        OnPropertyChanged(nameof(Shortcuts));
         SubtitleFontSize = candidate.SubtitleFontSize;
         SubtitleBottomOffset = candidate.SubtitleBottomOffset;
         SubtitleOutlineThickness = candidate.SubtitleOutlineThickness;
