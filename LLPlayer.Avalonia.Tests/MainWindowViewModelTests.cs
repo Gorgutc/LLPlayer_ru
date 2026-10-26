@@ -1,3 +1,4 @@
+﻿using Avalonia.Headless.XUnit;
 using AwesomeAssertions;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
@@ -9,7 +10,7 @@ public class MainWindowViewModelTests
 {
     static long Ticks(double seconds) => TimeSpan.FromSeconds(seconds).Ticks;
 
-    [Fact]
+    [AvaloniaFact]
     public void Transport_FollowsPlayerTimeAndDuration()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -24,7 +25,7 @@ public class MainWindowViewModelTests
         player.Seeks.Should().BeEmpty("updates coming from the player must not seek back (no feedback loop)");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void SeekDrag_IgnoresPlayerTime_AndSeeksOnceOnRelease()
     {
         ManualTimeProvider time = new();
@@ -54,7 +55,7 @@ public class MainWindowViewModelTests
         player.Seeks.Should().HaveCount(1);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void SeekHold_ExpiresSoAStuckEngineDoesNotFreezeTheBar()
     {
         ManualTimeProvider time = new();
@@ -69,7 +70,7 @@ public class MainWindowViewModelTests
         vm.SeekValue.Should().Be(3);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Volume_TwoWay_WithoutEcho()
     {
         var (vm, player, _, prefs, _) = TestVm.Create();
@@ -88,7 +89,7 @@ public class MainWindowViewModelTests
         vm.IsMuted.Should().BeTrue();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Speed_MenuSetsSpeed_AndMarksSelection()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -99,7 +100,7 @@ public class MainWindowViewModelTests
         vm.SpeedItems.Single(i => i.IsSelected).Speed.Should().Be(1.5);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Shortcuts_AppChordsRunAppActions_OthersAreForwarded()
     {
         var (vm, player, shell, _, _) = TestVm.Create();
@@ -132,7 +133,7 @@ public class MainWindowViewModelTests
         player.KeysDown.Should().HaveCount(3, "keys typed into a text box stay there");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Drop_MediaWithSubtitles_OpensMediaThenLoadsSubtitles()
     {
         var (vm, player, _, prefs, saved) = TestVm.Create();
@@ -149,7 +150,7 @@ public class MainWindowViewModelTests
         saved.Should().NotBeEmpty();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Drop_SubtitlesOnly_LoadsIntoOpenVideo_OrExplains()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -163,7 +164,7 @@ public class MainWindowViewModelTests
         player.Opened.Should().BeEmpty();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void OpenCommand_UsesPicker_AndOpenErrorsBecomeToasts()
     {
         var (vm, player, shell, _, _) = TestVm.Create();
@@ -176,7 +177,7 @@ public class MainWindowViewModelTests
         vm.RecentFiles.Should().BeEmpty();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task OpenCommand_WithoutFilePicker_ExplainsAlternatives()
     {
         var (vm, player, shell, _, _) = TestVm.Create();
@@ -186,7 +187,7 @@ public class MainWindowViewModelTests
         vm.Toasts.Should().ContainSingle(t => t.Title == "No file picker available" && t.Message!.Contains("LLPLAYER_MANAGED_DIALOGS"));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void OpenRecent_MissingFile_IsRemovedFromRecent()
     {
         AppPrefs prefs = new();
@@ -206,7 +207,7 @@ public class MainWindowViewModelTests
         player.Opened.Should().Equal("https://example.com/stream.m3u8");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Tracks_MenuListsOffPlusTracks_AndSelects()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -224,7 +225,7 @@ public class MainWindowViewModelTests
         player.SelectedTracks.Should().Equal((1, embedded), (0, (SubtitleTrack?)null));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void FullScreenIdle_HidesControlsAndCursor_ActivityShowsThem()
     {
         ManualTimeProvider time = new();
@@ -253,7 +254,7 @@ public class MainWindowViewModelTests
         vm.ControlsVisible.Should().BeTrue();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Theme_SwitchPersistsAndAppliesThroughTheShell()
     {
         var (vm, _, shell, prefs, saved) = TestVm.Create();
@@ -265,7 +266,7 @@ public class MainWindowViewModelTests
         saved.Should().ContainSingle();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Prefs_AreAppliedToThePlayerAtStart()
     {
         AppPrefs prefs = new() { Volume = 33, Mute = true, SubtitlesVisible = false, SubtitleFontSize = 40, SidebarVisible = true };
@@ -278,7 +279,7 @@ public class MainWindowViewModelTests
         vm.SidebarVisible.Should().BeTrue();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public async Task WordClick_PausesPlayback_AndResumingClosesThePopup()
     {
         var (vm, player, _, _, _) = TestVm.Create();

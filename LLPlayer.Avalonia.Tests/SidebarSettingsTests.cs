@@ -1,3 +1,4 @@
+﻿using Avalonia.Headless.XUnit;
 using System.Text.Json;
 using AwesomeAssertions;
 using LLPlayer.Avalonia.Services;
@@ -86,7 +87,7 @@ public class SidebarSettingsTests
         legacy.SidebarFontWeight.Should().Be("Normal");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Draft_loads_new_sidebar_fields_and_Save_persists_them_live_after_write()
     {
         var player = new FakePlaybackController(); var shell = new FakeShell(); var prefs = new AppPrefs();
@@ -123,7 +124,7 @@ public class SidebarSettingsTests
         main.SidebarFontWeight.Should().Be("Bold");
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("-1", "16", null)]   // padding below 0
     [InlineData("49", "16", null)]   // padding above 48
     [InlineData("5", "7", null)]     // font below 8
@@ -145,7 +146,7 @@ public class SidebarSettingsTests
         Assert.Equal(16, main.SidebarFontSize);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("0", "8")]
     [InlineData("48", "72")]
     public void Boundary_sidebar_values_are_valid(string padding, string size)
@@ -159,7 +160,7 @@ public class SidebarSettingsTests
         main.SidebarFontSize.Should().Be(double.Parse(size));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Write_failure_keeps_sidebar_live_state_and_prefs_then_retry_applies()
     {
         var prefs = new AppPrefs(); var player = new FakePlaybackController(); var shell = new FakeShell(); bool fail = true;
@@ -178,7 +179,7 @@ public class SidebarSettingsTests
         main.SidebarFontSize.Should().Be(30); main.SidebarFontFamily.Should().Be("Noto Sans");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Saved_non_default_sidebar_prefs_restore_live_state_after_reload()
     {
         using TempDir dir = new();

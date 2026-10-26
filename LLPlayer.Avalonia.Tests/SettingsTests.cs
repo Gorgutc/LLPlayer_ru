@@ -1,3 +1,4 @@
+﻿using Avalonia.Headless.XUnit;
 using System.Text.Json;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
@@ -6,7 +7,7 @@ namespace LLPlayer.Avalonia.Tests;
 
 public class SettingsTests
 {
-    [Fact]
+    [AvaloniaFact]
     public void Save_persists_all_six_fields_before_live_apply_and_preserves_fresh_unrelated_values()
     {
         var player = new FakePlaybackController(); var shell = new FakeShell(); var prefs = new AppPrefs();
@@ -34,7 +35,7 @@ public class SettingsTests
         Assert.Equal(42, main.SubtitleFontSize); Assert.Equal(50.4, main.SecondaryFontSize); Assert.Equal(["Light"], shell.Themes);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Failure_keeps_entire_live_state_unchanged_and_draft_open_then_retry_succeeds()
     {
         var prefs = new AppPrefs(); var player = new FakePlaybackController(); var shell = new FakeShell(); bool fail = true;
@@ -50,7 +51,7 @@ public class SettingsTests
         fail = false; draft.SaveCommand.Execute(null); Assert.Null(draft.Error); Assert.Equal(1, closes);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Scale_only_recomputes_secondary_font_and_Close_discards()
     {
         var (main, _, _, prefs, saved) = TestVm.Create(); using var owned = main;
@@ -61,7 +62,7 @@ public class SettingsTests
         Assert.Equal("Dark", prefs.Theme); Assert.Equal(34, main.SubtitleFontSize); Assert.Single(saved);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(11, 0.8, 360)] [InlineData(97, 0.8, 360)]
     [InlineData(34, 0.39, 360)] [InlineData(34, 1.51, 360)]
     [InlineData(34, 0.8, 219)] [InlineData(34, 0.8, 901)]
@@ -72,7 +73,7 @@ public class SettingsTests
         var draft = main.CreateSettings(); draft.SubtitleFontSize = font; draft.SecondaryFontScale = scale; draft.SidebarWidth = width;
         draft.SaveCommand.Execute(null); Assert.NotNull(draft.Error); Assert.Empty(saved);
     }
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(12, 0.4, 220)] [InlineData(96, 1.5, 900)]
     public void Boundary_values_are_valid(double font, double scale, double width)
     {

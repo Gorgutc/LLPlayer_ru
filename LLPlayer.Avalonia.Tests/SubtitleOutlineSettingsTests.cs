@@ -22,7 +22,7 @@ public class SubtitleOutlineSettingsTests
     const string Primary = "SubtitleOutlineThickness";
     const string Secondary = "SecondarySubtitleOutlineThickness";
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("{}")]
     [InlineData("{\"Volume\":42,\"Theme\":\"Light\",\"RecentFiles\":[\"old.mp4\"]}")]
     public void Legacy_preferences_restore_independent_primary_and_secondary_outline_defaults(string json)
@@ -33,7 +33,7 @@ public class SubtitleOutlineSettingsTests
         AssertLive(main, 3, 2.5);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("-1", "9", 0, 8)]
     [InlineData("9", "-1", 8, 0)]
     [InlineData("0", "8", 0, 8)]

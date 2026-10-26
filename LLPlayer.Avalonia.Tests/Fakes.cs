@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Avalonia;
+using Avalonia.Threading;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
@@ -307,6 +309,12 @@ public static class TestVm
     public static (MainWindowViewModel Vm, FakePlaybackController Player, FakeShell Shell, AppPrefs Prefs, List<AppPrefs> Saved)
         Create(TimeProvider? time = null, IWordTranslator? translator = null, AppPrefs? prefs = null)
     {
+        // Inspect the thread-local context before touching Avalonia's process-wide service locator. UIThread's
+        // getter can initialize a dispatcher, so it cannot safely be the first check for a misrouted plain test.
+        if (SynchronizationContext.Current is not AvaloniaSynchronizationContext
+            || Application.Current is not { } app || !app.CheckAccess())
+            throw new InvalidOperationException("TestVm.Create must run in an AvaloniaFact or AvaloniaTheory UI-thread context.");
+
         FakePlaybackController player = new();
         FakeShell shell = new();
         prefs ??= new AppPrefs().Normalize();

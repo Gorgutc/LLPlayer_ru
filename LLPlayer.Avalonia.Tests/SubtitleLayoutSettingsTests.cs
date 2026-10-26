@@ -30,7 +30,7 @@ public class SubtitleLayoutSettingsTests
 
     // ---- defaults and normalization ------------------------------------------------------------------------------
 
-    [Fact]
+    [AvaloniaFact]
     public void Missing_layout_keys_restore_the_current_look()
     {
         AppPrefs prefs = JsonSerializer.Deserialize<AppPrefs>("{}", PrefsStore.JsonOptions)!.Normalize();
@@ -107,7 +107,7 @@ public class SubtitleLayoutSettingsTests
 
     // ---- settings draft validation and transaction ---------------------------------------------------------------
 
-    [Fact]
+    [AvaloniaFact]
     public void Settings_draft_exposes_the_five_layout_fields_with_defaults()
     {
         using var vm = CreateVm(new AppPrefs().Normalize());
@@ -123,7 +123,7 @@ public class SubtitleLayoutSettingsTests
         SettingsViewModel.LineAlignments.Should().Equal("Center", "Left", "Right");
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("0", false)]
     [InlineData("1", true)]
     [InlineData("100", true)]
@@ -147,7 +147,7 @@ public class SubtitleLayoutSettingsTests
         }
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("0", true)]
     [InlineData("4000", true)]
     [InlineData("4001", false)]
@@ -162,7 +162,7 @@ public class SubtitleLayoutSettingsTests
         (draft.Error == null).Should().Be(shouldSave);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("0", true)]
     [InlineData("200", true)]
     [InlineData("200.5", false)]
@@ -176,7 +176,7 @@ public class SubtitleLayoutSettingsTests
         (draft.Error == null).Should().Be(shouldSave);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Save_persists_layout_before_apply_and_preserves_unrelated_preferences()
     {
         AppPrefs prefs = new AppPrefs { Volume = 42, SubtitleTextColor = "#112233", SubtitleBackgroundOpacityPercent = 30 }.Normalize();
@@ -216,7 +216,7 @@ public class SubtitleLayoutSettingsTests
         vm.SubtitleTextAlignment.Should().Be(TextAlignment.Right);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Save_failure_keeps_live_and_persisted_state_and_leaves_the_dialog_open()
     {
         AppPrefs prefs = new AppPrefs().Normalize();
@@ -230,7 +230,7 @@ public class SubtitleLayoutSettingsTests
         prefs.SubtitleWidthPercent.Should().Be(100);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Close_discards_layout_edits()
     {
         AppPrefs prefs = new AppPrefs().Normalize();
@@ -244,7 +244,7 @@ public class SubtitleLayoutSettingsTests
         prefs.SubtitleWidthPercent.Should().Be(100);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Persisted_layout_survives_restart()
     {
         using TempDir temp = new();

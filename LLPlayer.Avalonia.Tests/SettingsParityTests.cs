@@ -1,4 +1,4 @@
-using Avalonia.Controls;
+﻿using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -66,7 +66,7 @@ public class SettingsParityTests
         Assert.Equal(AppPrefs.DefaultAnkiDeck, overlong.AnkiDeck);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Word_and_anki_settings_round_trip_through_the_settings_hub_and_apply_live()
     {
         var (main, _, _, prefs, saved) = TestVm.Create();
@@ -86,7 +86,7 @@ public class SettingsParityTests
         Assert.Equal("Mining deck", main.AnkiDeck);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Settings_hub_rejects_unknown_word_actions_and_overlong_decks()
     {
         var (main, _, _, _, saved) = TestVm.Create();
@@ -105,7 +105,7 @@ public class SettingsParityTests
         Assert.Empty(saved);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("Clipboard", "word")]
     [InlineData("ClipboardAll", "the whole cue")]
     public void Word_click_action_copies_the_word_or_the_cue_instead_of_opening_the_popup(string action, string expected)
@@ -120,7 +120,7 @@ public class SettingsParityTests
         Assert.False(player.IsPlaying);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("Clipboard", "")]
     [InlineData("ClipboardAll", " ")]
     public void Blank_word_click_copy_does_not_clear_the_clipboard(string action, string blank)
@@ -134,7 +134,7 @@ public class SettingsParityTests
         Assert.False(player.IsPlaying);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Word_click_translation_action_still_opens_the_popup()
     {
         var (main, _, shell, _, _) = TestVm.Create();
@@ -264,7 +264,7 @@ public class SettingsParityTests
         finally { window.Close(); }
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Saving_settings_does_not_clobber_a_session_deck_typed_in_an_open_manager()
     {
         var (main, _, _, _, _) = TestVm.Create();
