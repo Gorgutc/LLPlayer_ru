@@ -62,6 +62,11 @@ public sealed class AppPrefs
     public const double DefaultSidebarFontSize = 16;
     public const string DefaultSidebarFontFamily = "Segoe UI";
     public const string DefaultSidebarFontWeight = "Normal";
+    public const string DefaultWordClickAction = "Translation";
+    public const string DefaultAnkiDeck = "LLPlayer";
+    public const int MaxAnkiDeckLength = 64;
+    /// <summary>Word-click behaviors ported to Avalonia (PDIC has no Avalonia surface).</summary>
+    public static IReadOnlyList<string> WordClickActions { get; } = ["Translation", "Clipboard", "ClipboardAll"];
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -163,6 +168,34 @@ public sealed class AppPrefs
     /// <summary>Optional target language (FlyleafLib <c>TargetLanguage</c> name); null = system language.</summary>
     public string? TranslateTargetLanguage { get; set; }
 
+    /// <summary>Word-click behavior: Translation (popup), Clipboard (copy the word) or ClipboardAll (copy the cue).</summary>
+    public string WordClickAction { get; set; } = DefaultWordClickAction;
+
+    /// <summary>Default Anki deck name offered by the Word Manager for TSV/.apkg/AnkiConnect.</summary>
+    public string AnkiDeck { get; set; } = DefaultAnkiDeck;
+
+    /// <summary>Accepts only the ported word-click behaviors; null keeps the default.</summary>
+    public static bool TryNormalizeWordClickAction(string? raw, out string normalized)
+    {
+        normalized = DefaultWordClickAction;
+        if (raw == null) return true;
+        string value = raw.Trim();
+        if (WordClickActions.Contains(value, StringComparer.Ordinal)) { normalized = value; return true; }
+        return false;
+    }
+
+    /// <summary>Trimmed deck name, blank means the default; control characters or over 64 chars are rejected.</summary>
+    public static bool TryNormalizeAnkiDeck(string? raw, out string normalized)
+    {
+        normalized = DefaultAnkiDeck;
+        if (raw == null) return true;
+        if (raw.Any(char.IsControl)) return false;
+        string value = raw.Trim();
+        if (value.Length > MaxAnkiDeckLength) return false;
+        if (value.Length > 0) normalized = value;
+        return true;
+    }
+
     public void AddRecent(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -229,6 +262,8 @@ public sealed class AppPrefs
         RecentFiles = (RecentFiles ?? []).Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.Ordinal).Take(MaxRecentFiles).ToList();
         if (string.IsNullOrWhiteSpace(WordTranslationService))
             WordTranslationService = "GoogleV1";
+        WordClickAction = TryNormalizeWordClickAction(WordClickAction, out string clickAction) ? clickAction : DefaultWordClickAction;
+        AnkiDeck = TryNormalizeAnkiDeck(AnkiDeck, out string deck) ? deck : DefaultAnkiDeck;
         return this;
     }
 

@@ -10,7 +10,7 @@ using WpfKey = System.Windows.Input.Key;
 
 namespace LLPlayer.Avalonia.ViewModels;
 
-public enum SettingsLink { Translation, Recognition, Shortcuts }
+public enum SettingsLink { Translation, Recognition, Shortcuts, WordManager }
 
 /// <summary>Detached preferences draft. Persistence and live application are owned by the main view model.</summary>
 public sealed partial class SettingsViewModel : ObservableObject
@@ -26,6 +26,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     public IReadOnlyList<EngineKeyBindingPref> EngineKeyBindingPrefs { get; private set; } = [];
     /// <summary>False means the profile keeps the engine's built-in defaults.</summary>
     public bool EngineKeysCustomized { get; private set; }
+    public static IReadOnlyList<string> WordClickActions => AppPrefs.WordClickActions;
+    [ObservableProperty] string wordClickAction = AppPrefs.DefaultWordClickAction;
+    [ObservableProperty] string ankiDeck = AppPrefs.DefaultAnkiDeck;
     ObservableCollection<string>? subtitleFontFamilies;
     public SettingsViewModel(AppPrefs current, Action<SettingsViewModel> commit, BitmapSubtitleRuntimeState bitmapState)
     {
@@ -106,6 +109,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         PrimaryBitmapScaleText = bitmapState.PrimaryScale.ToString(NumberFormat);
         SecondaryBitmapScaleText = bitmapState.SecondaryScale.ToString(NumberFormat);
         PrimaryBitmapPositionText = bitmapState.PrimaryPosition.ToString(NumberFormat);
+        WordClickAction = current.WordClickAction;
+        AnkiDeck = current.AnkiDeck;
     }
 
     public static IReadOnlyList<string> Themes { get; } = ["Dark", "Light"];
@@ -468,6 +473,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = engineKeyError;
             return;
         }
+        if (!AppPrefs.TryNormalizeWordClickAction(WordClickAction, out string clickAction)
+            || !AppPrefs.TryNormalizeAnkiDeck(AnkiDeck, out string deck))
+        {
+            Error = "Choose a word click action and an Anki deck name with 1–64 characters (no control characters).";
+            return;
+        }
+        WordClickAction = clickAction;
+        AnkiDeck = deck;
         AppShortcuts = appShortcuts;
         EngineKeyBindingPrefs = engineKeyPrefs;
         EngineKeysCustomized = engineKeysCustomized;

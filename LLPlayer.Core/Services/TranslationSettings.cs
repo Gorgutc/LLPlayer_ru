@@ -16,6 +16,10 @@ public sealed class TranslationSettings
     public TargetLanguage TargetLanguage { get; set; } = new Config(true).Subtitles.TranslateTargetLanguage;
     public Dictionary<TranslateServiceType, ITranslateSettings> Providers { get; set; } = [];
     public TranslateChatConfig Chat { get; set; } = new();
+    // WPF parity: translate-ahead window around the playhead and parallel subtitle requests.
+    public int TranslateCountBackward { get; set; } = 1;
+    public int TranslateCountForward { get; set; } = 12;
+    public int TranslateMaxConcurrency { get; set; } = 2;
 
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -37,6 +41,10 @@ public sealed class TranslationSettings
             throw new ArgumentException("Choose a known translation chat mode.");
         if (Chat.SubtitleContextCount < 0 || Chat.ContextWindowBefore < 0 || Chat.ContextWindowAfter < 0)
             throw new ArgumentException("Subtitle context counts must be nonnegative whole numbers.");
+        if (TranslateCountBackward is < 0 or > 1000 || TranslateCountForward is < 0 or > 1000)
+            throw new ArgumentException("Translation counts must be whole numbers from 0 to 1000.");
+        if (TranslateMaxConcurrency is < 1 or > 64)
+            throw new ArgumentException("Translation concurrency must be a whole number from 1 to 64.");
         foreach (var (type, value) in Providers)
         {
             if (!Enum.IsDefined(type) || value == null || value.GetType() != type.DefaultSettings().GetType())
@@ -75,6 +83,9 @@ public sealed class TranslationSettings
         target.TranslateTargetLanguage = copy.TargetLanguage;
         target.TranslateServiceSettings = copy.Providers;
         target.TranslateChatConfig = copy.Chat;
+        target.TranslateCountBackward = copy.TranslateCountBackward;
+        target.TranslateCountForward = copy.TranslateCountForward;
+        target.TranslateMaxConcurrency = copy.TranslateMaxConcurrency;
         if (Enum.TryParse<TranslateServiceType>(copy.SentenceProvider, out var sentenceProvider)) target.TranslateServiceType = sentenceProvider;
         if (Enum.TryParse<TranslateServiceType>(copy.WordProvider, out var provider)) target.TranslateWordServiceType = provider;
     }

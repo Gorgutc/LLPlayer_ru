@@ -158,7 +158,11 @@ public class SettingsWindowTests
                             "SidebarLeftEditor", "SidebarTextMaskEditor", "SidebarShowOriginalTextEditor", "SidebarSubPaddingEditor",
                             "SidebarFontFamilyEditor", "SidebarFontWeightEditor", "SidebarFontSizeEditor",
                         },
-                        _ => new[] { "TranslationLink", "RecognitionLink", "ShortcutsLink", "ResetEngineKeysButton" }
+                        _ => new[]
+                        {
+                            "TranslationLink", "RecognitionLink", "ShortcutsLink", "ResetEngineKeysButton",
+                            "WordClickActionEditor", "WordManagerLink", "AnkiDeckEditor",
+                        }
                     })
                     {
                         var control = window.FindControl<Control>(name)!;
@@ -199,7 +203,9 @@ public class SettingsWindowTests
             var draft = (SettingsViewModel)hub.DataContext!; draft.Theme = "Light"; draft.SubtitleFontSize = 90;
             draft.SelectedSection = 2; Dispatcher.UIThread.RunJobs();
             string name = link switch { SettingsLink.Translation => "TranslationLink", SettingsLink.Recognition => "RecognitionLink", _ => "ShortcutsLink" };
-            Click(hub, hub.FindControl<Button>(name)!);
+            Button tool = hub.FindControl<Button>(name)!;
+            tool.BringIntoView(); Dispatcher.UIThread.RunJobs();
+            Click(hub, tool);
             // Yield to the awaited ShowDialog continuation, then run the queued UI work.
             await Task.Yield(); Dispatcher.UIThread.RunJobs();
             Assert.False(hub.IsVisible); Assert.Equal(0, writes); Assert.Equal("Dark", prefs.Theme); Assert.Equal(34, main.SubtitleFontSize);
