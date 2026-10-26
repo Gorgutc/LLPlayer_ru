@@ -1404,7 +1404,8 @@ Product commits `593b106915d12445a1249b1dff54e79ad66f8aa4` (implementation) и `
 `TranslateMaxConcurrency`) добавлены в detached `TranslationSettings`, валидируются, сохраняются в
 `LLPlayer.Translation.json`, редактируются в Translation dialog и применяются к live engine `Subtitles`. Добавлены
 `AppPrefs.WordClickAction` (Translation/Clipboard/ClipboardAll, live-поведение клика по слову) и `AppPrefs.AnkiDeck`
-(default deck для Word Manager TSV/.apkg/AnkiConnect, live update открытого менеджера); Word Manager получил word count,
+(default deck следующего Word Manager для .apkg/AnkiConnect; TSV не содержит deck; открытый менеджер остаётся единственным
+владельцем своего session deck); Word Manager получил word count,
 read-only Source/Language/Saved и двухшаговое подтверждение Clear all. Границы: без LLM sampling/region-map editors,
 endpoint check/reset, Get Models/Hello API, word context-menu editor, copy-on-select/last-search, auto text copy, PDIC,
 AnkiConnect endpoint, APKG options. Локальные FINAL2-гейты на committed code tree: Avalonia 965/14 skipped; WPF 1440;

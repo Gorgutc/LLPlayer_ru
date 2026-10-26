@@ -125,11 +125,13 @@ public class SettingsParityTests
     [InlineData("ClipboardAll", " ")]
     public void Blank_word_click_copy_does_not_clear_the_clipboard(string action, string blank)
     {
-        var (main, _, shell, _, _) = TestVm.Create();
+        var (main, player, shell, _, _) = TestVm.Create();
         using var owned = main;
+        player.IsPlaying = true;
         main.WordClickAction = action;
         main.OnWordClicked(blank, blank, 0, 0, 0);
         Assert.Empty(shell.Clipboard);
+        Assert.False(player.IsPlaying);
     }
 
     [Fact]
@@ -163,6 +165,35 @@ public class SettingsParityTests
     }
 
     [Fact]
+    public void Clear_confirmation_disarms_on_delete_export_and_empty_library()
+    {
+        using TempLibrary temp = new();
+        Assert.True(temp.Library.TryAdd(Word("alpha")));
+        Assert.True(temp.Library.TryAdd(Word("beta")));
+        var manager = new WordManagerViewModel(temp.Library);
+        manager.Selected = manager.Words[0];
+
+        manager.ClearCommand.Execute(null);
+        Assert.True(manager.ClearConfirming);
+        manager.DeleteCommand.Execute(null);
+        Assert.False(manager.ClearConfirming);
+        Assert.Single(temp.Library.GetAll());
+
+        manager.ClearCommand.Execute(null);
+        Assert.True(manager.ClearConfirming);
+        manager.PickExportPath = _ => Task.FromResult<string?>(null);
+        manager.Start("apkg").GetAwaiter().GetResult();
+        Assert.False(manager.ClearConfirming);
+
+        manager.ClearCommand.Execute(null);
+        manager.ClearCommand.Execute(null);
+        Assert.Empty(temp.Library.GetAll());
+        manager.ClearCommand.Execute(null);
+        Assert.False(manager.ClearConfirming);
+        Assert.Contains("empty", manager.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Word_manager_count_pluralizes_and_distinguishes_a_filtered_list()
     {
         using TempLibrary temp = new();
@@ -172,6 +203,10 @@ public class SettingsParityTests
         Assert.Equal("2 words", manager.CountText);
         manager.Filter = "alpha";
         Assert.Equal("1 of 2 words", manager.CountText);
+        manager.Filter = "a";
+        Assert.Equal("2 of 2 words", manager.CountText);
+        manager.Filter = "";
+        Assert.Equal("2 words", manager.CountText);
     }
 
     [Fact]
@@ -266,6 +301,7 @@ public class SettingsParityTests
             List<TextBlock> texts = [.. window.GetLogicalDescendants().OfType<TextBlock>()];
             Assert.Contains(texts, t => t.Text == "1 word");
             Assert.Contains(texts, t => t.Text == "Source: Word click");
+        Assert.Contains(texts, t => t.Text == "Source language: en");
             Assert.Contains(texts, t => t.Text != null && t.Text.StartsWith("Saved at: ", StringComparison.Ordinal));
             Button clear = window.FindControl<Button>("ClearWordsButton")!;
             Assert.Equal("Clear all words", clear.Content);

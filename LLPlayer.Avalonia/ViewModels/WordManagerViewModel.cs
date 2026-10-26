@@ -36,9 +36,16 @@ public sealed partial class WordManagerViewModel : ObservableObject, IAsyncDispo
     public string SavedText => Selected == null ? ""
         : DateTimeOffset.TryParse(Selected.SavedAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset saved)
             ? saved.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : Selected.SavedAtUtc;
-    public string CountText => Words.Count == library.GetAll().Count
-        ? (Words.Count == 1 ? "1 word" : $"{Words.Count} words")
-        : $"{Words.Count} of {library.GetAll().Count} words";
+    public string CountText
+    {
+        get
+        {
+            int total = library.GetAll().Count;
+            if (string.IsNullOrWhiteSpace(Filter))
+                return total == 1 ? "1 word" : $"{total} words";
+            return $"{Words.Count} of {total} words";
+        }
+    }
     public bool HasSelection => Selected != null;
     public WordManagerViewModel(WordLibrary library,
         Func<IReadOnlyList<SavedWord>, string, CancellationToken, Task<AnkiAddNotesOutcome>>? send = null,
