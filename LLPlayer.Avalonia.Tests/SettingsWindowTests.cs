@@ -15,6 +15,48 @@ namespace LLPlayer.Avalonia.Tests;
 public class SettingsWindowTests
 {
     [AvaloniaFact]
+    public void Sidebar_editors_roundtrip_on_the_Subtitles_page_and_Close_discards_them()
+    {
+        var (main, _, _, prefs, saved) = TestVm.Create(); using var owned = main;
+        var model = main.CreateSettings(); var window = new SettingsWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            window.FindControl<ListBox>("SettingsNavigation")!.SelectedIndex = 1;
+            Dispatcher.UIThread.RunJobs();
+            window.FindControl<CheckBox>("SidebarLeftEditor")!.IsChecked = true;
+            window.FindControl<CheckBox>("SidebarTextMaskEditor")!.IsChecked = true;
+            window.FindControl<CheckBox>("SidebarShowOriginalTextEditor")!.IsChecked = true;
+            window.FindControl<NumericUpDown>("SidebarSubPaddingEditor")!.Value = 12;
+            window.FindControl<NumericUpDown>("SidebarFontSizeEditor")!.Value = 22;
+            window.FindControl<ComboBox>("SidebarFontFamilyEditor")!.SelectedItem = "";
+            window.FindControl<ComboBox>("SidebarFontWeightEditor")!.SelectedItem = "Bold";
+            Dispatcher.UIThread.RunJobs();
+            Click(window, window.FindControl<Button>("SaveButton")!);
+            Assert.False(window.IsVisible, model.Error); Assert.Single(saved);
+            Assert.True(prefs.SidebarLeft); Assert.True(prefs.SidebarTextMask); Assert.True(prefs.SidebarShowOriginalText);
+            Assert.Equal(12, prefs.SidebarSubPadding); Assert.Equal(22, prefs.SidebarFontSize);
+            Assert.Equal("", prefs.SidebarFontFamily); Assert.Equal("Bold", prefs.SidebarFontWeight);
+            Assert.True(main.SidebarLeft); Assert.True(main.SidebarTextMask); Assert.Equal("", main.SidebarFontFamily);
+            Assert.Equal(12, main.SidebarSubPadding);
+        }
+        finally { if (window.IsVisible) window.Close(); }
+
+        // A fresh draft opens with the saved values; Close discards edits.
+        var cancel = main.CreateSettings(); var cancelWindow = new SettingsWindow(cancel); cancelWindow.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            cancelWindow.FindControl<ListBox>("SettingsNavigation")!.SelectedIndex = 1; Dispatcher.UIThread.RunJobs();
+            cancelWindow.FindControl<CheckBox>("SidebarLeftEditor")!.IsChecked = false;
+            cancelWindow.FindControl<NumericUpDown>("SidebarFontSizeEditor")!.Value = 30;
+            Click(cancelWindow, cancelWindow.FindControl<Button>("CloseButton")!);
+            Assert.False(cancelWindow.IsVisible); Assert.Single(saved);
+            Assert.True(prefs.SidebarLeft); Assert.Equal(22, prefs.SidebarFontSize);
+            Assert.True(main.SidebarLeft); Assert.Equal(22, main.SidebarFontSize);
+        }
+        finally { if (cancelWindow.IsVisible) cancelWindow.Close(); }
+    }
+
+    [AvaloniaFact]
     public void Main_window_has_Settings_menu_and_gear()
     {
         using var vm = new MainWindowViewModel(new FakePlaybackController(), new AppPrefs(), _ => { }, new FakeTranslator(), new FakeShell());
@@ -49,10 +91,10 @@ public class SettingsWindowTests
         var (main, _, _, prefs, saved) = TestVm.Create(); using var owned = main;
         var model = main.CreateSettings(); var window = new SettingsWindow(model); window.Show(); Dispatcher.UIThread.RunJobs();
         window.FindControl<ComboBox>("ThemeEditor")!.SelectedItem = "Light";
-        window.FindControl<CheckBox>("SidebarVisibleEditor")!.IsChecked = true;
-        window.FindControl<NumericUpDown>("SidebarWidthEditor")!.Value = 420;
         window.FindControl<ListBox>("SettingsNavigation")!.SelectedIndex = 1;
         Dispatcher.UIThread.RunJobs(); Assert.True(window.FindControl<StackPanel>("SubtitlesPage")!.IsVisible);
+        window.FindControl<CheckBox>("SidebarVisibleEditor")!.IsChecked = true;
+        window.FindControl<NumericUpDown>("SidebarWidthEditor")!.Value = 420;
         window.FindControl<NumericUpDown>("FontSizeEditor")!.Value = 44;
         window.FindControl<NumericUpDown>("ScaleEditor")!.Value = 1.25m;
         window.FindControl<CheckBox>("SubtitlesVisibleEditor")!.IsChecked = false;
@@ -108,8 +150,13 @@ public class SettingsWindowTests
                     AssertContained(window.FindControl<ListBox>("SettingsNavigation")!, window);
                     foreach (string name in page switch
                     {
-                        0 => new[] { "ThemeEditor", "SidebarVisibleEditor", "SidebarWidthEditor" },
-                        1 => new[] { "FontSizeEditor", "ScaleEditor", "SubtitlesVisibleEditor" },
+                        0 => new[] { "ThemeEditor" },
+                        1 => new[]
+                        {
+                            "FontSizeEditor", "ScaleEditor", "SubtitlesVisibleEditor", "SidebarVisibleEditor", "SidebarWidthEditor",
+                            "SidebarLeftEditor", "SidebarTextMaskEditor", "SidebarShowOriginalTextEditor", "SidebarSubPaddingEditor",
+                            "SidebarFontFamilyEditor", "SidebarFontWeightEditor", "SidebarFontSizeEditor",
+                        },
                         _ => new[] { "TranslationLink", "RecognitionLink", "ShortcutsLink" }
                     })
                     {

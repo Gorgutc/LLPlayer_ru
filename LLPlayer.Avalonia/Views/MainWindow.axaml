@@ -455,10 +455,12 @@
             <ListBox Name="CueList" ItemsSource="{Binding Sidebar.Cues}" Margin="6,0,6,6">
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:CueItemViewModel">
-                  <Border Classes="cue" Classes.current="{Binding IsCurrent}">
+                  <Border Classes="cue" Classes.current="{Binding IsCurrent}" Padding="{Binding RowPadding}">
                     <Grid ColumnDefinitions="Auto,*">
                       <TextBlock Text="{Binding StartText}" Classes="muted xs mono" Margin="0,2,10,0" VerticalAlignment="Top" />
-                      <c:SubtitleText Grid.Column="1" Text="{Binding Text}" IsTranslated="{Binding IsTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="0" FontSize="14" OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordClicked="OnWordClicked" />
+                      <c:SubtitleText Grid.Column="1" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="0"
+                                      FontFamily="{Binding RowFontFamily}" FontWeight="{Binding RowFontWeight}" FontSize="{Binding RowFontSize}"
+                                      OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordClicked="OnWordClicked" />
                     </Grid>
                   </Border>
                 </DataTemplate>

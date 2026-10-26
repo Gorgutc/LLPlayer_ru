@@ -314,7 +314,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         List<SubtitleData> subs = bridge.Snapshot(player.SubtitlesManager[slot].Subs);
         List<CueInfo> cues = new(subs.Count);
         foreach (SubtitleData s in subs)
-            cues.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, player.SubtitlesManager[slot].Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391()));
+            cues.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, player.SubtitlesManager[slot].Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391(), s.Text ?? ""));
         return cues;
     }
 

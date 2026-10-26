@@ -27,6 +27,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     readonly AvaloniaHostServices? hostServices;
     readonly DispatcherTimer idleTimer;
     MainWindowViewModel? vm;
+    int sidebarColumnIndex = 2;
     Func<IReadOnlyList<ShortcutInfo>> cheatSheetRows = () => AppShortcutMap.BuildCheatSheet([]);
     WindowState stateBeforeFullScreen = WindowState.Normal;
     Task<IDisposable>? sleepInhibition;
@@ -119,7 +120,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         CueList.Tapped += OnCueTapped;
         SidebarSplitter.DragCompleted += (_, _) =>
         {
-            double width = ContentGrid.ColumnDefinitions[2].ActualWidth;
+            double width = ContentGrid.ColumnDefinitions[sidebarColumnIndex].ActualWidth;
             if (vm != null && vm.SidebarVisible && width > 0)
                 vm.SidebarWidth = width;
         };
@@ -152,7 +153,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
         Video.Renderer = renderer;
         UpdateSubtitleLayout();
-        UpdateSidebarColumn();
+        ApplySidebarSide();
         idleTimer.Start();
     }
 
@@ -279,26 +280,50 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         UpdateSubtitleLayout();
     }
 
-    /// <summary>The sidebar column gets the remembered width (the splitter resizes it); hidden = collapsed.</summary>
+    /// <summary>The sidebar column gets the remembered width (the splitter resizes it); hidden = collapsed. The
+    /// sidebar may be docked left or right, so the column index is derived from <see cref="MainWindowViewModel.SidebarLeft"/>.</summary>
     void UpdateSidebarColumn()
     {
         if (vm == null)
             return;
 
-        ColumnDefinition column = ContentGrid.ColumnDefinitions[2];
+        sidebarColumnIndex = vm.SidebarLeft ? 0 : 2;
+        int videoColumnIndex = vm.SidebarLeft ? 2 : 0;
+        ColumnDefinition sidebarColumn = ContentGrid.ColumnDefinitions[sidebarColumnIndex];
+        ColumnDefinition videoColumn = ContentGrid.ColumnDefinitions[videoColumnIndex];
+        // The column that becomes the video may have been the sidebar before a dock change, so its remembered
+        // Min/Max must be cleared instead of capping the video area.
+        videoColumn.MinWidth = 0;
+        videoColumn.MaxWidth = double.PositiveInfinity;
+        videoColumn.Width = new GridLength(1, GridUnitType.Star);
         if (vm.SidebarVisible)
         {
-            column.MinWidth = 220;
+            sidebarColumn.MinWidth = 220;
             // Keep the remembered width; cap only the arranged column so narrowing does not swallow the video.
             double splitterWidth = Math.Max(SidebarSplitter.DesiredSize.Width, ContentGrid.ColumnDefinitions[1].ActualWidth);
-            column.MaxWidth = Math.Max(column.MinWidth, ContentGrid.Bounds.Width - splitterWidth - MinimumVideoColumnWidth);
-            column.Width = new GridLength(vm.SidebarWidth, GridUnitType.Pixel);
+            sidebarColumn.MaxWidth = Math.Max(sidebarColumn.MinWidth, ContentGrid.Bounds.Width - splitterWidth - MinimumVideoColumnWidth);
+            sidebarColumn.Width = new GridLength(vm.SidebarWidth, GridUnitType.Pixel);
         }
         else
         {
-            column.MinWidth = 0;
-            column.Width = GridLength.Auto;
+            sidebarColumn.MinWidth = 0;
+            sidebarColumn.MaxWidth = double.PositiveInfinity;
+            sidebarColumn.Width = GridLength.Auto;
         }
+    }
+
+    /// <summary>Docks the sidebar left or right of the video by swapping the grid columns; the splitter stays between them.</summary>
+    void ApplySidebarSide()
+    {
+        if (vm == null)
+            return;
+
+        sidebarColumnIndex = vm.SidebarLeft ? 0 : 2;
+        Grid.SetColumn(VideoColumn, vm.SidebarLeft ? 2 : 0);
+        Grid.SetColumn(Sidebar, sidebarColumnIndex);
+        Grid.SetColumn(SidebarSplitter, 1);
+        ContentGrid.ColumnDefinitions[1].Width = GridLength.Auto;
+        UpdateSidebarColumn();
     }
 
     /// <summary>Keeps the bottom clearance, box width, separator gap and block-anchor alignment on one geometry seam.</summary>
@@ -352,6 +377,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             case nameof(MainWindowViewModel.SidebarVisible):
                 UpdateSidebarColumn();
                 break;
+            case nameof(MainWindowViewModel.SidebarLeft):
+                ApplySidebarSide();
+                break;
         }
     }
 
@@ -392,7 +420,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnWordClicked(object? sender, WordClickedEventArgs e)
     {
-        if (vm == null || sender is not Visual v)
+        // A masked sidebar row renders only underscores; never send that placeholder (or the hidden source) to a
+        // provider or the word library. Overlay controls use the main view model as DataContext and stay unaffected.
+        if (vm == null || sender is not Visual v || sender is SubtitleText { DataContext: CueItemViewModel { IsMasked: true } })
             return;
 
         Point p = v.TranslatePoint(e.Position, VideoHost) ?? e.Position;

@@ -400,7 +400,7 @@ public class SubtitleBackgroundSettingsTests
             Assert.Equal("Sidebar words remain unfilled", sidebarText.Text); Assert.Null(Read(sidebarText, "Background"));
             var draft = main.CreateSettings(); Set(draft, ColorField, "#AABBCC"); Set(draft, PrimaryField, 100); Set(draft, SecondaryField, 17); draft.SaveCommand.Execute(null);
             Dispatcher.UIThread.RunJobs(); Assert.Null(draft.Error); AssertActual(window, "#AABBCC", 100, 17);
-            Assert.Null(Read(sidebarText, "Background")); Assert.Equal(14, sidebarText.FontSize); Assert.Equal(0, sidebarText.OutlineThickness);
+            Assert.Null(Read(sidebarText, "Background")); Assert.Equal(16, sidebarText.FontSize); Assert.Equal(0, sidebarText.OutlineThickness);
         }
         finally { CloseMain(window); }
     }

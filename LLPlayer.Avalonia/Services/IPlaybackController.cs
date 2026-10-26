@@ -5,7 +5,9 @@ using WpfKey = System.Windows.Input.Key;
 namespace LLPlayer.Avalonia.Services;
 
 /// <summary>One subtitle cue as the UI shows it (primary/secondary sidebar, word popup context).</summary>
-public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "");
+/// <param name="Text">Display text (translated when translation display is on, otherwise the source text).</param>
+/// <param name="OriginalText">Source text snapshot, used by the sidebar's show-original choice; empty when unknown.</param>
+public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "", string OriginalText = "");
 
 /// <summary>A selectable subtitle track (embedded stream or external file) with its current slot assignment.</summary>
 public sealed record SubtitleTrack(string Label, bool IsExternal, bool IsPrimary, bool IsSecondary, object Source);

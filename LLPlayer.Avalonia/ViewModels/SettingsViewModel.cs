@@ -62,6 +62,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitlesVisible = current.SubtitlesVisible;
         SidebarVisible = current.SidebarVisible;
         SidebarWidth = current.SidebarWidth;
+        // Sidebar-only appearance (F-13): mask/original choice, padding and typography. Raw text mirrors are seeded
+        // even for default values because the generated change hook does not run for an unchanged initial value.
+        SidebarLeft = current.SidebarLeft;
+        SidebarTextMask = current.SidebarTextMask;
+        SidebarShowOriginalText = current.SidebarShowOriginalText;
+        SidebarSubPadding = current.SidebarSubPadding;
+        SidebarSubPaddingText = current.SidebarSubPadding.ToString(NumberFormat);
+        SidebarFontFamily = current.SidebarFontFamily;
+        SidebarFontWeight = current.SidebarFontWeight;
+        SidebarFontSize = current.SidebarFontSize;
+        SidebarFontSizeText = current.SidebarFontSize.ToString(NumberFormat);
         SubtitleWidthPercent = current.SubtitleWidthPercent;
         SubtitleWidthPercentText = current.SubtitleWidthPercent.ToString(NumberFormat);
         SubtitleMaxWidth = current.SubtitleMaxWidth;
@@ -144,6 +155,30 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] public partial string SubtitlePrimarySecondaryDistanceText { get; set; } = "";
     [ObservableProperty] public partial bool SidebarVisible { get; set; }
     [ObservableProperty] public partial double SidebarWidth { get; set; }
+    [ObservableProperty] public partial bool SidebarLeft { get; set; }
+    [ObservableProperty] public partial bool SidebarTextMask { get; set; }
+    [ObservableProperty] public partial bool SidebarShowOriginalText { get; set; }
+    [ObservableProperty] public partial int SidebarSubPadding { get; set; } = AppPrefs.DefaultSidebarSubPadding;
+    [ObservableProperty] public partial string SidebarSubPaddingText { get; set; } = "";
+    [ObservableProperty] public partial string SidebarFontFamily { get; set; } = AppPrefs.DefaultSidebarFontFamily;
+    [ObservableProperty] public partial string SidebarFontWeight { get; set; } = AppPrefs.DefaultSidebarFontWeight;
+    [ObservableProperty] public partial double SidebarFontSize { get; set; } = AppPrefs.DefaultSidebarFontSize;
+    [ObservableProperty] public partial string SidebarFontSizeText { get; set; } = "";
+    public static IReadOnlyList<string> SidebarFontWeights => SubtitleFontCatalog.Weights;
+    /// <summary>Families for the sidebar font picker; keeps the requested family selectable even if not installed.</summary>
+    public ObservableCollection<string> SidebarFontFamilies => sidebarFontFamilies ??= new(fonts.GetFamilies(SidebarFontFamily));
+    ObservableCollection<string>? sidebarFontFamilies;
+    /// <summary>Resolved-font feedback (fallback family when the requested one is unavailable).</summary>
+    public string SidebarFontStatus => SubtitleFontCatalog.DescribeFace(fonts.Resolve(SidebarFontFamily, SidebarFontWeight, "Normal"));
+    partial void OnSidebarSubPaddingChanged(int value) => SidebarSubPaddingText = value.ToString(NumberFormat);
+    partial void OnSidebarFontSizeChanged(double value) => SidebarFontSizeText = value.ToString(NumberFormat);
+    partial void OnSidebarFontFamilyChanged(string value)
+    {
+        if (sidebarFontFamilies != null && AppPrefs.TryNormalizeSubtitleFontFamily(value, out _) && !sidebarFontFamilies.Contains(value))
+            sidebarFontFamilies.Add(value);
+        OnPropertyChanged(nameof(SidebarFontStatus));
+    }
+    partial void OnSidebarFontWeightChanged(string value) => OnPropertyChanged(nameof(SidebarFontStatus));
     [ObservableProperty] public partial string SubtitleFontSizeText { get; set; } = "";
     [ObservableProperty] public partial string SecondaryFontScaleText { get; set; } = "";
     [ObservableProperty] public partial string SubtitleBottomOffsetText { get; set; } = "";
@@ -322,6 +357,18 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = "Choose a plain font family name, Normal / SemiBold / Bold weight and Normal / Italic style for both subtitles.";
             return;
         }
+        if (!TryReadWhole(SidebarSubPaddingText, AppPrefs.MinSidebarSubPadding, AppPrefs.MaxSidebarSubPadding, out int sidebarPadding)
+            || !TryRead(SidebarFontSizeText, AppPrefs.MinSidebarFontSize, AppPrefs.MaxSidebarFontSize, out double sidebarFontSize))
+        {
+            Error = $"Use a sidebar subtitle padding {AppPrefs.MinSidebarSubPadding}–{AppPrefs.MaxSidebarSubPadding} DIP and a sidebar font size {AppPrefs.MinSidebarFontSize}–{AppPrefs.MaxSidebarFontSize} DIP.";
+            return;
+        }
+        if (!AppPrefs.TryNormalizeSubtitleFontFamily(SidebarFontFamily, out string sidebarFamily)
+            || !AppPrefs.TryNormalizeSubtitleFontWeight(SidebarFontWeight, out string sidebarWeight))
+        {
+            Error = "Choose a plain sidebar font family name and a Normal / SemiBold / Bold weight.";
+            return;
+        }
         if (!TryReadWhole(SubtitleWidthPercentText, AppPrefs.MinSubtitleWidthPercent, AppPrefs.MaxSubtitleWidthPercent, out int widthPercent)
             || !TryRead(SubtitleMaxWidthText, AppPrefs.MinSubtitleMaxWidth, AppPrefs.MaxSubtitleMaxWidth, out double maxWidth)
             || !TryRead(SubtitlePrimarySecondaryDistanceText, AppPrefs.MinSubtitlePrimarySecondaryDistance, AppPrefs.MaxSubtitlePrimarySecondaryDistance, out double distance))
@@ -392,6 +439,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         SubtitleOutlineThickness = outline;
         SecondarySubtitleOutlineThickness = secondaryOutline;
         SidebarWidth = width;
+        SidebarSubPadding = sidebarPadding;
+        SidebarSubPaddingText = sidebarPadding.ToString(NumberFormat);
+        SidebarFontSize = sidebarFontSize;
+        SidebarFontSizeText = sidebarFontSize.ToString(NumberFormat);
+        SidebarFontFamily = sidebarFamily;
+        SidebarFontWeight = sidebarWeight;
         if (!TryBuildAppShortcuts(out Dictionary<string, string> appShortcuts, out string shortcutError))
         {
             Error = shortcutError;
