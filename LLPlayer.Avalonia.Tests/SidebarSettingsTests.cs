@@ -118,9 +118,9 @@ public class SidebarSettingsTests
         main.SidebarLeft.Should().BeTrue(); main.SidebarTextMask.Should().BeTrue(); main.SidebarShowOriginalText.Should().BeTrue();
         main.SidebarSubPadding.Should().Be(12); main.SidebarFontSize.Should().Be(22);
         main.SidebarFontFamily.Should().Be("Noto Sans"); main.SidebarFontWeight.Should().Be("Bold");
-        main.SidebarRowPadding.Should().Be(new global::Avalonia.Thickness(12));
-        main.SidebarListFontSize.Should().Be(22);
-        main.SidebarListFontWeight.Should().Be(global::Avalonia.Media.FontWeight.Bold);
+        main.SidebarSubPadding.Should().Be(12);
+        main.SidebarFontSize.Should().Be(22);
+        main.SidebarFontWeight.Should().Be("Bold");
     }
 
     [Theory]
@@ -176,5 +176,48 @@ public class SidebarSettingsTests
         Assert.Null(draft.Error); Assert.Equal(1, closes);
         main.SidebarLeft.Should().BeTrue(); main.SidebarTextMask.Should().BeTrue();
         main.SidebarFontSize.Should().Be(30); main.SidebarFontFamily.Should().Be("Noto Sans");
+    }
+
+    [Fact]
+    public void Saved_non_default_sidebar_prefs_restore_live_state_after_reload()
+    {
+        using TempDir dir = new();
+        PrefsStore store = new(Path.Combine(dir.Path, "prefs.json"));
+        AppPrefs saved = new()
+        {
+            SidebarVisible = true, SidebarWidth = 480, SidebarLeft = true, SidebarTextMask = true,
+            SidebarShowOriginalText = true, SidebarSubPadding = 12, SidebarFontFamily = "Noto Sans",
+            SidebarFontSize = 22, SidebarFontWeight = "Bold",
+        };
+        store.Save(saved);
+
+        AppPrefs loaded = store.Load().Normalize();
+        FakePlaybackController player = new();
+        player.Cues[0].Add(new CueInfo(0, TimeSpan.Zero, TimeSpan.FromSeconds(2), "Перевод", true, "en", "ru", "Original line"));
+        using var main = new MainWindowViewModel(player, loaded, store.Save, new FakeTranslator(), new FakeShell());
+
+        main.SidebarVisible.Should().BeTrue();
+        main.SidebarWidth.Should().Be(480);
+        main.SidebarLeft.Should().BeTrue();
+        main.SidebarTextMask.Should().BeTrue();
+        main.SidebarShowOriginalText.Should().BeTrue();
+        main.SidebarSubPadding.Should().Be(12);
+        main.SidebarFontFamily.Should().Be("Noto Sans");
+        main.SidebarFontSize.Should().Be(22);
+        main.SidebarFontWeight.Should().Be("Bold");
+        main.Sidebar.Appearance.TextMask.Should().BeTrue();
+        main.Sidebar.Appearance.SubPadding.Should().Be(12);
+
+        main.Sidebar.Reload();
+        main.Sidebar.UpdateCurrent(-1);
+        main.Sidebar.Cues.Should().ContainSingle();
+        main.Sidebar.Cues[0].IsMasked.Should().BeTrue("mask is restored before the first cue");
+        main.Sidebar.Cues[0].DisplayText.Should().Be(new string('_', "Original line".Length));
+        main.Sidebar.Cues[0].RowFontSize.Should().Be(22);
+
+        main.Sidebar.UpdateCurrent(0);
+        main.Sidebar.Cues[0].IsMasked.Should().BeFalse();
+        main.Sidebar.Cues[0].DisplayText.Should().Be("Original line");
+        main.Sidebar.Cues[0].IsDisplayTranslated.Should().BeFalse();
     }
 }

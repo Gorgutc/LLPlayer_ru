@@ -37,7 +37,7 @@ public class SettingsWindowTests
             Assert.Equal(12, prefs.SidebarSubPadding); Assert.Equal(22, prefs.SidebarFontSize);
             Assert.Equal("", prefs.SidebarFontFamily); Assert.Equal("Bold", prefs.SidebarFontWeight);
             Assert.True(main.SidebarLeft); Assert.True(main.SidebarTextMask); Assert.Equal("", main.SidebarFontFamily);
-            Assert.Equal(new global::Avalonia.Thickness(12), main.SidebarRowPadding);
+            Assert.Equal(12, main.SidebarSubPadding);
         }
         finally { if (window.IsVisible) window.Close(); }
 

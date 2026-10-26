@@ -1368,14 +1368,24 @@ review и не меняет source/tests. Source-review отчёты UI/runtim
 Native GUI/DPI/keyboard и real model/provider/GPU
 acceptance — **NOT_RUN / DEFERRED BY OWNER**.
 
-**NEXT — PROPOSED, реализация владельцем ещё не одобрена:** Settings parity → WPF **Subtitles Sidebar**.
-В предложении семь новых preferences: `SidebarLeft`, `SidebarTextMask`, `SidebarShowOriginalText`,
-`SidebarSubPadding`, `SidebarFontFamily`, `SidebarFontSize`, `SidebarFontWeight`. В WPF семь UI-строк, но visibility/width
-уже реализованы как `SidebarVisible`/`SidebarWidth`, а Fonts содержит три значения. Предложены WPF-defaults:
-padding `5`, family `Segoe UI`, size `16`, weight `Normal`; текущий Avalonia sidebar использует size `14` и padding
-`8,6`. Это видимое изменение defaults входит в предложение и требует одобрения владельца. На Linux при отсутствии
-Segoe UI используется доступный font fallback без установки шрифтов. Engine editor и app-vs-engine collision policy
-остаются отдельным более поздним блоком.
+**2026-10-26 owner-approved Subtitles Sidebar block — IMPLEMENTED, local gates PASS; PR/CI receipts tracked separately.**
+Settings → Subtitles → Subtitles sidebar в общем Windows/Linux Avalonia UI реализован на ветке
+`codex/f13-subtitles-sidebar-settings`. Семь additive `AppPrefs`: `SidebarLeft`, `SidebarTextMask`,
+`SidebarShowOriginalText`, `SidebarSubPadding` (0–48 DIP, default 5), `SidebarFontFamily` (Segoe UI),
+`SidebarFontSize` (8–72 DIP, default 16), `SidebarFontWeight` (Normal); существующие
+`SidebarVisible`/`SidebarWidth` (220–900 DIP) сохранены и не продублированы. Одобренное видимое изменение
+defaults: шрифт строк сайдбара 14→16 DIP и padding 8,6→5 DIP. `CueInfo.OriginalText` — минимальный
+snapshot-шов из `SubtitleData.Text`; display text остаётся `DisplayText`, engine/WPF/Core не менялись.
+Маска заменяет строки после текущего cue (`Index > CurrentIndex`, при -1 все) равным числом `_`, исходный
+текст не затирается; поиск и word lookup идут по выбранному original/display тексту. Шрифт и padding
+применяются только к cue rows через существующий font catalog с Inter fallback без установки шрифтов.
+Left/right docking меняет колонки sidebar/video, сохраняя splitter, запомненную ширину, минимальную ширину
+video и fullscreen. Detached draft Save валидирует raw-значения, сохраняет candidate до live-применения;
+ошибка записи не меняет live state; Close/Esc отбрасывают. Локальные гейты: Avalonia suite 918 passed /
+13 skipped, verify-fast exit 0, `verify.ps1` 1440 passed, `verify-avalonia` engine 1622/13 и UI 930/1,
+package 53 fixtures + 38-file ZIP readback. Native desktop/GUI/DPI acceptance — NOT_RUN. Engine editor,
+app-vs-engine collisions, secondary-sidebar selection, новые search modes и другие страницы Settings остаются
+отдельными более поздними блоками.
 
 **2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED, исторический local checkpoint ветки `codex/f13-hotkeys`.**
 Product `24ec18f08b23d0f452003606cb772bb793aa9dd1` (7 app + 1 test files) делает десять app-level шорткатов

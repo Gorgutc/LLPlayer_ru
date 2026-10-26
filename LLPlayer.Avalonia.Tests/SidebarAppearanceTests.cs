@@ -106,7 +106,7 @@ public class SidebarAppearanceTests
     }
 
     [Fact]
-    public void Masked_rows_hide_their_source_text_from_their_word_lookup_context()
+    public void Masked_rows_render_only_underscores_and_report_no_translation()
     {
         FakePlaybackController player = PlayerWithCues();
         SubtitlesSidebarViewModel sidebar = new(player);
@@ -115,8 +115,7 @@ public class SidebarAppearanceTests
         sidebar.UpdateCurrent(1);
 
         sidebar.Cues[2].DisplayText.Should().Be(new string('_', "Third spoiler".Length));
-        sidebar.Cues[2].LookupText.Should().Be(sidebar.Cues[2].DisplayText,
-            "word lookup must receive what is rendered, not the hidden source text");
+        sidebar.Cues[2].DisplayText.Should().BeEquivalentTo(new string('_', "Third spoiler".Length));
         sidebar.Cues[2].IsDisplayTranslated.Should().BeFalse();
     }
 
@@ -136,8 +135,8 @@ public class SidebarAppearanceTests
         var (main, _, _, _, _) = TestVm.Create();
         using var owned = main;
         main.SubtitleFontSize.Should().Be(34, "the video overlay font is independent from the sidebar");
-        main.SidebarListFontSize.Should().Be(16);
-        main.SidebarRowPadding.Should().Be(new Thickness(5));
+        main.SidebarFontSize.Should().Be(16);
+        main.SidebarSubPadding.Should().Be(5);
     }
 
     [Fact]
@@ -168,5 +167,39 @@ public class SidebarAppearanceTests
         player.Cues[0].Add(new CueInfo(0, TimeSpan.Zero, TimeSpan.FromSeconds(9), "replacement", false, "en", "ru", "replacement"));
         sidebar.Reload();
         sidebar.Cues.Should().ContainSingle().Which.DisplayText.Should().Be("replacement");
+    }
+
+    [Fact]
+    public void Subtitle_delay_shift_updates_row_times_without_losing_row_identity()
+    {
+        FakePlaybackController player = PlayerWithCues();
+        SubtitlesSidebarViewModel sidebar = new(player);
+        sidebar.Reload();
+        CueItemViewModel first = sidebar.Cues[0];
+
+        player.Cues[0][0] = new CueInfo(0, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3), "Hello there", false, "en", "ru", "Hello there");
+        sidebar.Reload();
+
+        sidebar.Cues[0].Should().BeSameAs(first, "a delay shift keeps the rows so scroll/highlight survive");
+        sidebar.Cues[0].StartText.Should().Be("00:02.0");
+        sidebar.Cues.Select(c => c.StartText).Should().Equal("00:02.0", "00:03.0", "00:05.0");
+    }
+
+    [Fact]
+    public void Track_language_change_with_identical_timing_updates_row_metadata_in_place()
+    {
+        FakePlaybackController player = PlayerWithCues();
+        SubtitlesSidebarViewModel sidebar = new(player);
+        sidebar.Reload();
+        CueItemViewModel first = sidebar.Cues[0];
+        first.SourceLanguage.Should().Be("en");
+
+        player.Cues[0][0] = new CueInfo(0, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), "Bonjour", false, "fr", "de", "Bonjour");
+        sidebar.Reload();
+
+        sidebar.Cues[0].Should().BeSameAs(first, "identical timings keep the row object");
+        sidebar.Cues[0].SourceLanguage.Should().Be("fr");
+        sidebar.Cues[0].TargetLanguage.Should().Be("de");
+        sidebar.Cues[0].DisplayText.Should().Be("Bonjour");
     }
 }

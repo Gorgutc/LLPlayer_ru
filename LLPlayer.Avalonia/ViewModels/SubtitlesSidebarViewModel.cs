@@ -26,9 +26,9 @@ public sealed record SidebarTextAppearance(
 
 /// <summary>
 /// One sidebar cue row. <see cref="DisplayText"/> is what the row renders: the source text, the translated display
-/// text, or an underscore spoiler mask. <see cref="LookupText"/> is the rendered text, so word lookup on a masked row
-/// can never receive the hidden source text. <see cref="IsDisplayTranslated"/> describes the rendered text, not the
-/// translation availability: showing original text must look the clicked word up as source text.
+/// text, or an underscore spoiler mask; word lookup receives that rendered text, so a masked row can never expose the
+/// hidden source text. <see cref="IsDisplayTranslated"/> describes the rendered text, not the translation
+/// availability: showing original text must look the clicked word up as source text.
 /// </summary>
 public sealed partial class CueItemViewModel : ObservableObject
 {
@@ -59,15 +59,32 @@ public sealed partial class CueItemViewModel : ObservableObject
     /// <summary>The rendered text is translated display text; false for original or masked rows.</summary>
     [ObservableProperty]
     public partial bool IsDisplayTranslated { get; set; }
-    /// <summary>The text word lookup receives; equals what the user sees.</summary>
-    public string LookupText => DisplayText;
+    // Observable so a Settings commit can restyle already-realized rows without rebuilding the list.
+    [ObservableProperty] public partial FontFamily RowFontFamily { get; private set; } = SubtitleFontCatalog.DefaultFamily;
+    [ObservableProperty] public partial FontWeight RowFontWeight { get; private set; } = FontWeight.Normal;
+    [ObservableProperty] public partial double RowFontSize { get; private set; } = AppPrefs.DefaultSidebarFontSize;
+    [ObservableProperty] public partial Thickness RowPadding { get; private set; } = new(AppPrefs.DefaultSidebarSubPadding);
 
-    public FontFamily RowFontFamily { get; private set; } = SubtitleFontCatalog.DefaultFamily;
-    public FontWeight RowFontWeight { get; private set; } = FontWeight.Normal;
-    public double RowFontSize { get; private set; } = AppPrefs.DefaultSidebarFontSize;
-    public Thickness RowPadding { get; private set; } = new(AppPrefs.DefaultSidebarSubPadding);
+    internal void UpdateCue(CueInfo cue)
+    {
+        if (Cue == cue)
+            return;
 
-    internal void UpdateCue(CueInfo cue) => Cue = cue;
+        CueInfo previous = Cue;
+        Cue = cue;
+        if (previous.Index != cue.Index) OnPropertyChanged(nameof(Index));
+        if (previous.Start != cue.Start)
+        {
+            OnPropertyChanged(nameof(Start));
+            OnPropertyChanged(nameof(StartText));
+        }
+        if (previous.End != cue.End) OnPropertyChanged(nameof(End));
+        if (previous.Text != cue.Text) OnPropertyChanged(nameof(Text));
+        if (previous.OriginalText != cue.OriginalText) OnPropertyChanged(nameof(OriginalText));
+        if (previous.IsTranslated != cue.IsTranslated) OnPropertyChanged(nameof(IsTranslated));
+        if (previous.SourceLanguage != cue.SourceLanguage) OnPropertyChanged(nameof(SourceLanguage));
+        if (previous.TargetLanguage != cue.TargetLanguage) OnPropertyChanged(nameof(TargetLanguage));
+    }
 
     internal void ApplyTypography(SubtitleFontSelection font, SidebarTextAppearance appearance)
     {
@@ -156,20 +173,18 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
 
         bool compatible = all.Count <= cues.Count;
         for (int i = 0; compatible && i < all.Count; i++)
-        {
-            CueInfo existing = all[i].Cue;
-            CueInfo current = cues[i];
-            compatible = existing.Index == current.Index && existing.Start == current.Start && existing.End == current.End;
-        }
+            compatible = all[i].Cue.Index == cues[i].Index;
 
         if (compatible && all.Count > 0)
         {
-            // Text-only changes (translation toggle, wording update) keep the row objects so the list selection,
-            // scroll position and highlight survive; new cues (ASR/OCR/append) are inserted after them.
+            // Cue updates (translation toggle, delay shift, wording change) keep the row objects so the list
+            // selection, scroll position and highlight survive; new cues (ASR/OCR/append) are inserted after them.
+            // Typography only changes through ApplyAppearance, so a cue notification never restyles every row.
             for (int i = 0; i < all.Count; i++)
             {
+                if (all[i].Cue == cues[i])
+                    continue;
                 all[i].UpdateCue(cues[i]);
-                all[i].ApplyTypography(fontSelection, appearance);
                 all[i].Refresh(appearance, currentIndex);
             }
             string filter = FilterText;

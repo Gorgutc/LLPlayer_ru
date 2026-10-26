@@ -354,6 +354,24 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   Old PR #180 receipts do not accept
   this correction; see [the current correction status](f13-status-2026-10-18.md#current-bounded-correction-and-proposed-continuation--2026-10-25).
 
+- **Subtitles Sidebar settings, owner-approved 2026-10-26 — native acceptance NOT_RUN / DEFERRED BY OWNER:** use the
+  rebuilt package and an isolated profile. Missing new keys must restore right docking, mask/original off, padding `5`,
+  family `Segoe UI`, size `16`, weight `Normal` (width `360` and visibility unchanged); note the approved visible change
+  from cue font `14`/padding `8,6` to `16`/uniform `5`. Open Settings → Subtitles → Subtitles sidebar, toggle Show
+  Sidebar/width and each option, Save & Close, reopen and restart; confirm saved values and that unrelated
+  volume/mute/recents/shortcuts survive. Confirm the width stays usable at the narrow minimum window and after
+  100 %/150 %/200 % DPI, the splitter resizes and remembers the width, and fullscreen keeps the sidebar on the same
+  side with a usable video column. With translation enabled, show original text: rows and search follow the original,
+  word lookup treats the clicked word as source text, and video overlays/engine translation toggles are unaffected.
+  Enable the spoiler mask: rows after the playing cue become `_` of the same displayed length, current/past rows stay
+  readable, before the first cue all rows are masked, seeking/append/ASR/media replacement keep the mask aligned, and a
+  masked row never exposes hidden source text to word lookup. Change family to an installed font and weight/size, then
+  confirm only sidebar cue rows change (not the video overlay, header or filter box) and that Linux without `Segoe UI`
+  keeps the requested name with the existing fallback instead of installing fonts. Invalid numeric raw input blocks Save
+  visibly; a save failure keeps live state, Settings open and persisted bytes unchanged, with retry working; Close/Esc
+  discard the draft. No Computer Use or application launch is authorized by this row. Evidence:
+  [the sidebar settings checkpoint](f13-status-2026-10-18.md#bounded-avalonia-subtitles-sidebar-settings-block).
+
 - **Audio waveform overlay (F-12 audio half), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY
   OWNER:** use the rebuilt package and an isolated profile. Open media with audio and confirm the waveform toggle sits
   next to the A-B button, starts off, and toggling it on builds the envelope over the seek bar without moving the

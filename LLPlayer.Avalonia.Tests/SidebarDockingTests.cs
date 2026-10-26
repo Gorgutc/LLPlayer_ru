@@ -140,7 +140,7 @@ public class SidebarDockingTests
             SubtitleText rowText = rows[0].GetVisualDescendants().OfType<SubtitleText>().Single();
             rowText.FontSize.Should().Be(22);
             rowText.FontWeight.Should().Be(global::Avalonia.Media.FontWeight.Bold);
-            rowText.FontFamily.Name.Should().Be(vm.SidebarListFontFamily.Name, "the realized row follows the resolved sidebar font");
+            rowText.FontFamily.Name.Should().Be(vm.Sidebar.Cues[0].RowFontFamily.Name, "the realized row follows its resolved row typography");
             Border rowBorder = rows[0].GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("cue"));
             rowBorder.Padding.Should().Be(new Thickness(12));
             rowText.Text.Should().Be("First cue");
@@ -156,6 +156,84 @@ public class SidebarDockingTests
             rows = list.GetRealizedContainers().OfType<ListBoxItem>().ToArray();
             rows.SelectMany(r => r.GetVisualDescendants().OfType<SubtitleText>())
                 .Select(t => t.Text).Should().Equal("First cue", new string('_', "Second cue".Length));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void Live_settings_save_repaints_realized_rows_and_switches_dock_in_place()
+    {
+        FakePlaybackController player = Player();
+        AppPrefs prefs = new() { SidebarVisible = true, SidebarWidth = 400 };
+        MainWindow window = new(new KeyMapper(), null) { Width = 1280, Height = 760 };
+        MainWindowViewModel vm = new(player, prefs.Normalize(), _ => { }, new FakeTranslator(), window);
+        window.Attach(vm, renderer: null);
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            vm.Sidebar.Reload();
+            Dispatcher.UIThread.RunJobs();
+            Grid content = window.FindControl<Grid>("ContentGrid")!;
+            Grid video = window.FindControl<Grid>("VideoColumn")!;
+            Border sidebar = window.FindControl<Border>("Sidebar")!;
+            GridSplitter splitter = window.FindControl<GridSplitter>("SidebarSplitter")!;
+            ListBox list = window.FindControl<ListBox>("CueList")!;
+            ListBoxItem row = list.GetRealizedContainers().OfType<ListBoxItem>().First();
+            SubtitleText rowText = row.GetVisualDescendants().OfType<SubtitleText>().Single();
+            Border rowBorder = row.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("cue"));
+            rowText.FontSize.Should().Be(16);
+            rowBorder.Padding.Should().Be(new Thickness(5));
+
+            // A live Settings save must restyle the already-realized row and swap the dock without rebuilding the list.
+            SettingsViewModel draft = vm.CreateSettings();
+            draft.SidebarFontSizeText = "30";
+            draft.SidebarSubPaddingText = "12";
+            draft.SidebarLeft = true;
+            draft.SaveCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Null(draft.Error);
+            vm.SidebarLeft.Should().BeTrue();
+            Grid.GetColumn(sidebar).Should().Be(0);
+            Grid.GetColumn(splitter).Should().Be(1);
+            Grid.GetColumn(video).Should().Be(2);
+            rowText = list.GetRealizedContainers().OfType<ListBoxItem>().First().GetVisualDescendants().OfType<SubtitleText>().Single();
+            rowText.FontSize.Should().Be(30, "a live sidebar font change must repaint realized rows");
+            rowBorder = list.GetRealizedContainers().OfType<ListBoxItem>().First().GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("cue"));
+            rowBorder.Padding.Should().Be(new Thickness(12));
+
+            // The swapped video column must not inherit the former sidebar's Min/Max constraints.
+            void AssertVideoFillsRemainder()
+            {
+                double expected = content.Bounds.Width - sidebar.Bounds.Width - splitter.Bounds.Width;
+                video.Bounds.Width.Should().BeApproximately(expected, 1, "the video column must fill the content grid after a dock switch");
+            }
+
+            AssertVideoFillsRemainder();
+            window.Width = 700;
+            Dispatcher.UIThread.RunJobs();
+            video.Bounds.Width.Should().BeGreaterThanOrEqualTo(240);
+            AssertVideoFillsRemainder();
+            window.Width = 1600;
+            Dispatcher.UIThread.RunJobs();
+            AssertVideoFillsRemainder();
+
+            vm.ToggleSidebarCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            sidebar.IsVisible.Should().BeFalse();
+            video.Bounds.Width.Should().BeApproximately(content.Bounds.Width, 1);
+            vm.ToggleSidebarCommand.Execute(null);
+            Dispatcher.UIThread.RunJobs();
+            AssertVideoFillsRemainder();
+
+            window.IsFullScreen = true;
+            Dispatcher.UIThread.RunJobs();
+            Grid.GetColumn(video).Should().Be(2);
+            Grid.GetColumn(sidebar).Should().Be(0);
+            sidebar.IsVisible.Should().BeTrue();
+            window.IsFullScreen = false;
+            Dispatcher.UIThread.RunJobs();
         }
         finally { window.Close(); }
     }

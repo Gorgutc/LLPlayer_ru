@@ -29,6 +29,35 @@
           <StackPanel Name="SubtitlesPage" IsVisible="{Binding SubtitlesSelected}" Spacing="14">
             <TextBlock Text="Subtitles" Classes="dialog-title" />
             <CheckBox Name="SubtitlesVisibleEditor" Content="Show subtitle overlay" IsChecked="{Binding SubtitlesVisible}" />
+            <TextBlock Text="Subtitles sidebar" Classes="dialog-title" />
+            <TextBlock Text="Sidebar-only options. The font, size and padding apply to the cue rows and never to the video overlay." Classes="dialog-description" TextWrapping="Wrap" />
+            <CheckBox Name="SidebarVisibleEditor" Content="Show subtitle sidebar" IsChecked="{Binding SidebarVisible}"
+                      AutomationProperties.Name="Show subtitle sidebar" />
+            <TextBlock Text="Sidebar width (220–900 DIP)" />
+            <NumericUpDown Name="SidebarWidthEditor" Minimum="220" Maximum="900" Increment="10" NumberFormat="{Binding NumberFormat}" Text="{Binding SidebarWidthText, Mode=TwoWay}" FormatString="0"
+                           AutomationProperties.Name="Sidebar width in DIP" />
+            <CheckBox Name="SidebarLeftEditor" Content="Dock sidebar on the left" IsChecked="{Binding SidebarLeft}"
+                      AutomationProperties.Name="Dock sidebar on the left" />
+            <CheckBox Name="SidebarTextMaskEditor" Content="Mask subtitles after the current cue (spoiler protection)" IsChecked="{Binding SidebarTextMask}"
+                      AutomationProperties.Name="Mask subtitles after the current cue"
+                      AutomationProperties.HelpText="Replaces cue text after the playing cue with underscores. Times and seeking stay available; the hidden text is never used by word lookup." />
+            <CheckBox Name="SidebarShowOriginalTextEditor" Content="Show original text when translating enabled" IsChecked="{Binding SidebarShowOriginalText}"
+                      AutomationProperties.Name="Show original text when translating enabled"
+                      AutomationProperties.HelpText="Shows source text instead of translated text in the sidebar and searches the same choice. Video overlays and engine translation are unchanged." />
+            <TextBlock Text="Subtitle padding (0–48 DIP)" />
+            <NumericUpDown Name="SidebarSubPaddingEditor" Minimum="0" Maximum="48" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding SidebarSubPaddingText, Mode=TwoWay}" FormatString="0"
+                           AutomationProperties.Name="Sidebar subtitle padding in DIP" />
+            <TextBlock Text="Sidebar font family" />
+            <ComboBox Name="SidebarFontFamilyEditor" ItemsSource="{Binding SidebarFontFamilies}" SelectedItem="{Binding SidebarFontFamily, Mode=TwoWay}"
+                      ItemTemplate="{StaticResource FontFamilyTemplate}" HorizontalAlignment="Stretch" MaxDropDownHeight="240"
+                      AutomationProperties.Name="Sidebar font family" AutomationProperties.HelpText="Missing requested fonts are retained and use the app Inter fallback; no fonts are installed." />
+            <TextBlock Text="Sidebar font weight" />
+            <ComboBox Name="SidebarFontWeightEditor" ItemsSource="{x:Static vm:SettingsViewModel.SidebarFontWeights}" SelectedItem="{Binding SidebarFontWeight, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch" AutomationProperties.Name="Sidebar font weight" />
+            <TextBlock Text="Sidebar font size (8–72 DIP)" />
+            <NumericUpDown Name="SidebarFontSizeEditor" Minimum="8" Maximum="72" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding SidebarFontSizeText, Mode=TwoWay}" FormatString="0.#"
+                           AutomationProperties.Name="Sidebar font size in DIP" />
+            <TextBlock Text="{Binding SidebarFontStatus}" Classes="dialog-description" TextWrapping="Wrap" />
             <TextBlock Text="Primary font" FontWeight="SemiBold" />
             <TextBlock Text="Font family" />
             <ComboBox Name="SubtitleFontFamilyEditor" ItemsSource="{Binding SubtitleFontFamilies}" SelectedItem="{Binding SubtitleFontFamily, Mode=TwoWay}"
@@ -179,35 +208,6 @@
             <NumericUpDown Name="PrimaryBitmapPositionEditor" Minimum="0" Maximum="150" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding PrimaryBitmapPositionText, Mode=TwoWay}" FormatString="0"
                            AutomationProperties.Name="Primary bitmap subtitle position percentage" />
             <TextBlock Text="The two-line preview shows alignment and line-break handling; box, separator and alignment values apply to the video overlay, bitmap values to the engine session." Classes="dialog-description" TextWrapping="Wrap" />
-            <TextBlock Text="Subtitles sidebar" Classes="dialog-title" />
-            <TextBlock Text="Sidebar-only options. The font, size and padding apply to the cue rows and never to the video overlay." Classes="dialog-description" TextWrapping="Wrap" />
-            <CheckBox Name="SidebarVisibleEditor" Content="Show subtitle sidebar" IsChecked="{Binding SidebarVisible}"
-                      AutomationProperties.Name="Show subtitle sidebar" />
-            <TextBlock Text="Sidebar width (220–900 DIP)" />
-            <NumericUpDown Name="SidebarWidthEditor" Minimum="220" Maximum="900" Increment="10" NumberFormat="{Binding NumberFormat}" Text="{Binding SidebarWidthText, Mode=TwoWay}" FormatString="0"
-                           AutomationProperties.Name="Sidebar width in DIP" />
-            <CheckBox Name="SidebarLeftEditor" Content="Dock sidebar on the left" IsChecked="{Binding SidebarLeft}"
-                      AutomationProperties.Name="Dock sidebar on the left" />
-            <CheckBox Name="SidebarTextMaskEditor" Content="Mask subtitles after the current cue (spoiler protection)" IsChecked="{Binding SidebarTextMask}"
-                      AutomationProperties.Name="Mask subtitles after the current cue"
-                      AutomationProperties.HelpText="Replaces cue text after the playing cue with underscores. Times and seeking stay available; the hidden text is never used by word lookup." />
-            <CheckBox Name="SidebarShowOriginalTextEditor" Content="Show original text when translating enabled" IsChecked="{Binding SidebarShowOriginalText}"
-                      AutomationProperties.Name="Show original text when translating enabled"
-                      AutomationProperties.HelpText="Shows source text instead of translated text in the sidebar and searches the same choice. Video overlays and engine translation are unchanged." />
-            <TextBlock Text="Subtitle padding (0–48 DIP)" />
-            <NumericUpDown Name="SidebarSubPaddingEditor" Minimum="0" Maximum="48" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding SidebarSubPaddingText, Mode=TwoWay}" FormatString="0"
-                           AutomationProperties.Name="Sidebar subtitle padding in DIP" />
-            <TextBlock Text="Sidebar font family" />
-            <ComboBox Name="SidebarFontFamilyEditor" ItemsSource="{Binding SidebarFontFamilies}" SelectedItem="{Binding SidebarFontFamily, Mode=TwoWay}"
-                      ItemTemplate="{StaticResource FontFamilyTemplate}" HorizontalAlignment="Stretch" MaxDropDownHeight="240"
-                      AutomationProperties.Name="Sidebar font family" AutomationProperties.HelpText="Missing requested fonts are retained and use the app Inter fallback; no fonts are installed." />
-            <TextBlock Text="Sidebar font weight" />
-            <ComboBox Name="SidebarFontWeightEditor" ItemsSource="{x:Static vm:SettingsViewModel.SidebarFontWeights}" SelectedItem="{Binding SidebarFontWeight, Mode=TwoWay}"
-                      HorizontalAlignment="Stretch" AutomationProperties.Name="Sidebar font weight" />
-            <TextBlock Text="Sidebar font size (8–72 DIP)" />
-            <NumericUpDown Name="SidebarFontSizeEditor" Minimum="8" Maximum="72" Increment="1" NumberFormat="{Binding NumberFormat}" Text="{Binding SidebarFontSizeText, Mode=TwoWay}" FormatString="0.#"
-                           AutomationProperties.Name="Sidebar font size in DIP" />
-            <TextBlock Text="{Binding SidebarFontStatus}" Classes="dialog-description" TextWrapping="Wrap" />
           </StackPanel>
           <StackPanel Name="ToolsPage" IsVisible="{Binding ToolsSelected}" Spacing="6">
             <TextBlock Text="Tools" Classes="dialog-title" />
@@ -241,7 +241,8 @@
       </ScrollViewer>
     </Grid>
     <StackPanel Grid.Row="2" Spacing="12" Margin="0,16,0,0">
-      <TextBlock Name="SaveError" Text="{Binding Error}" TextWrapping="Wrap" Foreground="{DynamicResource Shadcn.DestructiveBrush}" />
+      <TextBlock Name="SaveError" Text="{Binding Error}" TextWrapping="Wrap" Foreground="{DynamicResource Shadcn.DestructiveBrush}"
+                       AutomationProperties.LiveSetting="Polite" />
       <StackPanel Classes="dialog-footer">
         <Button Name="CloseButton" Content="Close" Classes="outline" Command="{Binding CloseCommand}" />
         <Button Name="SaveButton" Content="Save &amp; Close" Classes="primary" Command="{Binding SaveCommand}" />

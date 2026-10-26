@@ -69,7 +69,9 @@ public sealed class SubtitleFontCatalog
             FontWeight fontWeight = weightName switch { "Normal" => FontWeight.Normal, "Bold" => FontWeight.Bold, _ => FontWeight.SemiBold };
             FontStyle fontStyle = styleName == "Italic" ? FontStyle.Italic : FontStyle.Normal;
             FontFamily family = validFamily && name.Length > 0 ? new FontFamily(name) : DefaultFamily;
-            return new SubtitleFontSelection(family, fontWeight, fontStyle, "Font platform unavailable; requested name retained.");
+            return new SubtitleFontSelection(family, fontWeight, fontStyle, validFamily && name.Length > 0
+                ? "Font platform unavailable; requested name retained."
+                : "Font platform unavailable; invalid family uses the default.");
         }
     }
 

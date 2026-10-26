@@ -3,7 +3,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
-using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -524,27 +523,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Sidebar cue-row font size in DIP; the video overlay font is independent.</summary>
     [ObservableProperty] public partial double SidebarFontSize { get; set; } = AppPrefs.DefaultSidebarFontSize;
 
-    SubtitleFontSelection sidebarFont = new(SubtitleFontCatalog.DefaultFamily, FontWeight.Normal, FontStyle.Normal, "");
-    /// <summary>Resolved sidebar family for bindings.</summary>
-    public FontFamily SidebarListFontFamily => sidebarFont.Family;
-    public FontWeight SidebarListFontWeight => sidebarFont.Weight;
-    public double SidebarListFontSize => SidebarFontSize;
-    public Thickness SidebarRowPadding => new(SidebarSubPadding);
-
-    /// <summary>Pushes the persisted sidebar appearance into the sidebar rows and refreshes bound typography values.</summary>
+    /// <summary>Pushes the persisted sidebar appearance into the sidebar rows (the only typography surface the
+    /// view binds); this also restyles already-realized rows through their observable Row* properties.</summary>
     public void ApplySidebarAppearance()
-    {
-        sidebarFont = fonts.ResolveOrRequested(SidebarFontFamily, SidebarFontWeight, "Normal");
-        Sidebar.ApplyAppearance(new SidebarTextAppearance(SidebarTextMask, SidebarShowOriginalText, SidebarSubPadding,
-            SidebarFontFamily, SidebarFontWeight, SidebarFontSize));
-        OnPropertyChanged(nameof(SidebarListFontFamily));
-        OnPropertyChanged(nameof(SidebarListFontWeight));
-        OnPropertyChanged(nameof(SidebarListFontSize));
-        OnPropertyChanged(nameof(SidebarRowPadding));
-    }
-
-    partial void OnSidebarFontSizeChanged(double value) => OnPropertyChanged(nameof(SidebarListFontSize));
-    partial void OnSidebarSubPaddingChanged(int value) => OnPropertyChanged(nameof(SidebarRowPadding));
+        => Sidebar.ApplyAppearance(new SidebarTextAppearance(SidebarTextMask, SidebarShowOriginalText,
+            SidebarSubPadding, SidebarFontFamily, SidebarFontWeight, SidebarFontSize));
 
     partial void OnSubtitleFontSizeChanged(double value)
     {

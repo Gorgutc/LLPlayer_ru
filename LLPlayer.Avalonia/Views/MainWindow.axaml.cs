@@ -291,6 +291,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         int videoColumnIndex = vm.SidebarLeft ? 2 : 0;
         ColumnDefinition sidebarColumn = ContentGrid.ColumnDefinitions[sidebarColumnIndex];
         ColumnDefinition videoColumn = ContentGrid.ColumnDefinitions[videoColumnIndex];
+        // The column that becomes the video may have been the sidebar before a dock change, so its remembered
+        // Min/Max must be cleared instead of capping the video area.
+        videoColumn.MinWidth = 0;
+        videoColumn.MaxWidth = double.PositiveInfinity;
         videoColumn.Width = new GridLength(1, GridUnitType.Star);
         if (vm.SidebarVisible)
         {
@@ -416,7 +420,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnWordClicked(object? sender, WordClickedEventArgs e)
     {
-        if (vm == null || sender is not Visual v)
+        // A masked sidebar row renders only underscores; never send that placeholder (or the hidden source) to a
+        // provider or the word library. Overlay controls use the main view model as DataContext and stay unaffected.
+        if (vm == null || sender is not Visual v || sender is SubtitleText { DataContext: CueItemViewModel { IsMasked: true } })
             return;
 
         Point p = v.TranslatePoint(e.Position, VideoHost) ?? e.Position;
