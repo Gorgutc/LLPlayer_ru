@@ -1399,16 +1399,22 @@ shortcut блокируют Save (disabled строки игнорируются
 engine 1622/13 и UI 948/1; package 53 fixtures + 38-file readback; exit 0. Real-player adapter test env-gated и
 выполняется в Windows Avalonia gate. Native desktop/GUI/DPI acceptance — NOT_RUN.
 
-**2026-10-26 owner-approved Settings audit correction — IN PROGRESS.** После read-only аудита на main
-`d1f5427` владелец разрешил закрыть подтверждённые numeric input/blur, test-resource isolation и delivery/docs gaps.
-[План](plans/2026-10-26-settings-audit-fixes.md): raw invalid Translation input должен блокировать Save без записи/
-live apply; controller/Player теста освобождаются гарантированно; key-down/key-up и custom delegate проверяются по
-безопасному seam. На pre-fix source ordinary gates прошли (WPF 1440/0 skipped; Windows engine 1622/13 skipped,
-UI 979/1 skipped), но три дополнительных control-input probes были RED (`1.5`/`0`/`65` молча сохранялись как `2`).
-Final corrective gates, spawned `/review`, PR/main CI, fresh Desktop и vault closeout — **PENDING**.
-На момент аудита Desktop и living vault оставались на PR #184 `0811f615`; новый payload этим не принимается.
-Полный F-13 parity остаётся IN PROGRESS, native GUI/DPI/OS-keyboard acceptance — NOT_RUN, без CUA/запуска плеера.
-Исторические FAIL/UNKNOWN и точная цепочка receipts: [F-13 status](f13-status-2026-10-18.md).
+**2026-10-26 owner-approved Settings audit correction — IMPLEMENTED / LOCALLY VERIFIED; delivery closeout открыт.**
+Product `b36655d`, BOM-only `0e4635a`, полные local gates на чистом committed `116a4ba`.
+[План](plans/2026-10-26-settings-audit-fixes.md): `IntegerNumericUpDown` сохраняет raw invalid input для отказа Save
+без записи/live apply; adapter-тесты гарантируют controller/Player cleanup, проверяют key-down/key-up и custom delegate.
+Numeric RED: 24 failed/12 passed/0 skipped; adapter RED: 2 failed/0 passed. Expanded focused GREEN2: 60 passed/0 skipped;
+no-native adapter: 6 skipped, что не доказывает dispatch. WPF 1440/0 skipped, отдельный unfiltered UI 1031/1 skipped,
+package 53 fixtures/38-file ZIP — exit 0. Windows full attempt 1: FAIL (engine 1621/1 failed/13 skipped; UI NOT_RUN),
+новый OpenAL max 120.3333 ms при limit 100 ms; cause UNKNOWN, прежний slow-read sampler gap исключён.
+Один unchanged full diagnostic attempt 2: PASS engine 1622/13 skipped + UI 1031/1 skipped, exit 0; audio fix/flaky/host cause не заявлены.
+Независимые source/docs reviews: 0 Critical/Important, anchor Minor исправлен. На code-stage checkpoint публикация,
+corrective PR/main CI, fresh Desktop и vault closeout ещё NOT_RUN; позднейший итог сверяй по GitHub, Desktop receipt и live vault handoff.
+На момент pre-fix аудита Desktop/vault были на PR #184 `0811f615`; это историческое наблюдение, не актуальная приёмка нового payload.
+Полный F-13 parity остаётся IN PROGRESS. Новый прямой GO разрешает Windows CUA/GUI visual audit updater/Sidebar/
+engine keys/Settings/current fix и основных menus/open/fullscreen/subtitles; фактические visual/DPI/OS-keyboard
+результаты пока NOT_RUN. Прежний запрет соблюдался до этого GO; Linux/models/providers/Anki/GPU не принимаются из Windows visual evidence.
+Исторические FAIL/UNKNOWN, точные source/log hashes и раздельные receipts: [F-13 status](f13-status-2026-10-18.md).
 
 **2026-10-26 owner-approved Settings parity Translation/Word/Anki — MERGED PR #185, main `d1f5427`; pre-fix checkpoint.**
 Product commits `593b106915d12445a1249b1dff54e79ad66f8aa4` (implementation) и `0c70849bbb78bce690fb1d35a5265c94748cff54` (review fixes) на ветке `codex/f13-settings-parity`: translation parameters (`TranslateCountBackward/Forward`,
