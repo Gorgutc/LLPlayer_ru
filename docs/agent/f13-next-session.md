@@ -179,7 +179,7 @@ Defaults следуют WPF. Сейчас Avalonia использует разм
 Для переиспользования смотри `SidebarAndPopupTests`,
 `TransportSidebarLayoutTests` и существующие Settings/font tests.
 
-Engine key-binding editor и app-vs-engine collisions реализованы 2026-10-26 в PR #184 (Windows run 40313455362 и Linux run 40313455465 SUCCESS; receipts — status/backlog); новые shortcuts/actions, Translation/Word/Anki parity,
+Engine key-binding editor и app-vs-engine collisions реализованы 2026-10-26 в PR #184 (Windows run 40313455362 и Linux run 40313455465 SUCCESS); Translation/Word/Anki Settings parity реализованы в PR #185 (видимая часть — Translation parameters, Word click action, Anki deck + Word Manager UX; LLM sampling/region maps, word context menu, PDIC и AnkiConnect endpoint остаются вне stage). Новые shortcuts/actions,
 dependency upgrades, packaging redesign и другие страницы Settings остаются отдельными более поздними блоками.
 Не выбирай их автоматически после завершения этой страницы.
 

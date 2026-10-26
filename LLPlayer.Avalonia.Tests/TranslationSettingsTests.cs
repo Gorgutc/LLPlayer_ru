@@ -26,6 +26,64 @@ public class TranslationSettingsTests
         Assert.Empty(Directory.GetFiles(dir.Path));
     }
 
+    [Theory]
+    [InlineData(-1, 12, 2)]
+    [InlineData(1, 1001, 2)]
+    [InlineData(1, 12, 0)]
+    [InlineData(1, 12, 65)]
+    public void Invalid_translation_counts_and_concurrency_cannot_be_saved_or_applied(int backward, int forward, int concurrency)
+    {
+        using TempDir dir = new();
+        var settings = new TranslationSettings
+        { TranslateCountBackward = backward, TranslateCountForward = forward, TranslateMaxConcurrency = concurrency };
+        var config = new Config(true);
+        int oldBackward = config.Subtitles.TranslateCountBackward;
+        int oldForward = config.Subtitles.TranslateCountForward;
+        int oldConcurrency = config.Subtitles.TranslateMaxConcurrency;
+        Assert.Throws<ArgumentException>(() => new TranslationSettingsStore(Path.Combine(dir.Path, "translation.json")).Save(settings));
+        Assert.Throws<ArgumentException>(() => settings.Apply(config.Subtitles));
+        Assert.Equal(oldBackward, config.Subtitles.TranslateCountBackward);
+        Assert.Equal(oldForward, config.Subtitles.TranslateCountForward);
+        Assert.Equal(oldConcurrency, config.Subtitles.TranslateMaxConcurrency);
+        Assert.Empty(Directory.GetFiles(dir.Path));
+    }
+
+    [Fact]
+    public void Older_translation_files_without_parameters_keep_the_engine_defaults()
+    {
+        using TempDir dir = new();
+        string path = Path.Combine(dir.Path, "translation.json");
+        File.WriteAllText(path, "{}");
+        var loaded = new TranslationSettingsStore(path).Load("Off", null);
+        Assert.Equal(1, loaded.TranslateCountBackward);
+        Assert.Equal(12, loaded.TranslateCountForward);
+        Assert.Equal(2, loaded.TranslateMaxConcurrency);
+    }
+
+    [Fact]
+    public void Translation_parameters_default_and_round_trip_to_the_engine()
+    {
+        using TempDir dir = new();
+        var defaults = new TranslationSettings();
+        Assert.Equal(1, defaults.TranslateCountBackward);
+        Assert.Equal(12, defaults.TranslateCountForward);
+        Assert.Equal(2, defaults.TranslateMaxConcurrency);
+
+        string path = Path.Combine(dir.Path, "translation.json");
+        var store = new TranslationSettingsStore(path);
+        store.Save(new TranslationSettings { TranslateCountBackward = 0, TranslateCountForward = 4, TranslateMaxConcurrency = 3 });
+        var loaded = store.Load("Off", null);
+        Assert.Equal(0, loaded.TranslateCountBackward);
+        Assert.Equal(4, loaded.TranslateCountForward);
+        Assert.Equal(3, loaded.TranslateMaxConcurrency);
+
+        var config = new Config(true);
+        loaded.Apply(config.Subtitles);
+        Assert.Equal(0, config.Subtitles.TranslateCountBackward);
+        Assert.Equal(4, config.Subtitles.TranslateCountForward);
+        Assert.Equal(3, config.Subtitles.TranslateMaxConcurrency);
+    }
+
     [Fact]
     public void Existing_files_default_sentence_off_and_independent_provider_choices_round_trip()
     {

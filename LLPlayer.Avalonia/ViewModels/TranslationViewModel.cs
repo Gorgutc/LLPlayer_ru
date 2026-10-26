@@ -39,6 +39,9 @@ public partial class TranslationViewModel : ObservableObject
     [ObservableProperty] string contextWindowBefore = "";
     [ObservableProperty] string contextWindowAfter = "";
     [ObservableProperty] string subtitleContextCount = "";
+    [ObservableProperty] string translateCountBackward = "";
+    [ObservableProperty] string translateCountForward = "";
+    [ObservableProperty] string translateMaxConcurrency = "";
     [ObservableProperty] bool grammarCheckEnabled;
     [ObservableProperty] bool includeTargetLangRegion;
     [ObservableProperty] string promptContextWindow = "";
@@ -70,6 +73,9 @@ public partial class TranslationViewModel : ObservableObject
         contextWindowBefore = Draft.Chat.ContextWindowBefore.ToString(CultureInfo.InvariantCulture);
         contextWindowAfter = Draft.Chat.ContextWindowAfter.ToString(CultureInfo.InvariantCulture);
         subtitleContextCount = Draft.Chat.SubtitleContextCount.ToString(CultureInfo.InvariantCulture);
+        translateCountBackward = Draft.TranslateCountBackward.ToString(CultureInfo.InvariantCulture);
+        translateCountForward = Draft.TranslateCountForward.ToString(CultureInfo.InvariantCulture);
+        translateMaxConcurrency = Draft.TranslateMaxConcurrency.ToString(CultureInfo.InvariantCulture);
         grammarCheckEnabled = Draft.Chat.GrammarCheckEnabled; includeTargetLangRegion = Draft.Chat.IncludeTargetLangRegion;
         promptContextWindow = Draft.Chat.PromptContextWindow; promptKeepContext = Draft.Chat.PromptKeepContext;
         promptOneByOne = Draft.Chat.PromptOneByOne; promptGrammarCheck = Draft.Chat.PromptGrammarCheck;
@@ -154,6 +160,9 @@ public partial class TranslationViewModel : ObservableObject
         ? (int)value : throw new ArgumentException("Enter a positive whole number of milliseconds for each timeout.");
     static int ToContextCount(string value, string label) => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) && count >= 0
         ? count : throw new ArgumentException($"{label}: enter a whole number from 0 to 2147483647.");
+    static int ToBoundedCount(string value, string label, int min, int max) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) && count >= min && count <= max
+            ? count : throw new ArgumentException($"{label}: enter a whole number from {min} to {max}.");
     void CaptureChat()
     {
         // Validate every mode, including inactive drafts, before updating the detached record.
@@ -163,6 +172,9 @@ public partial class TranslationViewModel : ObservableObject
         Draft.Chat.GrammarCheckEnabled = GrammarCheckEnabled; Draft.Chat.IncludeTargetLangRegion = IncludeTargetLangRegion;
         Draft.Chat.PromptContextWindow = PromptContextWindow; Draft.Chat.PromptKeepContext = PromptKeepContext;
         Draft.Chat.PromptOneByOne = PromptOneByOne; Draft.Chat.PromptGrammarCheck = PromptGrammarCheck;
+        Draft.TranslateCountBackward = ToBoundedCount(TranslateCountBackward, "Max translate count backward", 0, 1000);
+        Draft.TranslateCountForward = ToBoundedCount(TranslateCountForward, "Max translate count forward", 0, 1000);
+        Draft.TranslateMaxConcurrency = ToBoundedCount(TranslateMaxConcurrency, "Max translate concurrency", 1, 64);
     }
     [RelayCommand]
     async Task SaveAsync()

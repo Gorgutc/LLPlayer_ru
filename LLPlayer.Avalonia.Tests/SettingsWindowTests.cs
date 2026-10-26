@@ -158,7 +158,11 @@ public class SettingsWindowTests
                             "SidebarLeftEditor", "SidebarTextMaskEditor", "SidebarShowOriginalTextEditor", "SidebarSubPaddingEditor",
                             "SidebarFontFamilyEditor", "SidebarFontWeightEditor", "SidebarFontSizeEditor",
                         },
-                        _ => new[] { "TranslationLink", "RecognitionLink", "ShortcutsLink", "ResetEngineKeysButton" }
+                        _ => new[]
+                        {
+                            "TranslationLink", "RecognitionLink", "ShortcutsLink", "ResetEngineKeysButton",
+                            "WordClickActionEditor", "WordManagerLink", "AnkiDeckEditor",
+                        }
                     })
                     {
                         var control = window.FindControl<Control>(name)!;
@@ -181,13 +185,17 @@ public class SettingsWindowTests
     }
 
     [AvaloniaTheory]
-    [InlineData(SettingsLink.Translation)] [InlineData(SettingsLink.Recognition)] [InlineData(SettingsLink.Shortcuts)]
+    [InlineData(SettingsLink.Translation)] [InlineData(SettingsLink.Recognition)]
+    [InlineData(SettingsLink.Shortcuts)] [InlineData(SettingsLink.WordManager)]
     public async Task Main_owned_singleton_modal_links_discard_then_route_after_cleanup(SettingsLink link)
     {
         var player = new RecognitionPlayer();
         var mainWindow = new MainWindow { Width = 640, Height = 420 }; var prefs = new AppPrefs(); int writes = 0;
         using var main = new MainWindowViewModel(player, prefs, _ => writes++, new FakeTranslator(), mainWindow);
         main.TranslationDialog = () => new TranslationViewModel(new(), _ => Task.CompletedTask);
+        string wordsPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".words.json");
+        var words = new WordLibrary(wordsPath); words.Load();
+        main.WordLibrary = words;
         mainWindow.Attach(main, null); mainWindow.Show(); Dispatcher.UIThread.RunJobs();
         try
         {
@@ -198,14 +206,30 @@ public class SettingsWindowTests
             Assert.Same(hub, Assert.Single(mainWindow.OwnedWindows));
             var draft = (SettingsViewModel)hub.DataContext!; draft.Theme = "Light"; draft.SubtitleFontSize = 90;
             draft.SelectedSection = 2; Dispatcher.UIThread.RunJobs();
-            string name = link switch { SettingsLink.Translation => "TranslationLink", SettingsLink.Recognition => "RecognitionLink", _ => "ShortcutsLink" };
-            Click(hub, hub.FindControl<Button>(name)!);
+            string name = link switch
+            {
+                SettingsLink.Translation => "TranslationLink",
+                SettingsLink.Recognition => "RecognitionLink",
+                SettingsLink.Shortcuts => "ShortcutsLink",
+                SettingsLink.WordManager => "WordManagerLink",
+                _ => throw new ArgumentOutOfRangeException(nameof(link)),
+            };
+            Button tool = hub.FindControl<Button>(name)!;
+            tool.BringIntoView(); Dispatcher.UIThread.RunJobs();
+            Click(hub, tool);
             // Yield to the awaited ShowDialog continuation, then run the queued UI work.
             await Task.Yield(); Dispatcher.UIThread.RunJobs();
             Assert.False(hub.IsVisible); Assert.Equal(0, writes); Assert.Equal("Dark", prefs.Theme); Assert.Equal(34, main.SubtitleFontSize);
             var routed = Assert.Single(mainWindow.OwnedWindows);
             Assert.Same(mainWindow, routed.Owner);
-            Assert.True(link switch { SettingsLink.Translation => routed is TranslationWindow, SettingsLink.Recognition => routed is RecognitionWindow, _ => routed is CheatSheetWindow });
+            Assert.True(link switch
+            {
+                SettingsLink.Translation => routed is TranslationWindow,
+                SettingsLink.Recognition => routed is RecognitionWindow,
+                SettingsLink.Shortcuts => routed is CheatSheetWindow,
+                SettingsLink.WordManager => routed is WordManagerWindow,
+                _ => throw new ArgumentOutOfRangeException(nameof(link)),
+            });
             routed.Close(); await Task.Yield(); Dispatcher.UIThread.RunJobs();
             Assert.True(mainWindow.IsVisible);
             main.ShowSettingsCommand.Execute(null); Dispatcher.UIThread.RunJobs();

@@ -48,6 +48,16 @@
           <StackPanel Spacing="6" IsVisible="{Binding HasModel}">
             <TextBlock Text="Health request timeout (ms)" /><NumericUpDown Value="{Binding HealthTimeoutMs}" Minimum="1" Maximum="2147483647" FormatString="0" />
           </StackPanel>
+          <TextBlock Text="Translation parameters" FontWeight="SemiBold" />
+          <TextBlock Text="Max translate count backward (0–1000)" />
+          <NumericUpDown Name="TranslateCountBackwardBox" Minimum="0" Maximum="1000" Increment="1" FormatString="0"
+                         Text="{Binding TranslateCountBackward, Mode=TwoWay}" AutomationProperties.Name="Max translate count backward" />
+          <TextBlock Text="Max translate count forward (0–1000)" />
+          <NumericUpDown Name="TranslateCountForwardBox" Minimum="0" Maximum="1000" Increment="1" FormatString="0"
+                         Text="{Binding TranslateCountForward, Mode=TwoWay}" AutomationProperties.Name="Max translate count forward" />
+          <TextBlock Text="Max translate concurrency (1–64)" />
+          <NumericUpDown Name="TranslateMaxConcurrencyBox" Minimum="1" Maximum="64" Increment="1" FormatString="0"
+                         Text="{Binding TranslateMaxConcurrency, Mode=TwoWay}" AutomationProperties.Name="Max translate concurrency" />
           <Expander Name="ChatExpander" Header="LLM subtitle translation" HorizontalAlignment="Stretch">
             <StackPanel Spacing="10" Margin="0,8,0,0">
               <TextBlock Classes="small muted" Text="Shared chat settings apply to all LLM subtitle providers, independently of the provider editor above. They are retained when using other providers. The OneByOne prompt also applies to LLM word lookups." TextWrapping="Wrap" />

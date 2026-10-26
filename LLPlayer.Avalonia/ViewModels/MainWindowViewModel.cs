@@ -115,6 +115,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SidebarSubPadding = prefs.SidebarSubPadding;
         SidebarFontFamily = prefs.SidebarFontFamily;
         SidebarFontWeight = prefs.SidebarFontWeight;
+        WordClickAction = prefs.WordClickAction;
+        AnkiDeck = prefs.AnkiDeck;
         SidebarFontSize = prefs.SidebarFontSize;
         ApplySidebarAppearance();
         // The engine owns the default chords; only an explicit replacement list is applied at start-up.
@@ -148,7 +150,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public WordManagerViewModel? WordManager { get; private set; }
     [RelayCommand] void ShowWordManager()
     {
-        if (WordLibrary != null) { WordManager ??= new WordManagerViewModel(WordLibrary); shell.ShowWordManager(WordManager); }
+        if (WordLibrary != null) { WordManager ??= new WordManagerViewModel(WordLibrary, defaultDeck: AnkiDeck); shell.ShowWordManager(WordManager); }
     }
     public void WordManagerClosed() => WordManager = null;
     public bool PrimaryTranslationEnabled => player.PrimaryTranslationEnabled;
@@ -202,6 +204,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SidebarFontFamily = draft.SidebarFontFamily;
         candidate.SidebarFontWeight = draft.SidebarFontWeight;
         candidate.SidebarFontSize = draft.SidebarFontSize;
+        candidate.WordClickAction = draft.WordClickAction;
+        candidate.AnkiDeck = draft.AnkiDeck;
         candidate.SubtitleWidthPercent = draft.SubtitleWidthPercent;
         candidate.SubtitleMaxWidth = draft.SubtitleMaxWidth;
         candidate.SubtitleIgnoreLineBreak = draft.SubtitleIgnoreLineBreak;
@@ -260,6 +264,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SidebarFontFamily = candidate.SidebarFontFamily;
         prefs.SidebarFontWeight = candidate.SidebarFontWeight;
         prefs.SidebarFontSize = candidate.SidebarFontSize;
+        prefs.WordClickAction = candidate.WordClickAction;
+        prefs.AnkiDeck = candidate.AnkiDeck;
         prefs.EngineKeysCustomized = candidate.EngineKeysCustomized;
         prefs.EngineKeyBindings = candidate.EngineKeyBindings;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
@@ -272,6 +278,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SubtitleSeparatorOpacityPercent = candidate.SubtitleSeparatorOpacityPercent;
         prefs.SubtitlePositionAlignment = candidate.SubtitlePositionAlignment;
         prefs.SubtitlePositionAlignmentWhenDual = candidate.SubtitlePositionAlignmentWhenDual;
+        WordClickAction = candidate.WordClickAction;
+        AnkiDeck = candidate.AnkiDeck;
+        // The deck pref is a default for the next Word Manager only: an open manager is the single owner of
+        // its session deck, so saving Settings must not discard a deck typed there.
         ApplyAppShortcutOverrides(candidate.AppShortcutOverrides);
         player.ApplyEngineKeyBindings(candidate.EngineKeysCustomized
             ? EngineKeyBindings.FromPrefs(candidate.EngineKeyBindings)
@@ -336,6 +346,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case SettingsLink.Translation: ShowTranslation(); break;
             case SettingsLink.Recognition: ShowRecognition(); break;
             case SettingsLink.Shortcuts: ShowCheatSheet(); break;
+            case SettingsLink.WordManager: ShowWordManager(); break;
         }
     }
 
@@ -537,6 +548,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial string SidebarFontFamily { get; set; } = AppPrefs.DefaultSidebarFontFamily;
     /// <summary>Sidebar font weight: Normal, SemiBold or Bold.</summary>
     [ObservableProperty] public partial string SidebarFontWeight { get; set; } = AppPrefs.DefaultSidebarFontWeight;
+    [ObservableProperty] public partial string WordClickAction { get; set; } = AppPrefs.DefaultWordClickAction;
+    [ObservableProperty] public partial string AnkiDeck { get; set; } = AppPrefs.DefaultAnkiDeck;
     /// <summary>Sidebar cue-row font size in DIP; the video overlay font is independent.</summary>
     [ObservableProperty] public partial double SidebarFontSize { get; set; } = AppPrefs.DefaultSidebarFontSize;
 
@@ -977,6 +990,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool SecondaryTextTranslated => player.SecondaryTextTranslated;
     public void OnWordClicked(string word, string context, int slot, double x, double y, bool? translated = null, string? sourceLanguage = null, string? targetLanguage = null)
     {
+        if (WordClickAction == "Clipboard" || WordClickAction == "ClipboardAll")
+        {
+            if (player.IsPlaying)
+                player.Pause();
+            string text = WordClickAction == "Clipboard" ? word : context;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                shell.SetClipboardText(text);
+                ShowToast("Copied", WordClickAction == "Clipboard" ? "Word copied to the clipboard." : "Cue copied to the clipboard.");
+            }
+            return;
+        }
         if (player.IsPlaying)
             player.Pause();
         _ = WordPopup.OpenAsync(word, context, slot, x, y, translated ?? (slot == 0 ? player.PrimaryTextTranslated : player.SecondaryTextTranslated), sourceLanguage, targetLanguage);

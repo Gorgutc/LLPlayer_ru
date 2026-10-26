@@ -33,6 +33,33 @@ public class TranslationDialogTests
     }
 
     [AvaloniaFact]
+    public async Task Translation_parameter_editors_save_bounded_values_and_reject_invalid_numbers()
+    {
+        TranslationSettings? saved = null;
+        var vm = new TranslationViewModel(new() { WordProvider = "Off" }, draft => { saved = draft; return Task.CompletedTask; });
+        var window = new TranslationWindow(vm); window.Show(); Dispatcher.UIThread.RunJobs();
+        Assert.Equal("1", window.FindControl<NumericUpDown>("TranslateCountBackwardBox")!.Text);
+        Assert.Equal("12", window.FindControl<NumericUpDown>("TranslateCountForwardBox")!.Text);
+        Assert.Equal("2", window.FindControl<NumericUpDown>("TranslateMaxConcurrencyBox")!.Text);
+
+        vm.TranslateCountBackward = "0";
+        vm.TranslateCountForward = "7";
+        vm.TranslateMaxConcurrency = "4";
+        await vm.SaveCommand.ExecuteAsync(null);
+        Assert.NotNull(saved);
+        Assert.Equal(0, saved.TranslateCountBackward);
+        Assert.Equal(7, saved.TranslateCountForward);
+        Assert.Equal(4, saved.TranslateMaxConcurrency);
+
+        saved = null;
+        vm.TranslateMaxConcurrency = "0";
+        await vm.SaveCommand.ExecuteAsync(null);
+        Assert.Null(saved);
+        Assert.Contains("1 to 64", vm.Message);
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public async Task Independent_sentence_selection_and_explicit_shared_editor_keep_other_provider_drafts()
     {
         TranslationSettings? saved = null;

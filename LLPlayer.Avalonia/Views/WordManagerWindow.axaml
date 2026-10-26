@@ -5,17 +5,20 @@
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
       <TextBlock Text="Word Manager" Classes="dialog-title" />
+      <TextBlock Text="{Binding CountText}" Classes="small muted" />
       <TextBox PlaceholderText="Filter term, reading, translation, definition or example…" Text="{Binding Filter}" />
     </StackPanel>
     <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
-      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" AutomationProperties.LiveSetting="Polite" />
       <TextBox PlaceholderText="Anki deck (this session)" Text="{Binding Deck}" IsEnabled="{Binding !Busy}" />
       <WrapPanel>
         <Button Content="Export TSV…" Classes="outline" Command="{Binding ExportTsvCommand}" IsEnabled="{Binding !Busy}" Margin="0,0,6,6" />
         <Button Content="Export APKG…" Classes="outline" Command="{Binding ExportApkgCommand}" IsEnabled="{Binding !Busy}" Margin="0,0,6,6" />
         <Button Content="Send to Anki" Classes="outline" Command="{Binding SendAnkiCommand}" IsEnabled="{Binding !Busy}" Margin="0,0,6,6" />
         <Button Content="Cancel operation" Classes="outline" Command="{Binding CancelCommand}" IsVisible="{Binding Busy}" Margin="0,0,6,6" />
-        <Button Content="Clear all words" Classes="outline" Command="{Binding ClearCommand}" Margin="0,0,6,6" />
+        <Button Name="ClearWordsButton" Content="{Binding ClearButtonText}" Classes="outline" Command="{Binding ClearCommand}" IsEnabled="{Binding !Busy}" Margin="0,0,6,6"
+                AutomationProperties.Name="Clear all saved words"
+                AutomationProperties.HelpText="Requires a second click to confirm; deletes every saved word." />
         <Button Content="Close" Classes="outline" Click="OnClose" Margin="0,0,6,6" />
       </WrapPanel>
     </StackPanel>
@@ -31,6 +34,9 @@
         <TextBlock Text="Translation" /><TextBox Text="{Binding Translation}" AcceptsReturn="True" TextWrapping="Wrap" />
         <TextBlock Text="Definition" /><TextBox Text="{Binding Definition}" AcceptsReturn="True" TextWrapping="Wrap" />
         <TextBlock Text="Example" /><TextBox Text="{Binding Example}" AcceptsReturn="True" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding SourceText, StringFormat='Source: {0}'}" Classes="small muted" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding SourceLanguageText, StringFormat='Source language: {0}'}" Classes="small muted" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding SavedText, StringFormat='Saved at: {0}'}" Classes="small muted" TextWrapping="Wrap" />
         <TextBlock Text="Edits are saved immediately." Classes="small muted" />
         <Button Content="Delete selected word" Classes="outline" Command="{Binding DeleteCommand}" />
       </StackPanel></ScrollViewer>

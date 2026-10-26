@@ -101,6 +101,8 @@ Additive: everything above still applies to the Windows target unchanged. These 
 - LLM-like translation has sequential/context modes; do not parallelize away context retention. Batch subtitle translation must keep `KeepContext` and `ContextWindow` sequential within each file. By default completed-file translation overlaps with ASR for the next file (pipelined throughput); a background-friendly "serialize ASR and translation" mode (default on in the app) instead runs each file fully through ASR → translate → save before the next file's ASR, so a GPU ASR engine and a local-LLM translator never both saturate the GPU at once.
 - Batch can stay responsive during a long run via a per-chunk CPU fallback: `BatchAsrTranscriber` / `AudioReader` / `FasterWhisperASRService` accept an optional `Func<bool> preferCpu` (app supplies a Win32 idle check); when it returns true, the NEXT faster-whisper chunk is launched with the device forced to CPU (and GPU-only compute types remapped) instead of the configured GPU device. The chunk in flight always finishes on its chosen device, so nothing already computed is lost; switching only affects subsequent chunks. The interactive ASR path passes no policy (`null`), so its behaviour is unchanged. whisper.cpp (in-process) does not participate. This is additive and must not change ASR/translation results.
 
+  **Additive F-13 Avalonia note (2026-10-26):** the Avalonia Word Manager seeds its deck from the persisted `AppPrefs.AnkiDeck` default (Settings → Tools → Anki); an already-open manager keeps its own session deck, so the WPF statement above remains true for WPF while Avalonia persists only the next-open default.
+
 ## Plugins
 
 - Plugin discovery is reflection-based.
