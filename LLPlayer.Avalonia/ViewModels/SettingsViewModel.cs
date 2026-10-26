@@ -473,10 +473,14 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = engineKeyError;
             return;
         }
-        if (!AppPrefs.TryNormalizeWordClickAction(WordClickAction, out string clickAction)
-            || !AppPrefs.TryNormalizeAnkiDeck(AnkiDeck, out string deck))
+        if (!AppPrefs.TryNormalizeWordClickAction(WordClickAction, out string clickAction))
         {
-            Error = "Choose a word click action and an Anki deck name with 1–64 characters (no control characters).";
+            Error = "Choose a word click action: Translation, Clipboard or ClipboardAll.";
+            return;
+        }
+        if (!AppPrefs.TryNormalizeAnkiDeck(AnkiDeck, out string deck))
+        {
+            Error = "The Anki deck may be blank for the LLPlayer default, otherwise it must be 1–64 characters without control characters.";
             return;
         }
         WordClickAction = clickAction;

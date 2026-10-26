@@ -280,7 +280,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SubtitlePositionAlignmentWhenDual = candidate.SubtitlePositionAlignmentWhenDual;
         WordClickAction = candidate.WordClickAction;
         AnkiDeck = candidate.AnkiDeck;
-        if (WordManager != null) WordManager.Deck = candidate.AnkiDeck;
+        // The deck pref is a default for the next Word Manager only: an open manager is the single owner of
+        // its session deck, so saving Settings must not discard a deck typed there.
         ApplyAppShortcutOverrides(candidate.AppShortcutOverrides);
         player.ApplyEngineKeyBindings(candidate.EngineKeysCustomized
             ? EngineKeyBindings.FromPrefs(candidate.EngineKeyBindings)
@@ -991,7 +992,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (WordClickAction == "Clipboard" || WordClickAction == "ClipboardAll")
         {
-            shell.SetClipboardText(WordClickAction == "Clipboard" ? word : context);
+            if (player.IsPlaying)
+                player.Pause();
+            string text = WordClickAction == "Clipboard" ? word : context;
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                shell.SetClipboardText(text);
+                ShowToast("Copied", WordClickAction == "Clipboard" ? "Word copied to the clipboard." : "Cue copied to the clipboard.");
+            }
             return;
         }
         if (player.IsPlaying)

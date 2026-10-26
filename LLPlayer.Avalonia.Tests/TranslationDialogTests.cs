@@ -38,9 +38,9 @@ public class TranslationDialogTests
         TranslationSettings? saved = null;
         var vm = new TranslationViewModel(new() { WordProvider = "Off" }, draft => { saved = draft; return Task.CompletedTask; });
         var window = new TranslationWindow(vm); window.Show(); Dispatcher.UIThread.RunJobs();
-        Assert.Equal("1", window.FindControl<TextBox>("TranslateCountBackwardBox")!.Text);
-        Assert.Equal("12", window.FindControl<TextBox>("TranslateCountForwardBox")!.Text);
-        Assert.Equal("2", window.FindControl<TextBox>("TranslateMaxConcurrencyBox")!.Text);
+        Assert.Equal("1", window.FindControl<NumericUpDown>("TranslateCountBackwardBox")!.Text);
+        Assert.Equal("12", window.FindControl<NumericUpDown>("TranslateCountForwardBox")!.Text);
+        Assert.Equal("2", window.FindControl<NumericUpDown>("TranslateMaxConcurrencyBox")!.Text);
 
         vm.TranslateCountBackward = "0";
         vm.TranslateCountForward = "7";

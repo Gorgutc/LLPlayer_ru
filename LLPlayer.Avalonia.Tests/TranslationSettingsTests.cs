@@ -38,10 +38,26 @@ public class TranslationSettingsTests
         { TranslateCountBackward = backward, TranslateCountForward = forward, TranslateMaxConcurrency = concurrency };
         var config = new Config(true);
         int oldBackward = config.Subtitles.TranslateCountBackward;
+        int oldForward = config.Subtitles.TranslateCountForward;
+        int oldConcurrency = config.Subtitles.TranslateMaxConcurrency;
         Assert.Throws<ArgumentException>(() => new TranslationSettingsStore(Path.Combine(dir.Path, "translation.json")).Save(settings));
         Assert.Throws<ArgumentException>(() => settings.Apply(config.Subtitles));
         Assert.Equal(oldBackward, config.Subtitles.TranslateCountBackward);
+        Assert.Equal(oldForward, config.Subtitles.TranslateCountForward);
+        Assert.Equal(oldConcurrency, config.Subtitles.TranslateMaxConcurrency);
         Assert.Empty(Directory.GetFiles(dir.Path));
+    }
+
+    [Fact]
+    public void Older_translation_files_without_parameters_keep_the_engine_defaults()
+    {
+        using TempDir dir = new();
+        string path = Path.Combine(dir.Path, "translation.json");
+        File.WriteAllText(path, "{}");
+        var loaded = new TranslationSettingsStore(path).Load("Off", null);
+        Assert.Equal(1, loaded.TranslateCountBackward);
+        Assert.Equal(12, loaded.TranslateCountForward);
+        Assert.Equal(2, loaded.TranslateMaxConcurrency);
     }
 
     [Fact]

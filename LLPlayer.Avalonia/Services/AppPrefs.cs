@@ -180,7 +180,8 @@ public sealed class AppPrefs
         normalized = DefaultWordClickAction;
         if (raw == null) return true;
         string value = raw.Trim();
-        if (WordClickActions.Contains(value, StringComparer.Ordinal)) { normalized = value; return true; }
+        string? canonical = WordClickActions.FirstOrDefault(action => string.Equals(action, value, StringComparison.OrdinalIgnoreCase));
+        if (canonical != null) { normalized = canonical; return true; }
         return false;
     }
 

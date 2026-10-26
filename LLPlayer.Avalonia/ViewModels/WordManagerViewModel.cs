@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer.AI;
+using LLPlayer.Avalonia.Services;
 using LLPlayer.Core.Services;
 using LLPlayer.Services;
 
@@ -25,15 +27,18 @@ public sealed partial class WordManagerViewModel : ObservableObject, IAsyncDispo
     [ObservableProperty] string translation = "";
     [ObservableProperty] string definition = "";
     [ObservableProperty] string example = "";
-    [ObservableProperty] string deck = "LLPlayer";
+    [ObservableProperty] string deck = AppPrefs.DefaultAnkiDeck;
     [ObservableProperty] string message = "";
     [ObservableProperty] bool busy;
     public string Term => Selected?.Term ?? "";
-    public string SourceText => Selected?.Source.ToString() ?? "";
+    public string SourceText => Selected == null ? "" : Selected.Source switch { WordSource.AiInsights => "AI Insights", _ => "Word click" };
     public string SourceLanguageText => Selected?.SourceLanguage ?? "";
     public string SavedText => Selected == null ? ""
-        : DateTimeOffset.TryParse(Selected.SavedAtUtc, out DateTimeOffset saved) ? saved.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : Selected.SavedAtUtc;
-    public string CountText => $"{Words.Count} words";
+        : DateTimeOffset.TryParse(Selected.SavedAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out DateTimeOffset saved)
+            ? saved.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : Selected.SavedAtUtc;
+    public string CountText => Words.Count == library.GetAll().Count
+        ? (Words.Count == 1 ? "1 word" : $"{Words.Count} words")
+        : $"{Words.Count} of {library.GetAll().Count} words";
     public bool HasSelection => Selected != null;
     public WordManagerViewModel(WordLibrary library,
         Func<IReadOnlyList<SavedWord>, string, CancellationToken, Task<AnkiAddNotesOutcome>>? send = null,
@@ -43,7 +48,7 @@ public sealed partial class WordManagerViewModel : ObservableObject, IAsyncDispo
         this.library = library;
         this.send = send ?? new AnkiConnectSender().PushAsync;
         this.buildPackage = buildPackage ?? AnkiApkgWriter.TryBuild;
-        Deck = string.IsNullOrWhiteSpace(defaultDeck) ? "LLPlayer" : defaultDeck;
+        Deck = string.IsNullOrWhiteSpace(defaultDeck) ? AppPrefs.DefaultAnkiDeck : defaultDeck;
         library.Changed += Refresh;
         Message = library.LoadWarning ?? "";
         Refresh();
@@ -86,6 +91,7 @@ public sealed partial class WordManagerViewModel : ObservableObject, IAsyncDispo
         Words.Clear();
         foreach (var word in library.GetAll().Where(w => Matches(w, Filter))) Words.Add(word);
         if (!publishing) Selected = Words.FirstOrDefault(w => w.DedupeKey == key);
+        ClearConfirming = false;
         OnPropertyChanged(nameof(CountText));
     }
     public static bool Matches(SavedWord word, string filter) => string.IsNullOrWhiteSpace(filter) ||
@@ -94,6 +100,7 @@ public sealed partial class WordManagerViewModel : ObservableObject, IAsyncDispo
     [RelayCommand] void Delete()
     {
         if (Selected is not { } word || stopping) return;
+        ClearConfirming = false;
         try { library.Remove(word); Message = "Deleted"; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Message = "Delete failed: " + e.Message; }
     }
@@ -103,6 +110,12 @@ public sealed partial class WordManagerViewModel : ObservableObject, IAsyncDispo
     [RelayCommand] void Clear()
     {
         if (stopping) return;
+        if (library.GetAll().Count == 0)
+        {
+            ClearConfirming = false;
+            Message = "The library is empty.";
+            return;
+        }
         if (!ClearConfirming)
         {
             ClearConfirming = true;
@@ -119,10 +132,11 @@ public sealed partial class WordManagerViewModel : ObservableObject, IAsyncDispo
     public Task Start(string format)
     {
         if (Busy || stopping) return Task.CompletedTask;
+        ClearConfirming = false;
         var snapshot = library.GetAll().ToArray();
         if (snapshot.Length == 0) { Message = "The library is empty."; return Task.CompletedTask; }
         Busy = true; operation = new();
-        return active = RunAsync(format, snapshot, Deck.Trim().Length == 0 ? "LLPlayer" : Deck.Trim(), operation);
+        return active = RunAsync(format, snapshot, Deck.Trim().Length == 0 ? AppPrefs.DefaultAnkiDeck : Deck.Trim(), operation);
     }
     async Task RunAsync(string format, SavedWord[] snapshot, string deckName, CancellationTokenSource mine)
     {

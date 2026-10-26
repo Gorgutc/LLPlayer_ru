@@ -222,8 +222,8 @@
             <TextBlock Text="Translation opens the dictionary popup; Clipboard copies the clicked word; ClipboardAll copies the clicked cue." Classes="dialog-description" TextWrapping="Wrap" />
             <Button Name="WordManagerLink" Content="Word Manager and Anki export…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.WordManager}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Anki" FontWeight="SemiBold" />
-            <TextBlock Text="Default deck name used by the Word Manager (TSV, .apkg and AnkiConnect)" Classes="dialog-description" TextWrapping="Wrap" />
-            <TextBox Name="AnkiDeckEditor" Text="{Binding AnkiDeck, Mode=TwoWay}" AutomationProperties.Name="Default Anki deck name" />
+            <TextBlock Text="Default deck name for .apkg and AnkiConnect exports (TSV has no deck column; blank means LLPlayer, up to 64 characters)" Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBox Name="AnkiDeckEditor" Text="{Binding AnkiDeck, Mode=TwoWay}" MaxLength="64" AutomationProperties.Name="Default Anki deck name" />
             <TextBlock Text="AnkiConnect stays on the WPF-compatible fixed http://localhost:8765; word context-menu actions, copy-on-select and PDIC remain outside this stage." Classes="dialog-description" TextWrapping="Wrap" />
             <TextBlock Text="Keyboard" FontWeight="SemiBold" />
             <Button Name="ShortcutsLink" Content="Keyboard shortcuts…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Shortcuts}" HorizontalAlignment="Stretch" />
