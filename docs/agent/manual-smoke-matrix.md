@@ -374,7 +374,7 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
 
 - **Engine key-binding editor and app↔engine collision policy, owner-approved 2026-10-26 — native acceptance
   NOT_RUN / DEFERRED BY OWNER:** use the rebuilt package and an isolated profile. Open Settings → Tools and confirm the
-  engine editor lists every existing engine binding with its current chord, Enabled and On release flags; capture a new
+  engine editor lists every existing built-in engine binding with its current chord, Enabled and On release flags; capture a new
   chord for one action, Save, reopen and restart, then confirm the saved chord is active and the old one is not. Confirm
   Reset to engine defaults restores all rows in the draft and after Save. Try saving two enabled rows with the same
   chord, an engine chord equal to a default or overridden app shortcut, and an app shortcut changed to an engine chord:

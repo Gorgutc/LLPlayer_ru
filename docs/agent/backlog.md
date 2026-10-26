@@ -1395,7 +1395,7 @@ Product commits `8e8c9cc7d11182cbda30d403ae49eb343a24b176` и `9d45a622956a8fbbf
 shortcut блокируют Save (disabled строки игнорируются); пустой draft и пустой нормализованный список отклоняются/падают
 на engine defaults; стартовый конфликт показывается destructive toast. Адаптер сохраняет engine-owned custom rows;
 открытая cheat sheet перестраивается из live engine keys. Add-row/action-assignment/custom actions — вне stage.
-Локальные FINAL3-гейты на committed code tree: Avalonia 935 passed/14 skipped; `verify.ps1` 1440; Windows Avalonia
+Локальные FINAL4-гейты на docs head: Avalonia 935 passed/14 skipped; `verify.ps1` 1440; Windows Avalonia
 engine 1622/13 и UI 948/1; package 53 fixtures + 38-file readback; exit 0. Real-player adapter test env-gated и
 выполняется в Windows Avalonia gate. Native desktop/GUI/DPI acceptance — NOT_RUN.
 

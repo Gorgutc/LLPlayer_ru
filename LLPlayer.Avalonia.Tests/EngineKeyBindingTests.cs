@@ -261,7 +261,6 @@ public class EngineKeyBindingTests
         fullScreen.DisplayChord.Should().Be("Enter");
         draft.SaveCommand.Execute(null);
         Assert.Null(draft.Error);
-        Assert.Null(draft.Error);
         draft.EngineKeyBindingPrefs.Should().Contain(b => b.Action == "ToggleFullScreen" && b.Key == "Enter");
         saved[0].EngineKeyBindings.Should().Contain(b => b.Action == "ToggleFullScreen" && b.Key == "Enter");
     }

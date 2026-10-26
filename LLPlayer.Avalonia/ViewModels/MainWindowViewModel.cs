@@ -348,7 +348,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
     public AppShortcutMap Shortcuts { get; private set; }
 
-    /// <summary>Applies validated app-shortcut overrides live and persists them; engine key bindings stay at defaults.</summary>
+    /// <summary>Applies validated app-shortcut overrides live and persists them; engine key bindings are edited separately in Settings → Tools.</summary>
     public void ApplyAppShortcuts(IReadOnlyDictionary<string, string> overrides)
     {
         ApplyAppShortcutOverrides(overrides);

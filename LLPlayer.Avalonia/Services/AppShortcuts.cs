@@ -24,8 +24,8 @@ public sealed record ShortcutInfo(string Group, string ActionName, string Descri
 /// key goes to the engine's key bindings (<c>Player.KeyDown/KeyUp</c> with FlyleafLib's default map: Space
 /// play/pause, arrows seek/volume, A/S/D subtitle seek, F fullscreen, Ctrl+O open, ...).
 /// <para>
-/// The app-level chords are rebindable through the persisted <see cref="AppPrefs.AppShortcutOverrides"/> map; the engine
-/// key bindings keep their defaults in this stage.
+/// The app-level chords are rebindable through the persisted <see cref="AppPrefs.AppShortcutOverrides"/> map. Engine key
+/// bindings are edited in Settings → Tools (bounded editor; app chords still route first and Save rejects collisions).
 /// </para>
 /// </summary>
 public sealed class AppShortcutMap
