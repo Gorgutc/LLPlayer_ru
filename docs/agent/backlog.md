@@ -1408,8 +1408,8 @@ Product commits `593b106915d12445a1249b1dff54e79ad66f8aa4` (implementation) и `
 владельцем своего session deck); Word Manager получил word count,
 read-only Source/Language/Saved и двухшаговое подтверждение Clear all. Границы: без LLM sampling/region-map editors,
 endpoint check/reset, Get Models/Hello API, word context-menu editor, copy-on-select/last-search, auto text copy, PDIC,
-AnkiConnect endpoint, APKG options. Локальные FINAL2-гейты на committed code tree: Avalonia 965/14 skipped; WPF 1440;
-Windows Avalonia engine 1622/13 + UI 978/1; package 53 fixtures + 38-file readback; exit 0. Native desktop/GUI/DPI
+AnkiConnect endpoint, APKG options. Локальные FINAL3-гейты на committed tree: Avalonia 966/14 skipped; WPF 1440;
+Windows Avalonia engine 1622/13 + UI 979/1; package 53 fixtures + 38-file readback; exit 0. Native desktop/GUI/DPI
 acceptance — NOT_RUN.
 
 **2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED, исторический local checkpoint ветки `codex/f13-hotkeys`.**
