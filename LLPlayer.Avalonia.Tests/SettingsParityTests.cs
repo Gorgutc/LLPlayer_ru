@@ -193,7 +193,7 @@ public class SettingsParityTests
         Assert.True(manager.ClearConfirming);
         Assert.Equal("Confirm clear", manager.ClearButtonText);
         Assert.Single(temp.Library.GetAll());
-        manager.Filter = "fir"; Dispatcher.UIThread.RunJobs();
+        manager.Filter = "fir";
         Assert.False(manager.ClearConfirming);
         Assert.Single(temp.Library.GetAll());
         manager.ClearCommand.Execute(null);
