@@ -1399,6 +1399,18 @@ shortcut блокируют Save (disabled строки игнорируются
 engine 1622/13 и UI 948/1; package 53 fixtures + 38-file readback; exit 0. Real-player adapter test env-gated и
 выполняется в Windows Avalonia gate. Native desktop/GUI/DPI acceptance — NOT_RUN.
 
+**2026-10-26 owner-approved Settings parity Translation/Word/Anki — IMPLEMENTED, local gates PASS; PR #185/CI receipts tracked separately.**
+Product commits `593b106915d12445a1249b1dff54e79ad66f8aa4` (implementation) и `0c70849bbb78bce690fb1d35a5265c94748cff54` (review fixes) на ветке `codex/f13-settings-parity`: translation parameters (`TranslateCountBackward/Forward`,
+`TranslateMaxConcurrency`) добавлены в detached `TranslationSettings`, валидируются, сохраняются в
+`LLPlayer.Translation.json`, редактируются в Translation dialog и применяются к live engine `Subtitles`. Добавлены
+`AppPrefs.WordClickAction` (Translation/Clipboard/ClipboardAll, live-поведение клика по слову) и `AppPrefs.AnkiDeck`
+(default deck для Word Manager TSV/.apkg/AnkiConnect, live update открытого менеджера); Word Manager получил word count,
+read-only Source/Language/Saved и двухшаговое подтверждение Clear all. Границы: без LLM sampling/region-map editors,
+endpoint check/reset, Get Models/Hello API, word context-menu editor, copy-on-select/last-search, auto text copy, PDIC,
+AnkiConnect endpoint, APKG options. Локальные FINAL2-гейты на committed code tree: Avalonia 965/14 skipped; WPF 1440;
+Windows Avalonia engine 1622/13 + UI 978/1; package 53 fixtures + 38-file readback; exit 0. Native desktop/GUI/DPI
+acceptance — NOT_RUN.
+
 **2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED, исторический local checkpoint ветки `codex/f13-hotkeys`.**
 Product `24ec18f08b23d0f452003606cb772bb793aa9dd1` (7 app + 1 test files) делает десять app-level шорткатов
 (sidebar, subtitles search, cheat sheet, size/position, copy primary text, open subtitles, theme) редактируемыми и

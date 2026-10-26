@@ -387,6 +387,19 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   Close/Esc discard. No Computer Use or application launch is authorized by this row. Evidence:
   [the engine-key checkpoint](f13-status-2026-10-18.md#bounded-avalonia-engine-key-binding-editor-and-appengine-collisions).
 
+- **Settings parity Translation / Word / Anki, owner-approved 2026-10-26 — native acceptance NOT_RUN / DEFERRED BY
+  OWNER:** use the rebuilt package and an isolated profile. Translation settings: set Backward/Forward counts and
+  concurrency, Save, reopen and restart; confirm the values persist in `LLPlayer.Translation.json` and that
+  ahead-translation depth/parallelism changes on a real subtitle file, with invalid values blocked and old files
+  keeping 1/12/2. Word: in Settings → Tools choose Clipboard and click a subtitle word — the word must be copied and no
+  popup may open; choose ClipboardAll — the cue text must be copied; choose Translation — the dictionary popup must
+  appear as before. Anki: set a deck, open Word Manager, confirm the deck is prefilled, export TSV/.apkg and push to a
+  running Anki with AnkiConnect; confirm the APKG note fields/source-language metadata and that a second Clear all
+  click is required before the irreversible delete. Verify the new Tools sections stay reachable at minimum window
+  size and 100 %/150 %/200 % DPI, dark/light themes, and that unsaved edits are discarded on Close/Esc.
+  No Computer Use or application launch is authorized by this row. Evidence:
+  [the Settings-parity checkpoint](f13-status-2026-10-18.md#bounded-avalonia-settings-parity-translation--word--anki).
+
 - **Audio waveform overlay (F-12 audio half), owner-approved 2026-10-24 — native acceptance NOT_RUN / DEFERRED BY
   OWNER:** use the rebuilt package and an isolated profile. Open media with audio and confirm the waveform toggle sits
   next to the A-B button, starts off, and toggling it on builds the envelope over the seek bar without moving the
