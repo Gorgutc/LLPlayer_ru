@@ -16,7 +16,7 @@ namespace LLPlayer.Avalonia.Tests;
 
 public class SubtitlePositionSettingsTests
 {
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("{}")]
     [InlineData("{\"Volume\":42,\"Theme\":\"Light\",\"RecentFiles\":[\"old.mp4\"]}")]
     public void Preferences_without_position_restore_the_existing_24_DIP_default(string json)
@@ -27,7 +27,7 @@ public class SubtitlePositionSettingsTests
         Assert.Equal(24, Position(prefs));
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("-20", 0)]
     [InlineData("0", 0)]
     [InlineData("13.5", 13.5)]
@@ -45,7 +45,7 @@ public class SubtitlePositionSettingsTests
         Assert.Equal(expected, Position(prefs));
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("0", 0)]
     [InlineData("24", 24)]
     [InlineData("400", 400)]
@@ -64,7 +64,7 @@ public class SubtitlePositionSettingsTests
         Assert.Equal(expected, main.SubtitleBottomOffset);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Movement_commands_keep_8_DIP_steps_and_clamps_in_the_preferences_saved_at_shutdown()
     {
         using TempDir temp = new();

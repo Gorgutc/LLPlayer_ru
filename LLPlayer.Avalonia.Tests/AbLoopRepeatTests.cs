@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -34,7 +34,7 @@ public class AbLoopRepeatTests
 
     // ---- view model: click cycle and explicit actions -----------------------------------------------------------
 
-    [Fact]
+    [AvaloniaFact]
     public void Click_cycles_set_A_then_set_B_then_clear()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -64,7 +64,7 @@ public class AbLoopRepeatTests
         LastToast(vm).Should().Be(("A-B repeat", "A-B cleared"));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Click_rejects_B_that_does_not_follow_A()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -81,7 +81,7 @@ public class AbLoopRepeatTests
         LastToast(vm).Should().Be(("A-B repeat", "B must be after A"));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Explicit_actions_set_both_points_and_clear()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -104,7 +104,7 @@ public class AbLoopRepeatTests
         player.AbLoopCalls.Should().Equal("setA", "setB", "clear");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Explicit_B_without_A_is_kept_but_does_not_loop()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -125,7 +125,7 @@ public class AbLoopRepeatTests
         LastToast(vm).Should().Be(("A-B repeat", "A set"));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Explicit_Set_B_at_an_earlier_position_keeps_the_old_B_and_reports_the_rejection()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -146,7 +146,7 @@ public class AbLoopRepeatTests
             "a rejected attempt must never be reported as accepted just because an older B is still set");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void A_playhead_that_advances_past_A_during_the_call_is_not_reported_as_a_rejection()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -165,7 +165,7 @@ public class AbLoopRepeatTests
             "the engine accepted the point, so the message must not claim a rejection");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Commands_do_nothing_without_media()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -180,7 +180,7 @@ public class AbLoopRepeatTests
         vm.AbLoopActive.Should().BeFalse();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Engine_point_changes_are_mirrored_into_view_model_notifications()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -203,7 +203,7 @@ public class AbLoopRepeatTests
         vm.AbLoopStartSeconds.Should().BeApproximately(7, 1e-9);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Opening_another_file_drops_the_points_like_the_engine()
     {
         var (vm, player, _, _, _) = TestVm.Create();

@@ -20,7 +20,7 @@ public class SubtitleTextColorSettingsTests
     const string Primary = "SubtitleTextColor";
     const string Secondary = "SecondarySubtitleTextColor";
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("{}")]
     [InlineData("{\"Volume\":42,\"Theme\":\"Light\",\"RecentFiles\":[\"old.mp4\"]}")]
     public void Legacy_preferences_restore_the_original_independent_overlay_colors(string json)
@@ -31,7 +31,7 @@ public class SubtitleTextColorSettingsTests
         AssertLive(main, "#FFFFFF", "#E8E8E8");
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(" #a1b2c3 ", "\t#d4E5f6\r\n", "#A1B2C3", "#D4E5F6")]
     [InlineData("#000000", "#FFFFFF", "#000000", "#FFFFFF")]
     [InlineData(null, "#123456", "#FFFFFF", "#123456")]
@@ -54,7 +54,7 @@ public class SubtitleTextColorSettingsTests
         AssertLive(main, expectedPrimary, expectedSecondary);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Canonical_color_roundtrip_preserves_unrelated_preferences()
     {
         using TempDir temp = new();

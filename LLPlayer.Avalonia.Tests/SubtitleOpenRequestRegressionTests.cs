@@ -1,10 +1,11 @@
-﻿using LLPlayer.Avalonia.ViewModels;
+﻿using Avalonia.Headless.XUnit;
+using LLPlayer.Avalonia.ViewModels;
 
 namespace LLPlayer.Avalonia.Tests;
 
 public sealed class SubtitleOpenRequestRegressionTests
 {
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("/media/a.mp4", "/media/b.mp4")]
     [InlineData("/media/repeated.mp4", "/media/repeated.mp4")]
     public void Superseded_media_completion_does_not_consume_latest_sidecars(string first, string second)
@@ -23,7 +24,7 @@ public sealed class SubtitleOpenRequestRegressionTests
         }
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("/media/native.mp4")]
     [InlineData("/media/app.mp4")]
     public void Native_media_replacement_invalidates_an_app_requests_pending_sidecars(string nativeMedia)
@@ -39,7 +40,7 @@ public sealed class SubtitleOpenRequestRegressionTests
         }
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Subtitle_selected_during_native_shortcut_open_still_loads_on_completion()
     {
         var (vm, player, _, _, _) = TestVm.Create();
@@ -56,7 +57,7 @@ public sealed class SubtitleOpenRequestRegressionTests
         }
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Failed_media_request_does_not_leave_its_sidecars_for_an_unrelated_open()
     {
         var (vm, player, _, _, _) = TestVm.Create();

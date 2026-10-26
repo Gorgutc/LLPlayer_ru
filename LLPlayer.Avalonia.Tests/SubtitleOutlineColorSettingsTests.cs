@@ -20,7 +20,7 @@ public class SubtitleOutlineColorSettingsTests
 {
     const string OutlineColor = "SubtitleOutlineColor";
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData("{}")]
     [InlineData("{\"Volume\":42,\"Theme\":\"Light\",\"SubtitleTextColor\":\"#123456\",\"SecondarySubtitleTextColor\":\"#ABCDEF\"}")]
     public void Legacy_preferences_restore_the_common_black_outline_without_changing_foreground_colors(string json)
@@ -34,7 +34,7 @@ public class SubtitleOutlineColorSettingsTests
         Assert.Equal(3, main.SubtitleOutlineThickness); Assert.Equal(2.5, main.SecondarySubtitleOutlineThickness);
     }
 
-    [Theory]
+    [AvaloniaTheory]
     [InlineData(" #a1b2c3 ", "#A1B2C3")]
     [InlineData("\t#d4E5f6\r\n", "#D4E5F6")]
     [InlineData("#000000", "#000000")]
@@ -80,7 +80,7 @@ public class SubtitleOutlineColorSettingsTests
         AssertColor(prefs, "#000000");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Canonical_outline_roundtrip_preserves_both_foregrounds_independent_thicknesses_and_unrelated_preferences()
     {
         using TempDir temp = new();

@@ -1,4 +1,4 @@
-using FlyleafLib;
+﻿using FlyleafLib;
 using FlyleafLib.MediaPlayer.Batch;
 using LLPlayer.Core.Services;
 using Whisper.net.Ggml;
@@ -7,6 +7,8 @@ namespace FlyleafLibTests.Core;
 
 public class RecognitionSettingsTests
 {
+    static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);
+
     [Fact]
     public void Explicit_directory_resolver_and_snapshot_preserve_legacy_default()
     {
@@ -124,18 +126,17 @@ public class RecognitionSettingsTests
         try
         {
             var backend = new FakeBackend();
-            using var actions = new RecognitionActions(backend);
+            await using var actions = new RecognitionActions(backend);
             Exception? failure = await Record.ExceptionAsync(() => actions.SaveAndApplyAsync(new(), new RecognitionSettingsStore(dir)));
             Assert.True(failure is IOException or UnauthorizedAccessException,
                 $"Expected IOException or UnauthorizedAccessException, got {failure?.GetType().FullName ?? "no exception"}.");
             Assert.Equal(0, backend.Applies);
-            using ManualResetEventSlim entered = new(), release = new();
-            Task first = actions.MutateAsync(() => { entered.Set(); release.Wait(); });
-            Assert.True(entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+            await using var first = new HeldMutation(actions);
+            await first.Entered.WaitAsync(Limit, TestContext.Current.CancellationToken);
             Task stale = actions.StartAsync(0);
             actions.Invalidate();
-            release.Set();
-            await first;
+            first.Release();
+            await first.Completion;
             await Assert.ThrowsAsync<RecognitionActionCanceledException>(() => stale);
             Assert.Empty(backend.Calls);
             await actions.StartAsync(1);
@@ -159,28 +160,129 @@ public class RecognitionSettingsTests
     public async Task Accepted_mutations_are_FIFO_and_async_disposal_drains_running_work()
     {
         var backend = new FakeBackend();
-        var actions = new RecognitionActions(backend);
-        using ManualResetEventSlim entered = new(), release = new();
+        await using var actions = new RecognitionActions(backend);
         List<int> calls = [];
-        Task first = actions.MutateAsync(() => { entered.Set(); release.Wait(); calls.Add(0); });
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        await using var first = new HeldMutation(actions, () => calls.Add(0));
+        await first.Entered.WaitAsync(Limit, TestContext.Current.CancellationToken);
         Task[] queued = Enumerable.Range(1, 20).Select(index => actions.MutateAsync(() => calls.Add(index))).ToArray();
-        release.Set();
-        await first;
+        first.Release();
+        await first.Completion;
         await Task.WhenAll(queued);
         Assert.Equal(Enumerable.Range(0, 21), calls);
 
-        entered.Reset(); release.Reset();
-        Task active = actions.MutateAsync(() => { entered.Set(); release.Wait(); calls.Add(21); });
-        Assert.True(entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        await using var active = new HeldMutation(actions, () => calls.Add(21));
+        await active.Entered.WaitAsync(Limit, TestContext.Current.CancellationToken);
         Task rejected = actions.StartAsync(0);
         Task draining = actions.DisposeAsync().AsTask();
         Assert.False(draining.IsCompleted);
-        release.Set();
-        await active;
+        active.Release();
+        await active.Completion;
         await draining;
         await Assert.ThrowsAsync<RecognitionActionCanceledException>(() => rejected);
         Assert.Empty(backend.Calls);
+    }
+
+    [Fact]
+    public async Task Held_mutation_scope_drains_the_worker_when_the_test_body_fails()
+    {
+        var backend = new FakeBackend();
+        await using var actions = new RecognitionActions(backend);
+        var held = new HeldMutation(actions);
+        try
+        {
+            var expected = new InvalidOperationException("Injected test-body failure.");
+            Exception? failure = await Record.ExceptionAsync(async () =>
+            {
+                await using (held)
+                {
+                    await held.Entered.WaitAsync(Limit, TestContext.Current.CancellationToken);
+                    Assert.False(held.Completion.IsCompleted);
+                    throw expected;
+                }
+            });
+
+            Assert.Same(expected, failure);
+            Assert.True(held.Completion.IsCompletedSuccessfully,
+                "Leaving the held scope after a test failure must release and drain the accepted mutation.");
+            Assert.False(actions.IsDispatching);
+            await actions.StartAsync(0).WaitAsync(Limit, TestContext.Current.CancellationToken);
+            Assert.Equal(new[] { "start0" }, backend.Calls);
+        }
+        finally
+        {
+            // Rescue cleanup also runs for the intentional RED assertion, so it cannot strand the worker.
+            held.Release();
+            await held.Completion.WaitAsync(Limit, CancellationToken.None);
+        }
+    }
+
+    [Fact]
+    public async Task Held_mutation_scope_drains_the_worker_when_entry_wait_is_canceled()
+    {
+        var backend = new FakeBackend();
+        await using var actions = new RecognitionActions(backend);
+        var predecessor = new HeldMutation(actions);
+        HeldMutation? pending = null;
+        try
+        {
+            await predecessor.Entered.WaitAsync(Limit, TestContext.Current.CancellationToken);
+            var held = new HeldMutation(actions);
+            pending = held;
+            Assert.False(held.Entered.IsCompleted);
+            using var canceled = new CancellationTokenSource();
+            canceled.Cancel();
+            Exception? failure = await Record.ExceptionAsync(async () =>
+            {
+                await using (held)
+                {
+                    try { await held.Entered.WaitAsync(Limit, canceled.Token); }
+                    finally { predecessor.Release(); }
+                }
+            });
+
+            Assert.IsAssignableFrom<OperationCanceledException>(failure);
+            Assert.True(held.Completion.IsCompletedSuccessfully,
+                "Canceling the entry wait must not leave its already accepted mutation held or queued.");
+            Assert.False(actions.IsDispatching);
+            await actions.StartAsync(0).WaitAsync(Limit, TestContext.Current.CancellationToken);
+            Assert.Equal(new[] { "start0" }, backend.Calls);
+        }
+        finally
+        {
+            // Release both gates before draining either task, even when the body or an assertion fails.
+            predecessor.Release();
+            pending?.Release();
+            await predecessor.Completion.WaitAsync(Limit, CancellationToken.None);
+            if (pending != null) await pending.Completion.WaitAsync(Limit, CancellationToken.None);
+        }
+    }
+
+    sealed class HeldMutation : IAsyncDisposable
+    {
+        readonly TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task Entered => entered.Task;
+        public Task Completion { get; }
+
+        public HeldMutation(RecognitionActions actions, Action? afterRelease = null)
+        {
+            Completion = actions.MutateAsync(() =>
+            {
+                entered.TrySetResult();
+                release.Task.GetAwaiter().GetResult();
+                afterRelease?.Invoke();
+            });
+        }
+
+        public void Release() => release.TrySetResult();
+
+        public async ValueTask DisposeAsync()
+        {
+            Release();
+            // Cleanup must still drain after the test's cancellation token has been canceled.
+            try { await Completion.WaitAsync(Limit, CancellationToken.None); }
+            catch (RecognitionActionCanceledException) { }
+        }
     }
 
     sealed class FakeBackend : IRecognitionBackend

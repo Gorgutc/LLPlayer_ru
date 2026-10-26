@@ -1,3 +1,4 @@
+﻿using Avalonia.Headless.XUnit;
 using System.Text.Json;
 using AwesomeAssertions;
 using FlyleafLib.MediaPlayer;
@@ -69,7 +70,7 @@ public class EngineKeyBindingTests
         prefs.EngineKeyBindings[1].IsKeyUp.Should().BeTrue();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Draft_loads_engine_defaults_or_persisted_overrides()
     {
         var (defaultMain, _, _, _, _) = TestVm.Create();
@@ -91,7 +92,7 @@ public class EngineKeyBindingTests
         draft.EngineKeyRows[0].Chord.Should().Be("Enter");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Startup_applies_persisted_engine_keys_only_when_customized()
     {
         FakePlaybackController player = new();
@@ -112,7 +113,7 @@ public class EngineKeyBindingTests
         plain.AppliedEngineKeyBindings.Should().BeEmpty("a non-customized profile keeps the engine defaults");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Save_persists_edited_engine_keys_and_applies_them_live()
     {
         var (main, player, _, prefs, saved) = TestVm.Create(); using var owned = main;
@@ -128,7 +129,7 @@ public class EngineKeyBindingTests
         player.AppliedEngineKeyBindings.Should().Contain(b => b.Action == KeyBindingAction.TogglePlayPause && b.Key == WpfKey.Enter);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Duplicate_enabled_engine_chords_block_save_but_disabled_duplicates_are_allowed()
     {
         var (main, player, _, prefs, saved) = TestVm.Create(); using var owned = main;
@@ -146,7 +147,7 @@ public class EngineKeyBindingTests
         Assert.Null(draft.Error); Assert.Single(saved);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void App_vs_engine_collision_blocks_both_directions_and_ignores_disabled_engine_rows()
     {
         var (main, player, _, prefs, saved) = TestVm.Create(); using var owned = main;
@@ -172,7 +173,7 @@ public class EngineKeyBindingTests
         Assert.NotNull(appDraft.Error); Assert.Empty(saved2);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Reset_restores_engine_defaults_and_clears_the_customized_flag()
     {
         AppPrefs prefs = new()
@@ -229,7 +230,7 @@ public class EngineKeyBindingTests
         prefs.EngineKeyBindings.Should().BeEmpty();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Empty_engine_draft_is_rejected_instead_of_disabling_every_engine_chord()
     {
         var (main, player, _, prefs, saved) = TestVm.Create(); using var owned = main;
@@ -242,7 +243,7 @@ public class EngineKeyBindingTests
         player.AppliedEngineKeyBindings.Should().BeEmpty();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Startup_surfaces_a_persisted_app_engine_collision_as_a_toast()
     {
         AppPrefs prefs = new AppPrefs().Normalize();
@@ -251,7 +252,7 @@ public class EngineKeyBindingTests
         main.Toasts.Should().Contain(toast => toast.Title == "Key binding conflict");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Engine_row_shows_a_friendly_chord_but_persists_the_canonical_key_name()
     {
         var (main, _, _, _, saved) = TestVm.Create(); using var owned = main;
@@ -265,7 +266,7 @@ public class EngineKeyBindingTests
         saved[0].EngineKeyBindings.Should().Contain(b => b.Action == "ToggleFullScreen" && b.Key == "Enter");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Write_failure_does_not_apply_engine_keys_live()
     {
         FakePlaybackController player = new();

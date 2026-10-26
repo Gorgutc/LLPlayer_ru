@@ -1,3 +1,4 @@
+﻿using Avalonia.Headless.XUnit;
 using Avalonia;
 using Avalonia.Media;
 using AwesomeAssertions;
@@ -25,7 +26,7 @@ public class SidebarAppearanceTests
         string family = "Segoe UI", string weight = "Normal", double size = 16)
         => new(mask, original, padding, family, weight, size);
 
-    [Fact]
+    [AvaloniaFact]
     public void Mask_hides_only_future_cues_and_uses_displayed_text_length()
     {
         FakePlaybackController player = PlayerWithCues();
@@ -48,7 +49,7 @@ public class SidebarAppearanceTests
         sidebar.Cues[2].IsMasked.Should().BeFalse();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Mask_uses_original_length_when_original_text_is_shown()
     {
         FakePlaybackController player = PlayerWithCues();
@@ -60,7 +61,7 @@ public class SidebarAppearanceTests
         sidebar.Cues[2].DisplayText.Should().Be(new string('_', "Third spoiler".Length));
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void ShowOriginalText_replaces_translated_display_text_and_lookup_flag()
     {
         FakePlaybackController player = PlayerWithCues();
@@ -82,7 +83,7 @@ public class SidebarAppearanceTests
         sidebar.Cues[1].IsDisplayTranslated.Should().BeFalse();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Search_uses_the_selected_original_or_display_text_and_refilters_when_the_selection_changes()
     {
         FakePlaybackController player = PlayerWithCues();
@@ -105,7 +106,7 @@ public class SidebarAppearanceTests
         sidebar.Cues.Should().HaveCount(3);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Masked_rows_render_only_underscores_and_report_no_translation()
     {
         FakePlaybackController player = PlayerWithCues();
@@ -119,7 +120,7 @@ public class SidebarAppearanceTests
         sidebar.Cues[2].IsDisplayTranslated.Should().BeFalse();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Typography_applies_only_to_cue_rows_and_keeps_the_overlay_fonts()
     {
         FakePlaybackController player = PlayerWithCues();
@@ -139,7 +140,7 @@ public class SidebarAppearanceTests
         main.SidebarSubPadding.Should().Be(5);
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Translation_and_append_updates_refresh_rows_without_losing_row_identity()
     {
         FakePlaybackController player = PlayerWithCues();
