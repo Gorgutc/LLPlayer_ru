@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -109,6 +110,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SecondarySubtitleBackgroundBrush = new(backgroundColor, Math.Clamp(prefs.SecondarySubtitleBackgroundOpacityPercent, 0, 100) / 100d);
         SidebarVisible = prefs.SidebarVisible;
         SidebarWidth = prefs.SidebarWidth;
+        SidebarLeft = prefs.SidebarLeft;
+        SidebarTextMask = prefs.SidebarTextMask;
+        SidebarShowOriginalText = prefs.SidebarShowOriginalText;
+        SidebarSubPadding = prefs.SidebarSubPadding;
+        SidebarFontFamily = prefs.SidebarFontFamily;
+        SidebarFontWeight = prefs.SidebarFontWeight;
+        SidebarFontSize = prefs.SidebarFontSize;
+        ApplySidebarAppearance();
         IsDarkTheme = prefs.Theme != "Light";
 
         player.Volume = Math.Min(prefs.Volume, player.VolumeMax);
@@ -179,6 +188,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitlesVisible = draft.SubtitlesVisible;
         candidate.SidebarVisible = draft.SidebarVisible;
         candidate.SidebarWidth = draft.SidebarWidth;
+        candidate.SidebarLeft = draft.SidebarLeft;
+        candidate.SidebarTextMask = draft.SidebarTextMask;
+        candidate.SidebarShowOriginalText = draft.SidebarShowOriginalText;
+        candidate.SidebarSubPadding = draft.SidebarSubPadding;
+        candidate.SidebarFontFamily = draft.SidebarFontFamily;
+        candidate.SidebarFontWeight = draft.SidebarFontWeight;
+        candidate.SidebarFontSize = draft.SidebarFontSize;
         candidate.SubtitleWidthPercent = draft.SubtitleWidthPercent;
         candidate.SubtitleMaxWidth = draft.SubtitleMaxWidth;
         candidate.SubtitleIgnoreLineBreak = draft.SubtitleIgnoreLineBreak;
@@ -228,6 +244,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SecondarySubtitleBackgroundOpacityPercent = candidate.SecondarySubtitleBackgroundOpacityPercent;
         prefs.SidebarVisible = candidate.SidebarVisible;
         prefs.SidebarWidth = candidate.SidebarWidth;
+        prefs.SidebarLeft = candidate.SidebarLeft;
+        prefs.SidebarTextMask = candidate.SidebarTextMask;
+        prefs.SidebarShowOriginalText = candidate.SidebarShowOriginalText;
+        prefs.SidebarSubPadding = candidate.SidebarSubPadding;
+        prefs.SidebarFontFamily = candidate.SidebarFontFamily;
+        prefs.SidebarFontWeight = candidate.SidebarFontWeight;
+        prefs.SidebarFontSize = candidate.SidebarFontSize;
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
         prefs.SubtitleWidthPercent = candidate.SubtitleWidthPercent;
         prefs.SubtitleMaxWidth = candidate.SubtitleMaxWidth;
@@ -266,6 +289,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SecondaryFontSize = Math.Round(candidate.SubtitleFontSize * candidate.SecondaryFontScale, 1);
         SidebarWidth = candidate.SidebarWidth;
         SidebarVisible = candidate.SidebarVisible;
+        SidebarLeft = candidate.SidebarLeft;
+        SidebarTextMask = candidate.SidebarTextMask;
+        SidebarShowOriginalText = candidate.SidebarShowOriginalText;
+        SidebarSubPadding = candidate.SidebarSubPadding;
+        SidebarFontFamily = candidate.SidebarFontFamily;
+        SidebarFontWeight = candidate.SidebarFontWeight;
+        SidebarFontSize = candidate.SidebarFontSize;
+        ApplySidebarAppearance();
         if (SidebarVisible) Sidebar.Reload();
         player.SubtitlesVisible = candidate.SubtitlesVisible;
         IsDarkTheme = candidate.Theme == "Dark";
@@ -478,6 +509,42 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty] public partial bool SidebarVisible { get; private set; }
     [ObservableProperty] public partial double SidebarWidth { get; set; }
+    /// <summary>Dock the sidebar left of the video (WPF parity); the window applies the column swap.</summary>
+    [ObservableProperty] public partial bool SidebarLeft { get; set; }
+    /// <summary>Mask cue text after the current one with underscores (spoiler protection).</summary>
+    [ObservableProperty] public partial bool SidebarTextMask { get; set; }
+    /// <summary>Show original cue text instead of the translated display text; search follows the choice.</summary>
+    [ObservableProperty] public partial bool SidebarShowOriginalText { get; set; }
+    /// <summary>Sidebar cue-row padding in DIP (sidebar only).</summary>
+    [ObservableProperty] public partial int SidebarSubPadding { get; set; } = AppPrefs.DefaultSidebarSubPadding;
+    /// <summary>Requested sidebar font family (resolved with a catalog fallback).</summary>
+    [ObservableProperty] public partial string SidebarFontFamily { get; set; } = AppPrefs.DefaultSidebarFontFamily;
+    /// <summary>Sidebar font weight: Normal, SemiBold or Bold.</summary>
+    [ObservableProperty] public partial string SidebarFontWeight { get; set; } = AppPrefs.DefaultSidebarFontWeight;
+    /// <summary>Sidebar cue-row font size in DIP; the video overlay font is independent.</summary>
+    [ObservableProperty] public partial double SidebarFontSize { get; set; } = AppPrefs.DefaultSidebarFontSize;
+
+    SubtitleFontSelection sidebarFont = new(SubtitleFontCatalog.DefaultFamily, FontWeight.Normal, FontStyle.Normal, "");
+    /// <summary>Resolved sidebar family for bindings.</summary>
+    public FontFamily SidebarListFontFamily => sidebarFont.Family;
+    public FontWeight SidebarListFontWeight => sidebarFont.Weight;
+    public double SidebarListFontSize => SidebarFontSize;
+    public Thickness SidebarRowPadding => new(SidebarSubPadding);
+
+    /// <summary>Pushes the persisted sidebar appearance into the sidebar rows and refreshes bound typography values.</summary>
+    public void ApplySidebarAppearance()
+    {
+        sidebarFont = fonts.ResolveOrRequested(SidebarFontFamily, SidebarFontWeight, "Normal");
+        Sidebar.ApplyAppearance(new SidebarTextAppearance(SidebarTextMask, SidebarShowOriginalText, SidebarSubPadding,
+            SidebarFontFamily, SidebarFontWeight, SidebarFontSize));
+        OnPropertyChanged(nameof(SidebarListFontFamily));
+        OnPropertyChanged(nameof(SidebarListFontWeight));
+        OnPropertyChanged(nameof(SidebarListFontSize));
+        OnPropertyChanged(nameof(SidebarRowPadding));
+    }
+
+    partial void OnSidebarFontSizeChanged(double value) => OnPropertyChanged(nameof(SidebarListFontSize));
+    partial void OnSidebarSubPaddingChanged(int value) => OnPropertyChanged(nameof(SidebarRowPadding));
 
     partial void OnSubtitleFontSizeChanged(double value)
     {

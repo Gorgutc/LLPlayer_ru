@@ -45,6 +45,24 @@ public sealed class AppPrefs
     public const int DefaultSubtitleSeparatorOpacityPercent = 30;
     public const string DefaultSubtitlePositionAlignment = "Bottom";
 
+    // F-13 Subtitles Sidebar (WPF parity; defaults from LLPlayer/Services/AppConfig.cs:182-228). The sidebar has its
+    // own typography and padding so it never changes the video overlay font. Numeric bounds are the approved safe
+    // limits: width 220-900, padding 0-48 DIP, font 8-72 DIP.
+    public const double DefaultSidebarWidth = 360;
+    public const double MinSidebarWidth = 220;
+    public const double MaxSidebarWidth = 900;
+    public const bool DefaultSidebarLeft = false;
+    public const bool DefaultSidebarTextMask = false;
+    public const bool DefaultSidebarShowOriginalText = false;
+    public const int MinSidebarSubPadding = 0;
+    public const int MaxSidebarSubPadding = 48;
+    public const int DefaultSidebarSubPadding = 5;
+    public const double MinSidebarFontSize = 8;
+    public const double MaxSidebarFontSize = 72;
+    public const double DefaultSidebarFontSize = 16;
+    public const string DefaultSidebarFontFamily = "Segoe UI";
+    public const string DefaultSidebarFontWeight = "Normal";
+
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
     public bool Mute { get; set; }
@@ -108,7 +126,21 @@ public sealed class AppPrefs
     public Dictionary<string, string> AppShortcutOverrides { get; set; } = [];
 
     public bool SidebarVisible { get; set; }
-    public double SidebarWidth { get; set; } = 360;
+    public double SidebarWidth { get; set; } = DefaultSidebarWidth;
+    /// <summary>Dock the sidebar left of the video (WPF <c>SidebarLeft</c>); false keeps it on the right.</summary>
+    public bool SidebarLeft { get; set; } = DefaultSidebarLeft;
+    /// <summary>Mask text of cues after the current one with underscores to avoid spoilers.</summary>
+    public bool SidebarTextMask { get; set; } = DefaultSidebarTextMask;
+    /// <summary>Show the original cue text instead of the translated display text; search follows the choice.</summary>
+    public bool SidebarShowOriginalText { get; set; } = DefaultSidebarShowOriginalText;
+    /// <summary>Uniform cue-row padding in DIP (sidebar only).</summary>
+    public int SidebarSubPadding { get; set; } = DefaultSidebarSubPadding;
+    /// <summary>Requested sidebar font family; resolved through the font catalog with a fallback.</summary>
+    public string SidebarFontFamily { get; set; } = DefaultSidebarFontFamily;
+    /// <summary>Sidebar cue-row font size in DIP (independent from <see cref="SubtitleFontSize"/>).</summary>
+    public double SidebarFontSize { get; set; } = DefaultSidebarFontSize;
+    /// <summary>Sidebar font weight: Normal, SemiBold or Bold.</summary>
+    public string SidebarFontWeight { get; set; } = DefaultSidebarFontWeight;
 
     /// <summary>"Dark" (default, like the WPF app) or "Light".</summary>
     public string Theme { get; set; } = "Dark";
@@ -168,7 +200,13 @@ public sealed class AppPrefs
         SubtitlePositionAlignment = TryNormalizeSubtitlePositionAlignment(SubtitlePositionAlignment, out string positionAlignment) ? positionAlignment : DefaultSubtitlePositionAlignment;
         SubtitlePositionAlignmentWhenDual = TryNormalizeSubtitlePositionAlignment(SubtitlePositionAlignmentWhenDual, out string dualAlignment) ? dualAlignment : DefaultSubtitlePositionAlignment;
         SecondaryFontScale = double.IsFinite(SecondaryFontScale) ? Math.Clamp(SecondaryFontScale, 0.4, 1.5) : 0.8;
-        SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, 220, 900) : 360;
+        SidebarWidth = double.IsFinite(SidebarWidth) ? Math.Clamp(SidebarWidth, MinSidebarWidth, MaxSidebarWidth) : DefaultSidebarWidth;
+        SidebarSubPadding = Math.Clamp(SidebarSubPadding, MinSidebarSubPadding, MaxSidebarSubPadding);
+        SidebarFontFamily = TryNormalizeSubtitleFontFamily(SidebarFontFamily, out string sidebarFamily) ? sidebarFamily : DefaultSidebarFontFamily;
+        SidebarFontWeight = TryNormalizeSubtitleFontWeight(SidebarFontWeight, out string sidebarWeight) ? sidebarWeight : DefaultSidebarFontWeight;
+        SidebarFontSize = double.IsFinite(SidebarFontSize)
+            ? Math.Clamp(SidebarFontSize, MinSidebarFontSize, MaxSidebarFontSize)
+            : DefaultSidebarFontSize;
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
         _ = AppShortcutMap.TryNormalizeOverrides(AppShortcutOverrides, out Dictionary<string, string> shortcuts);
         AppShortcutOverrides = shortcuts;

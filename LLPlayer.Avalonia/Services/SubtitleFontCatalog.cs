@@ -50,6 +50,29 @@ public sealed class SubtitleFontCatalog
         return new SubtitleFontSelection(family, fontWeight, fontStyle, status);
     }
 
+    /// <summary>
+    /// Like <see cref="Resolve"/>, but safe before the Avalonia font platform exists (view-model construction in
+    /// headless/non-UI hosts): the requested plain family is kept and the renderer falls back. The real desktop host
+    /// always resolves through <see cref="Resolve"/> and reports the catalog fallback.
+    /// </summary>
+    public SubtitleFontSelection ResolveOrRequested(string? requestedFamily, string? requestedWeight, string? requestedStyle)
+    {
+        try
+        {
+            return Resolve(requestedFamily, requestedWeight, requestedStyle);
+        }
+        catch (InvalidOperationException)
+        {
+            bool validFamily = AppPrefs.TryNormalizeSubtitleFontFamily(requestedFamily, out string name);
+            string weightName = AppPrefs.TryNormalizeSubtitleFontWeight(requestedWeight, out string weight) ? weight : AppPrefs.DefaultSubtitleFontWeight;
+            string styleName = AppPrefs.TryNormalizeSubtitleFontStyle(requestedStyle, out string style) ? style : AppPrefs.DefaultSubtitleFontStyle;
+            FontWeight fontWeight = weightName switch { "Normal" => FontWeight.Normal, "Bold" => FontWeight.Bold, _ => FontWeight.SemiBold };
+            FontStyle fontStyle = styleName == "Italic" ? FontStyle.Italic : FontStyle.Normal;
+            FontFamily family = validFamily && name.Length > 0 ? new FontFamily(name) : DefaultFamily;
+            return new SubtitleFontSelection(family, fontWeight, fontStyle, "Font platform unavailable; requested name retained.");
+        }
+    }
+
     public static string DescribeFace(SubtitleFontSelection selection)
     {
         Typeface typeface = new(selection.Family, selection.Style, selection.Weight);
