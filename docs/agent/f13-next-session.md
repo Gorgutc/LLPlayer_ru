@@ -1,230 +1,117 @@
-# Промпт для новой сессии F-13: настройки боковой панели
+# Продолжение F-13: закрытие технического хвоста Settings — 2026-10-26
 
-Продолжи работу над LLPlayer с чистым контекстом. Сначала сверь фактическое состояние, затем выполни только один
-одобренный владельцем блок. Этот документ передаёт контекст и предложение; сам по себе он не разрешает реализацию
-следующего блока.
+Продолжи только уже одобренный корректирующий блок по [плану](plans/2026-10-26-settings-audit-fixes.md).
+Владелец после аудита явно разрешил исправить числовой UI, изоляцию ресурсов в тестах, доказательства,
+документацию и Desktop delivery. Повторное одобрение этого scope не требуется. Полный F-13 parity остаётся
+**IN PROGRESS**; новый функциональный блок автоматически не начинается.
 
-> **Обновление 2026-10-26:** описанный ниже блок Subtitles Sidebar одобрен владельцем и реализован; этот документ остаётся историческим планом того блока. Актуальное состояние — [F-13 status](f13-status-2026-10-18.md) и `backlog.md`; новый промт следующей сессии перегенерируется после merge. Не используй раздел «Следующий блок» ниже как разрешение реализации.
+## Источники и проверенная база
 
-## Репозиторий, источники и правила
+Прочитай vault `AGENTS.md`, project `_INDEX.md`, frozen `Conventions.md` и сессию по единственному указателю
+«▶ Продолжить здесь». Затем прочитай repo `AGENTS.md`, `docs/agent/subagent-review-matrix.md`, локальные
+`llplayer-context-keeper` / `llplayer-instruction-drift` и подходящие frozen contracts. Используй `@superpowers`
+и подключённый `@github`; GitHub plugin нужен для сверки PR, default branch и CI. Сообщай о недоступных
+инструментах и неоднозначных требованиях. Исторический vault checkpoint сверяй с текущим source, а не наоборот.
 
-- Репозиторий: `C:\Users\Maxim\Documents\GitHub\LLPlayer_ru`.
-- Second Brain: `C:\Users\Maxim\Documents\GitHub\Second-brain`.
-- LLPlayer — C#/.NET 10 desktop-приложение. Поддерживаемый Windows-продукт — WPF (`LLPlayer/`);
-  F-13 — один общий Avalonia UI для Windows/Linux (`LLPlayer.Avalonia/`) и общий `LLPlayer.Core/`.
-  Полная совместимость функций и нативная desktop-приёмка ещё не завершены. WPF остаётся поддерживаемым.
-- Канонический backlog: `docs/agent/backlog.md`. Текущий статус и раздельные исторические доказательства:
-  `docs/agent/f13-status-2026-10-18.md`.
+Канонический backlog — [backlog.md](backlog.md); текущие и исторические receipts —
+[F-13 status](f13-status-2026-10-18.md). LLPlayer — C#/.NET 10 desktop: WPF остаётся поддерживаемым Windows
+продуктом, Avalonia UI и Core общие для Windows/Linux. Сохрани WPF, engine, config/defaults, native assets,
+зависимости и отдельные package flows вне корректирующего scope.
 
-`FlyleafLib/` — FFmpeg/media engine с WPF Windows и portable .NET 10 targets;
-`FlyleafLibTests/` — engine tests. `WpfColorFontDialog/` — WPF-зависимость; `Plugins/YoutubeDL/` —
-отдельный .NET plugin для yt-dlp. Tracked runtime assets находятся в `FFmpeg/`, `LLPlayer/lib/7z.dll`
-и `LLPlayer/Assets/silero_vad.onnx`. Publish profiles и GitHub workflows описывают отдельные WPF,
-Windows Avalonia и Linux build/package flows; не меняй их для настройки Sidebar.
+Проверенная база аудита — PR [№ 185](https://github.com/Gorgutc/LLPlayer_ru/pull/185), **MERGED** в
+`d1f5427ff9a5793b358d6154507af69d2870c6e4`; финальный PR head — `e28e76c190e380e7d7f085a883dc265149387f66`.
+Перед продолжением сверь фактический branch/HEAD/status и новые receipts. Корректирующая ветка —
+`codex/f13-settings-audit-fixes`; чужие dirty-файлы, worktrees и artifacts сохраняй.
 
-Перед работой прочитай vault `AGENTS.md`, `1-Projects/LLPlayer_ru/_INDEX.md`, frozen `Conventions.md`
-и единственную сессию по указателю «▶ Продолжить здесь». Затем прочитай repo `AGENTS.md`,
-`docs/agent/subagent-review-matrix.md` и подходящие локальные skills. Подключённые плагины `@github`
-и `@superpowers` обязательны, когда доступны; загрузи соответствующие skills и используй GitHub plugin
-для сверки PR/default branch/CI. Если инструмент недоступен, сообщи об этом и не имитируй его вызов.
+## Уже сделано; повторно не реализовывать
 
-До изменения поведения прочитай frozen contracts: `product-behavior-contract.md`, `wpf-design-contract.md`,
-`media-runtime-contract.md`, `config-data-contract.md`, `dependency-baseline.md`, `manual-smoke-matrix.md`
-в `docs/agent/`. Следуй порядку авторитета из repo `AGENTS.md`. Не меняй frozen-решения вне явно
-одобренного блока.
+- PR [№ 181](https://github.com/Gorgutc/LLPlayer_ru/pull/181): три исправления app-hotkeys.
+  Его premerge head `56117ee` и старый prompt — исторические checkpoints.
+- PR [№ 182](https://github.com/Gorgutc/LLPlayer_ru/pull/182): schema-2 Desktop updater, direct EXE,
+  physical paths, синяя per-build ICO и rollback.
+- PR [№ 183](https://github.com/Gorgutc/LLPlayer_ru/pull/183): Sidebar, семь prefs и approved WPF defaults,
+  original/display/mask/search, typography и left/right docking.
+- PR [№ 184](https://github.com/Gorgutc/LLPlayer_ru/pull/184), main `0811f615`: bounded engine-key editor
+  built-in строк и app↔engine collision blocking. Add-row/action-assignment/custom-action UI вне этапа.
+- PR № 185: три translation-параметра, Word click action, default Anki deck и Word Manager count/metadata/
+  безопасный Clear all. LLM sampling/region maps, provider probes, word context-menu editor, PDIC,
+  AnkiConnect endpoint и APKG options этим этапом не реализованы.
 
-Используй доступные агентские слоты для ограниченных независимых задач через явный `spawn_agent`.
-Роли и обязательное покрытие путей определяет review matrix. У каждого исполнителя должна быть своя
-область файлов; предупреди его, что другие агенты работают параллельно и их изменения нельзя откатывать.
-Перед сдачей обязателен независимый `/review`: отдельный review subagent, минимум `verification_reviewer`,
-плюс все профильные роли по матрице. Закрой Critical/Important и проверь финальные изменения повторно.
+Описание Sidebar из прежней версии этого файла было историческим планом завершённого блока.
+Его границы и результаты сохранены в [разделе Sidebar](f13-status-2026-10-18.md#bounded-avalonia-subtitles-sidebar-settings-block)
+и Git history. Не запускай старый Sidebar/premerge workflow заново.
 
-## Что уже сделано: локальный корректирующий блок хоткеев
+## Подтверждённый дефект и корректирующий scope
 
-Последний подтверждённый merge базового этапа — app-shortcuts, часть 1, PR № 180,
-main `e5b1d05baff0aaf5acb197bb9403d8387fd97f7d`, версия `0.3.62`.
-Перед исправлениями чистый локальный `main` безопасно обновлён fast-forward с `d646f19` до `e5b1d05`.
-Корректирующая ветка: `codex/f13-hotkey-repairs`.
-Локальный product commit: `c45fd9583b691c41842d8f8c5a1f36572bf080cb`, база — `e5b1d05`.
-Документация и этот промпт фиксируются отдельно от product commit.
-Корректировка опубликована в PR [№ 181](https://github.com/Gorgutc/LLPlayer_ru/pull/181).
-Подтверждённая premerge-контрольная точка: head `56117ee774d97f8014926e684e7c860978fa7f4a`.
-Состояние merge, последующего head и main проверяй заново перед продолжением.
+Исходный read-only audit: `artifacts/dsh-two-session-audit-2026-10-26/AUDIT.md`, `verification.json`,
+`CI-exact-main.json`. Он относится к `d1f5427`, до исправлений.
 
-Владелец одобрил именно три исправления и согласование записей о проверках/продолжении:
+1. Headless ввод в реальный TextBox → focus/blur → Save воспроизвёл три RED: forward `1.5 → 2`, concurrency
+   `0 → 2` и `65 → 2`; Save проходил без ошибки. Невалидный raw input должен дойти до существующей Save-validation
+   и блокировать запись/live apply с понятной ошибкой. Диапазоны прежние: backward/forward — целые 0–1000,
+   concurrency — целое 1–64. Сначала зафиксируй компилируемый RED, затем минимальный fix и GREEN того же теста.
+   Проверь valid integer/spinner, Close/Esc discard и write-failure/retry через контрольную границу.
+2. `EngineKeyBindingAdapterTests` оставлял owned controller/Player без Dispose. Гарантируй controller-then-Player
+   cleanup и при assertion failure. Отдельно усиль проверки реального key-down/key-up после reapply и работающего
+   custom delegate по существующему безопасному seam; production меняй только при новом воспроизводимом дефекте.
+3. Согласуй текущие source docs, выполненные reviews, gates, CI, Desktop и Second Brain. У каждого результата
+   должны быть собственные inputs/commit и наблюдаемый receipt. Будущий результат остаётся **PENDING** до проверки.
 
-1. `ChordCaptureButton` отклоняет Meta/Win/Super и неизвестные биты модификаторов, сохраняя прежний draft chord
-   и активный захват. Исключение: Escape всегда отменяет захват, в том числе с неподдерживаемыми модификаторами.
-2. `AppShortcutMap` принимает одиночное определённое имя клавиши или поддерживаемый alias; числовые,
-   составленные через запятую и неопределённые значения отклоняются. Невалидный override при загрузке
-   возвращает стандартные сочетания действия.
-3. Уже открытая шпаргалка обновляется после успешного Save переназначений либо Reset с последующим Save,
-   сохраняя активный фильтр. Повторное открытие окна для обновления не нужно.
+Свежие обычные suites на pre-fix `d1f5427` прошли: WPF 1440/0 skipped, Windows engine 1622/13 skipped,
+UI 979/1 skipped. Дополнительные три input probes были RED; обычный suite не покрывал этот путь.
+Exact-main CI Windows [40331221672](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/40331221672) и Linux
+[40331222038](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/40331222038) прошёл verify/publish/upload.
+Эти результаты не принимают новые исправления. Totals — наблюдения, а не фиксированные quality gates.
 
-Изменённые product-файлы: `LLPlayer.Avalonia/Controls/ChordCaptureButton.cs`,
-`LLPlayer.Avalonia/Services/AppShortcuts.cs`, `LLPlayer.Avalonia/Views/MainWindow.axaml.cs`;
-регрессии: `LLPlayer.Avalonia.Tests/HotkeyValidationRepairTests.cs`
-и `LLPlayer.Avalonia.Tests/CheatSheetHotkeyRefreshTests.cs`.
-Новых preferences, engine bindings, зависимостей или изменений инфраструктуры этот блок не вводит.
+На момент аудита Desktop всё ещё выбирал `0811f615`/PR № 184: 479 файлов, ноль mismatch,
+корректные direct EXE/no args/cwd/blue ICO. Обновления PR № 185 не было. Living vault также оставался на PR № 184.
+После текущего closeout используй новые receipts; старую синюю иконку и её запуск не считай приёмкой нового payload.
 
-Наблюдавшиеся локальные результаты текущих исправлений:
+## Исторические ошибки доказательств
 
-| Проверка | Результат |
-| --- | --- |
-| Компилируемый intentional RED до production-исправлений | 66 total: 29 failed, 37 passed, 0 skipped; actual exit 1 |
-| Тот же focused regression после исправлений | 66 passed, 0 failed, 0 skipped; actual exit 0 |
-| Полный WPF gate | 1 440 passed, 0 failed, 0 skipped |
-| Полный Windows Avalonia gate | engine: 1 622 passed, 0 failed, 13 skipped; UI: 901 passed, 0 failed, 1 skipped |
-| Windows package-contract tests | 53 fixtures PASS; ZIP readback: 38 files PASS |
-| Локальный Windows Avalonia publish/content | PASS: 479 files; ZIP 180 445 676 bytes; SHA-256 `d80c923f220d7dfdb5768a836968d4c9e7a0985634d1ca5eb461eca3bf0cc8a5` |
+FINAL3 PR № 185 привязан к `6e73ad8`; после docs receipt `0681af7` был test-only `e28e76c` с исправлением
+xUnit1031. Утверждение «после FINAL3 менялась только документация» неверно. Финальный PR-head CI и exact-main
+CI — отдельные receipts. Последние исторические delta reviews seq 7006/7008/7042 вернули FAIL; затем были fixes,
+но нового независимого final-tree PASS в raw journal нет. Текущий `/review` фиксируется отдельно.
 
-Это фактические результаты одного этапа, а не фиксированные ожидаемые totals для следующего запуска.
-Полные suites должны оставаться без фильтрации. Не переноси CI или package hashes PR № 180 на исправления.
+Linux PR № 185 run [40326448762](https://github.com/Gorgutc/LLPlayer_ru/actions/runs/40326448762) падал на
+Dispatcher wrong-thread и Outline `1e9999` Assert.NotNull. `c6c96c4` исправил Dispatcher test, отдельная причина
+Outline остаётся **UNKNOWN**. xUnit1031 в Windows/Linux runs 40329219933/40329219932 исправлен в `e28e76c`;
+финальные PR runs 40330061298/40330061376 и exact-main CI прошли. Прежние UNKNOWN PR № 170/172/173/181/183 сохраняются.
 
-### Подтверждённая premerge-контрольная точка PR № 181
+В старой DSH-сессии заявление «5/5 final PASS» было завышено: final product `24ec18f` проверили runtime/docs/
+verification seq 7295/7297/7299; XAML PASS 7135 и .NET PASS 7172 относятся к более ранним inputs. Vault draft review
+7397/7409 был FAIL без последующего независимого PASS. Не переписывай старые session bodies; сохраняй errata.
 
-Эти результаты относятся именно к head `56117ee774d97f8014926e684e7c860978fa7f4a`.
-Последующая правка документации или новый head требуют собственной сверки, а результаты main после merge
-фиксируются отдельно.
+## Проверки, review и доставка
 
-| Состояние | Подтверждённый результат |
-| --- | --- |
-| Публикация корректировки | PR № 181 создан; head `56117ee774d97f8014926e684e7c860978fa7f4a` |
-| Windows CI | run `40193094026`, attempt 1, SUCCESS; WPF: 1 440 passed / 0 skipped; engine: 1 622 passed / 13 skipped; UI: 901 passed / 1 skipped; publish и upload завершены |
-| Linux CI | run `40193094196`, attempt 1, SUCCESS; полный verify: engine 1 621 passed / 14 skipped; UI 900 passed / 2 skipped; publish и upload завершены |
-| Product reviews | Профильные независимые reviews: 0 Critical / 0 Important на проверенных входных файлах |
-| Review документации и промпта | Первичный независимый checkpoint: 0 Critical / 0 Important; minor по исторической точности исправлен. Финальный review этого последующего delta ещё нужен |
-| Vault prepublication session-close gate 2 | PASS: 107 unit tests, 0 hard, 0 broken links, 14 несвязанных debt; baseline 763/763, migrations 38/38, state 1/1 |
-| Предыдущая попытка vault gate | Gate 1: FAIL из-за одной JSON wikilink; исправлено. Important независимого review устранён |
-| Vault публикация и финальный commit | Vault не push; итоговый scoped commit на этой контрольной точке не подтверждён |
-
-Перед работой прочитай фактические PR № 181 head/state, default branch/main и live vault handoff по указателю
-из `_INDEX.md`. Итоговый handoff текущей корректировки может содержать более поздние факты и отдельную
-exact-main проверку. Не выводи merge, CI нового head, post-merge CI или финальный vault commit из этой
-premerge-таблицы. Новая сессия должна начинаться с проверенной базы, содержащей исправления;
-старый `e5b1d05` сам их не содержит. Если обязательный closeout предыдущего блока ещё открыт,
-сначала заверши его в уже разрешённых границах и зафиксируй результат.
-
-## Уточнение исторических доказательств DSH
-
-Аудит исходной сессии: ignored `artifacts/dsh-session-audit-2026-10-25/AUDIT.md`.
-Историческое заявление «финальный delta PASS у всех пяти» было завышено: реальные независимые reviewers
-были, но финальный product `24ec18f` проверили runtime/docs/verification — raw seq 7295/7297/7299.
-Последние XAML PASS 7135 и .NET PASS 7172 относятся к более ранним checkpoints; до финального дерева
-менялись нормализация shortcuts, тесты и XAML HelpText. Эти два PASS не подтверждают финальное дерево.
-
-Независимый vault draft review вернул FAIL: запрос 7397, ответ 7409. В журнале нет последующего
-независимого PASS этого draft. Позднейшее прямое подтверждение исправлений учитывается отдельно.
-Успешный draft session-close gate — другой факт; он не заменяет независимый review.
-Старые sessions сохраняют исходный текст с датированным erratum, live-записи содержат актуальную правду.
-Исторические HC-22/HC-27b waivers и неизвестные причины старых инцидентов не переопределяй.
-
-## Следующий блок: предложение настроек Sidebar
-
-**PROPOSED / IMPLEMENTATION NOT APPROVED текущим запросом на исправление хоткеев.**
-Если новое человеческое сообщение уже явно одобряет этот блок и его defaults, выполняй его без повторного
-запроса разрешения. Если такого GO нет, сначала представь ограниченный план и решение по defaults,
-затем дождись одобрения до product-изменений. Не считай запись «следующий этап» разрешением реализации.
-
-Предложение: перенести оставшиеся настройки страницы WPF **Subtitles Sidebar** в существующий Settings hub
-общего Windows/Linux Avalonia UI. Источник: `LLPlayer/Controls/Settings/SettingsSubtitles.xaml:810–884`;
-defaults: `LLPlayer/Services/AppConfig.cs:182–228`. WPF не меняется.
-
-Семь WPF UI-строк содержат девять значений. Show Sidebar и Sidebar Width уже представлены
-`AppPrefs.SidebarVisible` и `SidebarWidth` (220–900 DIP). Они сохраняются, не дублируются новой схемой.
-Предлагаются ровно семь новых persisted preferences:
-
-| Preference | Поведение и предлагаемый default |
-| --- | --- |
-| `SidebarLeft` | Сторона панели; `false` — справа |
-| `SidebarTextMask` | Маска текста после текущего cue; `false` |
-| `SidebarShowOriginalText` | Показывать исходный текст вместо переведённого display text; `false` |
-| `SidebarSubPadding` | Неотрицательный целочисленный отступ строки; `5` DIP |
-| `SidebarFontFamily` | Только шрифт текста панели; requested family `Segoe UI` |
-| `SidebarFontSize` | Только размер текста панели; `16` DIP |
-| `SidebarFontWeight` | Только вес текста панели; `Normal` |
-
-Defaults следуют WPF. Сейчас Avalonia использует размер `14` и отступ `8,6`; их изменение заметно
-пользователю и входит в предлагаемое решение для владельца. Не описывай его как сохранение прежнего вида.
-При отсутствии Segoe UI на Linux используй существующий font fallback без установки шрифтов.
-Конкретные безопасные числовые пределы и валидацию размера/отступа зафиксируй в одобряемом плане.
-Новые font style/color/inheritance keys и изменения overlay-шрифтов сюда не входят.
-
-### Обязательные детали реализации после GO
-
-- Settings остаётся detached draft: Close/Esc отбрасывают изменения. Save валидирует сырые значения,
-  сливает только принадлежащие ему поля со свежими preferences и сначала сохраняет candidate,
-  затем применяет его к живому состоянию. Ошибка записи не меняет live state и не закрывает Settings.
-  Не теряй waveform, shortcuts и другие несвязанные preferences.
-- Для original text нужен минимальный snapshot-шов приложения: `CueInfo` сейчас несёт только display text.
-  Добавь исходный текст через `Services/IPlaybackController.cs` и `FlyleafPlaybackController.GetCues`;
-  engine-модель и WPF config не меняются. Сохрани совместимость fake-controller и существующих тестов.
-- WPF-маска (`LLPlayer/Converters/SubtitleConverters.cs:43–65`) заменяет текст равным числом `_`,
-  когда `cue.Index > CurrentIndex`; до первого cue (`-1`) все строки будущие. Прошлые и текущая не маскируются.
-  Исходные данные не затираются. Word lookup не должен получать скрытый исходный текст маскированной строки.
-- При показе original text верно выставляй `IsTranslated` и язык word lookup. Переключатель панели
-  не меняет перевод overlays или engine translation switches. Поиск использует выбранный original/display
-  text, а не подчёркивания маски; при смене выбора активный фильтр пересчитывается.
-- Обновляй отображение после перевода, append cues, замены media, seek, изменения текущего cue
-  и перехода к состоянию без текущего cue. Сохрани highlight, seek по строке и append/replacement-семантику.
-- Left/right docking должен сохранять splitter, remembered width, узкое окно, минимальную ширину video
-  и fullscreen. В `MainWindow.axaml.cs` выбор колонки сейчас жёстко привязан к индексу 2.
-- Применяй шрифт и padding только к sidebar cue rows; переиспользуй font catalog и существующие validators.
-  Secondary-sidebar selection, новые search modes и нативные bitmap thumbnails не входят в этот блок.
-
-Основные файлы внутри `LLPlayer.Avalonia/`: `Services/AppPrefs.cs`, `Services/IPlaybackController.cs`,
-`Services/FlyleafPlaybackController.cs`, `ViewModels/SettingsViewModel.cs`, `ViewModels/MainWindowViewModel.cs`,
-`ViewModels/SubtitlesSidebarViewModel.cs`, `Views/SettingsWindow.axaml`, `Views/MainWindow.axaml`,
-`Views/MainWindow.axaml.cs`. Регрессии находятся в `LLPlayer.Avalonia.Tests/`.
-Для переиспользования смотри `SidebarAndPopupTests`,
-`TransportSidebarLayoutTests` и существующие Settings/font tests.
-
-Engine key-binding editor и app-vs-engine collisions реализованы 2026-10-26 в PR #184 (Windows run 40313455362 и Linux run 40313455465 SUCCESS); Translation/Word/Anki Settings parity реализованы в PR #185 (видимая часть — Translation parameters, Word click action, Anki deck + Word Manager UX; LLM sampling/region maps, word context menu, PDIC и AnkiConnect endpoint остаются вне stage). Новые shortcuts/actions,
-dependency upgrades, packaging redesign и другие страницы Settings остаются отдельными более поздними блоками.
-Не выбирай их автоматически после завершения этой страницы.
-
-## Проверки, публикация и границы
-
-После одобрения работай в `codex/*` от проверенной актуальной базы. Сохрани чужие dirty-файлы и старые
-worktrees/artifacts. Для новых исправлений поведения добавляй осмысленные детерминированные регрессии,
-фиксируй intentional RED там, где есть безопасный seam, и проверяй реальное поведение, а не копию реализации.
-
-Минимальный набор для общего Avalonia-блока:
+Используй все доступные агентские слоты через явный `spawn_agent`, с отдельным ownership файлов.
+Минимальные gates для общего Avalonia-блока:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify-fast.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\codex\verify.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1
 ```
 
-Linux: полный `scripts/linux/verify.sh`, при необходимости через фактический Linux CI,
-с обязательной сверкой проверенного commit. Дополнительные publish/package gates определяет repo `AGENTS.md`
-и фактический scope. WPF packaging сохраняет отдельный publish приложения и `Plugins/YoutubeDL`;
-источник правил — `.github/actions/build-package/action.yml`. Native assets и publish profiles не меняй
-в рамках Sidebar. Полные suites нельзя заменять focused-тестами или фиксированным числом PASS.
+Полный Linux `scripts/linux/verify.sh` и publish/content checks нужны на фактически проверенном head через Linux CI;
+локальный Linux укажи отдельно. Полные suites не заменяй focused-тестами. Обязателен отдельный spawned `/review`,
+минимум `verification_reviewer` и профильные роли из review matrix; закрой Critical/Important и проверь delta.
 
-Для Sidebar проверь persistence/defaults/invalid input, discard/write-failure/restart, независимость overlay,
-original/display lookup и поиск, privacy маски, lifecycle обновлений, layout/splitter и font fallback.
-Делегируй review профильным ролям по матрице; свяжи каждый PASS с фактическими финальными файлами/commit.
-После исправлений не переноси старый review на новые semantic changes без проверки соответствующего delta.
+После scoped product/tests и docs commits выполни разрешённый GitHub flow с PR/CI/merge и отдельным exact-main
+readback. Затем на чистом финальном source HEAD запусти default fresh `scripts/windows/update-desktop-test-build.ps1`:
+receipt `sourceCommit=HEAD`, новый payload/manifest, физические paths и ярлык direct EXE/no args/cwd/blue ICO
+должны согласоваться. Сохрани предыдущие payload и WPF shortcut. Updater не запускает и не останавливает плеер.
 
-**Computer Use/CUA, запуск GUI/плеера/launcher, реальные ASR/OCR/translation/TTS/model/provider/GPU прогоны,
-установка программ, шрифтов или моделей, WSL setup и reboot запрещены без отдельного разрешения владельца.**
-Headless tests и разрешённые script/CI gates допустимы; они не доказывают native desktop/keyboard/glyph/DPI
-acceptance. Незапущенное отмечай `NOT_RUN / DEFERRED BY OWNER`; не заявляй прохождение по старым receipts.
+Обнови только project-scoped allowlist Second Brain по vault-протоколу: completed session, primary index,
+живой `_INDEX` с as-of/basis и одним продолжением, нужные Tests/snapshot, `session-close`, независимый review
+и изолированный vault commit. Публичный релиз и push vault из этого не следуют.
 
-Заверши одобренный блок по действующему repo GitHub Flow: раздельные scoped product/docs commits,
-проверки, независимый `/review`, фактические push/PR/CI/merge при действующей авторизации, затем
-readback main и post-merge CI. Не выдавай локальный commit за merge. Публичный релиз и push vault
-требуют соответствующего разрешения и не следуют автоматически из product merge.
+Человеческий GO seq 4632 включал native acceptance и остальные Settings; seq 6047 уточнил три страницы.
+Прежний запрет Computer Use/автоматического GUI не отозван. В текущем correction запуск player/launcher/CUA
+не выполняется. Native GUI/DPI/OS-keyboard/real model/provider/Anki/GPU acceptance — **NOT_RUN**;
+headless/native-library evidence не заменяет эти проверки. Не называй это отсутствием native GO в принципе.
 
-Синхронизируй Second Brain по его `AGENTS.md`: точный allowlist, одна completed session, primary-запись
-в terminal month shard и recent navigation, актуальный `_INDEX.md` с `as_of`/basis/одним продолжением,
-project-scoped session-close, независимый review и изолированный vault commit. Историю сохраняй;
-уточнения старых утверждений добавляй датированным erratum. Если что-то неясно, сообщи владельцу;
-если ответ меняет одобряемое поведение, выясни его до зависимых изменений.
-
-В итоговом отчёте раздели реализацию, локальные проверки, CI, merge/package delivery и native acceptance.
-Назови фактические commit/PR, ограничения и единственную следующую точку продолжения. После одного
-одобренного блока остановись; следующий продуктовый этап требует нового задания владельца.
+В handoff назови фактические source commit/PR, gates/reviews, Desktop sourceCommit и vault result, ограничения
+и единственную точку продолжения. Заверши этот корректирующий блок, затем остановись перед новым функциональным scope.

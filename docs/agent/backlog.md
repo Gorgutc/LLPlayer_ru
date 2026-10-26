@@ -1364,7 +1364,7 @@ latest head, merge/main и post-merge receipts нужно сверять с ж
 Предыдущее document review: 0 Critical / 0 Important; эта новая docs-only delta ожидает независимого infrastructure
 review и не меняет source/tests. Source-review отчёты UI/runtime/.NET/reuse/native и package-boundary содержат
 0 Critical / 0 Important на своих закреплённых input-файлах. Старые receipts не подтверждают исправления.
-Точные log/source hashes находятся в [текущем статусе](f13-status-2026-10-18.md#current-bounded-correction-and-proposed-continuation--2026-10-25).
+Точные log/source hashes находятся в [текущем статусе](f13-status-2026-10-18.md#historical-hotkey-correction-and-continuation-checkpoint--2026-10-25).
 Native GUI/DPI/keyboard и real model/provider/GPU
 acceptance — **NOT_RUN / DEFERRED BY OWNER**.
 
@@ -1399,7 +1399,18 @@ shortcut блокируют Save (disabled строки игнорируются
 engine 1622/13 и UI 948/1; package 53 fixtures + 38-file readback; exit 0. Real-player adapter test env-gated и
 выполняется в Windows Avalonia gate. Native desktop/GUI/DPI acceptance — NOT_RUN.
 
-**2026-10-26 owner-approved Settings parity Translation/Word/Anki — IMPLEMENTED, local gates PASS; PR #185/CI receipts tracked separately.**
+**2026-10-26 owner-approved Settings audit correction — IN PROGRESS.** После read-only аудита на main
+`d1f5427` владелец разрешил закрыть подтверждённые numeric input/blur, test-resource isolation и delivery/docs gaps.
+[План](plans/2026-10-26-settings-audit-fixes.md): raw invalid Translation input должен блокировать Save без записи/
+live apply; controller/Player теста освобождаются гарантированно; key-down/key-up и custom delegate проверяются по
+безопасному seam. На pre-fix source ordinary gates прошли (WPF 1440/0 skipped; Windows engine 1622/13 skipped,
+UI 979/1 skipped), но три дополнительных control-input probes были RED (`1.5`/`0`/`65` молча сохранялись как `2`).
+Final corrective gates, spawned `/review`, PR/main CI, fresh Desktop и vault closeout — **PENDING**.
+На момент аудита Desktop и living vault оставались на PR #184 `0811f615`; новый payload этим не принимается.
+Полный F-13 parity остаётся IN PROGRESS, native GUI/DPI/OS-keyboard acceptance — NOT_RUN, без CUA/запуска плеера.
+Исторические FAIL/UNKNOWN и точная цепочка receipts: [F-13 status](f13-status-2026-10-18.md).
+
+**2026-10-26 owner-approved Settings parity Translation/Word/Anki — MERGED PR #185, main `d1f5427`; pre-fix checkpoint.**
 Product commits `593b106915d12445a1249b1dff54e79ad66f8aa4` (implementation) и `0c70849bbb78bce690fb1d35a5265c94748cff54` (review fixes) на ветке `codex/f13-settings-parity`: translation parameters (`TranslateCountBackward/Forward`,
 `TranslateMaxConcurrency`) добавлены в detached `TranslationSettings`, валидируются, сохраняются в
 `LLPlayer.Translation.json`, редактируются в Translation dialog и применяются к live engine `Subtitles`. Добавлены
@@ -1408,9 +1419,12 @@ Product commits `593b106915d12445a1249b1dff54e79ad66f8aa4` (implementation) и `
 владельцем своего session deck); Word Manager получил word count,
 read-only Source/Language/Saved и двухшаговое подтверждение Clear all. Границы: без LLM sampling/region-map editors,
 endpoint check/reset, Get Models/Hello API, word context-menu editor, copy-on-select/last-search, auto text copy, PDIC,
-AnkiConnect endpoint, APKG options. Локальные FINAL3-гейты на committed tree: Avalonia 966/14 skipped; WPF 1440;
+AnkiConnect endpoint, APKG options. Исторические FINAL3-гейты относятся только к `6e73ad8`; после них test-only
+`e28e76c` исправил xUnit1031, поэтому позднейшие изменения не были только docs. FINAL3: Avalonia 966/14 skipped; WPF 1440;
 Windows Avalonia engine 1622/13 + UI 979/1; package 53 fixtures + 38-file readback; exit 0. Native desktop/GUI/DPI
-acceptance — NOT_RUN.
+acceptance — NOT_RUN. Финальный PR head `e28e76c`: Windows 40330061298/Linux 40330061376 SUCCESS;
+exact-main `d1f5427`: Windows 40331221672/Linux 40331222038 SUCCESS (full verify/publish/upload).
+Исторические последние delta reviews seq 7006/7008/7042 — FAIL, позднейшего независимого final-tree PASS в журнале нет.
 
 **2026-10-25 owner-approved hotkey rebinding, часть 1 (app shortcuts) — IMPLEMENTED, исторический local checkpoint ветки `codex/f13-hotkeys`.**
 Product `24ec18f08b23d0f452003606cb772bb793aa9dd1` (7 app + 1 test files) делает десять app-level шорткатов

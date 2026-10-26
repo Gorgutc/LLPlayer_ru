@@ -19,12 +19,15 @@ Owner GO: «остальные страницы Settings parity - Translation/Wo
 ## Verification
 
 - Product commit `593b106915d12445a1249b1dff54e79ad66f8aa4`; review-response commit `0c70849bbb78bce690fb1d35a5265c94748cff54`.
-- Focused settings/translation/word suites: 80 passed, zero failed. Full Avalonia, WPF, Windows Avalonia and package facts are recorded in the FINAL2 logs and `docs/agent/f13-status-2026-10-18.md`.
+- Focused settings/translation/word suites: 80 passed, zero failed. Historical FINAL3, superseding FINAL2, covers `6e73ad8c37f7a49e2989600a89ed7f61de707bc9`: Avalonia 966/14 skipped, WPF 1440/0, Windows engine 1622/13 + UI 979/1, package 53 fixtures + 38-file readback, exits 0. The later `e28e76c190e380e7d7f085a883dc265149387f66` changes a test for xUnit1031; later changes were not all docs-only.
+- PR #185 MERGED at `d1f5427ff9a5793b358d6154507af69d2870c6e4`. Final PR-head Windows 40330061298/Linux 40330061376 and exact-main Windows 40331221672/Linux 40331222038 passed separately; these receipts do not erase earlier CI failures. See [F-13 status](../f13-status-2026-10-18.md).
 - Contract/status/backlog/manual-smoke updated in the docs commit; plan committed here because ignored `artifacts/` is not evidence.
 
 ## Reviews
 
-Round 1 on `593b106`: dotnet_quality_guardian PASS; media_runtime_mapper PASS (Medium pause divergence → fixed); wpf_xaml_reviewer PASS (clear-confirm/disarm, numeric editors, deck help, a11y → fixed); verification_reviewer FAIL (pause, deck-export non-vacuity, routing, invalid-Apply snapshot, blank copy, hub binding, absent-key tests → fixed in `0c70849`); codex_infra_architect FAIL (docs slice and dual deck owner → docs commit and next-open-only semantics). Delta re-review is recorded in the PR/vault handoff.
+Round 1 on `593b106`: dotnet_quality_guardian PASS; media_runtime_mapper PASS (Medium pause divergence → fixed); wpf_xaml_reviewer PASS (clear-confirm/disarm, numeric editors, deck help, a11y → fixed); verification_reviewer FAIL (pause, deck-export non-vacuity, routing, invalid-Apply snapshot, blank copy, hub binding, absent-key tests → fixed in `0c70849`); codex_infra_architect FAIL (docs slice and dual deck owner → docs commit and next-open-only semantics). Historical last delta verdicts seq 7006/7008/7042 were FAIL; later fixes have no later independent final-tree PASS in that journal. New audit/corrective reviews are separate evidence.
+
+The later read-only audit on `d1f5427` reproduced three numeric-control RED probes despite passing ordinary suites, and found adapter-test cleanup and Desktop/vault gaps. The owner's approved correction is tracked in [the audit-fixes plan](2026-10-26-settings-audit-fixes.md); this plan remains the historical three-page scope.
 
 ## Limits
 
