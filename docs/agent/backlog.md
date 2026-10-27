@@ -708,7 +708,7 @@ Computer Use запрещён; следующий функциональный �
 `WordClickAction` для фразы (поп-ап перевода, Clipboard phrase, ClipboardAll cue); одиночный клик остаётся словом;
 жёсткие переводы строк заменяются пробелом; отпускание вне слов, потеря capture и смена текста отменяют выбор.
 Тот же контрол используют строки sidebar, masked-guard сохранён; подсветка берёт существующий `Shadcn.RingBrush`.
-Product `8f94399e23041a9b67f2f3f5bfe3b9723ee82c66` (5 файлов, включая 9 новых headless-тестов). WPF, engine,
+Product `8f94399e23041a9b67f2f3f5bfe3b9723ee82c66` (5 файлов, включая 10 новых headless-тестов). WPF, engine,
 Core, config/defaults, зависимости и упаковка не менялись; новые persisted-настройки не добавлены.
 Compiled RED 7 failed/1 passed; focused GREEN 9/9; полный Avalonia suite 1023/0/19; WPF 1442/0/0; Windows
 Avalonia gate: attempt 1 FAIL известным OpenAL wave-тестом (537 Hz vs 440, Goertzel 440 dominance, причина
