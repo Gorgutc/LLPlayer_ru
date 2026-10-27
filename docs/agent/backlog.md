@@ -702,6 +702,22 @@ Local Linux NOT_RUN; новый Linux/PR/exact-main CI, final-HEAD Desktop и н
 Computer Use запрещён; следующий функциональный блок не начат. План и точные receipts —
 [test isolation repair](plans/2026-10-26-windows-ci-test-isolation.md) и текущий status выше.
 
+**2026-10-27 owner-approved word/phrase selection — IMPLEMENTED / LOCALLY VERIFIED; publication pending.**
+Общий Windows/Linux Avalonia-контрол субтитров получил выбор слова или фразы протяжкой с видимой подсветкой.
+Нажатие на слово ставит воспроизведение на паузу (WPF `WordClickedDown` parity); отпускание выполняет прежнее
+`WordClickAction` для фразы (поп-ап перевода, Clipboard phrase, ClipboardAll cue); одиночный клик остаётся словом;
+жёсткие переводы строк заменяются пробелом; отпускание вне слов, потеря capture и смена текста отменяют выбор.
+Тот же контрол используют строки sidebar, masked-guard сохранён; подсветка берёт существующий `Shadcn.RingBrush`.
+Product `8f94399e23041a9b67f2f3f5bfe3b9723ee82c66` (5 файлов, включая 9 новых headless-тестов). WPF, engine,
+Core, config/defaults, зависимости и упаковка не менялись; новые persisted-настройки не добавлены.
+Compiled RED 7 failed/1 passed; focused GREEN 9/9; полный Avalonia suite 1023/0/19; WPF 1442/0/0; Windows
+Avalonia gate: attempt 1 FAIL известным OpenAL wave-тестом (537 Hz vs 440, Goertzel 440 dominance, причина
+UNKNOWN), unchanged attempt 2 PASS (engine 1624/0/13, UI 1041/0/1); package 53 fixtures; local publish 479 файлов,
+SHA-256 `11595c1db9a6ae439f37f06449fea48793b892c5d7ba47033d39b9ac1208e1e5`. Local Linux NOT_RUN; PR/CI/merge,
+merged-main CI, Desktop и Vault близко к pending. Native desktop visual/keyboard acceptance NOT_RUN
+(no-Computer-Use); word-bounded selection не повторяет char-level выбор WPF sidebar. План и receipts —
+[word selection](plans/2026-10-27-f13-word-selection.md) и текущий status выше.
+
 Avalonia-приложение обязано оставаться платформенно-нейтральным (без Linux-only допущений): конфиг — XDG
 `~/.config/LLPlayer` на Linux и `%APPDATA%\LLPlayer` на Windows (состояние/логи — `~/.local/state/LLPlayer` /
 `%LOCALAPPDATA%\LLPlayer`), список FFmpeg-библиотек — `*.so` / `*.dll` по ОС (`AppPaths`, `FFmpegLocator`, покрыто
