@@ -988,6 +988,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool PrimaryTextTranslated => player.PrimaryTextTranslated;
     public bool SecondaryTextTranslated => player.SecondaryTextTranslated;
+
+    /// <summary>Word press starts a possible drag selection; pause immediately (WPF WordClickedDown parity).</summary>
+    public void PauseForWordSelection()
+    {
+        if (player.IsPlaying)
+            player.Pause();
+    }
+
     public void OnWordClicked(string word, string context, int slot, double x, double y, bool? translated = null, string? sourceLanguage = null, string? targetLanguage = null)
     {
         if (WordClickAction == "Clipboard" || WordClickAction == "ClipboardAll")
