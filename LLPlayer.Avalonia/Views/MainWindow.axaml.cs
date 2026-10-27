@@ -107,6 +107,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
         PrimarySubtitle.WordClicked += OnWordClicked;
         SecondarySubtitle.WordClicked += OnWordClicked;
+        PrimarySubtitle.WordPressed += OnWordPressed;
+        SecondarySubtitle.WordPressed += OnWordPressed;
         VideoHost.DoubleTapped += OnVideoDoubleTapped;
         VideoHost.Tapped += OnVideoTapped;
         VideoHost.PointerWheelChanged += OnVideoWheel;
@@ -428,6 +430,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         Point p = v.TranslatePoint(e.Position, VideoHost) ?? e.Position;
         vm.OnWordClicked(e.Word, e.Text, e.Slot, p.X, p.Y, e.IsTranslated, e.SourceLanguage, e.TargetLanguage);
     }
+
+    /// <summary>A word press starts a possible drag selection; pause before the release action (WPF parity).</summary>
+    void OnWordPressed(object? sender, EventArgs e) => vm?.PauseForWordSelection();
 
     void OnVideoTapped(object? sender, TappedEventArgs e)
     {

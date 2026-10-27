@@ -156,6 +156,16 @@ For a future owner-resumed native run, use the rebuilt package and an isolated t
 Record package identity, platform and actual results separately; headless tests and an older package do not
 close these rows. The current rebuilt-package native recheck is deferred by owner; do not auto-launch it.
 
+- **Word/phrase selection, owner-approved 2026-10-27 — NOT_RUN / DEFERRED BY OWNER:** on each native
+  Windows/Linux host, use a new package and an isolated profile. Press a word and confirm playback pauses before
+  the release. Drag forward and backward across words, including wrapped lines and a cue with a hard line break;
+  confirm a visible selection highlight covers the word range and clears on release. Confirm the release opens
+  the word popup with the selected phrase (Translation mode) or copies the phrase / whole cue (Clipboard /
+  ClipboardAll), that a simple click still acts on one word, and that releasing off-text, changing the cue or
+  losing focus cancels without a provider call. Repeat in the subtitle sidebar, and confirm a masked sidebar row
+  never sends underscores or hidden source text to a provider or the word library. Check both overlay slots,
+  fullscreen, minimum-window size and 100/150/200% DPI. Headless pointer/render tests and the local
+  WPF/Windows Avalonia gates do not close this native row. No Computer Use or player launch is authorized.
 - Open the Media menu and the native file picker; cancel safely, then open local media with Unicode and spaces
   in its path. Confirm video, duration and primary cues. Exercise explicit subtitle loading for supported text
   formats including `.txt`, malformed/unsupported input, rapid media replacement and primary/secondary slots.

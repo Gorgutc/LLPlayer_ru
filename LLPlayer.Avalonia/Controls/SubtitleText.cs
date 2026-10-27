@@ -12,9 +12,11 @@ using Avalonia.Rendering.SceneGraph;
 namespace LLPlayer.Avalonia.Controls;
 
 /// <summary>A word clicked in a <see cref="SubtitleText"/>.</summary>
-public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position, bool isTranslated = false, string? sourceLanguage = null, string? targetLanguage = null)
+public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position, bool isTranslated = false, string? sourceLanguage = null, string? targetLanguage = null, bool isWord = true)
     : RoutedEventArgs(routedEvent)
 {
+    /// <summary>True for a single word, false for a dragged phrase.</summary>
+    public bool IsWord { get; } = isWord;
     public bool IsTranslated { get; } = isTranslated;
     public string? SourceLanguage { get; } = sourceLanguage;
     public string? TargetLanguage { get; } = targetLanguage;
@@ -80,16 +82,35 @@ public sealed class SubtitleText : Control
     public static readonly RoutedEvent<WordClickedEventArgs> WordClickedEvent =
         RoutedEvent.Register<SubtitleText, WordClickedEventArgs>(nameof(WordClicked), RoutingStrategies.Bubble);
 
+    /// <summary>Opaque fallback; hosts bind the themed Shadcn ring brush over it.</summary>
+    public static readonly StyledProperty<IBrush?> SelectionBrushProperty =
+        AvaloniaProperty.Register<SubtitleText, IBrush?>(nameof(SelectionBrush), Brushes.Gray);
+    public IBrush? SelectionBrush { get => GetValue(SelectionBrushProperty); set => SetValue(SelectionBrushProperty, value); }
+
+    /// <summary>Highlight opacity in the range 0..1 (values outside are clamped when drawn).</summary>
+    public static readonly StyledProperty<double> SelectionOpacityProperty =
+        AvaloniaProperty.Register<SubtitleText, double>(nameof(SelectionOpacity), 0.35);
+    public double SelectionOpacity { get => GetValue(SelectionOpacityProperty); set => SetValue(SelectionOpacityProperty, value); }
+
     static readonly IBrush ShadowBrush = new ImmutableSolidColorBrush(Color.FromArgb(110, 0, 0, 0));
 
     TextLayout? layout;
     Geometry? geometry;
     double layoutWidth = -1;
 
+    // Drag selection: anchor word and current word as character ranges over DisplayText ([start, end)).
+    bool selecting;
+    bool dragActive;
+    int anchorStart = -1;
+    int anchorEnd = -1;
+    int currentStart = -1;
+    int currentEnd = -1;
+    IPointer? selectionPointer;
+
     static SubtitleText()
     {
         AffectsMeasure<SubtitleText>(TextProperty, FontSizeProperty, FontFamilyProperty, FontWeightProperty, FontStyleProperty, OutlineThicknessProperty);
-        AffectsRender<SubtitleText>(FillProperty, OutlineProperty, BackgroundProperty);
+        AffectsRender<SubtitleText>(FillProperty, OutlineProperty, BackgroundProperty, SelectionBrushProperty, SelectionOpacityProperty);
         FontWeightProperty.OverrideDefaultValue<SubtitleText>(FontWeight.SemiBold);
     }
 
@@ -184,6 +205,9 @@ public sealed class SubtitleText : Control
         remove => RemoveHandler(WordClickedEvent, value);
     }
 
+    /// <summary>Raised on a word press before any click action, so the host can pause playback (WPF parity).</summary>
+    public event EventHandler? WordPressed;
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -225,6 +249,21 @@ public sealed class SubtitleText : Control
 
         double pad = OutlineThickness;
         DrawBackground(context, pad);
+
+        if (selecting && SelectionBrush != null && layout != null)
+        {
+            int start = Math.Min(anchorStart, currentStart);
+            int end = Math.Max(anchorEnd, currentEnd);
+            if (start >= 0 && end > start)
+            {
+                using (context.PushOpacity(Math.Clamp(SelectionOpacity, 0, 1)))
+                {
+                    foreach (Rect rect in GetSelectionRects(start, end))
+                        context.FillRectangle(SelectionBrush, rect);
+                }
+            }
+        }
+
         using (context.PushTransform(Matrix.CreateTranslation(pad + 2, pad + 2.5)))
             context.DrawGeometry(ShadowBrush, new Pen(ShadowBrush, OutlineThickness * 2 + 2, lineJoin: PenLineJoin.Round), geometry);
 
@@ -273,17 +312,150 @@ public sealed class SubtitleText : Control
             return;
 
         Point p = e.GetPosition(this);
-        if (TryGetWordAt(p, out string word))
-        {
-            e.Handled = true;
-            RaiseEvent(new WordClickedEventArgs(WordClickedEvent, word, DisplayText, Slot, p, IsTranslated, SourceLanguage, TargetLanguage));
-        }
+        if (!TryGetWordRangeAt(p, out int start, out int end))
+            return;
+
+        e.Handled = true;
+        anchorStart = currentStart = start;
+        anchorEnd = currentEnd = end;
+        selecting = false;
+        dragActive = true;
+        selectionPointer = e.Pointer;
+        e.Pointer.Capture(this);
+        WordPressed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Word under <paramref name="point"/> (control coordinates); false when the point is not on a word.</summary>
-    public bool TryGetWordAt(Point point, out string word)
+    protected override void OnPointerMoved(PointerEventArgs e)
     {
-        word = "";
+        base.OnPointerMoved(e);
+        if (!dragActive)
+            return;
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        Point p = e.GetPosition(this);
+        if (!TryGetWordRangeAt(p, out int start, out int end))
+            return;
+        if (start == currentStart && end == currentEnd)
+            return;
+
+        currentStart = start;
+        currentEnd = end;
+        selecting = true;
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!dragActive)
+            return;
+
+        dragActive = false;
+        IPointer? pointer = selectionPointer;
+        selectionPointer = null;
+        pointer?.Capture(null);
+
+        bool onWord = TryGetWordRangeAt(e.GetPosition(this), out int releasedStart, out int releasedEnd);
+        int aStart = anchorStart, aEnd = anchorEnd;
+        ClearSelection();
+
+        if (!onWord)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        bool isWord = releasedStart == aStart;
+        int start = isWord ? aStart : Math.Min(aStart, releasedStart);
+        int end = isWord ? aEnd : Math.Max(aEnd, releasedEnd);
+        string text = DisplayText;
+        if (start < 0 || end <= start || end > text.Length)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        string words = isWord ? text[start..end] : text[start..end].ReplaceLineEndings(" ");
+        Point anchor = SelectionAnchor(start, end, e.GetPosition(this));
+        e.Handled = true;
+        RaiseEvent(new WordClickedEventArgs(WordClickedEvent, words, text, Slot, anchor, IsTranslated,
+            SourceLanguage, TargetLanguage, isWord));
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (!dragActive)
+            return;
+        dragActive = false;
+        selectionPointer = null;
+        ClearSelection();
+    }
+
+    void ClearSelection()
+    {
+        CancelSelection();
+        InvalidateVisual();
+    }
+
+    void CancelSelection()
+    {
+        dragActive = false;
+        if (selectionPointer is { } pointer)
+        {
+            selectionPointer = null;
+            pointer.Capture(null);
+        }
+        selecting = false;
+        anchorStart = anchorEnd = currentStart = currentEnd = -1;
+    }
+
+    Point SelectionAnchor(int start, int end, Point fallback)
+    {
+        Rect union = default;
+        bool first = true;
+        foreach (Rect rect in GetSelectionRects(start, end))
+        {
+            union = first ? rect : union.Union(rect);
+            first = false;
+        }
+        return first ? fallback : new Point(union.Center.X, union.Top);
+    }
+
+    List<Rect> GetSelectionRects(int start, int end)
+    {
+        List<Rect> rects = [];
+        if (layout == null)
+            return rects;
+
+        double pad = OutlineThickness;
+        double top = pad;
+        foreach (TextLine line in layout.TextLines)
+        {
+            int lineStart = line.FirstTextSourceIndex;
+            int lineEnd = lineStart + line.Length;
+            int from = Math.Max(start, lineStart);
+            int to = Math.Min(end, lineEnd);
+            if (to > from)
+            {
+                foreach (TextBounds bounds in line.GetTextBounds(from, to - from))
+                {
+                    if (bounds.Rectangle.Width <= 0)
+                        continue;
+                    rects.Add(new Rect(pad + bounds.Rectangle.X, top + bounds.Rectangle.Y,
+                        bounds.Rectangle.Width, bounds.Rectangle.Height));
+                }
+            }
+            top += line.Height;
+        }
+        return rects;
+    }
+
+    /// <summary>Word character range under a point; false when the point is not on a word.</summary>
+    public bool TryGetWordRangeAt(Point point, out int start, out int end)
+    {
+        start = end = -1;
         string text = DisplayText;
         if (string.IsNullOrEmpty(text) || layout == null)
             return false;
@@ -314,23 +486,37 @@ public sealed class SubtitleText : Control
         if (!IsWordChar(text[index]) && index > 0 && IsWordChar(text[index - 1]))
             index--;
 
-        word = WordAt(text, index);
+        return WordRangeAt(text, index, out start, out end);
+    }
+
+    /// <summary>Word under <paramref name="point"/> (control coordinates); false when the point is not on a word.</summary>
+    public bool TryGetWordAt(Point point, out string word)
+    {
+        word = "";
+        if (!TryGetWordRangeAt(point, out int start, out int end))
+            return false;
+        word = DisplayText[start..end];
         return word.Length > 0;
     }
 
     /// <summary>The word (letters, digits, inner apostrophes / hyphens) containing <paramref name="index"/>.</summary>
     public static string WordAt(string text, int index)
-    {
-        if (index < 0 || index >= text.Length || !IsWordChar(text[index]))
-            return "";
+        => WordRangeAt(text, index, out int start, out int end) ? text[start..end] : "";
 
-        int start = index, end = index;
+    static bool WordRangeAt(string text, int index, out int start, out int end)
+    {
+        start = end = -1;
+        if (index < 0 || index >= text.Length || !IsWordChar(text[index]))
+            return false;
+
+        start = index;
+        end = index;
         while (start > 0 && (IsWordChar(text[start - 1]) || (IsJoiner(text[start - 1]) && start > 1 && IsWordChar(text[start - 2]))))
             start--;
         while (end < text.Length - 1 && (IsWordChar(text[end + 1]) || (IsJoiner(text[end + 1]) && end + 2 < text.Length && IsWordChar(text[end + 2]))))
             end++;
-
-        return text[start..(end + 1)];
+        end++;
+        return true;
     }
 
     static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark;
@@ -339,6 +525,7 @@ public sealed class SubtitleText : Control
 
     void Invalidate()
     {
+        CancelSelection();
         layout?.Dispose();
         layout = null;
         geometry = null;
