@@ -356,4 +356,46 @@ public class SubtitleSelectionTests
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
         }
     }
+
+    [AvaloniaFact]
+    public void DragAcrossHardLineBreak_HighlightsSecondLine()
+    {
+        var (window, _, _, text) = CreateOverlay("Hello brave\nnew world");
+        try
+        {
+            WriteableBitmap baseline = window.CaptureRenderedFrame()!;
+            Point from = FindClickableWordPoint(window, text, "Hello");
+            Point to = FindClickableWordPoint(window, text, "new");
+            Press(window, from);
+            MoveDrag(window, to);
+            WriteableBitmap during = window.CaptureRenderedFrame()!;
+
+            Point origin = text.TranslatePoint(default, window)!.Value;
+            Rect lower = new(origin.X, origin.Y + text.Bounds.Height / 2, text.Bounds.Width, text.Bounds.Height / 2);
+            using ILockedFramebuffer a = baseline.Lock();
+            using ILockedFramebuffer b = during.Lock();
+            int changed = 0;
+            unsafe
+            {
+                for (int y = Math.Max(0, (int)lower.Top); y < Math.Min(a.Size.Height, (int)lower.Bottom); y++)
+                {
+                    byte* pa = (byte*)a.Address + y * a.RowBytes;
+                    byte* pb = (byte*)b.Address + y * b.RowBytes;
+                    for (int x = Math.Max(0, (int)lower.Left); x < Math.Min(a.Size.Width, (int)lower.Right); x++)
+                    {
+                        int ba = pa[x * 4], ga = pa[x * 4 + 1], ra = pa[x * 4 + 2];
+                        int bb = pb[x * 4], gb = pb[x * 4 + 1], rb = pb[x * 4 + 2];
+                        if (Math.Abs(ba - bb) > 12 || Math.Abs(ga - gb) > 12 || Math.Abs(ra - rb) > 12)
+                            changed++;
+                    }
+                }
+            }
+            changed.Should().BeGreaterThan(20, "the second visual line must be highlighted for a cross-line selection");
+        }
+        finally
+        {
+            window.Close();
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        }
+    }
 }
