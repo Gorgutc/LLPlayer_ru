@@ -710,7 +710,7 @@ Computer Use запрещён; следующий функциональный �
 Тот же контрол используют строки sidebar, masked-guard сохранён; подсветка берёт существующий `Shadcn.RingBrush`.
 Product `8f94399e23041a9b67f2f3f5bfe3b9723ee82c66` (5 файлов, включая 10 новых headless-тестов). WPF, engine,
 Core, config/defaults, зависимости и упаковка не менялись; новые persisted-настройки не добавлены.
-Compiled RED 7 failed/1 passed; focused GREEN 9/9; полный Avalonia suite 1023/0/19; WPF 1442/0/0; Windows
+Compiled RED 7 failed/1 passed; focused GREEN 10/10; полный Avalonia suite 1023/0/19; WPF 1442/0/0; Windows
 Avalonia gate: attempt 1 FAIL известным OpenAL wave-тестом (537 Hz vs 440, Goertzel 440 dominance, причина
 UNKNOWN), unchanged attempt 2 PASS (engine 1624/0/13, UI 1041/0/1); package 53 fixtures; local publish 479 файлов,
 SHA-256 `11595c1db9a6ae439f37f06449fea48793b892c5d7ba47033d39b9ac1208e1e5`. Local Linux NOT_RUN; PR/CI/merge,
