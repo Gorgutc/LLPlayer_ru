@@ -84,7 +84,8 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         translator = new FlyleafWordTranslator(player, translationSettings);
 
         window = new MainWindow(keys, hostServices);
-        viewModel = new MainWindowViewModel(controller, prefs, SavePrefs, translator, window);
+        viewModel = new MainWindowViewModel(controller, prefs, SavePrefs, translator, window)
+        { SubtitleExportSource = new FlyleafSubtitleExportSource(player) };
         var wordLibrary = new WordLibrary(paths.WordListFile);
         wordLibrary.Load();
         viewModel.WordLibrary = wordLibrary;
@@ -167,11 +168,12 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
     {
         viewModel?.SavePrefs();
         viewModel?.Dispose();
+        Task exportDrain = viewModel?.DrainSubtitlesExportAsync() ?? Task.CompletedTask;
         Task managerDrain = viewModel?.WordManager?.DisposeAsync().AsTask() ?? Task.CompletedTask;
         Task popupDrain = viewModel?.WordPopup.DisposeAsync().AsTask() ?? Task.CompletedTask;
         Task translationDrain = translator?.DisposeAsync().AsTask() ?? Task.CompletedTask;
         Task recognitionDrain = controller?.DisposeAsync().AsTask() ?? Task.CompletedTask;
-        await Task.WhenAll(popupDrain, managerDrain, translationDrain, recognitionDrain);
+        await Task.WhenAll(popupDrain, managerDrain, translationDrain, recognitionDrain, exportDrain);
     }
 
     /// <summary>Developer option --screenshot: render <paramref name="window"/> to a PNG after the delay and exit.</summary>

@@ -146,6 +146,7 @@
               </MenuItem.Styles>
             </MenuItem>
             <MenuItem Header="Open subtitles file…" InputGesture="Ctrl+Shift+O" Command="{Binding OpenSubtitlesCommand}" />
+            <MenuItem Header="Export subtitles…" Command="{Binding ShowSubtitlesExportCommand}" />
             <Separator />
             <MenuItem Header="Show subtitles" InputGesture="V" Command="{Binding ToggleSubtitlesCommand}"
                       ToggleType="CheckBox" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}" />
@@ -199,7 +200,43 @@
 
       <Grid Name="VideoColumn" RowDefinitions="*,Auto">
         <Panel Name="VideoHost" Background="Black" ClipToBounds="True">
-          <c:VideoView Name="Video" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+          <Panel.ContextMenu>
+            <ContextMenu Name="VideoContextMenu">
+              <MenuItem Header="Play / Pause" Command="{Binding TogglePlayPauseCommand}" />
+              <MenuItem Name="VideoSubtitlesMenu" Header="Subtitles">
+                <MenuItem Header="Primary track" ItemsSource="{Binding PrimaryTracks}">
+                  <MenuItem.Styles>
+                    <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                      <Setter Property="Header" Value="{Binding Label}" />
+                      <Setter Property="Command" Value="{Binding Command}" />
+                      <Setter Property="ToggleType" Value="Radio" />
+                      <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                    </Style>
+                  </MenuItem.Styles>
+                </MenuItem>
+                <MenuItem Header="Secondary track" ItemsSource="{Binding SecondaryTracks}">
+                  <MenuItem.Styles>
+                    <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                      <Setter Property="Header" Value="{Binding Label}" />
+                      <Setter Property="Command" Value="{Binding Command}" />
+                      <Setter Property="ToggleType" Value="Radio" />
+                      <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                    </Style>
+                  </MenuItem.Styles>
+                </MenuItem>
+                <MenuItem Header="Open subtitles file…" Command="{Binding OpenSubtitlesCommand}" />
+                <MenuItem Header="Export subtitles…" Command="{Binding ShowSubtitlesExportCommand}" />
+                <Separator />
+                <MenuItem Header="Show subtitles" Command="{Binding ToggleSubtitlesCommand}"
+                          ToggleType="CheckBox" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}" />
+                <MenuItem Header="Subtitles sidebar" Command="{Binding ToggleSidebarCommand}"
+                          ToggleType="CheckBox" IsChecked="{Binding SidebarVisible, Mode=OneWay}" />
+              </MenuItem>
+              <MenuItem Name="VideoSettingsMenu" Header="Settings…" Command="{Binding ShowSettingsCommand}" />
+              <MenuItem Header="Fullscreen" Command="{Binding ToggleFullScreenCommand}" />
+            </ContextMenu>
+          </Panel.ContextMenu>
+          <c:VideoView Name="Video" Focusable="True" RenderOptions.BitmapInterpolationMode="MediumQuality" />
           <c:SubtitleImageView Name="PrimaryImageView" IsVisible="{Binding SubtitlesVisible}" Image="{Binding PrimaryImage}" Video="{Binding #Video}" />
           <c:SubtitleImageView Name="SecondaryImageView" IsVisible="{Binding SubtitlesVisible}" Image="{Binding SecondaryImage}" Video="{Binding #Video}" />
 
@@ -452,6 +489,20 @@
                               Foreground="{DynamicResource Shadcn.MutedForegroundBrush}" />
               </TextBox.InnerLeftContent>
             </TextBox>
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" ColumnSpacing="4">
+              <ToggleButton Name="MatchCaseButton" Content="Aa" Width="36" MinWidth="0" Padding="4,6" IsChecked="{Binding Sidebar.MatchCase}"
+                            ToolTip.Tip="Match case" AutomationProperties.Name="Match case" />
+              <ToggleButton Name="WholeWordButton" Grid.Column="1" Content="Word" Width="48" MinWidth="0" Padding="4,6" IsChecked="{Binding Sidebar.WholeWord}"
+                            ToolTip.Tip="Match whole word" AutomationProperties.Name="Match whole word" />
+              <ToggleButton Name="RegexButton" Grid.Column="2" Content=".*" Width="32" MinWidth="0" Padding="4,6" IsChecked="{Binding Sidebar.UseRegex}"
+                            ToolTip.Tip="Use regular expression" AutomationProperties.Name="Use regular expression" />
+              <Button Name="PreviousMatchButton" Grid.Column="4" Content="↑" Width="28" MinWidth="0" Padding="0" Command="{Binding Sidebar.PreviousMatchCommand}"
+                      ToolTip.Tip="Previous match (Shift+Enter)" AutomationProperties.Name="Previous search match" />
+              <Button Name="NextMatchButton" Grid.Column="5" Content="↓" Width="28" MinWidth="0" Padding="0" Command="{Binding Sidebar.NextMatchCommand}"
+                      ToolTip.Tip="Next match (Enter)" AutomationProperties.Name="Next search match" />
+            </Grid>
+            <TextBlock Name="SearchErrorText" Text="{Binding Sidebar.SearchError}" IsVisible="{Binding Sidebar.HasSearchError}"
+                       TextWrapping="Wrap" Classes="small" Foreground="{DynamicResource Shadcn.DestructiveBrush}" />
           </StackPanel>
           <Panel>
             <ListBox Name="CueList" ItemsSource="{Binding Sidebar.Cues}" Margin="6,0,6,6">

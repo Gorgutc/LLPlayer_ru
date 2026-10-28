@@ -24,6 +24,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 {
     const double MinimumVideoColumnWidth = 240;
     readonly KeyMapper keys;
+    readonly HashSet<Key> searchKeysAwaitingRelease = [];
     readonly AvaloniaHostServices? hostServices;
     readonly DispatcherTimer idleTimer;
     MainWindowViewModel? vm;
@@ -50,6 +51,19 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     RecognitionWindow? recognitionWindow;
     WordManagerWindow? wordManagerWindow;
+    SubtitlesExportWindow? subtitlesExportWindow;
+
+    public void ShowSubtitlesExport(SubtitlesExportViewModel model)
+    {
+        if (subtitlesExportWindow != null) { subtitlesExportWindow.Activate(); return; }
+        subtitlesExportWindow = new SubtitlesExportWindow(model);
+        subtitlesExportWindow.Closed += (_, _) =>
+        {
+            subtitlesExportWindow = null;
+            vm?.SubtitlesExportClosed(model);
+        };
+        _ = subtitlesExportWindow.ShowDialog(this);
+    }
     public void ShowWordManager(WordManagerViewModel model)
     {
         if (wordManagerWindow != null) { wordManagerWindow.Activate(); return; }
@@ -93,6 +107,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
         AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, OnKeyUpTunnel, RoutingStrategies.Tunnel);
+        Deactivated += (_, _) => searchKeysAwaitingRelease.Clear();
         AddHandler(PointerMovedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
 
@@ -112,6 +127,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.DoubleTapped += OnVideoDoubleTapped;
         VideoHost.Tapped += OnVideoTapped;
         VideoHost.PointerWheelChanged += OnVideoWheel;
+        VideoContextMenu.Opening += (_, _) => vm?.RefreshTracks();
+        VideoHost.AddHandler(ContextRequestedEvent, OnVideoContextRequested, RoutingStrategies.Tunnel);
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => UpdateSubtitleLayout();
@@ -269,6 +286,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         cheatSheet?.Close();
         translationWindow?.Close();
         recognitionWindow?.Close();
+        subtitlesExportWindow?.Close();
         ReleaseSleepInhibition();
         Video.Renderer = null;
         base.OnClosed(e);
@@ -441,12 +459,23 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnVideoTapped(object? sender, TappedEventArgs e)
     {
-        // A click on the video (not on a subtitle word, which opened the popup, nor inside the popup) closes it.
-        if (vm?.WordPopup.IsOpen != true || e.Source is not Visual src)
+        // Subtitle selection, popup contents and controls retain their own pointer actions.
+        if (vm == null || keys.Modifiers != KeyModifiers.None || !IsVideoBackground(e.Source))
             return;
-        if (src.FindAncestorOfType<SubtitleText>(true) != null || src == WordPopupCard || WordPopupCard.IsVisualAncestorOf(src))
-            return;
-        vm.WordPopup.Close();
+        if (vm.WordPopup.IsOpen)
+            vm.WordPopup.Close();
+        else
+            vm.TogglePlayPause();
+        e.Handled = true;
+    }
+
+    bool IsVideoBackground(object? source) => ReferenceEquals(source, Video) || ReferenceEquals(source, VideoHost);
+
+    void OnVideoContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        // The attached menu belongs to the video backdrop, not to subtitle words or popup controls.
+        if (!IsVideoBackground(e.Source))
+            e.Handled = true;
     }
 
     void OnVideoDoubleTapped(object? sender, TappedEventArgs e)
@@ -490,11 +519,23 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             return;
 
         bool textFocused = IsTextInputFocused();
+        if (textFocused && e.Key == Key.Enter && FocusManager?.GetFocusedElement() == FilterBox
+            && (e.KeyModifiers & ~KeyModifiers.Shift) == KeyModifiers.None)
+        {
+            searchKeysAwaitingRelease.Add(e.Key);
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                vm.Sidebar.PreviousMatchCommand.Execute(null);
+            else
+                vm.Sidebar.NextMatchCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
         if (textFocused && e.Key == Key.Escape && FocusManager?.GetFocusedElement() == FilterBox)
         {
             // WPF sidebar: Esc clears the search and returns focus to the video.
+            searchKeysAwaitingRelease.Add(e.Key);
             vm.Sidebar.FilterText = "";
-            Focus();
+            Video.Focus();
             e.Handled = true;
             return;
         }
@@ -510,6 +551,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     void OnKeyUpTunnel(object? sender, KeyEventArgs e)
     {
         keys.Update(e.KeyModifiers);
+        if (searchKeysAwaitingRelease.Remove(e.Key))
+        {
+            // Esc moved focus out of the filter, but its paired release still belongs to the search action.
+            e.Handled = true;
+            return;
+        }
         if (vm != null && vm.HandleKeyUp(KeyMapper.ToWpf(e.Key), IsTextInputFocused()))
             e.Handled = true;
     }

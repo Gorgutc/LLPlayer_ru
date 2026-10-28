@@ -1,0 +1,36 @@
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.SubtitlesExportWindow"
+        x:DataType="vm:SubtitlesExportViewModel" Classes="dialog" Title="Subtitle export - LLPlayer"
+        Width="460" Height="460" MinWidth="360" MinHeight="400" CanResize="True" SizeToContent="Manual">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
+      <TextBlock Text="Subtitle export" Classes="dialog-title" />
+      <TextBlock Text="Export captures the subtitles currently available in the selected track." Classes="dialog-description" TextWrapping="Wrap" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="10" Margin="0,16,0,0">
+      <TextBlock Name="ExportMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" AutomationProperties.LiveSetting="Polite" />
+      <StackPanel Classes="dialog-footer">
+        <Button Content="Cancel export" Classes="outline" Command="{Binding CancelCommand}" IsVisible="{Binding Busy}" />
+        <Button Content="Close" Classes="outline" Click="OnClose" />
+        <Button Name="ExportButton" Content="Export..." Command="{Binding ExportCommand}" />
+      </StackPanel>
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="12">
+        <StackPanel Spacing="10" IsEnabled="{Binding !Busy}">
+          <TextBlock Text="Subtitle track" />
+          <ComboBox Name="ExportSlot" SelectedIndex="{Binding SelectedSlot}" HorizontalAlignment="Stretch" AutomationProperties.Name="Subtitle track">
+            <ComboBoxItem Content="Primary" /><ComboBoxItem Content="Secondary" />
+          </ComboBox>
+          <TextBlock Text="Text" />
+          <ComboBox Name="ExportText" ItemsSource="{Binding TextOptions}" SelectedIndex="{Binding SelectedTextIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Text to export" />
+          <TextBlock Text="Format" />
+          <ComboBox Name="ExportFormat" ItemsSource="{Binding FormatOptions}" SelectedIndex="{Binding SelectedFormatIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Export format" />
+          <TextBlock Text="SRT and WebVTT keep original-text italics. TXT contains plain transcript text." Classes="small muted" TextWrapping="Wrap" />
+          <CheckBox Name="ExportBom" Content="With UTF-8 BOM" IsChecked="{Binding IsUtf8Bom}" />
+        </StackPanel>
+        <TextBlock Name="ExportPartialWarning" IsVisible="{Binding IsPartial}" Text="ASR/OCR is running. Only the subtitles captured when you choose Export will be saved." TextWrapping="Wrap" Classes="small muted" />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

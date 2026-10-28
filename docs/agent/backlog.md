@@ -67,6 +67,20 @@
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
+**Текущий F-13 блок, 2026-10-28:** одобрен общий Windows/Linux поиск и экспорт субтитров плюс исправление
+правого меню и левого play/pause на видео. Ветка `codex/f13-search-export-input`, база — delivered PR № 189/main
+`a9f57c23`. Source реализован и локально проверен: product C1 `a615985a`, docs C2 `53711bf5`, label fix C3
+`4a14dbd0`. Пять full local gates PASS attempt1 на clean C3: WPF1442/0/0, engine1624/0/13, UI1120/0/1;
+package53/38, publish479/180501123 bytes. Relevant reviews после fixes: 0 C/I; docs-only receipt delta ещё review.
+Новая PR/exact-main CI, final-HEAD Desktop, final delivery `/review` и Vault closeout пока **PENDING**.
+Точные последующие receipts и продолжение — [текущий статус](f13-status-2026-10-18.md#current-subtitle-searchexport-and-video-input--2026-10-28)
+и `artifacts/f13-search-export-2026-10-28/HANDOFF.md`, когда он появится. PR № 189 уже доставлена;
+старые pending ниже исторические. Разрешённый native Windows C2 smoke на installed .NET10.0.7 подтвердил
+video/pause/menu/SRT4cues/search/navigation; native actual export save ждёт ручного действия пользователя,
+C3 native reread pending. Initial SRT failure был temp10.0.13 без Brotli; unchanged payload под complete10.0.7
+загрузил SRT. Build/test SDK10.0.402/temp10.0.13 — отдельная среда. Linux desktop, модели/провайдеры и GPU
+не входят в этот smoke. Полный F-13 parity остаётся IN PROGRESS.
+
 **Наш форк:** <https://github.com/Gorgutc/LLPlayer_ru>
 **Upstream (источник кода плеера):** <https://github.com/umlx5h/LLPlayer> ·
 [Wiki](https://github.com/umlx5h/LLPlayer/wiki) · [Issues](https://github.com/umlx5h/LLPlayer/issues) ·
@@ -644,7 +658,21 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Идея от SubtitleEdit.** **Остаток (waveform):** рендер waveform из аудио FlyleafLib для визуального sync.
 **Рассуждение:** A-B повтор — заметный single-session UX-win для изучения языка; waveform — крупный effort, не топ.
 
-### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-26; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
+### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-28; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
+
+**F-13 search/export/input — текущий одобренный срез (2026-10-28), source/local validation COMPLETE,
+внешняя доставка PENDING.** Пять gates PASS на clean C3 `4a14dbd0`, independent reviews0 C/I; текущая docs-only
+receipt delta требует review. Native C2 Windows подтверждает ограниченный search/input/SRT smoke на complete
+installed10.0.7; actual native export save и C3 native caption reread pending. Общий Avalonia UI:
+primary-only sidebar с match-case/Unicode whole-word/regex, wrapping next/previous и Enter/Shift+Enter/Escape;
+три default-false переключателя persist в AppPrefs. Invalid regex/первый 100 ms timeout обнуляет весь проход,
+исправленный запрос восстанавливает поиск. Экспорт обоих слотов: Original / Translated only / Translated with
+fallback, SRT/VTT/TXT, BOM initially on, WPF DisplayText/styles, detached snapshot перед picker,
+explicit confirmed-path atomic replacement и cancel/close-drain. Добавленный input subitem фиксирует сообщённые
+владельцем mouse gestures: bare-video right menu с существующими subtitle/track/settings commands и немедленный
+left-click play/pause; открытый popup только закрывается. Second tap включает fullscreen без второго playback
+toggle, single-click debounce нет; words/drag/controls сохраняют владение вводом. Отдельной прежней карточки этих
+mouse gestures не было. План: [2026-10-28-f13-search-export-input](plans/2026-10-28-f13-search-export-input.md).
 SE5 и Buzz уже кросс-платформенны → Windows-only был конкурентным минусом. Владелец явно запросил Linux-порт;
 трек переведён из DEFERRED в IN PROGRESS.
 

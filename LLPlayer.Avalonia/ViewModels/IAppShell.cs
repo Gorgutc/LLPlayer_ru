@@ -1,4 +1,4 @@
-namespace LLPlayer.Avalonia.ViewModels;
+﻿namespace LLPlayer.Avalonia.ViewModels;
 
 /// <summary>Window-level operations the main view model asks for (implemented by MainWindow; faked in tests).</summary>
 public interface IAppShell
@@ -11,6 +11,7 @@ public interface IAppShell
     void ShowCheatSheet();
     void ShowSettings(SettingsViewModel model) { }
     void ShowWordManager(WordManagerViewModel model) { }
+    void ShowSubtitlesExport(SubtitlesExportViewModel model) { }
     void ShowTranslation(TranslationViewModel model) { }
     void ShowRecognition(RecognitionViewModel model) { }
     void SetClipboardText(string text);

@@ -1,4 +1,41 @@
-# Продолжение F-13: проверка и доставка исправления word selection — 2026-10-28
+# Продолжение F-13: поиск, экспорт субтитров и мышь — 2026-10-28
+
+Текущий одобренный блок — общий Windows/Linux Avalonia поиск и экспорт субтитров, а также меню правой кнопки
+и play/pause по левой кнопке на видео. Ветка `codex/f13-search-export-input`, база — delivered PR № 189/main
+`a9f57c23def397f1d64ee40b4e7b3866d0723779`. Прочитай repo/vault AGENTS, live project `_INDEX.md`,
+[план](plans/2026-10-28-f13-search-export-input.md),
+[текущий статус](f13-status-2026-10-18.md#current-subtitle-searchexport-and-video-input--2026-10-28)
+и последний `artifacts/f13-search-export-2026-10-28/HANDOFF.md`, когда он появится.
+Сверь actual source/PR/main/CI/Desktop/Vault receipts и продолжи первый незавершённый шаг.
+
+Реализованы primary-only поиск с тремя persisted default-false переключателями, wrapping navigation,
+Enter/Shift+Enter/Escape, экспорт обоих слотов в SRT/VTT/TXT с WPF text/style semantics и detached snapshot,
+отмена/close-drain/atomic confirmed-path save. Первый unmodified bare-video click немедленно меняет play/pause
+либо только закрывает word popup; второй tap включает fullscreen без повторного play/pause toggle.
+Single-click debounce нет. Bare-video context menu использует общие subtitle/track/settings commands;
+words/drag/controls сохраняют свои действия. `VideoView` не менялся.
+
+C1 product `a615985a`, C2 docs `53711bf5`, C3 label fix `4a14dbd04fbaccaf59f715c647e6a75c5aa10577`.
+Пять full local gates PASS attempt 1 буквально на clean C3: WPF1442/0/0, engine1624/0/13, UI1120/0/1,
+package53/38; publish479/180501123 bytes. Receipt: `local-final-gate-receipt.json/.md` в evidence home;
+первоначальный C2 receipt/UI1118 сохранён отдельно. Label-font RED2fail/0pass; final focused49/0/0.
+Relevant independent product/UI/.NET/runtime/docs reviews после исправлений: 0 Critical/Important.
+Текущая docs-only receipt delta ещё требует короткого независимого review.
+
+Computer Use разрешён владельцем. Native Windows на C2 с complete installed ProgramFiles .NET10.0.7:
+video/leftpause/rightmenu/SRT4cues/search modes/error recovery/Enter+ShiftEnter seek/Esc пройдены в ограниченном
+smoke. Export dialog/native picker открыты; фактический save **PENDING manual user action**, сохранение файла
+и overwrite не заявлены. Original overwrite отклонён; CUA-кнопки/клавиатура ненадёжны. C3 native caption reread
+ещё pending. Initial SRT failure вызван выбранным temp10.0.13 без Brotli; неизменённый C2 payload загрузил SRT
+под установленным complete10.0.7. Build/tests используют SDK10.0.402/temp10.0.13; не смешивай среды и receipts.
+Новая PR/CI, merge/exact-main CI, fresh final-HEAD Desktop, final `/review` и scoped Vault closeout **PENDING**.
+PR № 189 уже доставлена; её старые pending не повторять. Full Linux/local native Linux, реальные модели/
+провайдеры, GPU и неиспытанные GUI/DPI поверхности NOT_RUN. После доставки остановись перед следующим блоком.
+
+## История: исправление word selection, PR № 189 уже доставлена
+
+Ниже сохранён прежний prompt и его local checkpoint. PR № 189 MERGED / DELIVERED на `a9f57c23`;
+старые pending относятся к моменту записи и не задают текущую работу.
 
 Сначала сверь repo/vault AGENTS, branch/HEAD/status, GitHub PR/main/CI, Desktop receipt и live Vault.
 Текущий bounded scope — review/исправление уже доставленного

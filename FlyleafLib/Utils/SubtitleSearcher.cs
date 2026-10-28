@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text.RegularExpressions;
 
 namespace FlyleafLib;
@@ -71,8 +71,15 @@ public sealed class SubtitleSearcher
     /// True when <paramref name="text"/> matches the compiled query. Null/empty text never matches; a regex that
     /// times out on pathological input is treated as a non-match rather than throwing.
     /// </summary>
-    public bool IsMatch(string? text)
+    public bool IsMatch(string? text) => IsMatch(text, out _);
+
+    /// <summary>
+    /// Reports a regex timeout separately so callers can abort an entire filter pass after the first timeout.
+    /// The existing overload retains its non-match-on-timeout behavior and the same per-match bound.
+    /// </summary>
+    public bool IsMatch(string? text, out bool timedOut)
     {
+        timedOut = false;
         if (string.IsNullOrEmpty(text))
             return false;
 
@@ -84,6 +91,7 @@ public sealed class SubtitleSearcher
             }
             catch (RegexMatchTimeoutException)
             {
+                timedOut = true;
                 return false;
             }
         }
