@@ -463,7 +463,7 @@
                       <c:SubtitleText Grid.Column="1" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="0"
                                       SelectionBrush="{DynamicResource Shadcn.RingBrush}"
                                       FontFamily="{Binding RowFontFamily}" FontWeight="{Binding RowFontWeight}" FontSize="{Binding RowFontSize}"
-                                      OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordClicked="OnWordClicked" />
+                                      OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordPressed="OnWordPressed" WordClicked="OnWordClicked" />
                     </Grid>
                   </Border>
                 </DataTemplate>
