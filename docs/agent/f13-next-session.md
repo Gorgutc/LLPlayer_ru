@@ -1,26 +1,37 @@
-# Продолжение F-13: завершить одобренный блок изоляции тестов — 2026-10-26
+# Продолжение F-13: проверка и доставка исправления word selection — 2026-10-28
 
 Сначала сверь repo/vault AGENTS, branch/HEAD/status, GitHub PR/main/CI, Desktop receipt и live Vault.
-Текущий одобренный блок — [барьеры recognition-тестов и изоляция Avalonia UI-сервисов](plans/2026-10-26-windows-ci-test-isolation.md),
-база main `9b717ef`/PR № 186. **Computer Use и запуск плеера запрещены.** Старое разрешение native audit ниже
-историческое и не отменяет этот более поздний запрет. Повторное одобрение текущего тестового scope не требуется.
-Новые функции F-13, выделение текста, styling, провайдеры и модели в этот этап не входят.
+Текущий bounded scope — review/исправление уже доставленного
+[word/phrase selection](plans/2026-10-27-f13-word-selection.md): sidebar должен ставить playback на паузу при
+нажатии на открытое слово, сохраняя masked guard. Ветка `codex/f13-word-selection-review-fixes`, база merged main
+`7e68b0a67f1044be65b126d88b3a2f0b1ac6434e`. **Computer Use и запуск плеера запрещены.** Старое разрешение native
+audit ниже историческое и не отменяет этот запрет. Новые функции F-13, styling, провайдеры и модели не входят
+в исправление; следующий функциональный блок требует нового owner GO.
 
-Test-only реализация — `76c7989`; полный local checkpoint — clean
-`2e9a240842fcf2df8f104964d34827b37eeb8d2d`: WPF 1442/0 skip, Windows portable engine 1624/13 skip и UI 1032/1 skip,
-package contracts (53 fixtures/один 38-file ZIP) и local publish (479 файлов) PASS, actual exit 0. Точные hashes, RED и локальный
-stale-build FAIL/rebuild — в [текущем status](f13-status-2026-10-18.md#current-owner-approved-windows-ci-test-isolation-repair--2026-10-26).
-Local Linux NOT_RUN; новые PR/Linux CI и exact merged-main CI ещё pending. Две исходные CI Important остаются
-OPEN до свежих required actual-main результатов; точные исторические scheduler/writer причины UNKNOWN.
+Sidebar fix закоммичен отдельно: product `4318340fc495fa06ffb0c4d81242186c018d49ef`, только три app/test файла.
+Compiled RED **2 expected failures/15 passed/0 skipped** (`BBA9B6DB`); initial GREEN 17/0/0 (`A136C8E5`).
+После Dispose семи ignored capture results final focused GREEN **17 passed/0 failed/0 skipped**, exit 0,
+лог `artifacts/local-model-selection-review-2026-10-28/selection-GREEN-cleanup.log`.
+Свежие full WPF/Windows Avalonia gates, package checks, independent final review и дальнейшая доставка ещё
+**PENDING на committed-product/draft-docs checkpoint**. Local Linux **NOT_RUN**.
+Текущий статус и раздельные historical/fresh receipts —
+[F-13 status](f13-status-2026-10-18.md#current-word-selection-review-repair--2026-10-28).
 
-Продолжи только первый фактически незавершённый шаг: prepublication living-Vault snapshot и scoped session-close,
-затем PR/Linux/Windows CI с чтением полных logs, свежая premerge Vault-сверка/gate, merge/actual-main CI,
-fresh Desktop из final clean HEAD без запуска и финальный scoped Vault closeout.
-Эти этапы имеют отдельные receipts; local publish не означает, что новый payload уже выбран Desktop-иконкой.
-Не повторяй завершённые fixes/mechanism RED только из-за dated pending checkpoint. Сохраняй прежние assertions,
-5s и cancellation; не меняй production, skips или runner/collection parallelism ради зелёного теста.
-Если этот одобренный срез уже полностью подтверждён актуальными receipts, отчитайся и остановись перед новым
-функциональным блоком. Полный F-13 parity остаётся IN PROGRESS.
+Продолжи первый фактически незавершённый шаг исправления: отдельный docs commit, свежие полные gates и cumulative
+domain `/review`, затем обновление docs только фактическими receipts, living-Vault snapshot/session-close и PR с required
+Windows/Linux CI. Перед merge повторно сверь GitHub/другие PR и living Vault; после merge проверь exact actual-main
+CI, выполни fresh Desktop из final clean HEAD без запуска и scoped Vault closeout. Каждый этап получает свой
+receipt; прежние CI/Desktop/Vault PR № 188 не принимают этот новый fix. Raw local/review logs прежнего этапа,
+отсутствующие по документированным путям, остаются **UNVERIFIED** до retrieval DSH; не восстанавливай их из claims.
+
+PR № 187/test isolation уже MERGED / DELIVERED на `9c4154b1`: required actual-main CI прошёл, обе исходные
+Important CLOSED FOR NEW MAIN; исторические scheduler/writer причины UNKNOWN. PR № 188/selection также
+MERGED / DELIVERED на `7e68b0a`, Desktop и Vault closeout завершены. Final PR head `4ce2f4c` имеет отдельные
+runs `40504924534`/`40504924581`; прежние `40502751339`/`40502751511` относятся к `affca63`. Actual-main runs:
+`40505617519`/`40505617536`. Final PR/main UI totals: Windows 1042/0/1, Linux 1041/0/2; local 1041/0/1 был до
+десятого теста `9f5bd7e`. Причина прежнего local OpenAL FAIL **UNKNOWN**. Не повторяй завершённые этапы из-за
+старого pending и не считай headless/CI native acceptance. После доставки исправления отчитайся и остановись
+перед новым функциональным блоком. Полный F-13 parity остаётся **IN PROGRESS**.
 
 ## Предыдущий Settings audit checkpoint — исторический контекст
 

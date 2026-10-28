@@ -689,7 +689,7 @@ Windows baseline разрешён до полного Linux parity. Для бу�
 и Windows CI/build gates остаются обязательными. Текущий implementation/verification status:
 [`f13-status-2026-10-18.md`](f13-status-2026-10-18.md).
 
-**Одобренный блок надёжности тестов — IMPLEMENTED / LOCALLY VERIFIED, новый CI ожидается.**
+**Одобренный блок надёжности тестов — MERGED / DELIVERED, PR № 187/main `9c4154b1`.**
 После PR № 186/main `9b717ef` Windows CI зафиксировал entry timeout в RecognitionSettingsTests и concurrent
 registry corruption в AvaloniaLocator. Test-only commit `76c7989` заменяет entry waits на async signals с
 прежними 5 секундами и unconditional release/drain; реальные VM/font users используют существующий headless
@@ -697,26 +697,45 @@ dispatcher. Production, assertions, skips, runner/collection parallelism и за
 Focused GREEN: 23 recognition/cancellation и 27 UI tests; clean mechanism RED, первоначальный mixed analyzer RED
 и локальный stale-assembly FAIL сохранены отдельно. На clean `2e9a240842fcf2df8f104964d34827b37eeb8d2d`
 полные WPF и Windows Avalonia gates, 53 package fixtures/38-file contract ZIP и локальный publish (479 файлов) PASS.
-Local Linux NOT_RUN; новый Linux/PR/exact-main CI, final-HEAD Desktop и новый scoped Vault closeout ещё pending.
-Две исходные CI Important остаются OPEN до свежего required exact merged-main CI; исторические причины UNKNOWN.
-Computer Use запрещён; следующий функциональный блок не начат. План и точные receipts —
+Required exact-main CI Windows `40387498180` и Linux `40387498144` прошёл все три обязательных job с первой попытки;
+две исходные CI Important CLOSED FOR NEW MAIN, исторические причины UNKNOWN и исходные FAIL сохранены.
+Desktop `9c4154b1b3da-20261026T193231656Z-9ff4b235` обновлён без запуска; Vault closeout — `ab12ee07`.
+Local Linux NOT_RUN; Computer Use запрещён. Не повторять завершённый этап из-за старого pending. План и receipts —
 [test isolation repair](plans/2026-10-26-windows-ci-test-isolation.md) и текущий status выше.
 
-**2026-10-27 owner-approved word/phrase selection — IMPLEMENTED / LOCALLY VERIFIED; publication pending.**
+**2026-10-27 owner-approved word/phrase selection — MERGED / DELIVERED, PR № 188/main `7e68b0a`.**
 Общий Windows/Linux Avalonia-контрол субтитров получил выбор слова или фразы протяжкой с видимой подсветкой.
-Нажатие на слово ставит воспроизведение на паузу (WPF `WordClickedDown` parity); отпускание выполняет прежнее
+Нажатие на слово в overlay ставит воспроизведение на паузу (WPF `WordClickedDown` parity); отпускание выполняет прежнее
 `WordClickAction` для фразы (поп-ап перевода, Clipboard phrase, ClipboardAll cue); одиночный клик остаётся словом;
 жёсткие переводы строк заменяются пробелом; отпускание вне слов, потеря capture и смена текста отменяют выбор.
 Тот же контрол используют строки sidebar, masked-guard сохранён; подсветка берёт существующий `Shadcn.RingBrush`.
-Product `8f94399e23041a9b67f2f3f5bfe3b9723ee82c66` (5 файлов, включая 10 новых headless-тестов). WPF, engine,
+Product `8f94399e23041a9b67f2f3f5bfe3b9723ee82c66` (5 файлов, включая 9 новых headless-тестов); десятый
+cross-line pixel test добавлен в `9f5bd7e`. WPF, engine,
 Core, config/defaults, зависимости и упаковка не менялись; новые persisted-настройки не добавлены.
-Compiled RED 7 failed/1 passed; focused GREEN 10/10; полный Avalonia suite 1023/0/19; WPF 1442/0/0; Windows
+Исторически записаны compiled RED 7 failed/1 passed; focused GREEN 10/10; полный Avalonia suite 1023/0/19;
+WPF 1442/0/0; Windows
 Avalonia gate: attempt 1 FAIL известным OpenAL wave-тестом (537 Hz vs 440, Goertzel 440 dominance, причина
-UNKNOWN), unchanged attempt 2 PASS (engine 1624/0/13, UI 1041/0/1); package 53 fixtures; local publish 479 файлов,
-SHA-256 `11595c1db9a6ae439f37f06449fea48793b892c5d7ba47033d39b9ac1208e1e5`. Local Linux NOT_RUN; PR/CI/merge,
-merged-main CI, Desktop и Vault близко к pending. Native desktop visual/keyboard acceptance NOT_RUN
+UNKNOWN), unchanged attempt 2 PASS (engine 1624/0/13, UI 1041/0/1 до десятого теста `9f5bd7e`); package 53 fixtures;
+local publish 479 файлов, SHA-256 `11595c1db9a6ae439f37f06449fea48793b892c5d7ba47033d39b9ac1208e1e5`.
+Raw local/review logs отсутствуют по указанным путям в этом checkout: эти claims **UNVERIFIED** до retrieval DSH.
+Свежая GitHub-сверка различает старый `affca63` (runs `40502751339`/`40502751511`), final head `4ce2f4c`
+(`40504924534`/`40504924581`) и actual main `7e68b0a` (`40505617519`/`40505617536`): все три required job PASS
+с первой попытки; final PR/main Windows UI 1042/0/1, Linux UI 1041/0/2 (total 1043), а не прежний local total 1042.
+Fresh no-launch Desktop `7e68b0a67f10-20261027T124102522Z-b3c9aacc` и Vault commit `cffb6207` завершены.
+Local Linux и native desktop visual/keyboard acceptance NOT_RUN
 (no-Computer-Use); word-bounded selection не повторяет char-level выбор WPF sidebar. План и receipts —
 [word selection](plans/2026-10-27-f13-word-selection.md) и текущий status выше.
+
+**2026-10-28 review repair — IMPLEMENTED / FOCUSED VERIFIED, свежий full/delivery pending.**
+Аудит PR № 188 нашёл пропущенный pause-on-press у sidebar: phrase release работал, но `WordPressed` был подключён
+только к overlay. Узкий fix подключает sidebar к прежнему pause path и сохраняет masked guard. Compiled RED:
+2 expected failures/15 passed/0 skipped (SHA-256 prefix `BBA9B6DB`); initial focused GREEN 17/0/0 (`A136C8E5`).
+Product commit `4318340fc495fa06ffb0c4d81242186c018d49ef` включает только три app/test файла; после явного
+Dispose семи ignored capture results итоговый `selection-GREEN-cleanup.log`: 17 passed/0 failed/0 skipped, exit 0.
+Ветка `codex/f13-word-selection-review-fixes`, база `7e68b0a`; fresh full gates/package checks,
+независимый final `/review`, PR/required CI, merge/actual-main CI, final-HEAD Desktop и Vault **PENDING на committed-product/draft-docs checkpoint**.
+Прежние PR № 188 receipts не принимают новый fix. Причина прежнего OpenAL FAIL остаётся UNKNOWN; UI-only diff
+не доказывает причинную несвязанность. Computer Use/запуск плеера запрещены; новый функциональный блок требует owner GO.
 
 Avalonia-приложение обязано оставаться платформенно-нейтральным (без Linux-only допущений): конфиг — XDG
 `~/.config/LLPlayer` на Linux и `%APPDATA%\LLPlayer` на Windows (состояние/логи — `~/.local/state/LLPlayer` /
