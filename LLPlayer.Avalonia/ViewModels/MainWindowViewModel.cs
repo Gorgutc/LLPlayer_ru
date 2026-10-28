@@ -67,7 +67,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         this.time = time ?? TimeProvider.System;
         lastActivity = this.time.GetUtcNow();
 
-        Sidebar = new SubtitlesSidebarViewModel(player);
+        Sidebar = new SubtitlesSidebarViewModel(player)
+        {
+            MatchCase = prefs.SidebarSearchMatchCase,
+            WholeWord = prefs.SidebarSearchWholeWord,
+            UseRegex = prefs.SidebarSearchRegex,
+        };
+        // Restore before subscribing so startup never rewrites preferences or persists transient search state.
+        Sidebar.PropertyChanged += OnSidebarPropertyChanged;
         WordPopup = new WordPopupViewModel(translator, text => shell.SetClipboardText(text));
         WordPopup.OpenSettings = ShowTranslation;
         InvalidateTranslation = () => { WordPopup.Invalidate(); (translator as FlyleafWordTranslator)?.Invalidate(); };
@@ -153,6 +160,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (WordLibrary != null) { WordManager ??= new WordManagerViewModel(WordLibrary, defaultDeck: AnkiDeck); shell.ShowWordManager(WordManager); }
     }
     public void WordManagerClosed() => WordManager = null;
+    public ISubtitleExportSource? SubtitleExportSource { get; set; }
+    public SubtitlesExportViewModel? SubtitlesExport { get; private set; }
+    [RelayCommand]
+    void ShowSubtitlesExport()
+    {
+        if (disposed || SubtitleExportSource == null) return;
+        SubtitlesExport ??= new SubtitlesExportViewModel(SubtitleExportSource);
+        shell.ShowSubtitlesExport(SubtitlesExport);
+    }
+
+    /// <summary>The window calls this after its export work drains; stale callbacks cannot discard a newer session.</summary>
+    public void SubtitlesExportClosed(SubtitlesExportViewModel model)
+    {
+        if (ReferenceEquals(SubtitlesExport, model)) SubtitlesExport = null;
+    }
+
+    /// <summary>Cancel and drain before the host releases the player used by the source adapter.</summary>
+    public Task DrainSubtitlesExportAsync() => SubtitlesExport?.DisposeAsync().AsTask() ?? Task.CompletedTask;
     public bool PrimaryTranslationEnabled => player.PrimaryTranslationEnabled;
     public bool SecondaryTranslationEnabled => player.SecondaryTranslationEnabled;
     [RelayCommand]
@@ -1064,6 +1089,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (disposed)
             return;
         disposed = true;
+        Sidebar.PropertyChanged -= OnSidebarPropertyChanged;
         player.PropertyChanged -= OnPlayerPropertyChanged;
         player.CuesChanged -= OnCuesChanged;
         player.OpenCompleted -= OnOpenCompleted;
@@ -1177,6 +1203,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Sidebar.Reload();
         SyncAllFromPlayer();
+    }
+
+    void OnSidebarPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(SubtitlesSidebarViewModel.MatchCase):
+                prefs.SidebarSearchMatchCase = Sidebar.MatchCase;
+                break;
+            case nameof(SubtitlesSidebarViewModel.WholeWord):
+                prefs.SidebarSearchWholeWord = Sidebar.WholeWord;
+                break;
+            case nameof(SubtitlesSidebarViewModel.UseRegex):
+                prefs.SidebarSearchRegex = Sidebar.UseRegex;
+                break;
+            default:
+                return;
+        }
+        SavePrefs();
     }
 
     void OnPlayerError(string message) => ShowToast("Playback error", message, ToastVariant.Destructive);

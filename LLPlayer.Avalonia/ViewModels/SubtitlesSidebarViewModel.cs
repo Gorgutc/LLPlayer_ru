@@ -1,4 +1,5 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
+using FlyleafLib;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Avalonia;
@@ -113,8 +114,8 @@ public sealed partial class CueItemViewModel : ObservableObject
 
 /// <summary>
 /// Subtitles sidebar: the primary cue list (times + text), current cue highlight (the view auto-scrolls to
-/// <see cref="CurrentCue"/>), click to seek to a cue's start and a case-insensitive filter box (like the WPF sidebar's
-/// default search mode). The filter follows the same original/display text choice the rows render.
+/// <see cref="CurrentCue"/>), click to seek to a cue's start and the WPF-compatible case/whole-word/regex search.
+/// Search follows the original/display text choice, through visual spoiler masks, and stops on the first timeout.
 /// </summary>
 public sealed partial class SubtitlesSidebarViewModel : ObservableObject
 {
@@ -124,6 +125,9 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     SidebarTextAppearance appearance = SidebarTextAppearance.Default;
     SubtitleFontSelection fontSelection = new(SubtitleFontCatalog.DefaultFamily, FontWeight.Normal, FontStyle.Normal, "");
     int currentIndex = -1;
+    int? navigationIndex;
+    string effectiveFilter = "";
+    SubtitleSearcher? searcher;
 
     public SubtitlesSidebarViewModel(IPlaybackController player)
     {
@@ -140,6 +144,21 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     public partial string FilterText { get; set; } = "";
 
     [ObservableProperty]
+    public partial bool MatchCase { get; set; }
+
+    [ObservableProperty]
+    public partial bool WholeWord { get; set; }
+
+    [ObservableProperty]
+    public partial bool UseRegex { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSearchError))]
+    public partial string SearchError { get; private set; } = "";
+
+    public bool HasSearchError => !string.IsNullOrEmpty(SearchError);
+
+    [ObservableProperty]
     public partial CueItemViewModel? CurrentCue { get; private set; }
 
     [ObservableProperty]
@@ -151,7 +170,20 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     /// <summary>Raised when the view should move keyboard focus to the filter box (Ctrl+F).</summary>
     public event Action? FocusFilterRequested;
 
-    partial void OnFilterTextChanged(string value) => ApplyFilter();
+    partial void OnFilterTextChanged(string value) => UpdateSearch();
+    partial void OnMatchCaseChanged(bool value) => UpdateSearch();
+    partial void OnWholeWordChanged(bool value) => UpdateSearch();
+    partial void OnUseRegexChanged(bool value) => UpdateSearch();
+
+    void UpdateSearch()
+    {
+        effectiveFilter = FilterText?.Trim() ?? "";
+        // The engine matcher is shared with WPF. Compile once per query/options change, never per cue or reload.
+        searcher = effectiveFilter.Length == 0
+            ? null
+            : SubtitleSearcher.TryCreate(effectiveFilter, MatchCase, WholeWord, UseRegex);
+        ApplyFilter();
+    }
 
     /// <summary>Applies the sidebar-only appearance and refreshes rows/typography; the active filter is re-evaluated.</summary>
     public void ApplyAppearance(SidebarTextAppearance value)
@@ -169,6 +201,7 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     /// <summary>Re-reads the primary cues from the player (called on the engine's coalesced change notification).</summary>
     public void Reload()
     {
+        navigationIndex = null;
         IReadOnlyList<CueInfo> cues = player.GetCues(0);
 
         bool compatible = all.Count <= cues.Count;
@@ -187,8 +220,7 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
                 all[i].UpdateCue(cues[i]);
                 all[i].Refresh(appearance, currentIndex);
             }
-            string filter = FilterText;
-            bool filterActive = !string.IsNullOrEmpty(filter);
+            bool filterActive = effectiveFilter.Length != 0;
             for (int i = all.Count; i < cues.Count; i++)
             {
                 CueItemViewModel row = new(cues[i]);
@@ -228,6 +260,7 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
         if (currentIndex != index)
         {
             currentIndex = index;
+            navigationIndex = null;
             foreach (CueItemViewModel row in all)
                 row.Refresh(appearance, index);
         }
@@ -256,12 +289,56 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     [RelayCommand]
     void ClearFilter() => FilterText = "";
 
+    [RelayCommand]
+    void NextMatch() => NavigateMatch(forward: true);
+
+    [RelayCommand]
+    void PreviousMatch() => NavigateMatch(forward: false);
+
+    void NavigateMatch(bool forward)
+    {
+        if (Cues.Count == 0 || HasSearchError)
+            return;
+
+        // A seek completes asynchronously. Keep the requested hit as the cursor for repeated navigation until
+        // playback reports a new current cue; changing the query/options or reloading resets to playback too.
+        int anchor = navigationIndex ?? currentIndex;
+        CueItemViewModel match = forward
+            ? Cues.FirstOrDefault(cue => cue.Index > anchor) ?? Cues[0]
+            : Cues.LastOrDefault(cue => cue.Index < anchor) ?? Cues[^1];
+        navigationIndex = match.Index;
+        Seek(match);
+    }
+
     public void RequestFocusFilter() => FocusFilterRequested?.Invoke();
 
     void ApplyFilter()
     {
-        string f = FilterText;
-        List<CueItemViewModel> desired = all.Where(item => Matches(item, f)).ToList();
+        navigationIndex = null;
+        SearchError = effectiveFilter.Length != 0 && searcher == null ? "Invalid regex" : "";
+        List<CueItemViewModel> desired = [];
+        foreach (CueItemViewModel item in all)
+        {
+            if (effectiveFilter.Length == 0)
+            {
+                desired.Add(item);
+                continue;
+            }
+            if (searcher == null)
+                break;
+
+            bool matches = searcher.IsMatch(SearchText(item), out bool timedOut);
+            if (timedOut)
+            {
+                // Stop at the first engine regex timeout rather than paying it again for every remaining cue,
+                // and do not show a misleading subset consisting only of matches before the timed-out cue.
+                desired.Clear();
+                SearchError = "Search timed out";
+                break;
+            }
+            if (matches)
+                desired.Add(item);
+        }
         if (desired.Count == Cues.Count)
         {
             bool same = true;
@@ -284,7 +361,8 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(TotalCount));
         OnPropertyChanged(nameof(HasCues));
-        CountText = string.IsNullOrEmpty(FilterText) ? $"{all.Count} cues" : $"{Cues.Count} / {all.Count}";
+        CountText = HasSearchError ? SearchError
+            : effectiveFilter.Length == 0 ? $"{all.Count} cues" : $"{Cues.Count} / {all.Count}";
     }
 
     /// <summary>The text the WPF sidebar searches: the same original/display source the rows show, never the mask.</summary>
@@ -292,7 +370,4 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
         => appearance.ShowOriginalText && item.IsTranslated && !string.IsNullOrEmpty(item.OriginalText)
             ? item.OriginalText
             : item.Text;
-
-    bool Matches(CueItemViewModel item, string filter)
-        => string.IsNullOrEmpty(filter) || SearchText(item).Contains(filter, StringComparison.CurrentCultureIgnoreCase);
 }
