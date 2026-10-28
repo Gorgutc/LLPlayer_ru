@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.TextFormatting;
@@ -26,29 +27,31 @@ public class SubtitleSelectionTests
 {
     const string Cue = "Hello brave new world";
 
-    static (MainWindow Window, MainWindowViewModel Vm, FakePlaybackController Player) CreateWindow(bool sidebar = false)
+    static (MainWindow Window, MainWindowViewModel Vm, FakePlaybackController Player) CreateWindow(bool sidebar = false,
+        AppPrefs? preferences = null, FakeTranslator? translator = null, FakeShell? shell = null)
     {
         Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
         FakePlaybackController player = new();
         MainWindow window = new(new KeyMapper(), null) { Width = 1000, Height = 600 };
-        AppPrefs prefs = new AppPrefs().Normalize();
+        AppPrefs prefs = (preferences ?? new AppPrefs()).Normalize();
         prefs.SidebarVisible = sidebar;
-        MainWindowViewModel vm = new(player, prefs, _ => { }, new FakeTranslator(), window, null);
+        MainWindowViewModel vm = new(player, prefs, _ => { }, translator ?? new FakeTranslator(), (IAppShell?)shell ?? window, null);
         window.Attach(vm, renderer: null);
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        window.CaptureRenderedFrame();
+        window.CaptureRenderedFrame()?.Dispose();
         Dispatcher.UIThread.RunJobs();
         return (window, vm, player);
     }
 
-    static (MainWindow Window, MainWindowViewModel Vm, FakePlaybackController Player, SubtitleText Text) CreateOverlay(string cue)
+    static (MainWindow Window, MainWindowViewModel Vm, FakePlaybackController Player, SubtitleText Text) CreateOverlay(string cue,
+        AppPrefs? preferences = null, FakeTranslator? translator = null, FakeShell? shell = null)
     {
-        var (window, vm, player) = CreateWindow();
+        var (window, vm, player) = CreateWindow(preferences: preferences, translator: translator, shell: shell);
         player.IsOpened = true;
         player.PrimaryText = cue;
         Dispatcher.UIThread.RunJobs();
-        window.CaptureRenderedFrame();
+        window.CaptureRenderedFrame()?.Dispose();
         Dispatcher.UIThread.RunJobs();
         return (window, vm, player, window.FindControl<SubtitleText>("PrimarySubtitle")!);
     }
@@ -305,20 +308,234 @@ public class SubtitleSelectionTests
         var (window, vm, player, text) = CreateOverlay(Cue);
         try
         {
+            const string replacement = "Other brave new place";
+            player.PrimaryText = replacement;
+            Dispatcher.UIThread.RunJobs();
+            using WriteableBitmap replacementBaseline = window.CaptureRenderedFrame()!;
+            player.PrimaryText = Cue;
+            Dispatcher.UIThread.RunJobs();
+            using WriteableBitmap baseline = window.CaptureRenderedFrame()!;
+
             List<WordClickedEventArgs> events = [];
+            IPointer? pointer = null;
             text.WordClicked += (_, e) => events.Add(e);
+            text.AddHandler(InputElement.PointerPressedEvent, (_, e) => pointer = e.Pointer,
+                RoutingStrategies.Bubble, handledEventsToo: true);
             Point from = FindClickableWordPoint(window, text, "brave");
             Point to = FindClickableWordPoint(window, text, "world");
             Press(window, from);
             MoveDrag(window, to);
+            pointer.Should().NotBeNull();
+            pointer!.Captured.Should().BeSameAs(text);
+            using WriteableBitmap during = window.CaptureRenderedFrame()!;
+            ChangedPixels(baseline, during).Should().BeGreaterThan(50, "the selection must exist before replacement");
 
-            player.PrimaryText = "";
+            player.PrimaryText = replacement;
             Dispatcher.UIThread.RunJobs();
-            window.MouseUp(to, MouseButton.Left);
+            using WriteableBitmap after = window.CaptureRenderedFrame()!;
+            pointer.Captured.Should().BeNull("a replacement cue must release the active selection capture");
+            ChangedPixels(replacementBaseline, after).Should().BeLessThan(5,
+                "a nonempty replacement must render without the old selection highlight");
+            Point replacementWord = FindClickableWordPoint(window, text, "place");
+            window.MouseUp(replacementWord, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
 
             events.Should().BeEmpty();
             vm.WordPopup.IsOpen.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SidebarWordPress_PausesBeforeCompletedOrCancelledSelection(bool completeSelection)
+    {
+        FakeTranslator translator = new();
+        FakeShell shell = new();
+        var (window, vm, player) = CreateWindow(sidebar: true, translator: translator, shell: shell);
+        try
+        {
+            player.IsOpened = true;
+            player.Cues[0].Add(new CueInfo(0, TimeSpan.Zero, TimeSpan.FromSeconds(4), Cue));
+            player.RaiseCuesChanged(0);
+            player.IsPlaying = true;
+            Dispatcher.UIThread.RunJobs();
+            window.CaptureRenderedFrame()?.Dispose();
+            SubtitleText row = window.GetVisualDescendants().OfType<SubtitleText>()
+                .Single(item => item.DataContext is CueItemViewModel && item.Text == Cue);
+            Point from = FindClickableWordPoint(window, row, "brave");
+            Point to = FindClickableWordPoint(window, row, "world");
+
+            Press(window, from);
+            player.PauseCalls.Should().Be(1, "the sidebar must pause on press, before a release or cancellation");
+            player.IsPlaying.Should().BeFalse();
+            vm.WordPopup.IsOpen.Should().BeFalse("the action belongs to release");
+            translator.Calls.Should().BeEmpty();
+            shell.Clipboard.Should().BeEmpty();
+            MoveDrag(window, to);
+            Point release = completeSelection ? to : ToWindow(row, window, new Point(-4, -4));
+            window.MouseUp(release, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+
+            player.PauseCalls.Should().Be(1, "release must not pause an already paused player again");
+            vm.WordPopup.IsOpen.Should().Be(completeSelection);
+            if (completeSelection)
+            {
+                vm.WordPopup.Word.Should().Be("brave new world");
+                translator.Calls.Should().Equal(("brave new world", 0));
+            }
+            else
+                translator.Calls.Should().BeEmpty("an off-text release cancels without an action");
+            shell.Clipboard.Should().BeEmpty();
+        }
+        finally
+        {
+            window.Close();
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        }
+    }
+
+    [AvaloniaFact]
+    public void MaskedSidebarRow_RejectsPressAndReleaseFromStaleReadableText()
+    {
+        FakeTranslator translator = new();
+        FakeShell shell = new();
+        var (window, vm, player) = CreateWindow(sidebar: true,
+            preferences: new AppPrefs { SidebarTextMask = true }, translator: translator, shell: shell);
+        try
+        {
+            player.IsOpened = true;
+            player.Cues[0].Add(new CueInfo(0, TimeSpan.Zero, TimeSpan.FromSeconds(4), Cue));
+            player.RaiseCuesChanged(0);
+            player.IsPlaying = true;
+            Dispatcher.UIThread.RunJobs();
+            window.CaptureRenderedFrame()?.Dispose();
+            SubtitleText row = window.GetVisualDescendants().OfType<SubtitleText>()
+                .Single(item => item.DataContext is CueItemViewModel { IsMasked: true });
+            row.Text.Should().Be(new string('_', Cue.Length));
+
+            // Exercise the host guard even when a control still has readable text from an earlier binding snapshot.
+            // Testing only underscore hits would stop in SubtitleText before either host handler could run.
+            row.Text = Cue;
+            Dispatcher.UIThread.RunJobs();
+            window.CaptureRenderedFrame()?.Dispose();
+            List<WordClickedEventArgs> events = [];
+            row.WordClicked += (_, e) => events.Add(e);
+            Point from = FindClickableWordPoint(window, row, "brave");
+            Point to = FindClickableWordPoint(window, row, "world");
+            Press(window, from);
+            player.PauseCalls.Should().Be(0, "masked rows must not affect playback on press");
+            MoveDrag(window, to);
+            window.MouseUp(to, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+
+            events.Should().ContainSingle("the readable stale control must reach the masked host guard");
+            vm.WordPopup.IsOpen.Should().BeFalse();
+            player.IsPlaying.Should().BeTrue();
+            player.PauseCalls.Should().Be(0);
+            translator.Calls.Should().BeEmpty();
+            shell.Clipboard.Should().BeEmpty();
+        }
+        finally
+        {
+            window.Close();
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        }
+    }
+
+    [AvaloniaFact]
+    public void DragAcrossSoftWrappedLines_PreservesTheSourcePhrase()
+    {
+        const string wrappedCue = "Hello brave learners carefully choose a new world";
+        var (window, _, _, text) = CreateOverlay(wrappedCue, new AppPrefs { SubtitleMaxWidth = 240 });
+        try
+        {
+            List<WordClickedEventArgs> events = [];
+            text.WordClicked += (_, e) => events.Add(e);
+            Point from = FindClickableWordPoint(window, text, "Hello");
+            Point to = FindClickableWordPoint(window, text, "world");
+            to.Y.Should().BeGreaterThan(from.Y, "the fixture must actually wrap without hard line breaks");
+            Drag(window, from, to);
+
+            events.Should().ContainSingle();
+            events[0].Word.Should().Be(wrappedCue);
+            events[0].Text.Should().Be(wrappedCue);
+            events[0].IsWord.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Clipboard", "brave new world")]
+    [InlineData("ClipboardAll", "Hello brave new world")]
+    public void OverlayPhraseRelease_CopiesTheConfiguredPayload(string action, string expected)
+    {
+        FakeShell shell = new();
+        FakeTranslator translator = new();
+        var (window, vm, _, text) = CreateOverlay(Cue, translator: translator, shell: shell);
+        try
+        {
+            vm.WordClickAction = action;
+            Point from = FindClickableWordPoint(window, text, "brave");
+            Point to = FindClickableWordPoint(window, text, "world");
+            Press(window, from);
+            MoveDrag(window, to);
+            shell.Clipboard.Should().BeEmpty("copy must wait for release");
+            window.MouseUp(to, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+
+            shell.Clipboard.Should().Equal(expected);
+            translator.Calls.Should().BeEmpty("copy actions must not open a provider lookup");
+            vm.WordPopup.IsOpen.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        }
+    }
+
+    [AvaloniaFact]
+    public void SecondaryOverlayPhrase_PreservesSlotTranslationAndLanguageMetadata()
+    {
+        FakeTranslator translator = new();
+        var (window, vm, player) = CreateWindow(translator: translator);
+        try
+        {
+            player.IsOpened = true;
+            player.SecondaryText = Cue;
+            Dispatcher.UIThread.RunJobs();
+            window.CaptureRenderedFrame()?.Dispose();
+            SubtitleText text = window.FindControl<SubtitleText>("SecondarySubtitle")!;
+            text.IsTranslated = true;
+            text.SourceLanguage = "fr";
+            text.TargetLanguage = "de";
+            List<WordClickedEventArgs> events = [];
+            text.WordClicked += (_, e) => events.Add(e);
+            Point from = FindClickableWordPoint(window, text, "brave");
+            Point to = FindClickableWordPoint(window, text, "world");
+            Drag(window, from, to);
+
+            events.Should().ContainSingle();
+            events[0].Word.Should().Be("brave new world");
+            events[0].Slot.Should().Be(1);
+            events[0].IsTranslated.Should().BeTrue();
+            events[0].SourceLanguage.Should().Be("fr");
+            events[0].TargetLanguage.Should().Be("de");
+            vm.WordPopup.Slot.Should().Be(1);
+            vm.WordPopup.Word.Should().Be("brave new world");
+            vm.WordPopup.IsOpen.Should().BeTrue();
+            vm.WordPopup.CanSave.Should().BeTrue("the release must retain the language metadata");
+            translator.Calls.Should().BeEmpty("already translated secondary text must not be translated again");
         }
         finally
         {
@@ -335,7 +552,7 @@ public class SubtitleSelectionTests
             player.Cues[0].Add(new CueInfo(0, TimeSpan.Zero, TimeSpan.FromSeconds(4), Cue));
             player.RaiseCuesChanged(0);
             Dispatcher.UIThread.RunJobs();
-            window.CaptureRenderedFrame();
+            window.CaptureRenderedFrame()?.Dispose();
             Dispatcher.UIThread.RunJobs();
 
             SubtitleText? row = window.GetVisualDescendants()

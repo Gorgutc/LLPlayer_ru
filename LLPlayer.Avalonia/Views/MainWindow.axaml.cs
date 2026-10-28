@@ -432,7 +432,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     }
 
     /// <summary>A word press starts a possible drag selection; pause before the release action (WPF parity).</summary>
-    void OnWordPressed(object? sender, EventArgs e) => vm?.PauseForWordSelection();
+    void OnWordPressed(object? sender, EventArgs e)
+    {
+        if (sender is SubtitleText { DataContext: CueItemViewModel { IsMasked: true } })
+            return;
+        vm?.PauseForWordSelection();
+    }
 
     void OnVideoTapped(object? sender, TappedEventArgs e)
     {
