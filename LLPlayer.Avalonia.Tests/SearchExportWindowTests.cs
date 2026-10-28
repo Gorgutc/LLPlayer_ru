@@ -1,9 +1,11 @@
-﻿using Avalonia;
+﻿using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -185,6 +187,23 @@ public class SearchExportWindowTests
         Assert.True(fixture.Vm.Sidebar.WholeWord);
         Assert.True(fixture.Vm.Sidebar.UseRegex);
         Assert.Equal(2, fixture.Player.Seeks.Count);
+    }
+    [AvaloniaTheory]
+    [InlineData(AppPrefs.MinSidebarWidth)]
+    [InlineData(AppPrefs.DefaultSidebarWidth)]
+    public void Whole_word_label_fits_its_actual_text_slot_without_clipping(double sidebarWidth)
+    {
+        using var fixture = new SearchWindow(width: 1100, sidebarWidth: sidebarWidth);
+        ToggleButton button = fixture.Window.FindControl<ToggleButton>("WholeWordButton")!;
+        TextBlock label = Assert.Single(button.GetVisualDescendants().OfType<TextBlock>(), text => text.Text == "Word");
+        Assert.True(label.IsEffectivelyVisible);
+        Assert.True(label.Bounds.Height > 0);
+        FormattedText intrinsic = new(label.Text!, CultureInfo.CurrentUICulture, label.FlowDirection,
+            new Typeface(label.FontFamily, label.FontStyle, label.FontWeight, label.FontStretch), label.FontSize, label.Foreground);
+        Assert.True(intrinsic.WidthIncludingTrailingWhitespace > 0);
+        Assert.True(label.Bounds.Width >= intrinsic.WidthIncludingTrailingWhitespace,
+            $"Whole-word label '{label.Text}' needs {intrinsic.WidthIncludingTrailingWhitespace:F3} DIP at its actual {label.FontFamily}/{label.FontSize} font, "
+            + $"but its rendered TextBlock receives only {label.Bounds.Width:F3} DIP in a {sidebarWidth}-DIP sidebar.");
     }
     static void PressKey(TopLevel window, Key key, RawInputModifiers modifiers = RawInputModifiers.None)
     {

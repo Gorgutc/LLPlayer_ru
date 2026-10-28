@@ -490,11 +490,11 @@
               </TextBox.InnerLeftContent>
             </TextBox>
             <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" ColumnSpacing="4">
-              <ToggleButton Name="MatchCaseButton" Content="Aa" Width="36" MinWidth="0" IsChecked="{Binding Sidebar.MatchCase}"
+              <ToggleButton Name="MatchCaseButton" Content="Aa" Width="36" MinWidth="0" Padding="4,6" IsChecked="{Binding Sidebar.MatchCase}"
                             ToolTip.Tip="Match case" AutomationProperties.Name="Match case" />
-              <ToggleButton Name="WholeWordButton" Grid.Column="1" Content="Word" Width="48" MinWidth="0" IsChecked="{Binding Sidebar.WholeWord}"
+              <ToggleButton Name="WholeWordButton" Grid.Column="1" Content="Word" Width="48" MinWidth="0" Padding="4,6" IsChecked="{Binding Sidebar.WholeWord}"
                             ToolTip.Tip="Match whole word" AutomationProperties.Name="Match whole word" />
-              <ToggleButton Name="RegexButton" Grid.Column="2" Content=".*" Width="32" MinWidth="0" IsChecked="{Binding Sidebar.UseRegex}"
+              <ToggleButton Name="RegexButton" Grid.Column="2" Content=".*" Width="32" MinWidth="0" Padding="4,6" IsChecked="{Binding Sidebar.UseRegex}"
                             ToolTip.Tip="Use regular expression" AutomationProperties.Name="Use regular expression" />
               <Button Name="PreviousMatchButton" Grid.Column="4" Content="↑" Width="28" MinWidth="0" Padding="0" Command="{Binding Sidebar.PreviousMatchCommand}"
                       ToolTip.Tip="Previous match (Shift+Enter)" AutomationProperties.Name="Previous search match" />
