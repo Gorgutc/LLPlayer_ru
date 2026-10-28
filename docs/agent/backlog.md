@@ -69,12 +69,17 @@
 
 **Текущий F-13 блок, 2026-10-28:** одобрен общий Windows/Linux поиск и экспорт субтитров плюс исправление
 правого меню и левого play/pause на видео. Ветка `codex/f13-search-export-input`, база — delivered PR № 189/main
-`a9f57c23`. Source реализован; focused GREEN 62/0/0 относится к начальному набору, дальнейшие тесты/reviews идут.
-Full local gates, новая PR/exact-main CI, final-HEAD Desktop, final `/review` и Vault closeout пока **PENDING**.
+`a9f57c23`. Source реализован и локально проверен: product C1 `a615985a`, docs C2 `53711bf5`, label fix C3
+`4a14dbd0`. Пять full local gates PASS attempt1 на clean C3: WPF1442/0/0, engine1624/0/13, UI1120/0/1;
+package53/38, publish479/180501123 bytes. Relevant reviews после fixes: 0 C/I; docs-only receipt delta ещё review.
+Новая PR/exact-main CI, final-HEAD Desktop, final delivery `/review` и Vault closeout пока **PENDING**.
 Точные последующие receipts и продолжение — [текущий статус](f13-status-2026-10-18.md#current-subtitle-searchexport-and-video-input--2026-10-28)
 и `artifacts/f13-search-export-2026-10-28/HANDOFF.md`, когда он появится. PR № 189 уже доставлена;
-старые pending ниже исторические. Native Windows smoke теперь разрешён владельцем, результат **NOT_RUN** до receipt;
-Linux desktop, модели/провайдеры и GPU не входят в этот smoke. Полный F-13 parity остаётся IN PROGRESS.
+старые pending ниже исторические. Разрешённый native Windows C2 smoke на installed .NET10.0.7 подтвердил
+video/pause/menu/SRT4cues/search/navigation; native actual export save ждёт ручного действия пользователя,
+C3 native reread pending. Initial SRT failure был temp10.0.13 без Brotli; unchanged payload под complete10.0.7
+загрузил SRT. Build/test SDK10.0.402/temp10.0.13 — отдельная среда. Linux desktop, модели/провайдеры и GPU
+не входят в этот smoke. Полный F-13 parity остаётся IN PROGRESS.
 
 **Наш форк:** <https://github.com/Gorgutc/LLPlayer_ru>
 **Upstream (источник кода плеера):** <https://github.com/umlx5h/LLPlayer> ·
@@ -655,7 +660,10 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 
 ### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-10-28; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 
-**F-13 search/export/input — текущий одобренный срез (2026-10-28), доставка PENDING.** Общий Avalonia UI:
+**F-13 search/export/input — текущий одобренный срез (2026-10-28), source/local validation COMPLETE,
+внешняя доставка PENDING.** Пять gates PASS на clean C3 `4a14dbd0`, independent reviews0 C/I; текущая docs-only
+receipt delta требует review. Native C2 Windows подтверждает ограниченный search/input/SRT smoke на complete
+installed10.0.7; actual native export save и C3 native caption reread pending. Общий Avalonia UI:
 primary-only sidebar с match-case/Unicode whole-word/regex, wrapping next/previous и Enter/Shift+Enter/Escape;
 три default-false переключателя persist в AppPrefs. Invalid regex/первый 100 ms timeout обнуляет весь проход,
 исправленный запрос восстанавливает поиск. Экспорт обоих слотов: Original / Translated only / Translated with

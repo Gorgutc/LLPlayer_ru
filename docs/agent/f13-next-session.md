@@ -15,12 +15,22 @@ Enter/Shift+Enter/Escape, экспорт обоих слотов в SRT/VTT/TXT 
 Single-click debounce нет. Bare-video context menu использует общие subtitle/track/settings commands;
 words/drag/controls сохраняют свои действия. `VideoView` не менялся.
 
-Source и docs ещё проходят независимые reviews. Initial focused GREEN 62/0/0; full local gates, новая PR/CI,
-merge/exact-main CI, fresh final-HEAD Desktop, final `/review` и scoped Vault closeout **PENDING на этом checkpoint**.
-Новые receipts определяют дальнейший статус. PR № 189 уже доставлена; её старые pending не повторять.
-После начального headless этапа владелец явно разрешил Computer Use: bounded native Windows smoke этого среза
-после build в isolated profile. До отдельного receipt он **NOT_RUN**. Native Linux, реальные модели/провайдеры,
-GPU и неиспытанные GUI/DPI поверхности остаются NOT_RUN. После доставки остановись перед следующим блоком.
+C1 product `a615985a`, C2 docs `53711bf5`, C3 label fix `4a14dbd04fbaccaf59f715c647e6a75c5aa10577`.
+Пять full local gates PASS attempt 1 буквально на clean C3: WPF1442/0/0, engine1624/0/13, UI1120/0/1,
+package53/38; publish479/180501123 bytes. Receipt: `local-final-gate-receipt.json/.md` в evidence home;
+первоначальный C2 receipt/UI1118 сохранён отдельно. Label-font RED2fail/0pass; final focused49/0/0.
+Relevant independent product/UI/.NET/runtime/docs reviews после исправлений: 0 Critical/Important.
+Текущая docs-only receipt delta ещё требует короткого независимого review.
+
+Computer Use разрешён владельцем. Native Windows на C2 с complete installed ProgramFiles .NET10.0.7:
+video/leftpause/rightmenu/SRT4cues/search modes/error recovery/Enter+ShiftEnter seek/Esc пройдены в ограниченном
+smoke. Export dialog/native picker открыты; фактический save **PENDING manual user action**, сохранение файла
+и overwrite не заявлены. Original overwrite отклонён; CUA-кнопки/клавиатура ненадёжны. C3 native caption reread
+ещё pending. Initial SRT failure вызван выбранным temp10.0.13 без Brotli; неизменённый C2 payload загрузил SRT
+под установленным complete10.0.7. Build/tests используют SDK10.0.402/temp10.0.13; не смешивай среды и receipts.
+Новая PR/CI, merge/exact-main CI, fresh final-HEAD Desktop, final `/review` и scoped Vault closeout **PENDING**.
+PR № 189 уже доставлена; её старые pending не повторять. Full Linux/local native Linux, реальные модели/
+провайдеры, GPU и неиспытанные GUI/DPI поверхности NOT_RUN. После доставки остановись перед следующим блоком.
 
 ## История: исправление word selection, PR № 189 уже доставлена
 

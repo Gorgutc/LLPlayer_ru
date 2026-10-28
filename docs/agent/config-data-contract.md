@@ -41,6 +41,13 @@ before the native save picker. Only an explicitly confirmed path is written, thr
 and atomic replacement; cancellation preserves an existing destination. Close/shutdown cancels and drains the
 operation before disposing the player. Existing word-list TSV/APKG export and config ownership stay unchanged.
 
+Verification boundary: clean C3 `4a14dbd0` passed the full local gates; see the current
+[stage receipt](f13-status-2026-10-18.md#current-subtitle-searchexport-and-video-input--2026-10-28).
+Native C2 opened the export dialog/save picker, but actual file save/overwrite remains pending manual user
+action. Native GUI used complete installed .NET10.0.7; build/tests used SDK10.0.402/temp runtime10.0.13.
+The earlier temp-runtime missing-Brotli SRT failure recovered with unchanged payload on installed10.0.7;
+it does not authorize a new dependency/config change or establish native C3 acceptance.
+
 ## Load Order
 
 1. `FlyleafLoader.StartEngine()` loads engine config and starts `Engine`.

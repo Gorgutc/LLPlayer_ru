@@ -66,4 +66,13 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 
 ## Manual Checks When Touched
 
+The 2026-10-28 search/export/input stage passed five full local gates on clean C3 `4a14dbd0`; relevant
+independent reviews after fixes found zero Critical/Important. Bounded native Windows observations belong to C2
+under complete installed .NET10.0.7: video/pause/menu/SRT/search/navigation exercised. Export dialog/picker opened,
+but actual saved output/overwrite awaits manual user action; C3 native caption reread is pending. The earlier
+SRT failure used temp10.0.13 physically missing Brotli and recovered with the unchanged package under10.0.7.
+Build/test SDK10.0.402/temp10.0.13 evidence remains separate. See the
+[current stage receipt](f13-status-2026-10-18.md#current-subtitle-searchexport-and-video-input--2026-10-28);
+remote delivery, native Linux, GPU and real-provider/model acceptance remain separate pending or NOT_RUN gates.
+
 Use `docs/agent/manual-smoke-matrix.md` for smoke scenarios. Unit tests do not cover WPF rendering, real media playback, external translators, ASR/OCR engines, or `yt-dlp.exe`.
