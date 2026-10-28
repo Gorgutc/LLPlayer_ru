@@ -717,7 +717,14 @@ WPF 1442/0/0; Windows
 Avalonia gate: attempt 1 FAIL известным OpenAL wave-тестом (537 Hz vs 440, Goertzel 440 dominance, причина
 UNKNOWN), unchanged attempt 2 PASS (engine 1624/0/13, UI 1041/0/1 до десятого теста `9f5bd7e`); package 53 fixtures;
 local publish 479 файлов, SHA-256 `11595c1db9a6ae439f37f06449fea48793b892c5d7ba47033d39b9ac1208e1e5`.
-Raw local/review logs отсутствуют по указанным путям в этом checkout: эти claims **UNVERIFIED** до retrieval DSH.
+Исторический evidence gap закрыт: 58 byte-exact local logs найдены в исходном Codex worktree
+`f13-word-selection-lead`, а не в primary checkout; recovery manifest `dsh-historical-local-manifest.json`
+в `artifacts/local-model-selection-review-2026-10-28/` имеет SHA-256
+`e7bbe43f55f623c1763666dba1e4c95802a5e7486d3b9dc9fa40da00d9719b58`. Отдельно сохранены 36 gate calls/22 polls
+и семь reviewer spawns с фактическими relays/notices. Два initial reviewer context errors и broad final без
+closing report не считаются PASS; narrow verification PASS снял ложный geometry Critical по absolute-index API,
+narrow docs FAIL про 9/9 исправлен на 10/10. Historical publish2 FAIL (overwrite refusal) и publish3 с `-Force`
+PASS сохранены раздельно; причина OpenAL FAIL UNKNOWN. Это доказательство исторического scope, не all-roles final PASS.
 Свежая GitHub-сверка различает старый `affca63` (runs `40502751339`/`40502751511`), final head `4ce2f4c`
 (`40504924534`/`40504924581`) и actual main `7e68b0a` (`40505617519`/`40505617536`): все три required job PASS
 с первой попытки; final PR/main Windows UI 1042/0/1, Linux UI 1041/0/2 (total 1043), а не прежний local total 1042.
@@ -726,14 +733,22 @@ Local Linux и native desktop visual/keyboard acceptance NOT_RUN
 (no-Computer-Use); word-bounded selection не повторяет char-level выбор WPF sidebar. План и receipts —
 [word selection](plans/2026-10-27-f13-word-selection.md) и текущий status выше.
 
-**2026-10-28 review repair — IMPLEMENTED / FOCUSED VERIFIED, свежий full/delivery pending.**
+**2026-10-28 review repair — IMPLEMENTED / LOCALLY VERIFIED, новая remote/delivery pending.**
 Аудит PR № 188 нашёл пропущенный pause-on-press у sidebar: phrase release работал, но `WordPressed` был подключён
 только к overlay. Узкий fix подключает sidebar к прежнему pause path и сохраняет masked guard. Compiled RED:
 2 expected failures/15 passed/0 skipped (SHA-256 prefix `BBA9B6DB`); initial focused GREEN 17/0/0 (`A136C8E5`).
 Product commit `4318340fc495fa06ffb0c4d81242186c018d49ef` включает только три app/test файла; после явного
 Dispose семи ignored capture results итоговый `selection-GREEN-cleanup.log`: 17 passed/0 failed/0 skipped, exit 0.
-Ветка `codex/f13-word-selection-review-fixes`, база `7e68b0a`; fresh full gates/package checks,
-независимый final `/review`, PR/required CI, merge/actual-main CI, final-HEAD Desktop и Vault **PENDING на committed-product/draft-docs checkpoint**.
+Ветка `codex/f13-word-selection-review-fixes`, база `7e68b0a`; clean docs checkpoint
+`dbdab7860aa92561c4ef5822956ea7ae82576bce` прошёл все пять root local gates attempt 1, exits 0: fast; WPF1442/0/0;
+Windows engine1624/0/13 и UI1049/0/1; package53 unique fixtures дважды с fixtureZIP38; publish479 files,
+180478622 bytes/SHA-256 `de583738fa71e200f2cae1dbedb94afb6cc8bdaa8bb1b3605de3cd712afb7369`.
+Команды/arguments/exit/full log hashes — `artifacts/local-model-selection-review-2026-10-28/local-gates-progress.json`.
+Независимые UI/.NET/runtime reviews product `4318340` и infra review docs `dbdab786`: 0 Critical/Important;
+финальный receipt delta требует своего `/review`. PR/required CI, merge/actual-main CI, final-HEAD Desktop и Vault
+**PENDING на этом local checkpoint**. Перед продолжением сверь внешний `artifacts/local-model-selection-review-2026-10-28/HANDOFF.md`
+и текущий Vault: завершённые позднее шаги не повторять по старому pending. Этот docs delta не выдаётся за literal
+full-suite run на будущем commit. Local Linux/native GUI/DPI NOT_RUN.
 Прежние PR № 188 receipts не принимают новый fix. Причина прежнего OpenAL FAIL остаётся UNKNOWN; UI-only diff
 не доказывает причинную несвязанность. Computer Use/запуск плеера запрещены; новый функциональный блок требует owner GO.
 

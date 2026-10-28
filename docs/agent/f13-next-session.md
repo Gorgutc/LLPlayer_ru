@@ -12,17 +12,32 @@ Sidebar fix закоммичен отдельно: product `4318340fc495fa06ffb0
 Compiled RED **2 expected failures/15 passed/0 skipped** (`BBA9B6DB`); initial GREEN 17/0/0 (`A136C8E5`).
 После Dispose семи ignored capture results final focused GREEN **17 passed/0 failed/0 skipped**, exit 0,
 лог `artifacts/local-model-selection-review-2026-10-28/selection-GREEN-cleanup.log`.
-Свежие full WPF/Windows Avalonia gates, package checks, independent final review и дальнейшая доставка ещё
-**PENDING на committed-product/draft-docs checkpoint**. Local Linux **NOT_RUN**.
+На clean docs checkpoint `dbdab7860aa92561c4ef5822956ea7ae82576bce` все пять root local gates **PASS attempt 1**,
+exits 0: fast; WPF1442/0/0; Windows engine1624/0/13 и UI1049/0/1; package53 unique fixtures дважды/fixtureZIP38;
+publish479 files/180478622 bytes/SHA-256 `de583738fa71e200f2cae1dbedb94afb6cc8bdaa8bb1b3605de3cd712afb7369`.
+Точные commands/args/exit/log hashes — `artifacts/local-model-selection-review-2026-10-28/local-gates-progress.json`.
+Независимые UI/.NET/runtime reviews product `4318340` и infra review docs `dbdab786`: 0 Critical/Important.
+Финальный receipt delta требует своего review; новая PR/required CI/merge/main/Desktop/Vault доставка
+**PENDING на этом local checkpoint**. Local Linux/native GUI/DPI **NOT_RUN**; эти local gates не являются
+literal full run на будущем docs commit или merged main.
 Текущий статус и раздельные historical/fresh receipts —
 [F-13 status](f13-status-2026-10-18.md#current-word-selection-review-repair--2026-10-28).
 
-Продолжи первый фактически незавершённый шаг исправления: отдельный docs commit, свежие полные gates и cumulative
-domain `/review`, затем обновление docs только фактическими receipts, living-Vault snapshot/session-close и PR с required
-Windows/Linux CI. Перед merge повторно сверь GitHub/другие PR и living Vault; после merge проверь exact actual-main
-CI, выполни fresh Desktop из final clean HEAD без запуска и scoped Vault closeout. Каждый этап получает свой
-receipt; прежние CI/Desktop/Vault PR № 188 не принимают этот новый fix. Raw local/review logs прежнего этапа,
-отсутствующие по документированным путям, остаются **UNVERIFIED** до retrieval DSH; не восстанавливай их из claims.
+Сначала прочитай позднейший внешний `artifacts/local-model-selection-review-2026-10-28/HANDOFF.md`, текущую
+Vault continuation и actual GitHub/Desktop receipts. Продолжи только первый фактически незавершённый шаг:
+проверка receipt delta и отдельный docs commit, living-Vault snapshot/session-close, PR/required Windows/Linux CI,
+premerge GitHub/другие PR/living-Vault сверка, merge/exact actual-main CI, fresh final-HEAD Desktop без запуска,
+scoped Vault closeout. Этот список описывает зависимости, а не команду повторить уже завершённые шаги.
+Каждый этап получает свой receipt; прежние CI/Desktop/Vault PR № 188 не принимают новый fix.
+
+Historical raw evidence восстановлен: 58 byte-exact logs из исходного worktree `f13-word-selection-lead`,
+manifest `artifacts/local-model-selection-review-2026-10-28/dsh-historical-local-manifest.json`, SHA-256
+`e7bbe43f55f623c1763666dba1e4c95802a5e7486d3b9dc9fa40da00d9719b58`; отдельно — 36 gate calls/22 polls и семь
+reviewer spawns с фактическими relays/notices. Причиной отсутствия файлов был другой worktree path. Два initial
+reviewer context errors и broad final без closing report не дают complete all-roles PASS; narrow verification
+отклонил ложный geometry Critical по absolute-index API; narrow docs FAIL 9/9 исправлен на 10/10. Historical publish2 overwrite-refusal
+FAIL и explicit `-Force` publish3 PASS сохранены оба. Explicit human GO selection/full delivery — DSH seq350;
+выборка `dsh-session-selected-evidence.json` содержит human/final text, без reasoning.
 
 PR № 187/test isolation уже MERGED / DELIVERED на `9c4154b1`: required actual-main CI прошёл, обе исходные
 Important CLOSED FOR NEW MAIN; исторические scheduler/writer причины UNKNOWN. PR № 188/selection также
