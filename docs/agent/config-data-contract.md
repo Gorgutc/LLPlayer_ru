@@ -30,6 +30,17 @@ provider records, target language, and chat configuration. Primary and secondary
 state: both start Off and are not persisted. Loading or saving settings makes no provider health/probe requests;
 ordinary translations may resume for slots explicitly enabled in the current session after settings are applied.
 
+## Additive Avalonia search/export — 2026-10-28
+
+`LLPlayer.Avalonia.json` adds three `AppPrefs` booleans: `SidebarSearchMatchCase`,
+`SidebarSearchWholeWord`, `SidebarSearchRegex`. All default to `false`, including absent keys in older files;
+the shared Windows/Linux sidebar restores and saves them without changing WPF `AppConfig` defaults.
+The search query, result/navigation cursor and regex errors are session-only. Export slot/text/format/BOM choices
+are session-only; UTF-8 BOM starts on. Export captures detached text/timing and copied original-source styles
+before the native save picker. Only an explicitly confirmed path is written, through a sibling temporary file
+and atomic replacement; cancellation preserves an existing destination. Close/shutdown cancels and drains the
+operation before disposing the player. Existing word-list TSV/APKG export and config ownership stay unchanged.
+
 ## Load Order
 
 1. `FlyleafLoader.StartEngine()` loads engine config and starts `Engine`.

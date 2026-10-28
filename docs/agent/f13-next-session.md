@@ -1,4 +1,31 @@
-# Продолжение F-13: проверка и доставка исправления word selection — 2026-10-28
+# Продолжение F-13: поиск, экспорт субтитров и мышь — 2026-10-28
+
+Текущий одобренный блок — общий Windows/Linux Avalonia поиск и экспорт субтитров, а также меню правой кнопки
+и play/pause по левой кнопке на видео. Ветка `codex/f13-search-export-input`, база — delivered PR № 189/main
+`a9f57c23def397f1d64ee40b4e7b3866d0723779`. Прочитай repo/vault AGENTS, live project `_INDEX.md`,
+[план](plans/2026-10-28-f13-search-export-input.md),
+[текущий статус](f13-status-2026-10-18.md#current-subtitle-searchexport-and-video-input--2026-10-28)
+и последний `artifacts/f13-search-export-2026-10-28/HANDOFF.md`, когда он появится.
+Сверь actual source/PR/main/CI/Desktop/Vault receipts и продолжи первый незавершённый шаг.
+
+Реализованы primary-only поиск с тремя persisted default-false переключателями, wrapping navigation,
+Enter/Shift+Enter/Escape, экспорт обоих слотов в SRT/VTT/TXT с WPF text/style semantics и detached snapshot,
+отмена/close-drain/atomic confirmed-path save. Первый unmodified bare-video click немедленно меняет play/pause
+либо только закрывает word popup; второй tap включает fullscreen без повторного play/pause toggle.
+Single-click debounce нет. Bare-video context menu использует общие subtitle/track/settings commands;
+words/drag/controls сохраняют свои действия. `VideoView` не менялся.
+
+Source и docs ещё проходят независимые reviews. Initial focused GREEN 62/0/0; full local gates, новая PR/CI,
+merge/exact-main CI, fresh final-HEAD Desktop, final `/review` и scoped Vault closeout **PENDING на этом checkpoint**.
+Новые receipts определяют дальнейший статус. PR № 189 уже доставлена; её старые pending не повторять.
+После начального headless этапа владелец явно разрешил Computer Use: bounded native Windows smoke этого среза
+после build в isolated profile. До отдельного receipt он **NOT_RUN**. Native Linux, реальные модели/провайдеры,
+GPU и неиспытанные GUI/DPI поверхности остаются NOT_RUN. После доставки остановись перед следующим блоком.
+
+## История: исправление word selection, PR № 189 уже доставлена
+
+Ниже сохранён прежний prompt и его local checkpoint. PR № 189 MERGED / DELIVERED на `a9f57c23`;
+старые pending относятся к моменту записи и не задают текущую работу.
 
 Сначала сверь repo/vault AGENTS, branch/HEAD/status, GitHub PR/main/CI, Desktop receipt и live Vault.
 Текущий bounded scope — review/исправление уже доставленного

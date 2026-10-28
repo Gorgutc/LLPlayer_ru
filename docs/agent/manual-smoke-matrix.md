@@ -4,6 +4,8 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 
 ## Playback
 
+- F-13 shared Avalonia video input (2026-10-28, native Windows/Linux **NOT_RUN**): with media playing, single-click bare video and confirm immediate pause; single-click again to resume. With a word popup open, the first bare-video click must only dismiss it. Double-click bare video: the first tap performs its immediate action and the second changes fullscreen without a second playback toggle. Right-click bare video and check subtitle/track/settings menu commands and current track checks. Subtitle words, phrase drags, masked rows, popup content, buttons and seek/volume controls must retain their own pointer actions; wheel volume remains usable. Headless routed-input evidence does not accept native pointer/DPI behavior.
+
 - Open a local video file.
 - Open media from a command-line path/URL.
 - Play, pause, seek, stop, change volume, fullscreen, and close.
@@ -12,6 +14,8 @@ Automated tests do not cover every LLPlayer behavior. Use these manual checks wh
 - Seek-bar waveform (F-12, since 0.3.28): open a local video/audio file, click the Waveform toggle in the player bar; confirm an amplitude envelope appears behind the seek track after a brief background build (it should track loud/quiet sections), playback is not blocked while it builds, and the toggle lights when on. Toggle off → the envelope disappears. Open another file → the waveform rebuilds for the new file (no stale envelope). Confirm a file with no audio / a live stream shows no waveform and does not error.
 
 ## Subtitles
+
+- F-13 search/export (2026-10-28, native Windows/Linux **NOT_RUN**): in the primary sidebar, test trimmed case-insensitive literal search, case-sensitive and Unicode whole-word modes, valid/invalid regex and timeout recovery, original/display selection and masked rows. Next/previous and Enter/Shift+Enter must wrap and seek; Escape clears and restores focus. Restart and confirm only the three switches persist. Export both slots in SRT/VTT/TXT, Original / Translated only / Translated with fallback and BOM on/off; compare WPF `DisplayText`, timing and Original italic styles. Change media/translation while the save picker is open and confirm the captured output is stable. Cancel the picker or close the export/app during a pending save and confirm existing destination preservation, no partial file or late write; explicitly confirm overwrite and inspect the output. During recognition confirm the partial-output warning. Empty/bitmap-only slots report no text rather than running OCR. Existing word TSV/APKG export remains usable. Real media/picker/desktop acceptance requires separate evidence.
 
 - Load embedded text subtitles.
 - Load external text subtitles.
