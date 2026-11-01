@@ -59,7 +59,7 @@
 > **2026-09-24:** владелец активировал `F-13` (Linux-порт): Avalonia 12.1.3 + FluentTheme + своя тема из
 > shadcn-токенов; сохраняется Windows WPF-продукт. Этап 1 — draft PR #166; этап 2 закрыт 2026-09-26 (см. F-13).
 >
-> **Текущий фокус (2026-10-25):** `F-13` активен; цель владельца — один Avalonia UI и общий Core для нативных
+> **Исторический фокус (2026-10-25):** `F-13` активен; цель владельца — один Avalonia UI и общий Core для нативных
 > Windows и Linux. Windows Avalonia build/package baseline реализован на общем UI до полного Linux parity;
 > WPF сохраняется до приёмки замены. Октябрьский экспорт восстановлен через PR #167; свежие проверки нового
 > Windows-среза фиксируются отдельно от исторических receipts. Статус, происхождение и следующий срез:
@@ -67,7 +67,17 @@
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
-**Текущий F-13 блок, 2026-10-28:** одобрен общий Windows/Linux поиск и экспорт субтитров плюс исправление
+**Текущий одобренный F-13 срез, 2026-11-01: A/V streams и chapters.**
+Общий Windows/Linux Avalonia UI получает Audio track / Video track / Chapters в Playback и меню видео.
+База — доставленный PR № 192/main `aa123a2`, ветка `codex/f13-av-streams-chapters`.
+[План и границы](plans/2026-11-01-f13-av-streams-chapters.md),
+[текущий source checkpoint](f13-status-2026-10-18.md#av-streams-and-chapters--owner-approved-2026-11-01).
+App commit `7063e00`; финальные локальные WPF/Windows/package gates и review завершены. Публикация и доставка
+остаются PENDING на этом pre-delivery checkpoint; фактический итог PR/main CI, Desktop и Vault фиксируется
+в `artifacts/f13-av-streams-chapters-2026-11-01/CLOSEOUT.md` и completed Vault session.
+Native acceptance согласуется отдельно и остаётся **NOT_RUN**; полный F-13 — **IN PROGRESS**.
+
+**Исторический source/local checkpoint F-13, 2026-10-28:** одобрен общий Windows/Linux поиск и экспорт субтитров плюс исправление
 правого меню и левого play/pause на видео. Ветка `codex/f13-search-export-input`, база — delivered PR № 189/main
 `a9f57c23`. Source реализован и локально проверен: product C1 `a615985a`, docs C2 `53711bf5`, label fix C3
 `4a14dbd0`. Пять full local gates PASS attempt1 на clean C3: WPF1442/0/0, engine1624/0/13, UI1120/0/1;
@@ -660,7 +670,20 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 
 ### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-11-01; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 
-**Текущий одобренный срез, 2026-11-01: оставшиеся настройки Translation/Word и hotkeys.**
+**Текущий одобренный срез, 2026-11-01: A/V streams и chapters.**
+База — доставленный PR № 192/main `aa123a2`, ветка `codex/f13-av-streams-chapters`.
+Реализован общий выбор embedded/external audio/video и глав через Playback и меню видео с текущими metadata
+и checked state. Portable switching сохраняет time/play-pause, audio delay, оба subtitle/translation owners;
+устаревшие команды отклоняются, при смене медиа или shutdown активная операция отменяется с ожиданием завершения.
+Failed-switch rollback сохраняет владельцев; recovery снимает только собственную interrupt revision. IOStream
+и переключение во время загрузки субтитров дают явную ошибку; после загрузки переключение можно повторить.
+App commit `7063e00`: финальные локальные WPF/Windows/package gates и review завершены; доставка PENDING.
+[План](plans/2026-11-01-f13-av-streams-chapters.md) и
+[текущий source checkpoint](f13-status-2026-10-18.md#av-streams-and-chapters--owner-approved-2026-11-01)
+разделяют проверенный исходный код, последующую delivery и **NOT_RUN** native/encoded uncached PGS acceptance.
+WPF поддерживается; playlist/output-device UI, YoutubeDL preferences и GPU вне этого среза.
+
+**Предыдущий датированный source/local checkpoint, 2026-11-01: настройки Translation/Word и hotkeys.**
 Работа продолжается от доставленного PR № 191/main `f84f70676d2fa526073c061292ac8f252f2e6de4`;
 PR № 190/191 повторно не выполняются. [Утверждённый дизайн](plans/2026-11-01-f13-settings-keys-design.md),
 [план](plans/2026-11-01-f13-settings-keys.md) и [текущий статус с границами доказательств](f13-status-2026-10-18.md#remaining-settings-and-hotkeys--2026-11-01).

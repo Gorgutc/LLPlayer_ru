@@ -15,7 +15,7 @@ namespace LLPlayer.Avalonia.Services;
 /// arbitrary threads and are re-raised on the UI thread (through <see cref="IUIDispatcher"/>); cross-thread engine
 /// collections are read through <see cref="CollectionSyncBridge"/>.
 /// </summary>
-public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitionController, IDisposable, IAsyncDisposable
+public sealed partial class FlyleafPlaybackController : IPlaybackController, IRecognitionController, IDisposable, IAsyncDisposable
 {
     sealed record NativeMediaOpen(long RequestId, int Epoch);
     readonly AsyncLocal<int> appMediaOpenEpoch = new();
@@ -109,6 +109,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         player.Opening += OnOpening;
         player.KnownErrorOccurred += OnKnownError;
         player.UnknownErrorOccurred += OnUnknownError;
+        InitializePlaybackChoices();
 
         for (int i = 0; i < cueWatchers.Length; i++)
         {
@@ -367,6 +368,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         lock (mediaOpenInterruption)
             cancelableAppEpoch = epoch = Interlocked.Increment(ref mediaOpenEpoch);
         Raise(nameof(CanCancelOpen));
+        QueuePlaybackChoices();
         Observe(MutateWithTranslationAsync(token =>
         {
             // Player.Open raises Opening/OpenCompleted synchronously. Carry this request's identity through those
@@ -403,6 +405,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
                     if (cancelableAppEpoch == epoch) cancelableAppEpoch = 0;
                 }
                 Raise(nameof(CanCancelOpen));
+                QueuePlaybackChoices();
                 appMediaOpenEpoch.Value = previous;
             }
             Post(() => { if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) completed(error); });
@@ -418,6 +421,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
             Recognition.Invalidate();
         }
         Raise(nameof(CanCancelOpen));
+        QueuePlaybackChoices();
         return true;
     }
 
@@ -444,6 +448,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
                 lock (mediaOpenInterruption)
                     if (cancelableAppEpoch == openEpoch) cancelableAppEpoch = 0;
                 Raise(nameof(CanCancelOpen));
+                QueuePlaybackChoices();
             }
         }
     }
@@ -514,6 +519,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         if (disposed)
             return;
         disposed = true;
+        DisposePlaybackChoices();
         Recognition.Dispose();
 
         foreach (IDisposable? w in cueWatchers)
@@ -577,6 +583,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
 
     void OnPlayerChanged(string? name)
     {
+        if (name is nameof(Player.CanPlay) or nameof(Player.Status) or nameof(Player.Chapters)) QueuePlaybackChoices();
         if (name is nameof(Player.IsASRRunning) or nameof(Player.IsASRPaused)) Raise(nameof(RecognitionStatus));
         switch (name)
         {
@@ -657,6 +664,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
                 if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) ExternalMediaOpening?.Invoke();
             });
         }
+        QueuePlaybackChoices();
     }
 
     void OnOpenCompleted(object? sender, OpenCompletedArgs? e)
@@ -664,6 +672,7 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         if (e == null)
             return;
 
+        QueuePlaybackChoices();
         string? url = e.Url;
         bool isSubs = e.IsSubtitles;
         string? error = e.Error;

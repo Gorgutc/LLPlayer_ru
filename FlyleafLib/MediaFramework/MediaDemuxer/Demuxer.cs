@@ -112,6 +112,14 @@ public unsafe class Demuxer : RunThreadBase
         }
     }
 
+#if !WINDOWS
+    internal void SelectRetainedSubtitleQueue(int index)
+    {
+        lock (lockFmtCtx)
+            CurPackets = SubtitlesPackets[index];
+    }
+#endif
+
     public ConcurrentQueue<ConcurrentStack<List<nint>>>
                                     VideoPacketsReverse
                                                     { get; private set; } = [];

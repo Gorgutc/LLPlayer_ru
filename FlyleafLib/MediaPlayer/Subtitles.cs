@@ -472,6 +472,11 @@ public static class SubtitlesSelectedHelper
     {
         ArgumentNullException.ThrowIfNull(stream);
 
+#if !WINDOWS
+        // Retained embedded tracks can share a container URL while selecting different native slots.
+        if (stream is Player.RetainedSubtitlesStream || Get(subIndex)?.Item2 is Player.RetainedSubtitlesStream)
+            return ReferenceEquals(Get(subIndex)?.Item2, stream);
+#endif
         return GetSubEnabled(stream.Url, subIndex);
     }
 
@@ -565,6 +570,25 @@ public class Subtitle : NotifyPropertyChanged
         Data.Reset();
         UpdateUI();
     }
+
+#if !WINDOWS
+    // A video-variant change may rebind the native source, but owns none of the cached cue/bitmap,
+    // OCR, ASR, translation or display state. Refresh only the native metadata and selected identity.
+    internal void RefreshRetainedStream()
+    {
+        var stream = Decoder.SubtitlesStreams[_subIndex];
+        _isOpened = stream != null && !Decoder.SubtitlesDecoders[_subIndex].Disposed;
+        _streamIndex = _isOpened ? stream.StreamIndex : -1;
+        _codec = _isOpened ? stream.Codec : null;
+        _isBitmap = _isOpened && stream.IsBitmap;
+        if (_isOpened)
+            SubtitlesSelectedHelper.Set(_subIndex, stream.ExternalStream is ExternalSubtitlesStream external
+                ? (null, external) : (stream.StreamIndex, null));
+        else if (!_enabledASR)
+            SubtitlesSelectedHelper.Set(_subIndex, null);
+        UpdateUI();
+    }
+#endif
 
     internal void Refresh()
     {

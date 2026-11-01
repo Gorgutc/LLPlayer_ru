@@ -14,11 +14,18 @@ using WpfKey = System.Windows.Input.Key;
 
 namespace LLPlayer.Avalonia.ViewModels;
 
-/// <summary>A radio item of the Subtitles ▸ Primary / Secondary track menus.</summary>
+/// <summary>A radio item of the subtitle and audio/video track menus.</summary>
 public sealed class TrackMenuItem(string label, bool isSelected, IRelayCommand command)
 {
     public string Label { get; } = label;
     public bool IsSelected { get; } = isSelected;
+    public IRelayCommand Command { get; } = command;
+}
+
+/// <summary>A chapter command, labelled with its media-relative start time.</summary>
+public sealed class ChapterMenuItem(string label, IRelayCommand command)
+{
+    public string Label { get; } = label;
     public IRelayCommand Command { get; } = command;
 }
 
@@ -52,6 +59,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     readonly TimeProvider time;
     readonly List<string> pendingSubtitles = [];
     object? pendingMediaRequest;
+    object playbackChoicesSnapshot = new();
     DateTimeOffset lastActivity;
     bool updatingFromPlayer;
     double seekTarget = -1;
@@ -453,6 +461,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> RecentFiles { get; } = [];
     public ObservableCollection<TrackMenuItem> PrimaryTracks { get; } = [];
     public ObservableCollection<TrackMenuItem> SecondaryTracks { get; } = [];
+    public ObservableCollection<TrackMenuItem> AudioTracks { get; } = [];
+    public ObservableCollection<TrackMenuItem> VideoTracks { get; } = [];
+    public ObservableCollection<ChapterMenuItem> Chapters { get; } = [];
     public ObservableCollection<SpeedMenuItem> SpeedItems { get; } = [];
 
     // ---- media / transport -------------------------------------------------------------------------------------
@@ -950,6 +961,63 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Rebuilds detached A/V and chapter choices from actual controller state.</summary>
+    [RelayCommand]
+    public void RefreshPlaybackChoices()
+    {
+        ClearPlaybackChoices();
+        if (disposed || pendingMediaRequest != null || !player.IsOpened || player.IsOpening)
+            return;
+
+        try
+        {
+            IReadOnlyList<PlaybackStreamTrack> audio = player.GetAudioTracks();
+            IReadOnlyList<PlaybackStreamTrack> video = player.GetVideoTracks();
+            IReadOnlyList<PlaybackChapter> chapters = player.GetChapters();
+            object snapshot = playbackChoicesSnapshot;
+            foreach (PlaybackStreamTrack track in audio)
+                AudioTracks.Add(new(track.Label, track.IsSelected,
+                    ChoiceCommand(snapshot, () => player.SelectAudioTrackAsync(track))));
+            foreach (PlaybackStreamTrack track in video)
+                VideoTracks.Add(new(track.Label, track.IsSelected,
+                    ChoiceCommand(snapshot, () => player.SelectVideoTrackAsync(track))));
+            foreach (PlaybackChapter chapter in chapters)
+                Chapters.Add(new($"[{TimeFormat.Clock(chapter.Start)}] {chapter.Title}",
+                    ChoiceCommand(snapshot, () => player.SeekToChapterAsync(chapter))));
+        }
+        catch (Exception error)
+        {
+            ClearPlaybackChoices();
+            ShowToast("Playback choices", error.Message, ToastVariant.Destructive);
+        }
+    }
+
+    IRelayCommand ChoiceCommand(object snapshot, Func<Task> action)
+        => new AsyncRelayCommand(() => InvokePlaybackChoiceAsync(snapshot, action), () => IsCurrentPlaybackChoice(snapshot));
+
+    bool IsCurrentPlaybackChoice(object snapshot)
+        => !disposed && pendingMediaRequest == null && player.IsOpened && !player.IsOpening && ReferenceEquals(playbackChoicesSnapshot, snapshot);
+
+    async Task InvokePlaybackChoiceAsync(object snapshot, Func<Task> action)
+    {
+        // Retained menu rows can outlive their popup or media. The adapter additionally validates queued tokens.
+        if (!IsCurrentPlaybackChoice(snapshot)) return;
+        try { await action(); }
+        catch (Exception error)
+        {
+            if (IsCurrentPlaybackChoice(snapshot))
+                ShowToast("Playback choices", error.Message, ToastVariant.Destructive);
+        }
+    }
+
+    void ClearPlaybackChoices()
+    {
+        playbackChoicesSnapshot = new();
+        AudioTracks.Clear();
+        VideoTracks.Clear();
+        Chapters.Clear();
+    }
+
     // ---- inputs from the view ----------------------------------------------------------------------------------
 
     /// <summary>Opens a media path / URL (or loads it as subtitles when it is a subtitle file). Subtitle files given in
@@ -968,6 +1036,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         RememberFolder(path);
+        ClearPlaybackChoices();
         pendingSubtitles.Clear();
         if (subtitles != null)
             pendingSubtitles.AddRange(subtitles);
@@ -981,8 +1050,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             string[] subs = [.. pendingSubtitles];
             pendingSubtitles.Clear();
             if (error == null)
+            {
                 foreach (string subtitle in subs)
                     player.OpenSubtitles(subtitle);
+                RefreshPlaybackChoices();
+            }
         }, onlineVideo);
     }
 
@@ -1128,6 +1200,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         BeginWordActionsShutdown();
         CancelAppShortcuts();
         disposed = true;
+        ClearPlaybackChoices();
         browserWaitCancellation.Dispose();
         Sidebar.PropertyChanged -= OnSidebarPropertyChanged;
         player.PropertyChanged -= OnPlayerPropertyChanged;
@@ -1202,6 +1275,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     void OnExternalMediaOpening()
     {
+        ClearPlaybackChoices();
         pendingMediaRequest = null;
         pendingSubtitles.Clear();
     }
@@ -1210,6 +1284,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (error != null)
         {
+            if (!isSubtitles) ClearPlaybackChoices();
             if (!isSubtitles && pendingMediaRequest == null)
                 pendingSubtitles.Clear();
             ShowToast(isSubtitles ? "Could not open subtitles" : "Could not open media", error, ToastVariant.Destructive);
@@ -1291,14 +1366,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 CancelOpenCommand.NotifyCanExecuteChanged();
                 break;
             case nameof(IPlaybackController.IsOpening):
-                if (player.IsOpening) InvalidateTranslation();
+                if (player.IsOpening)
+                {
+                    InvalidateTranslation();
+                    ClearPlaybackChoices();
+                }
                 IsOpening = player.IsOpening;
                 break;
             case nameof(IPlaybackController.IsOpened):
                 IsOpened = player.IsOpened;
+                if (IsOpened) RefreshPlaybackChoices();
+                else ClearPlaybackChoices();
+                break;
+            case "PlaybackChoices":
+                RefreshPlaybackChoices();
+                break;
+            case nameof(IPlaybackController.Url):
+                ClearPlaybackChoices();
+                SyncTitle();
                 break;
             case nameof(IPlaybackController.Title):
-            case nameof(IPlaybackController.Url):
                 SyncTitle();
                 break;
             case nameof(IPlaybackController.Volume):
@@ -1366,6 +1453,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SyncAbLoop();
         PrimaryImage = player.PrimaryImage;
         SecondaryImage = player.SecondaryImage;
+        RefreshPlaybackChoices();
     }
 
     void SyncTitle()
