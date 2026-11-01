@@ -36,12 +36,14 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     SettingsWindow? settingsWindow;
     public void ShowSettings(SettingsViewModel model)
     {
+        vm?.CancelAppShortcuts();
         if (settingsWindow != null) { settingsWindow.Activate(); return; }
         _ = ShowSettingsAsync(model);
     }
     async Task ShowSettingsAsync(SettingsViewModel model)
     {
         var window = new SettingsWindow(model);
+        OwnKeyboardSurface(window);
         settingsWindow = window;
         try { await window.ShowDialog(this); }
         finally { settingsWindow = null; }
@@ -55,8 +57,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     public void ShowSubtitlesExport(SubtitlesExportViewModel model)
     {
+        vm?.CancelAppShortcuts();
         if (subtitlesExportWindow != null) { subtitlesExportWindow.Activate(); return; }
         subtitlesExportWindow = new SubtitlesExportWindow(model);
+        OwnKeyboardSurface(subtitlesExportWindow);
         subtitlesExportWindow.Closed += (_, _) =>
         {
             subtitlesExportWindow = null;
@@ -66,8 +70,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     }
     public void ShowWordManager(WordManagerViewModel model)
     {
+        vm?.CancelAppShortcuts();
         if (wordManagerWindow != null) { wordManagerWindow.Activate(); return; }
         wordManagerWindow = new WordManagerWindow(model);
+        OwnKeyboardSurface(wordManagerWindow);
         wordManagerWindow.Closed += (_, _) => { wordManagerWindow = null; vm?.WordManagerClosed(); };
         wordManagerWindow.Show(this);
     }
@@ -75,8 +81,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     OnlineVideoWindow? onlineVideoWindow;
     public void ShowOnlineVideo(OnlineVideoViewModel model)
     {
+        vm?.CancelAppShortcuts();
         if (onlineVideoWindow != null) { onlineVideoWindow.Activate(); return; }
         onlineVideoWindow = new OnlineVideoWindow(model);
+        OwnKeyboardSurface(onlineVideoWindow);
         onlineVideoWindow.Closed += (_, _) => onlineVideoWindow = null;
         _ = onlineVideoWindow.ShowDialog(this);
     }
@@ -85,20 +93,24 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     bool shutdownStarted;
     public void ShowTranslation(TranslationViewModel model)
     {
+        vm?.CancelAppShortcuts();
         if (translationWindow != null) { translationWindow.Activate(); return; }
         translationWindow = new TranslationWindow(model);
+        OwnKeyboardSurface(translationWindow);
         translationWindow.Closed += (_, _) => translationWindow = null;
         _ = translationWindow.ShowDialog(this);
     }
 
     public void ShowRecognition(RecognitionViewModel model)
     {
+        vm?.CancelAppShortcuts();
         if (recognitionWindow != null)
         {
             if (recognitionWindow.DataContext is RecognitionViewModel current) current.Message = model.Message;
             recognitionWindow.Activate(); return;
         }
         recognitionWindow = new RecognitionWindow(model);
+        OwnKeyboardSurface(recognitionWindow);
         recognitionWindow.Closed += (_, _) => recognitionWindow = null;
         _ = recognitionWindow.ShowDialog(this);
     }
@@ -115,7 +127,11 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
         AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, OnKeyUpTunnel, RoutingStrategies.Tunnel);
-        Deactivated += (_, _) => searchKeysAwaitingRelease.Clear();
+        Deactivated += (_, _) => vm?.LoseKeyboardContext();
+        Activated += (_, _) =>
+        {
+            if (vm?.RestoreKeyboardContext() == true) searchKeysAwaitingRelease.Clear();
+        };
         AddHandler(PointerMovedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
 
@@ -135,7 +151,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.DoubleTapped += OnVideoDoubleTapped;
         VideoHost.Tapped += OnVideoTapped;
         VideoHost.PointerWheelChanged += OnVideoWheel;
-        VideoContextMenu.Opening += (_, _) => vm?.RefreshTracks();
+        VideoContextMenu.Opening += (_, _) => { vm?.CancelAppShortcuts(); vm?.RefreshTracks(); };
         VideoHost.AddHandler(ContextRequestedEvent, OnVideoContextRequested, RoutingStrategies.Tunnel);
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => PositionWordPopup();
@@ -214,6 +230,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     public void ShowCheatSheet()
     {
+        vm?.CancelAppShortcuts();
         if (cheatSheet != null)
         {
             cheatSheet.Activate();
@@ -221,11 +238,55 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         }
 
         cheatSheet = new CheatSheetWindow(new CheatSheetViewModel(cheatSheetRows()));
+        OwnKeyboardSurface(cheatSheet);
         cheatSheet.Closed += (_, _) => cheatSheet = null;
         if (IsVisible)
             cheatSheet.Show(this);
         else
             cheatSheet.Show();
+    }
+
+    public async Task<bool> OpenBrowserAsync(Uri uri)
+    {
+        if (!WordActions.IsHttpUri(uri)) return false;
+        try { return await Launcher.LaunchUriAsync(uri); }
+        catch (Exception) { return false; }
+    }
+
+    void ShowWordMenu(Visual target, IReadOnlyList<WordMenuInvocation> invocations)
+    {
+        if (target is not Control control || vm == null || invocations.Count == 0) return;
+        MainWindowViewModel owner = vm;
+        owner.CancelAppShortcuts();
+        ContextMenu menu = new();
+        foreach (WordMenuInvocation invocation in invocations)
+        {
+            MenuItem item = new() { Header = invocation.Action.Title };
+            item.Click += (_, _) => owner.TrackBrowserOperation(owner.InvokeWordMenuAsync(invocation));
+            menu.Items.Add(item);
+        }
+        menu.Open(control);
+    }
+
+    void OnPopupWordContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (sender is Visual target && vm != null)
+        {
+            ShowWordMenu(target, vm.CreatePopupWordMenu());
+            e.Handled = true;
+        }
+    }
+
+    void OwnKeyboardSurface(Window window)
+    {
+        // A dialog may receive the release of the key which opened it. Finish the parent's ownership there,
+        // and retain child-origin presses when Escape closes the child before its paired release arrives.
+        window.AddHandler(KeyDownEvent, (_, e) => vm?.SuppressInputKeyDown(KeyMapper.ToWpf(e.Key)),
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        window.AddHandler(KeyUpEvent, (_, e) =>
+        {
+            if (vm?.HandleTrackedKeyUp(KeyMapper.ToWpf(e.Key)) == true) e.Handled = true;
+        }, RoutingStrategies.Bubble, handledEventsToo: true);
     }
 
     public void SetClipboardText(string text)
@@ -276,6 +337,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     {
         base.OnClosing(e);
         if (e.Cancel || shutdownComplete) return;
+        vm?.BeginWordActionsShutdown();
+        vm?.CancelAppShortcuts();
         if (ShutdownRequested == null) { vm?.SavePrefs(); return; }
         e.Cancel = true;
         if (!shutdownStarted) { shutdownStarted = true; IsEnabled = false; _ = DrainBeforeClosingAsync(); }
@@ -283,7 +346,13 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     async Task DrainBeforeClosingAsync()
     {
-        try { await ShutdownRequested!(); }
+        try
+        {
+            if (translationWindow?.DataContext is TranslationViewModel translation)
+                await translation.DrainDiagnosticsAsync();
+            if (vm != null) await vm.DrainBrowserOperationsAsync();
+            await ShutdownRequested!();
+        }
         finally { shutdownComplete = true; Close(); }
     }
 
@@ -455,7 +524,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             return;
 
         Point p = v.TranslatePoint(e.Position, VideoHost) ?? e.Position;
-        vm.OnWordClicked(e.Word, e.Text, e.Slot, p.X, p.Y, e.IsTranslated, e.SourceLanguage, e.TargetLanguage);
+        WordSelectionSnapshot selection = new(e.Word, e.Text, e.Slot, e.IsWord, e.IsTranslated,
+            e.SourceLanguage, e.TargetLanguage,
+            sender is SubtitleText { DataContext: CueItemViewModel } ? WordSelectionOrigin.Sidebar : WordSelectionOrigin.Overlay,
+            e.Button, e.Modifiers);
+        if (e.Button == MouseButton.Right) ShowWordMenu(v, vm.CreateWordMenu(selection));
+        else vm.OnWordClicked(selection, p.X, p.Y);
     }
 
     /// <summary>A word press starts a possible drag selection; pause before the release action (WPF parity).</summary>
@@ -483,7 +557,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     void OnVideoContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         // The attached menu belongs to the video backdrop, not to subtitle words or popup controls.
-        if (!IsVideoBackground(e.Source))
+        bool popupWord = ReferenceEquals(e.Source, PopupWordActions)
+            || e.Source is Visual child && child.GetVisualAncestors().Any(ancestor => ReferenceEquals(ancestor, PopupWordActions));
+        if (!IsVideoBackground(e.Source) && !popupWord)
             e.Handled = true;
     }
 
@@ -532,6 +608,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             && (e.KeyModifiers & ~KeyModifiers.Shift) == KeyModifiers.None)
         {
             searchKeysAwaitingRelease.Add(e.Key);
+            vm.SuppressInputKeyDown(KeyMapper.ToWpf(e.Key));
             if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
                 vm.Sidebar.PreviousMatchCommand.Execute(null);
             else
@@ -543,6 +620,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         {
             // WPF sidebar: Esc clears the search and returns focus to the video.
             searchKeysAwaitingRelease.Add(e.Key);
+            vm.SuppressInputKeyDown(KeyMapper.ToWpf(e.Key));
             vm.Sidebar.FilterText = "";
             Video.Focus();
             e.Handled = true;
@@ -562,6 +640,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         keys.Update(e.KeyModifiers);
         if (searchKeysAwaitingRelease.Remove(e.Key))
         {
+            vm?.HandleTrackedKeyUp(KeyMapper.ToWpf(e.Key));
             // Esc moved focus out of the filter, but its paired release still belongs to the search action.
             e.Handled = true;
             return;

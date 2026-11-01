@@ -66,6 +66,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         this.savePrefs = savePrefs;
         this.shell = shell;
         this.time = time ?? TimeProvider.System;
+        appKeyDispatcher = new(this.time);
         lastActivity = this.time.GetUtcNow();
 
         Sidebar = new SubtitlesSidebarViewModel(player)
@@ -133,7 +134,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IReadOnlyList<EngineKeyBindingInfo> activeEngineKeys = prefs.EngineKeysCustomized
             ? EngineKeyBindings.FromPrefs(prefs.EngineKeyBindings)
             : EngineKeyBindings.Defaults();
-        if (!EngineKeyBindings.TryValidate(activeEngineKeys, Shortcuts.Shortcuts, out string keyConflict))
+        if (!Shortcuts.TryValidateEffective(out string keyConflict)
+            || !EngineKeyBindings.TryValidate(activeEngineKeys, Shortcuts.Shortcuts, out keyConflict))
             ShowToast("Key binding conflict", keyConflict, ToastVariant.Destructive);
         IsDarkTheme = prefs.Theme != "Light";
 
@@ -230,8 +232,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SidebarFontFamily = draft.SidebarFontFamily;
         candidate.SidebarFontWeight = draft.SidebarFontWeight;
         candidate.SidebarFontSize = draft.SidebarFontSize;
-        candidate.WordClickAction = draft.WordClickAction;
-        candidate.AnkiDeck = draft.AnkiDeck;
+        draft.MergeToolsEditsInto(candidate);
         candidate.SubtitleWidthPercent = draft.SubtitleWidthPercent;
         candidate.SubtitleMaxWidth = draft.SubtitleMaxWidth;
         candidate.SubtitleIgnoreLineBreak = draft.SubtitleIgnoreLineBreak;
@@ -242,6 +243,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SubtitlePositionAlignment = draft.SubtitlePositionAlignment;
         candidate.SubtitlePositionAlignmentWhenDual = draft.SubtitlePositionAlignmentWhenDual;
         candidate.AppShortcutOverrides = new Dictionary<string, string>(draft.AppShortcuts, StringComparer.Ordinal);
+        candidate.AppKeyBindings = AppKeyBindings.NormalizePrefs(draft.AppKeyBindingPrefs);
         candidate.EngineKeysCustomized = draft.EngineKeysCustomized;
         candidate.EngineKeyBindings = draft.EngineKeysCustomized ? [.. draft.EngineKeyBindingPrefs] : [];
         // Resolve font resources and parse brushes before persistence, so live application only assigns prepared values.
@@ -292,8 +294,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         prefs.SidebarFontSize = candidate.SidebarFontSize;
         prefs.WordClickAction = candidate.WordClickAction;
         prefs.AnkiDeck = candidate.AnkiDeck;
+        prefs.WordMenuActions = candidate.WordMenuActions!.Select(row => row.Clone()).ToList();
+        prefs.WordCopyOnSelected = candidate.WordCopyOnSelected;
+        prefs.WordLastSearchOnSelected = candidate.WordLastSearchOnSelected;
+        prefs.WordLastSearchModifier = candidate.WordLastSearchModifier;
+        prefs.SubsAutoTextCopy = candidate.SubsAutoTextCopy;
+        prefs.SubsAutoTextCopyTarget = candidate.SubsAutoTextCopyTarget;
+        RefreshLastWordSearch();
         prefs.EngineKeysCustomized = candidate.EngineKeysCustomized;
         prefs.EngineKeyBindings = candidate.EngineKeyBindings;
+        prefs.AppKeyBindings = AppKeyBindings.NormalizePrefs(candidate.AppKeyBindings);
         prefs.SubtitlesVisible = candidate.SubtitlesVisible;
         prefs.SubtitleWidthPercent = candidate.SubtitleWidthPercent;
         prefs.SubtitleMaxWidth = candidate.SubtitleMaxWidth;
@@ -413,6 +423,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     void ApplyAppShortcutOverrides(IReadOnlyDictionary<string, string> overrides)
     {
+        CancelAppShortcuts();
         _ = AppShortcutMap.TryNormalizeOverrides(overrides, out Dictionary<string, string> normalized);
         prefs.AppShortcutOverrides = normalized;
         Shortcuts = CreateShortcutMap();
@@ -431,7 +442,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         [AppShortcutMap.SubsPrimaryTextCopy] = CopyPrimaryText,
         [AppShortcutMap.OpenSubtitles] = () => _ = OpenSubtitlesAsync(),
         [AppShortcutMap.ToggleTheme] = ToggleTheme,
-    }, prefs.AppShortcutOverrides);
+        [AppShortcutMap.OpenWindowSettings] = ShowSettings,
+        [AppShortcutMap.OpenWindowWordManager] = ShowWordManager,
+        [AppShortcutMap.OpenWindowSubsExporter] = ShowSubtitlesExport,
+    }, prefs.AppShortcutOverrides, prefs.AppKeyBindings);
     public IPlaybackController Player => player;
     public AppPrefs Prefs => prefs;
 
@@ -1019,25 +1033,34 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Key down from the window. Returns true when handled.</summary>
     public bool HandleKeyDown(WpfKey key, bool ctrl, bool alt, bool shift, bool textInputFocused)
     {
+        if (disposed || wordActionsStopping) return false;
+        orphanedInputReleases.Remove(key);
         NotifyActivity();
 
         if (key == WpfKey.Escape && WordPopup.IsOpen)
         {
+            inputKeysAwaitingRelease.Add(key);
             WordPopup.Close();
             return true;
         }
 
         if (textInputFocused)
+        {
+            if (key != WpfKey.None) inputKeysAwaitingRelease.Add(key);
             return false;
+        }
 
-        if (Shortcuts.TryExecute(key, ctrl, alt, shift))
+        if (inputKeysAwaitingRelease.Contains(key)) return true;
+        if (appKeyDispatcher.HandleKeyDown(Shortcuts, key, ctrl, alt, shift))
             return true;
 
-        return key != WpfKey.None && player.KeyDown(key);
+        bool handled = key != WpfKey.None && player.KeyDown(key);
+        if (handled) engineKeysAwaitingRelease.Add(key);
+        return handled;
     }
 
     public bool HandleKeyUp(WpfKey key, bool textInputFocused)
-        => !textInputFocused && key != WpfKey.None && player.KeyUp(key);
+        => HandleTrackedKeyUp(key) || !textInputFocused && key != WpfKey.None && player.KeyUp(key);
 
     public bool PrimaryTextTranslated => player.PrimaryTextTranslated;
     public bool SecondaryTextTranslated => player.SecondaryTextTranslated;
@@ -1050,24 +1073,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     public void OnWordClicked(string word, string context, int slot, double x, double y, bool? translated = null, string? sourceLanguage = null, string? targetLanguage = null)
-    {
-        if (WordClickAction == "Clipboard" || WordClickAction == "ClipboardAll")
-        {
-            if (player.IsPlaying)
-                player.Pause();
-            string text = WordClickAction == "Clipboard" ? word : context;
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                shell.SetClipboardText(text);
-                ShowToast("Copied", WordClickAction == "Clipboard" ? "Word copied to the clipboard." : "Cue copied to the clipboard.");
-            }
-            return;
-        }
-        if (player.IsPlaying)
-            player.Pause();
-        _ = WordPopup.OpenAsync(word, context, slot, x, y, translated ?? (slot == 0 ? player.PrimaryTextTranslated : player.SecondaryTextTranslated), sourceLanguage, targetLanguage);
-    }
-
+        => OnWordClicked(new WordSelectionSnapshot(word, context, slot, true,
+            translated ?? (slot == 0 ? player.PrimaryTextTranslated : player.SecondaryTextTranslated),
+            sourceLanguage, targetLanguage, WordSelectionOrigin.Overlay, global::Avalonia.Input.MouseButton.Left,
+            global::Avalonia.Input.KeyModifiers.None), x, y);
     /// <summary>The window's fullscreen state changed (menu, F, Esc via the engine's IHostPlayer calls).</summary>
     public void OnFullScreenChanged(bool fullScreen)
     {
@@ -1116,7 +1125,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (disposed)
             return;
+        BeginWordActionsShutdown();
+        CancelAppShortcuts();
         disposed = true;
+        browserWaitCancellation.Dispose();
         Sidebar.PropertyChanged -= OnSidebarPropertyChanged;
         player.PropertyChanged -= OnPlayerPropertyChanged;
         player.CuesChanged -= OnCuesChanged;
@@ -1317,6 +1329,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 break;
             case nameof(IPlaybackController.PrimaryText):
             case nameof(IPlaybackController.SecondaryText):
+                SyncSubtitles();
+                CopyChangedSubtitle(e.PropertyName);
+                break;
             case nameof(IPlaybackController.SubtitlesVisible):
                 SyncSubtitles();
                 break;

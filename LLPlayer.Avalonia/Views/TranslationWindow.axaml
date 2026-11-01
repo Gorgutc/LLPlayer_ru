@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:LLPlayer.Avalonia.Controls"
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.TranslationWindow"
         x:DataType="vm:TranslationViewModel" Classes="dialog" Title="Translation — LLPlayer"
@@ -6,13 +6,15 @@
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
       <TextBlock Classes="dialog-title" Text="Translation" />
-      <TextBlock Classes="dialog-description" Text="Settings are applied only when saved. No connection test is sent." TextWrapping="Wrap" />
+      <TextBlock Classes="dialog-description" Text="Settings apply only when saved. Provider requests run only from the explicit diagnostic buttons." TextWrapping="Wrap" />
     </StackPanel>
     <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,16,0,0">
-      <Button Content="Close" Classes="outline" IsEnabled="{Binding !Busy}" Click="OnClose" />
+      <Button Content="Close" Classes="outline" Click="OnClose" />
+      <Button Name="CancelDiagnosticButton" Content="Cancel request" Classes="outline" IsVisible="{Binding DiagnosticRunning}" Command="{Binding CancelDiagnosticCommand}" />
       <Button Name="SaveButton" Content="Save &amp; Close" IsEnabled="{Binding !Busy}" Command="{Binding SaveCommand}" />
     </StackPanel>
     <TextBlock DockPanel.Dock="Bottom" Name="TranslationMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+    <TextBlock DockPanel.Dock="Bottom" Name="DiagnosticStatusBlock" Text="{Binding DiagnosticStatus}" TextWrapping="Wrap" Classes="small muted" />
     <ScrollViewer Name="TranslationScroll">
       <StackPanel Spacing="12">
         <TextBlock Name="LoadWarning" Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
@@ -28,11 +30,21 @@
           <ComboBox ItemsSource="{Binding DictionaryModes}" SelectedItem="{Binding DictionaryMode}" HorizontalAlignment="Stretch" />
           <TextBlock Text="Target language" />
           <ComboBox Name="TargetBox" ItemsSource="{Binding TargetLanguages}" SelectedItem="{Binding TargetLanguage}" HorizontalAlignment="Stretch" />
+          <TextBlock Name="TargetAdvisoryBlock" Text="{Binding TargetAdvisory}" Classes="small muted" TextWrapping="Wrap" />
+          <HyperlinkButton Content="Provider wiki / setup help" NavigateUri="{Binding ProviderWiki}" />
           <StackPanel Spacing="6" IsVisible="{Binding HasEndpoint}">
             <TextBlock Text="Endpoint" /><TextBox Name="EndpointBox" Text="{Binding Endpoint}" />
+            <Button Name="ResetEndpointButton" Content="Reset endpoint only" Classes="outline" Command="{Binding ResetEndpointCommand}" />
           </StackPanel>
           <StackPanel Spacing="6" IsVisible="{Binding HasModel}">
-            <TextBlock Text="Model" /><TextBox Name="ModelBox" Text="{Binding Model}" />
+            <TextBlock Text="{Binding ModelRequirement}" /><TextBox Name="ModelBox" Text="{Binding Model}" />
+            <ComboBox Name="AvailableModelsBox" ItemsSource="{Binding AvailableModels}" SelectedItem="{Binding SelectedAvailableModel}" PlaceholderText="Discovered models (optional selection)" HorizontalAlignment="Stretch" />
+            <WrapPanel>
+              <Button Name="CheckProviderButton" Content="Check" Classes="outline" Command="{Binding CheckProviderCommand}" Margin="0,0,6,6" />
+              <Button Name="GetModelsButton" Content="Get Models" Classes="outline" Command="{Binding GetModelsCommand}" Margin="0,0,6,6" />
+              <Button Name="HelloApiButton" Content="Hello API" Classes="outline" Command="{Binding HelloApiCommand}" Margin="0,0,0,6" />
+            </WrapPanel>
+            <TextBlock Text="Hello API sends a model request using this draft. Check and Get Models request the provider's model list. Saving never sends a diagnostic." TextWrapping="Wrap" Classes="small muted" />
           </StackPanel>
           <StackPanel Spacing="6" IsVisible="{Binding HasApiKey}">
             <TextBlock Text="API key" /><TextBox Name="ApiKeyBox" Text="{Binding ApiKey}" PasswordChar="●" />
@@ -42,6 +54,7 @@
           </StackPanel>
           <StackPanel Spacing="6" IsVisible="{Binding HasChatPath}">
             <TextBlock Text="Chat path" /><TextBox Text="{Binding ChatPath}" />
+            <Button Name="ResetChatPathButton" Content="Reset chat path only" Classes="outline" Command="{Binding ResetChatPathCommand}" />
           </StackPanel>
           <StackPanel Spacing="6" IsVisible="{Binding HasTimeout}">
             <TextBlock Text="Request timeout (ms)" /><NumericUpDown Name="TimeoutBox" Value="{Binding TimeoutMs}" Minimum="1" Maximum="2147483647" FormatString="0" />
@@ -105,7 +118,32 @@
               <TextBlock Classes="small muted" Text="Context counts must be whole numbers from 0 to 2147483647. Inactive mode values are retained and validated on save." TextWrapping="Wrap" />
             </StackPanel>
           </Expander>
-          <TextBlock Classes="small muted" Text="Advanced sampling parameters and provider region mappings are retained when saving." TextWrapping="Wrap" />
+          <Expander Name="SamplingExpander" Header="Advanced LLM parameters" IsVisible="{Binding HasModel}" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="8" Margin="0,8,0,0">
+              <TextBlock Text="Use a dot for decimals. Manual flags control whether sampling values are sent. Token caps are optional; blank leaves the cap unset." Classes="small muted" TextWrapping="Wrap" />
+              <CheckBox Name="TemperatureManualBox" Content="Manual temperature (0 to 2)" IsChecked="{Binding TemperatureManual}" />
+              <TextBox Name="TemperatureBox" Text="{Binding TemperatureText}" AutomationProperties.Name="Temperature" />
+              <CheckBox Name="TopPManualBox" Content="Manual top_p (0 to 1)" IsChecked="{Binding TopPManual}" />
+              <TextBox Name="TopPBox" Text="{Binding TopPText}" AutomationProperties.Name="top_p" />
+              <CheckBox Name="FrequencyPenaltyManualBox" Content="Manual frequency penalty (-2 to 2)" IsChecked="{Binding FrequencyPenaltyManual}" />
+              <TextBox Name="FrequencyPenaltyBox" Text="{Binding FrequencyPenaltyText}" AutomationProperties.Name="Frequency penalty" />
+              <CheckBox Name="PresencePenaltyManualBox" Content="Manual presence penalty (-2 to 2)" IsChecked="{Binding PresencePenaltyManual}" />
+              <TextBox Name="PresencePenaltyBox" Text="{Binding PresencePenaltyText}" AutomationProperties.Name="Presence penalty" />
+              <TextBlock Text="max_tokens (optional positive whole number)" TextWrapping="Wrap" />
+              <TextBox Name="MaxTokensBox" Text="{Binding MaxTokensText}" AutomationProperties.Name="max_tokens" />
+              <TextBlock Text="max_completion_tokens (optional positive whole number)" TextWrapping="Wrap" />
+              <TextBox Name="MaxCompletionTokensBox" Text="{Binding MaxCompletionTokensText}" AutomationProperties.Name="max_completion_tokens" />
+            </StackPanel>
+          </Expander>
+          <Expander Name="RegionsExpander" Header="Target language region mappings" IsVisible="{Binding HasRegionMap}" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="8" Margin="0,8,0,0">
+              <TextBlock Text="{Binding RegionHelp}" Classes="small muted" TextWrapping="Wrap" />
+              <TextBlock Text="Chinese (zh)" /><TextBox Name="ChineseRegionBox" Text="{Binding ChineseRegion}" />
+              <TextBlock Text="French (fr)" /><TextBox Name="FrenchRegionBox" Text="{Binding FrenchRegion}" />
+              <TextBlock Text="Portuguese (pt)" /><TextBox Name="PortugueseRegionBox" Text="{Binding PortugueseRegion}" />
+              <TextBlock Text="Other saved mapping entries remain unchanged." Classes="small muted" TextWrapping="Wrap" />
+            </StackPanel>
+          </Expander>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

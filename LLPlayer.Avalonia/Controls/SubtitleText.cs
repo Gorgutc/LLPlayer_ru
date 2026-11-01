@@ -12,11 +12,13 @@ using Avalonia.Rendering.SceneGraph;
 namespace LLPlayer.Avalonia.Controls;
 
 /// <summary>A word clicked in a <see cref="SubtitleText"/>.</summary>
-public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position, bool isTranslated = false, string? sourceLanguage = null, string? targetLanguage = null, bool isWord = true)
+public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position, bool isTranslated = false, string? sourceLanguage = null, string? targetLanguage = null, bool isWord = true, MouseButton button = MouseButton.Left, KeyModifiers modifiers = KeyModifiers.None)
     : RoutedEventArgs(routedEvent)
 {
     /// <summary>True for a single word, false for a dragged phrase.</summary>
     public bool IsWord { get; } = isWord;
+    public MouseButton Button { get; } = button;
+    public KeyModifiers Modifiers { get; } = modifiers;
     public bool IsTranslated { get; } = isTranslated;
     public string? SourceLanguage { get; } = sourceLanguage;
     public string? TargetLanguage { get; } = targetLanguage;
@@ -308,6 +310,17 @@ public sealed class SubtitleText : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            Point point = e.GetPosition(this);
+            if (TryGetWordAt(point, out string word))
+            {
+                e.Handled = true;
+                RaiseEvent(new WordClickedEventArgs(WordClickedEvent, word, DisplayText, Slot, point, IsTranslated,
+                    SourceLanguage, TargetLanguage, true, MouseButton.Right, e.KeyModifiers));
+            }
+            return;
+        }
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || e.ClickCount > 1)
             return;
 
@@ -380,7 +393,7 @@ public sealed class SubtitleText : Control
         Point anchor = SelectionAnchor(start, end, e.GetPosition(this));
         e.Handled = true;
         RaiseEvent(new WordClickedEventArgs(WordClickedEvent, words, text, Slot, anchor, IsTranslated,
-            SourceLanguage, TargetLanguage, isWord));
+            SourceLanguage, TargetLanguage, isWord, e.InitialPressMouseButton, e.KeyModifiers));
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)

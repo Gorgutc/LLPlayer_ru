@@ -1,5 +1,6 @@
 ﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:c="using:LLPlayer.Avalonia.Controls" xmlns:services="using:LLPlayer.Avalonia.Services" x:Class="LLPlayer.Avalonia.Views.SettingsWindow"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+        xmlns:s="using:LLPlayer.Avalonia.Services" xmlns:c="using:LLPlayer.Avalonia.Controls" xmlns:services="using:LLPlayer.Avalonia.Services" x:Class="LLPlayer.Avalonia.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel" Title="Settings — LLPlayer" Width="760" Height="550"
         MinWidth="560" MinHeight="440" WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
         Background="{DynamicResource Shadcn.BackgroundBrush}">
@@ -221,35 +222,92 @@
             <ComboBox Name="WordClickActionEditor" ItemsSource="{x:Static vm:SettingsViewModel.WordClickActions}" SelectedItem="{Binding WordClickAction, Mode=TwoWay}" HorizontalAlignment="Stretch"
                       AutomationProperties.Name="Word click action" />
             <TextBlock Text="Translation opens the dictionary popup; Clipboard copies the clicked word; ClipboardAll copies the clicked cue." Classes="dialog-description" TextWrapping="Wrap" />
+            <CheckBox Name="WordCopyOnSelectedEditor" Content="Copy selected word or phrase" IsChecked="{Binding WordCopyOnSelected}" />
+            <CheckBox Name="WordLastSearchOnSelectedEditor" Content="Search selected text with the last word search" IsChecked="{Binding WordLastSearchOnSelected}" />
+            <TextBlock Text="Exact search modifier" Classes="dialog-description" />
+            <ComboBox Name="WordSearchModifierEditor" ItemsSource="{x:Static vm:SettingsViewModel.WordSearchModifiers}" SelectedItem="{Binding WordLastSearchModifier}" HorizontalAlignment="Stretch" />
+            <CheckBox Name="SubsAutoTextCopyEditor" Content="Automatically copy new subtitle text" IsChecked="{Binding SubsAutoTextCopy}" />
+            <ComboBox Name="SubsAutoTextCopyTargetEditor" ItemsSource="{x:Static vm:SettingsViewModel.SubtitleAutoCopyTargets}" SelectedItem="{Binding SubsAutoTextCopyTarget}" HorizontalAlignment="Stretch" AutomationProperties.Name="Automatic subtitle copy target" />
+            <Expander Header="Word context menu actions" IsExpanded="True">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Ordered draft rows. Search accepts HTTP(S) with %w (word), %lw (lowercase word), and %s (cue). Save applies changes." Classes="dialog-description" TextWrapping="Wrap" />
+                <WrapPanel Orientation="Horizontal">
+                  <Button Content="Add search" Classes="outline sm" Command="{Binding AddWordActionCommand}" CommandParameter="{x:Static s:WordMenuActionKind.Search}" Margin="0,0,6,6" />
+                  <Button Content="Add copy" Classes="outline sm" Command="{Binding AddWordActionCommand}" CommandParameter="{x:Static s:WordMenuActionKind.Clipboard}" Margin="0,0,6,6" />
+                  <Button Content="Add copy all" Classes="outline sm" Command="{Binding AddWordActionCommand}" CommandParameter="{x:Static s:WordMenuActionKind.ClipboardAll}" Margin="0,0,6,6" />
+                  <Button Name="ResetWordActionsButton" Content="Reset menu" Classes="outline sm" Command="{Binding ResetWordActionsCommand}" Margin="0,0,6,6" />
+                </WrapPanel>
+                <ItemsControl Name="WordMenuActionsEditor" ItemsSource="{Binding WordMenuActions}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="s:WordMenuActionPref">
+                      <Border BorderBrush="{DynamicResource Shadcn.BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8" Margin="0,0,0,8">
+                        <StackPanel Spacing="6">
+                          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                            <CheckBox Content="Enabled" IsChecked="{Binding IsEnabled}" />
+                            <TextBox Grid.Column="1" Text="{Binding Title}" AutomationProperties.Name="Word menu title" />
+                          </Grid>
+                          <ComboBox ItemsSource="{x:Static vm:SettingsViewModel.WordMenuActionKinds}" SelectedItem="{Binding Kind}" HorizontalAlignment="Stretch" AutomationProperties.Name="Word menu action" />
+                          <TextBox IsVisible="{Binding IsSearch}" Text="{Binding Url}" PlaceholderText="Search URL (HTTP or HTTPS)" AutomationProperties.Name="Word search URL" />
+                          <CheckBox Content="Lowercase copied text" IsVisible="{Binding IsClipboard}" IsChecked="{Binding ToLower}" />
+                          <WrapPanel Orientation="Horizontal">
+                            <Button Content="Clone" Classes="ghost sm" Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).CloneWordActionCommand}" CommandParameter="{Binding}" />
+                            <Button Content="Up" Classes="ghost sm" Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).MoveWordActionUpCommand}" CommandParameter="{Binding}" />
+                            <Button Content="Down" Classes="ghost sm" Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).MoveWordActionDownCommand}" CommandParameter="{Binding}" />
+                            <Button Content="Delete" Classes="ghost sm" Command="{Binding $parent[Window].((vm:SettingsViewModel)DataContext).DeleteWordActionCommand}" CommandParameter="{Binding}" />
+                          </WrapPanel>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Expander>
             <Button Name="WordManagerLink" Content="Word Manager and Anki export…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.WordManager}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Anki" FontWeight="SemiBold" />
             <TextBlock Text="Default deck name for .apkg and AnkiConnect exports (TSV has no deck column; blank means LLPlayer, up to 64 characters)" Classes="dialog-description" TextWrapping="Wrap" />
             <TextBox Name="AnkiDeckEditor" Text="{Binding AnkiDeck, Mode=TwoWay}" MaxLength="64" AutomationProperties.Name="Default Anki deck name" />
-            <TextBlock Text="AnkiConnect stays on the WPF-compatible fixed http://localhost:8765; word context-menu actions, copy-on-select and PDIC remain outside this stage." Classes="dialog-description" TextWrapping="Wrap" />
+            <TextBlock Text="AnkiConnect uses the fixed http://localhost:8765 endpoint. The saved deck is the next Word Manager default; an open manager keeps its session deck." Classes="dialog-description" TextWrapping="Wrap" />
             <TextBlock Text="Keyboard" FontWeight="SemiBold" />
             <Button Name="ShortcutsLink" Content="Keyboard shortcuts…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Shortcuts}" HorizontalAlignment="Stretch" />
             <TextBlock Text="App shortcuts (draft; Save applies them; collisions with engine keys are rejected)"
                        Classes="dialog-description" TextWrapping="Wrap" />
+            <WrapPanel>
+              <Button Name="AddAppKeyButton" Content="Add app binding" Classes="outline sm" Command="{Binding AddAppKeyCommand}" Margin="0,0,8,4" />
+              <Button Name="ResetAppKeysButton" Content="Reset app keys" Classes="outline sm" Command="{Binding ResetAppKeysCommand}" Margin="0,0,0,4" />
+            </WrapPanel>
             <ItemsControl Name="ShortcutRows" ItemsSource="{Binding ShortcutRows}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:ShortcutEditRow">
-                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,2">
-                    <TextBlock Text="{Binding Description}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                    <c:ChordCaptureButton Grid.Column="1" Chord="{Binding Chord, Mode=TwoWay}" Content="{Binding Chord}"
-                                          Classes="outline" MinWidth="140"
-                                          AutomationProperties.Name="{Binding Description}"
+                  <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="4" Margin="0,4">
+                    <ComboBox ItemsSource="{x:Static services:ShortcutActionCatalog.AppActions}" SelectedItem="{Binding SelectedAction, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch" AutomationProperties.Name="{Binding AccessibleName, StringFormat='App action for {0}'}" />
+                    <c:ChordCaptureButton Grid.Row="1" Chord="{Binding Chord, Mode=TwoWay}" Content="{Binding Chord}"
+                                          Classes="outline" HorizontalAlignment="Stretch"
+                                          AutomationProperties.Name="{Binding AccessibleName}"
                                           AutomationProperties.HelpText="{Binding Chord, StringFormat='Current chord {0}. Click, then press the new chord; Esc cancels.'}"
                                           ToolTip.Tip="Click, then press the new chord; Esc cancels" />
-                    <Button Grid.Column="2" Content="Reset" Classes="ghost sm" Command="{Binding ResetCommand}"
+                    <WrapPanel Grid.Row="2">
+                      <CheckBox Content="Enabled" IsChecked="{Binding IsEnabled}" Margin="0,0,10,0"
+                                AutomationProperties.Name="{Binding AccessibleName, StringFormat='Enable app binding {0}'}" />
+                      <CheckBox Content="On release" IsChecked="{Binding IsKeyUp}" Margin="0,0,10,0"
+                                AutomationProperties.Name="{Binding AccessibleName, StringFormat='Fire app binding {0} on release'}" />
+                      <Button Content="Clone" Classes="ghost sm" Command="{Binding CloneCommand}"
+                              AutomationProperties.Name="{Binding AccessibleName, StringFormat='Clone app binding {0}'}" />
+                      <Button Content="Delete" Classes="ghost sm" Command="{Binding DeleteCommand}"
+                              AutomationProperties.Name="{Binding AccessibleName, StringFormat='Delete app binding {0}'}" />
+                    <Button Content="Reset" Classes="ghost sm" Command="{Binding ResetCommand}"
                             AutomationProperties.Name="{Binding Description, StringFormat='Reset {0} to its default chord'}"
                             ToolTip.Tip="Restore the default chord" />
+                    </WrapPanel>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
             <TextBlock Text="Engine key bindings" FontWeight="SemiBold" />
-            <TextBlock Text="Draft only: Save applies these rows. Only the engine's existing bindings are listed, and duplicate or app-colliding chords are rejected. Adding new action rows is outside this stage."
+            <TextBlock Text="Draft only: add or clone a row, choose its action and capture a free chord. Save rejects duplicate enabled chords and app collisions, including bindings that run on release."
                        Classes="dialog-description" TextWrapping="Wrap" />
+            <Button Name="AddEngineKeyButton" Content="Add engine binding" Classes="outline"
+                    Command="{Binding AddEngineKeyCommand}" HorizontalAlignment="Stretch" AutomationProperties.Name="Add engine key binding" />
             <Button Name="ResetEngineKeysButton" Content="Reset engine keys to defaults" Classes="outline"
                     Command="{Binding ResetEngineKeysCommand}" HorizontalAlignment="Stretch"
                     AutomationProperties.Name="Reset engine key bindings to engine defaults"
@@ -259,21 +317,26 @@
             <ItemsControl Name="EngineKeyRows" ItemsSource="{Binding EngineKeyRows}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:EngineKeyEditRow">
-                  <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,3">
-                    <TextBlock Text="{Binding Description}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                    <c:ChordCaptureButton Grid.Column="1" Chord="{Binding Chord, Mode=TwoWay}" Content="{Binding DisplayChord}"
-                                          Classes="outline" MinWidth="120" MaxWidth="180"
+                  <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="4" Margin="0,4">
+                    <ComboBox ItemsSource="{x:Static services:ShortcutActionCatalog.EngineActions}" SelectedItem="{Binding SelectedAction, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch" AutomationProperties.Name="{Binding AccessibleName, StringFormat='Engine action for {0}'}" />
+                    <c:ChordCaptureButton Grid.Row="1" Chord="{Binding Chord, Mode=TwoWay}" Content="{Binding DisplayChord}"
+                                          Classes="outline" HorizontalAlignment="Stretch"
                                           AutomationProperties.Name="{Binding AccessibleName}"
                                           AutomationProperties.HelpText="{Binding DisplayChord, StringFormat='Current chord {0}. Click, then press the new chord; Esc cancels.'}"
                                           ToolTip.Tip="{Binding DisplayChord, StringFormat='Current chord: {0}. Click, then press the new chord; Esc cancels.'}" />
-                    <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="10">
+                    <WrapPanel Grid.Row="2">
                       <CheckBox Content="Enabled" IsChecked="{Binding IsEnabled}" VerticalAlignment="Center"
+                                Margin="0,0,10,0"
                                 AutomationProperties.Name="{Binding AccessibleName, StringFormat='Enable engine binding {0}'}" />
                       <CheckBox Content="On release" IsChecked="{Binding IsKeyUp}" VerticalAlignment="Center"
+                                Margin="0,0,10,0"
                                 AutomationProperties.Name="{Binding AccessibleName, StringFormat='Fire engine binding {0} on release'}" />
                       <Button Content="Delete" Classes="ghost sm" Command="{Binding DeleteCommand}"
                               AutomationProperties.Name="{Binding AccessibleName, StringFormat='Delete engine binding {0}'}" />
-                    </StackPanel>
+                      <Button Content="Clone" Classes="ghost sm" Command="{Binding CloneCommand}"
+                              AutomationProperties.Name="{Binding AccessibleName, StringFormat='Clone engine binding {0}'}" />
+                    </WrapPanel>
                   </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>

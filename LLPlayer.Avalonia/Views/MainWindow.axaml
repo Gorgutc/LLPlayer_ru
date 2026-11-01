@@ -303,7 +303,7 @@
               <ScrollViewer Name="WordPopupScroll">
               <StackPanel Spacing="8">
                 <Grid ColumnDefinitions="*,Auto,Auto">
-                  <SelectableTextBlock Text="{Binding WordPopup.Word}" Classes="large" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"
+                  <SelectableTextBlock Name="PopupWordActions" ContextRequested="OnPopupWordContextRequested" Text="{Binding WordPopup.Word}" Classes="large" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"
                                        TextWrapping="Wrap" />
                   <Button Grid.Column="1" Classes="ghost icon-sm" Command="{Binding WordPopup.CopyCommand}" ToolTip.Tip="Copy word">
                     <c:LucideIcon Data="{StaticResource Icon.Copy}" Size="14" />

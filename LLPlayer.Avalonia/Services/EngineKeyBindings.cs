@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Reflection;
 using FlyleafLib.MediaPlayer;
 using WpfKey = System.Windows.Input.Key;
@@ -171,7 +171,7 @@ public static class EngineKeyBindings
         foreach (EngineKeyBindingInfo binding in enabled)
         {
             AppShortcut? collision = appShortcuts.FirstOrDefault(shortcut =>
-                shortcut.Matches(binding.Key, binding.Ctrl, binding.Alt, binding.Shift));
+                shortcut.IsEnabled && shortcut.Matches(binding.Key, binding.Ctrl, binding.Alt, binding.Shift));
             if (collision != null)
             {
                 error = $"Engine chord {binding.FormatChord()} for \"{Describe(binding.Action)}\" collides with the app " +

@@ -33,21 +33,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public SettingsViewModel(AppPrefs current, Action<SettingsViewModel> commit, BitmapSubtitleRuntimeState bitmapState)
     {
         this.commit = commit;
-        foreach (string action in AppShortcutMap.ActionNames)
-        {
-            AppShortcut first = AppShortcutMap.Defaults.First(s => s.ActionName == action);
-            string defaultChord = AppShortcutMap.FormatChord(first.Key, first.Ctrl, first.Alt, first.Shift);
-            string chord = current.AppShortcutOverrides.TryGetValue(action, out string? saved)
-                && AppShortcutMap.TryParseChord(saved, out WpfKey key, out bool ctrl, out bool alt, out bool shift)
-                ? AppShortcutMap.FormatChord(key, ctrl, alt, shift)
-                : defaultChord;
-            ShortcutRows.Add(new ShortcutEditRow(action, first.Description, defaultChord, chord));
-        }
+        InitializeAppKeyRows(current);
         IReadOnlyList<EngineKeyBindingInfo> engineBindings = current.EngineKeysCustomized
             ? EngineKeyBindings.FromPrefs(current.EngineKeyBindings)
             : EngineKeyBindings.Defaults();
         foreach (EngineKeyBindingInfo binding in engineBindings)
-            EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow));
+            EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow, CloneEngineKeyRow));
         Theme = current.Theme;
         SubtitleFontFamily = current.SubtitleFontFamily;
         SubtitleFontWeight = current.SubtitleFontWeight;
@@ -111,6 +102,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         PrimaryBitmapPositionText = bitmapState.PrimaryPosition.ToString(NumberFormat);
         WordClickAction = current.WordClickAction;
         AnkiDeck = current.AnkiDeck;
+        InitializeWordActions(current);
     }
 
     public static IReadOnlyList<string> Themes { get; } = ["Dark", "Light"];
@@ -483,6 +475,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Error = "The Anki deck may be blank for the LLPlayer default, otherwise it must be 1–64 characters without control characters.";
             return;
         }
+        if (!ValidateWordActions()) return;
         WordClickAction = clickAction;
         AnkiDeck = deck;
         AppShortcuts = appShortcuts;
@@ -497,27 +490,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         CloseRequested?.Invoke();
     }
     bool TryBuildAppShortcuts(out Dictionary<string, string> overrides, out AppShortcutMap map, out string error)
-    {
-        overrides = new Dictionary<string, string>(StringComparer.Ordinal);
-        error = "";
-        foreach (ShortcutEditRow row in ShortcutRows)
-        {
-            if (!AppShortcutMap.TryParseChord(row.Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift))
-            {
-                error = $"Use a key chord such as Ctrl+Shift+B for \"{row.Description}\" (a modifier alone is not a chord).";
-                map = new AppShortcutMap(new Dictionary<string, Action>());
-                return false;
-            }
-            string canonical = AppShortcutMap.FormatChord(key, ctrl, alt, shift);
-            // Untouched rows keep no override, so actions with several default chords (the cheat sheet has F1 and
-            // Shift+OemQuestion) keep all of them; Reset therefore really restores the defaults.
-            if (canonical != row.DefaultChord)
-                overrides[row.ActionName] = canonical;
-        }
-
-        map = new AppShortcutMap(new Dictionary<string, Action>(), overrides);
-        return map.TryValidateEffective(out error);
-    }
+        => TryBuildAppRows(out overrides, out map, out error);
 
     /// <summary>Validates the engine draft: parseable chords, no duplicate enabled chords, no app↔engine collision.</summary>
     bool TryBuildEngineKeys(AppShortcutMap appMap, out List<EngineKeyBindingPref> prefs, out bool customized, out string error)
@@ -534,7 +507,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         List<EngineKeyBindingInfo> bindings = [];
         foreach (EngineKeyEditRow row in EngineKeyRows)
         {
-            if (!AppShortcutMap.TryParseChord(row.Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift))
+            if (!ShortcutActionCatalog.TryGetEngine(row.ActionName, out _)
+                || !AppShortcutMap.TryParseChord(row.Chord, out WpfKey key, out bool ctrl, out bool alt, out bool shift))
             {
                 error = $"Use a key chord such as Ctrl+Shift+B for engine action \"{row.Description}\".";
                 return false;
@@ -565,7 +539,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         EngineKeyRows.Clear();
         foreach (EngineKeyBindingInfo binding in EngineKeyBindings.Defaults())
-            EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow));
+            EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow, CloneEngineKeyRow));
         OnPropertyChanged(nameof(HasEngineKeyRows));
     }
 
@@ -595,11 +569,24 @@ public sealed partial class SettingsViewModel : ObservableObject
 }
 
 /// <summary>One engine key-binding draft row (bounded WPF SettingsKeys equivalent: edit/disable/release/delete).</summary>
-public sealed partial class EngineKeyEditRow(EngineKeyBindingInfo binding, Action<EngineKeyEditRow> delete) : ObservableObject
+public sealed partial class EngineKeyEditRow(EngineKeyBindingInfo binding, Action<EngineKeyEditRow> delete,
+    Action<EngineKeyEditRow>? clone = null) : ObservableObject
 {
-    public KeyBindingAction Action { get; } = binding.Action;
+    [ObservableProperty] public partial KeyBindingAction Action { get; set; } = binding.Action;
     public string ActionName => Action.ToString();
     public string Description => EngineKeyBindings.Describe(Action);
+    public ShortcutActionDescriptor SelectedAction
+    {
+        get => ShortcutActionCatalog.EngineActions.First(row => row.EngineAction == Action);
+        set { if (value?.EngineAction is { } action) Action = action; }
+    }
+    partial void OnActionChanged(KeyBindingAction value)
+    {
+        OnPropertyChanged(nameof(ActionName));
+        OnPropertyChanged(nameof(Description));
+        OnPropertyChanged(nameof(SelectedAction));
+        OnPropertyChanged(nameof(AccessibleName));
+    }
     [ObservableProperty] public partial string Chord { get; set; } = binding.FormatChord();
     [ObservableProperty] public partial bool IsEnabled { get; set; } = binding.IsEnabled;
     [ObservableProperty] public partial bool IsKeyUp { get; set; } = binding.IsKeyUp;
@@ -615,14 +602,33 @@ public sealed partial class EngineKeyEditRow(EngineKeyBindingInfo binding, Actio
         OnPropertyChanged(nameof(AccessibleName));
     }
     [RelayCommand] void Delete() => delete(this);
+    [RelayCommand] void Clone() => clone?.Invoke(this);
 }
 
-public sealed partial class ShortcutEditRow(string actionName, string description, string defaultChord, string chord)
+public sealed partial class ShortcutEditRow(string actionName, string description, string defaultChord, string chord,
+    Action<ShortcutEditRow>? delete = null, Action<ShortcutEditRow>? clone = null, Action<ShortcutEditRow>? reset = null)
     : ObservableObject
 {
-    public string ActionName { get; } = actionName;
-    public string Description { get; } = description;
+    [ObservableProperty] public partial string ActionName { get; set; } = actionName;
+    public string Description => ShortcutActionCatalog.TryGetApp(ActionName, out var action) ? action.Description : description;
     public string DefaultChord { get; } = defaultChord;
     [ObservableProperty] public partial string Chord { get; set; } = chord;
-    [RelayCommand] void Reset() => Chord = DefaultChord;
+    [ObservableProperty] public partial bool IsEnabled { get; set; } = true;
+    [ObservableProperty] public partial bool IsKeyUp { get; set; }
+    public string AccessibleName => $"{Description} ({Chord})";
+    public ShortcutActionDescriptor SelectedAction
+    {
+        get => ShortcutActionCatalog.AppActions.First(row => row.Name == ActionName);
+        set { if (value != null && value.Target == ShortcutActionTarget.Application) ActionName = value.Name; }
+    }
+    partial void OnActionNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(Description));
+        OnPropertyChanged(nameof(SelectedAction));
+        OnPropertyChanged(nameof(AccessibleName));
+    }
+    partial void OnChordChanged(string value) => OnPropertyChanged(nameof(AccessibleName));
+    [RelayCommand] void Delete() => delete?.Invoke(this);
+    [RelayCommand] void Clone() => clone?.Invoke(this);
+    [RelayCommand] void Reset() { if (reset != null) reset(this); else Chord = DefaultChord; }
 }

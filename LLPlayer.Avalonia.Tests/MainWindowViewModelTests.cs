@@ -116,6 +116,8 @@ public class MainWindowViewModelTests
         double size = vm.SubtitleFontSize;
         vm.HandleKeyDown(WpfKey.Right, false, false, true, false);
         vm.SubtitleFontSize.Should().Be(size + 2);
+        vm.HandleKeyUp(WpfKey.Right, textInputFocused: false).Should().BeTrue();
+        player.KeysUp.Should().BeEmpty("the app owns the paired release before a distinct engine press");
         vm.HandleKeyDown(WpfKey.Left, false, false, true, false);
         vm.SubtitleFontSize.Should().Be(size);
 
