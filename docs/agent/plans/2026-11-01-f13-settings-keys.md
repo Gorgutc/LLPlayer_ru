@@ -35,11 +35,11 @@
 
 **Interfaces:** Consume `TranslationSettings.Clone/Validate`, existing atomic Save callback `Func<TranslationSettings, Task>`, provider settings types and current window lifecycle. Produce a test-injectable diagnostics interface with a Task result and CancellationToken; keep existing constructor callers source-compatible. The implementer owns exact internal type names, records them in the task report, and does not change the other modules' public interfaces.
 
-- [ ] Add compiled RED for missing advanced control/raw validation and a fake explicit diagnostic that must not run on open/save; retain actual failure logs.
-- [ ] Implement sampling/manual/ranges (temperature 0..2, top_p 0..1, penalties -2..2), nullable positive integral token caps, selected known region-map editing preserving unknown entries, narrow reset, model requirement/help/advisory.
-- [ ] Add cancellable explicit Check/Get Models/Hello over immutable draft snapshots with injectable transport. Block conflicting editor/save state; drain on close; reject late results and sanitize errors, including responses containing synthetic credentials.
-- [ ] Prove actual typed invalid values, switch/discard/reset/write failure, zero automatic calls, snapshot/cancel/reentrancy/custom model behavior and 400x360 layout; GREEN plus existing translation/lifecycle suites.
-- [ ] Independent task review, fix confirmed Critical/Important; report exact files/interfaces/RED+GREEN and restore exclusive build lock. Root commits later with the whole product allowlist.
+- [x] Add compiled RED for missing advanced control/raw validation and a fake explicit diagnostic that must not run on open/save; retain actual failure logs.
+- [x] Implement sampling/manual/ranges (temperature 0..2, top_p 0..1, penalties -2..2), nullable positive integral token caps, selected known region-map editing preserving unknown entries, narrow reset, model requirement/help/advisory.
+- [x] Add cancellable explicit Check/Get Models/Hello over immutable draft snapshots with injectable transport. Block conflicting editor/save state; drain on close; reject late results and sanitize errors, including responses containing synthetic credentials.
+- [x] Prove actual typed invalid values, switch/discard/reset/write failure, zero automatic calls, snapshot/cancel/reentrancy/custom model behavior and 400x360 layout; GREEN plus existing translation/lifecycle suites.
+- [x] Independent task review, fix confirmed Critical/Important; report exact files/interfaces/RED+GREEN and restore exclusive build lock. Root commits later with the whole product allowlist.
 
 ## Task 2 — Word actions, menus and opt-in copying
 
@@ -47,12 +47,12 @@
 
 **Interfaces:** Consume current word-selection data and `IAppShell.SetClipboardText`; add a Task browser host seam accepting a validated absolute HTTP(S) URI with a fake implementation in tests. Produce typed Search/Clipboard/ClipboardAll preference rows and detached Settings fields, cloning/normalization, runtime menu snapshots and safe template expansion. AppPrefs Save callback remains the fresh owned-field transaction. Exact internal names go in the task report for Task 3.
 
-- [ ] Add compiled behavioral RED against existing UI/event/prefs behavior for menu editing, opt-in selection copy and exact Ctrl last-search. No compile error is RED evidence.
-- [ ] Implement ordered enabled/title/action/lowercase rows with add/clone/delete/reorder and valid `%w`/`%lw`/`%s` expansion; enforce HTTP(S), URI-escaped replacements and independent right-click/lookup snapshots.
-- [ ] Implement copy-on-select/last-search default false; auto-copy default false with Primary/Secondary/All and nonempty update ownership. Preserve mask/drag/control/popup routing; no middle-click expansion/PDIC.
-- [ ] Merge/persist/apply all new owned fields transactionally and preserve Anki default plus open session deck. Reset remains draft-only.
-- [ ] GREEN: real pointer/menu/input routing, legacy/malformed prefs, template encoding/refusal, failed Save/retry/discard and concurrent field preservation; Settings 560x440/Dark/Light/keyboard reachability.
-- [ ] Independent task review and scoped fixes; report new interfaces and exact files. Release shared files/build lock for Task 3. Root owns commits.
+- [x] Add compiled behavioral RED against existing UI/event/prefs behavior for menu editing, opt-in selection copy and exact Ctrl last-search. No compile error is RED evidence.
+- [x] Implement ordered enabled/title/action/lowercase rows with add/clone/delete/reorder and valid `%w`/`%lw`/`%s` expansion; enforce HTTP(S), URI-escaped replacements and independent right-click/lookup snapshots.
+- [x] Implement copy-on-select/last-search default false; auto-copy default false with Primary/Secondary/All and nonempty update ownership. Preserve mask/drag/control/popup routing; no middle-click expansion/PDIC.
+- [x] Merge/persist/apply all new owned fields transactionally and preserve Anki default plus open session deck. Reset remains draft-only.
+- [x] GREEN: real pointer/menu/input routing, legacy/malformed prefs, template encoding/refusal, failed Save/retry/discard and concurrent field preservation; Settings 560x440/Dark/Light/keyboard reachability.
+- [x] Independent task review and scoped fixes; report new interfaces and exact files. Release shared files/build lock for Task 3. Root owns commits.
 
 ## Task 3 — Add/clone/action hotkeys and explicit app rows
 
@@ -60,12 +60,12 @@
 
 **Interfaces:** Consume existing app IDs/handlers, engine `KeyBindingAction` metadata, `IPlaybackController.Get/ApplyEngineKeyBindings`, native `Player.KeyDown/KeyUp` path. Produce a typed action catalog and app-row representation with action ID/chord/enabled/release; absent rows use legacy override behavior. App-first dispatch remains in current handlers; no new process/script actions.
 
-- [ ] Compiled RED: expose unbound `ABLoopSetStart`, assign a free chord, Save/reload and invoke the real delegate; reassign/clone changes actual dispatch.
-- [ ] Implement engine add/clone/reassignment and catalog, including unbound actions. Keep custom native binding objects/delegates untouched.
-- [ ] Implement explicit portable app rows with multiple chords/enabled/release. Preserve legacy dual F1 defaults and on-down timing when new list absent.
-- [ ] Prove duplicate/app-engine rejection both directions regardless of release, disabled-row behavior, matching-up/repeat/focus transitions, capture Escape/text suppression, failed write/retry and engine custom identity.
-- [ ] Refresh live cheat sheet only after successful Save, including Reset then Save; preserve filter. GREEN new and existing key/settings/word compatibility suites plus 560x440 keyboard/UI tests.
-- [ ] Independent task review and scoped fixes; root freezes product snapshot and separates product commit from docs/tooling.
+- [x] Compiled RED: expose unbound `ABLoopSetStart`, assign a free chord, Save/reload and invoke the real delegate; reassign/clone changes actual dispatch.
+- [x] Implement engine add/clone/reassignment and catalog, including unbound actions. Keep custom native binding objects/delegates untouched.
+- [x] Implement explicit portable app rows with multiple chords/enabled/release. Preserve legacy dual F1 defaults and on-down timing when new list absent.
+- [x] Prove duplicate/app-engine rejection both directions regardless of release, disabled-row behavior, matching-up/repeat/focus transitions, capture Escape/text suppression, failed write/retry and engine custom identity.
+- [x] Refresh live cheat sheet only after successful Save, including Reset then Save; preserve filter. GREEN new and existing key/settings/word compatibility suites plus 560x440 keyboard/UI tests.
+- [x] Independent task review and scoped fixes; root freezes product snapshot and separates product commit from docs/tooling.
 
 ## Task 4 — Contracts, integrated review and fresh gates
 

@@ -668,17 +668,21 @@ Translation/Word реализованы, заморожены и прошли s
 sampling/manual/null-token/region editors, явные Check/Get Models/Hello, упорядоченное меню Search/Copy/Copy All,
 независимые снимки выбранного текста, opt-in copy-on-select/last-search/auto-copy. Автоматические эффекты по умолчанию
 выключены и для старых prefs; Search допускает только HTTP(S), discovery сохраняет custom model.
-Task 3: **реализация COMPLETE, полные проверки/доставка PENDING**. Редактор action rows, `AppPrefs.AppKeyBindings`,
-Save и runtime заморожены; runtime/UI review не оставили Critical/Important. Focused context/UI run: 34 passed,
-exit 0; полный unfiltered suite повторяется после исправления двух устаревших test fixtures. K-R1/K-R2 и дефект
+Task 3: **реализация COMPLETE**. Редактор action rows, `AppPrefs.AppKeyBindings`, Save и runtime завершены;
+whole-branch `/review` после исправления Reset клонированной строки одобрен на `8accf176` без открытых Critical/Important.
+Compiled Reset RED: два падения; GREEN: 151 passed. K-R1/K-R2 и дефект
 темы capture-кнопки закрыты. После потери внешнего key-up новый activation epoch допускает первое свежее нажатие,
 сохраняя владение реальными engine key-up без новых TTL/global hooks. Hotkey-only Save сохраняет свежие значения
 нетронутых Word/Anki полей; явный Reset Word actions заменяет меню только после Save. Это не полная приёмка этапа.
 
 Anki сохраняет существующие default-deck/session ownership, фиксированный localhost/version-6 и пять полей.
 В WPF не было редакторов endpoint/key/APKG-options; прежнее исключение этапа не делает их незакрытым parity.
-PDIC и новые Anki-опции требуют отдельного решения. Полные gates/CI/доставка/Desktop/Vault пока **PENDING / NOT_RUN**;
-native/live provider/Anki/browser/clipboard/GUI/audio — **NOT_RUN / DEFERRED BY OWNER**. Старые exclusions и receipts
+PDIC и новые Anki-опции требуют отдельного решения. Clean committed checkpoint `8accf176`: canonical Windows
+Avalonia exit 0, engine 1657 passed/13 skipped, UI 1297 passed/1 explicit real-recognition skip; package 91 passed,
+fresh ZIP 481 files и оба packaged-plugin load PASS. Ранее WPF full gate прошёл на `f4f4ee5`: 1443 passed/0 failed/0 skipped;
+это отдельная ревизия, не итоговый doc-HEAD и не WPF 7-Zip ship. Точные receipts и границы — в текущем статусе.
+Это source/local checkpoint: фактические последующие GitHub/main/CI/Desktop/Vault результаты фиксируются отдельно
+в completed Vault session и stage closeout. Native/live provider/Anki/browser/clipboard/GUI/audio — **NOT_RUN / DEFERRED BY OWNER**. Старые exclusions и receipts
 ниже описывают свои датированные этапы; ими не подтверждается текущая реализация.
 
 **F-13 search/export/input — исторический одобренный срез (2026-10-28), source/local validation COMPLETE,
@@ -1440,8 +1444,8 @@ whisper.cpp/Whisper.net поддерживают квантизованные м
 
 ## 4. 📊 АКТИВНОЕ РАНЖИРОВАНИЕ ПО ВАЖНОСТИ (убыв., as-of 2026-10-25 / F-13 active)
 
-**Текущий выбранный блок, 2026-11-01:** завершить интеграционные проверки и доставку настроек/горячих клавиш
-по [актуальному F-13 статусу](f13-status-2026-10-18.md#remaining-settings-and-hotkeys--2026-11-01).
+**Текущий выбранный блок, 2026-11-01:** настройки/горячие клавиши реализованы; committed source/local checkpoint
+и отдельные delivery receipts описаны в [актуальном F-13 статусе](f13-status-2026-10-18.md#remaining-settings-and-hotkeys--2026-11-01).
 Датированные checkpoints ниже сохраняются; новый продуктовый этап автоматически не выбирается.
 
 Owner-selected трек с 2026-09-24 — `F-13`; с 2026-10-18 приоритет — единый Avalonia UI для Windows/Linux. `HC-22` закрыт решением владельца от 2026-07-20 как **DONE WITH RESIDUAL RISK**:
@@ -1714,8 +1718,8 @@ DEFERRED BY OWNER**. Полный F-13 parity и следующий этап н�
 
 ## 5. 🛠️ АКТИВНОЕ РАНЖИРОВАНИЕ ПО СЛОЖНОСТИ (возр., as-of 2026-10-24 / F-13 active)
 
-**Уточнение 2026-11-01:** исходники одобренного блока Translation/Word/hotkeys завершены и прошли scoped review;
-полные проверки/доставка ожидаются. [Текущие ограничения](f13-status-2026-10-18.md#remaining-settings-and-hotkeys--2026-11-01)
+**Уточнение 2026-11-01:** исходники одобренного блока Translation/Word/hotkeys завершены; whole-branch review
+и canonical Windows Avalonia/package checkpoint прошли на `8accf176`. [Текущие ограничения и отдельные delivery receipts](f13-status-2026-10-18.md#remaining-settings-and-hotkeys--2026-11-01)
 имеют приоритет над датированными checkpoints ниже.
 
 Активный крупный трек — `F-13`; общий Windows/Linux Avalonia build/package baseline реализован. Локальные
