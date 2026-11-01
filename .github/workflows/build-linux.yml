@@ -53,7 +53,21 @@ jobs:
       run: xvfb-run -a bash scripts/linux/verify.sh
 
     - name: Publish
-      run: bash scripts/linux/publish.sh --out "$RUNNER_TEMP/linux-package"
+      run: bash scripts/linux/publish.sh --out "$RUNNER_TEMP/linux-package" --staging "$GITHUB_WORKSPACE/artifacts/ci-linux-online-package"
+
+    - name: Verify staged and archived portable plugin load
+      run: |
+        staged=("$GITHUB_WORKSPACE"/artifacts/ci-linux-online-package/LLPlayer-*-linux-x64)
+        [[ ${#staged[@]} -eq 1 && -d "${staged[0]}" ]] || { echo 'Expected one staged Linux package.' >&2; exit 1; }
+        LLPLAYER_PACKAGE_DIR="${staged[0]}" dotnet test FlyleafLibTests/FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
+        archives=("$RUNNER_TEMP"/linux-package/*.tar.gz)
+        [[ ${#archives[@]} -eq 1 && -f "${archives[0]}" ]] || { echo 'Expected one Linux archive.' >&2; exit 1; }
+        readback="$RUNNER_TEMP/linux-plugin-readback"
+        mkdir "$readback"
+        tar -xzf "${archives[0]}" -C "$readback"
+        extracted=("$readback"/LLPlayer-*-linux-x64)
+        [[ ${#extracted[@]} -eq 1 && -d "${extracted[0]}" ]] || { echo 'Expected one extracted Linux package.' >&2; exit 1; }
+        LLPLAYER_PACKAGE_DIR="${extracted[0]}" dotnet test FlyleafLibTests/FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
 
     - name: Upload package
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

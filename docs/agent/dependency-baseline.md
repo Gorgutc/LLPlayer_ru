@@ -7,7 +7,7 @@ This document freezes current dependency decisions from `main`.
 - `LLPlayer`: `net10.0-windows10.0.18362.0`, `WinExe`, WPF, `win-x64`.
 - `FlyleafLib`: `net10.0-windows10.0.18362.0`, WPF and Windows Forms enabled; plus portable `net10.0` for Linux (F-13) without WPF, Windows Forms, or Vortice.
 - `WpfColorFontDialog`: `net10.0-windows10.0.18362.0`, WPF.
-- `Plugins/YoutubeDL`: `net10.0-windows10.0.18362.0`, `win-x64`.
+- `Plugins/YoutubeDL`: `net10.0-windows10.0.18362.0;net10.0`; the original WPF `win-x64` profile remains separate from the portable Windows/Linux plugin.
 - `FlyleafLibTests`: xUnit test project targeting `net10.0-windows10.0.18362.0` (on Linux build hosts it also builds and runs `net10.0`).
 - `LLPlayer.Avalonia` (F-13): `net10.0`, `win-x64;linux-x64`, framework-dependent shared Avalonia app over the portable engine on both OSes. `LLPlayer.Avalonia.Tests`: `net10.0`.
 
@@ -208,6 +208,28 @@ truth, and adding or upgrading any Linux package is the same focused dependency 
   user media folders; any `*.so` outside `FFmpeg/` except the explicitly allowed NuGet shared libraries above,
   the four Whisper natives under `runtimes/linux-x64/`, and root `libe_sqlite3.so`; FFmpeg libraries with other
   majors; Windows native payload folders; and symlinks that escape the package.
+
+### Configured Avalonia online-video tools (2026-11-01)
+
+Both Avalonia publishers separately build YoutubeDL with `-f net10.0` and the selected `win-x64`/`linux-x64` RID,
+and copy only nonempty `YoutubeDL.dll` and `YoutubeDL.pdb` into exact-cased `Plugins/YoutubeDL/`. Validate the
+portable assembly identity/target and load it against the shared engine; retain archive integrity checks. Tool
+executables, tool archives/caches and `LLPlayer.OnlineVideo.json` are user runtime state and must be excluded.
+Do not bulk-copy plugin publish output or change the WPF release profile/action.
+
+Users supply standalone yt-dlp and Deno through explicit absolute executable paths. Upstream distinguishes
+Windows `yt-dlp.exe` and Linux standalone `yt-dlp_linux` from the Python-dependent `yt-dlp` zipimport file.
+The official standalone builds include EJS scripts; YouTube support additionally needs a supported JavaScript
+runtime (Deno recommended). Shared FFmpeg libraries do not supply FFmpeg/ffprobe command-line tools. This
+extraction-only slice installs/downloads nothing and promises no postprocessing or provider/native acceptance.
+Linux online extraction also requires the system util-linux `/usr/bin/setsid` executable. It is checked only
+when explicit extraction starts, never installed or searched on PATH. The root stays in the owned session
+without `--fork`; cancellation/finalization kills its process group even after the root exits. Windows uses
+a kill-on-close Job Object assigned to the suspended helper before it is resumed. These OS containment
+adapters add no bundled executable and do not change ordinary direct playback requirements.
+References: [yt-dlp dependencies](https://github.com/yt-dlp/yt-dlp#dependencies),
+[EJS requirements](https://github.com/yt-dlp/yt-dlp/wiki/EJS). Record actual external tool versions/hashes only
+when separately authorized native acceptance is performed; the managed plugin package does not certify them.
 
 ## Release Packaging Tail
 

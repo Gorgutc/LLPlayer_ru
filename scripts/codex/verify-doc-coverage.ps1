@@ -114,6 +114,39 @@ try {
         }
     }
 
+    function Assert-BuildWorkflowTestCommands([string]$Text) {
+        $wpfJobs = [regex]::Matches($Text, '(?ms)^  build:\r?\n(?<Body>.*?)(?=^  \S|\z)')
+        $avaloniaJobs = [regex]::Matches($Text, '(?ms)^  avalonia-windows:\r?\n(?<Body>.*?)(?=^  \S|\z)')
+        if ($wpfJobs.Count -ne 1 -or $avaloniaJobs.Count -ne 1) {
+            throw 'Build workflow must contain one protected WPF job and one additive Windows Avalonia job.'
+        }
+        $wpfText = $wpfJobs[0].Groups['Body'].Value
+        $avaloniaText = $avaloniaJobs[0].Groups['Body'].Value
+        if (($wpfText + $avaloniaText) -cmatch '(?m)^\s+(?:if|continue-on-error):') {
+            throw 'Build workflow test commands must not be conditional or non-fatal.'
+        }
+        $wpfCommand = '      run: dotnet test --no-restore -warnaserror .\FlyleafLibTests'
+        $wpfTests = [regex]::Matches($wpfText, '(?ms)^    - name: Test\r?\n.*?(?=^    - |\z)')
+        if ($wpfTests.Count -ne 1) { throw 'WPF job must contain exactly one canonical Test step.' }
+        $wpfTestLines = @($wpfTests[0].Value -split '\r?\n' | Where-Object {
+            $_.Trim() -and -not $_.TrimStart().StartsWith('#', [StringComparison]::Ordinal)
+        } | ForEach-Object { $_.TrimEnd() })
+        if (($wpfTestLines -join "`n") -cne ('    - name: Test' + "`n" + $wpfCommand) -or
+            [regex]::Matches($wpfText, '(?i)dotnet test').Count -ne 1) {
+            throw 'WPF job must run exactly its canonical unfiltered warning-clean test command.'
+        }
+        $packageCommand = '          dotnet test .\FlyleafLibTests\FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 -p:LLPlayerPortableTests=true --filter ''FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'''
+        $packageSteps = [regex]::Matches($avaloniaText, '(?ms)^    - name: Verify staged and archived portable plugin load\r?\n.*?(?=^    - |\z)')
+        if ($packageSteps.Count -ne 1 -or
+            [regex]::Matches($packageSteps[0].Value, '(?m)^' + [regex]::Escape($packageCommand) + '\r?$').Count -ne 1 -or
+            [regex]::Matches($avaloniaText, '(?i)dotnet test').Count -ne 1 -or
+            [regex]::Matches($Text, '(?i)dotnet test').Count -ne 2) {
+            throw 'Build workflow may add only the exact portable packaged-plugin load test in its reviewed Avalonia step.'
+        }
+        # verify-build-workflow.ps1 separately locks the complete jobs, including the helper's execution,
+        # staged and archived calls, failure handling, and their order after the full unfiltered suites.
+    }
+
     $contractDocs = @(
         "product-behavior-contract.md",
         "wpf-design-contract.md",
@@ -143,7 +176,6 @@ try {
     $testCommandSurfaces = @(
         @{ Path = ".\AGENTS.md"; Pattern = '(?m)^dotnet test --no-restore -warnaserror \.\\FlyleafLibTests\r?$' },
         @{ Path = ".\RUN_INSTRUCTIONS.md"; Pattern = '(?m)^dotnet test --no-restore -warnaserror \.\\FlyleafLibTests\r?$' },
-        @{ Path = ".\.github\workflows\build.yml"; Pattern = '(?m)^      run: dotnet test --no-restore -warnaserror \.\\FlyleafLibTests\r?$' },
         @{ Path = ".\.codex\agents\dotnet_quality_guardian.toml"; Pattern = '(?m)^Required baseline is .* dotnet test --no-restore -warnaserror \.\\\\FlyleafLibTests\.\r?$' },
         @{ Path = ".\docs\agent\verification.md"; Pattern = '(?m)^dotnet test --no-restore -warnaserror \.\\FlyleafLibTests\r?$' },
         @{ Path = ".\docs\agent\quality-tooling.md"; Pattern = '(?m)^- `dotnet test --no-restore -warnaserror \.\\FlyleafLibTests`\r?$' },
@@ -155,6 +187,48 @@ try {
     foreach ($surface in $testCommandSurfaces) {
         Require-UniqueCaseSensitiveText $surface.Path $surface.Pattern "$($surface.Path) must contain exactly one surface-specific canonical warning-clean test command."
         Require-UniqueCaseSensitiveText $surface.Path '(?i)dotnet test' "$($surface.Path) must declare exactly one dotnet test command in any casing."
+    }
+    try { Assert-BuildWorkflowTestCommands (Get-Content '.\.github\workflows\build.yml' -Raw) }
+    catch { $failures.Add($_.Exception.Message) }
+
+    $positiveBuildTestCommands = @'
+jobs:
+  build:
+    steps:
+    - name: Test
+      run: dotnet test --no-restore -warnaserror .\FlyleafLibTests
+  avalonia-windows:
+    steps:
+    - name: Verify staged and archived portable plugin load
+      shell: pwsh
+      run: |
+        function Test-PluginLoad([string]$PackageRoot) {
+          $env:LLPLAYER_PACKAGE_DIR = $PackageRoot
+          dotnet test .\FlyleafLibTests\FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 -p:LLPlayerPortableTests=true --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
+          if ($LASTEXITCODE -ne 0) { throw 'Package load failed.' }
+        }
+'@
+    Assert-BuildWorkflowTestCommands $positiveBuildTestCommands
+    $buildTestCommandMutations = @(
+        @{ Name = 'filtered WPF baseline'; Before = 'run: dotnet test --no-restore -warnaserror .\FlyleafLibTests'; After = 'run: dotnet test --no-restore -warnaserror .\FlyleafLibTests --filter FullyQualifiedName=__NoSuchTest__' },
+        @{ Name = 'alternate-case WPF command'; Before = 'run: dotnet test'; After = 'run: DotNet Test' },
+        @{ Name = 'conditional WPF suite'; Before = '    - name: Test'; After = "    - name: Test`n      if: false" },
+        @{ Name = 'non-fatal WPF suite'; Before = '    - name: Test'; After = "    - name: Test`n      continue-on-error: true" },
+        @{ Name = 'second WPF command'; Before = '  avalonia-windows:'; After = "    - name: Extra test`n      run: DOTNET TEST --filter __NoSuchTest__`n  avalonia-windows:" },
+        @{ Name = 'missing WPF suite'; Before = '    - name: Test'; After = '    - name: Test omitted' },
+        @{ Name = 'wrong packaged test'; Before = 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'; After = 'FullyQualifiedName=__NoSuchTest__' },
+        @{ Name = 'alternate-case packaged command'; Before = '          dotnet test'; After = '          DOTNET TEST' },
+        @{ Name = 'conditional packaged test'; Before = '    - name: Verify staged and archived portable plugin load'; After = "    - name: Verify staged and archived portable plugin load`n      if: false" },
+        @{ Name = 'wrong packaged test step'; Before = '    - name: Verify staged and archived portable plugin load'; After = '    - name: Unrelated step' },
+        @{ Name = 'packaged warnings non-fatal'; Before = '--no-build --no-restore -warnaserror'; After = '--no-build --no-restore' },
+        @{ Name = 'arbitrary third test'; Before = 'jobs:'; After = "metadata: dotnet test --filter __NoSuchTest__`njobs:" }
+    )
+    foreach ($mutation in $buildTestCommandMutations) {
+        if (-not $positiveBuildTestCommands.Contains($mutation.Before)) { throw "Build test-command fixture mutation is stale: $($mutation.Name)." }
+        $rejected = $false
+        try { Assert-BuildWorkflowTestCommands ($positiveBuildTestCommands.Replace($mutation.Before, $mutation.After)) }
+        catch { $rejected = $true }
+        if (-not $rejected) { $failures.Add("Build test-command guard accepted adversarial fixture: $($mutation.Name).") }
     }
 
     $canonicalDotnetGuardian = @'

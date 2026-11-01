@@ -15,6 +15,8 @@ acceptance and do not replace the shipped WPF package.
 
 ## Windows Avalonia Package
 
+- Configured online video (2026-11-01): publish `Plugins/YoutubeDL` separately with portable `-f net10.0` and the selected Windows/Linux RID. Both Avalonia packages require nonempty portable `Plugins/YoutubeDL/YoutubeDL.dll` and `YoutubeDL.pdb`, and reject yt-dlp/Deno executables, downloaded archives/caches and user settings. Helpers are external explicit absolute paths; do not apply the WPF bundled-helper flow to Avalonia.
+
 - Produce `LLPlayer-Avalonia-<version>-win-x64.zip` plus SHA-256; keep this separate from WPF release assets.
 - Require the existing FFmpeg DLLs, explicit win-x64 native allowlists and app-local OpenAL Soft 1.23.1 through
   pinned `Silk.NET.OpenAL.Soft.Native`, with its license/source notices. Require .NET 10 runtime and x64 Visual C++

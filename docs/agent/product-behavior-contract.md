@@ -9,6 +9,7 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 ## Core Functions To Preserve
 
 - Play local media files and online video URLs.
+- Additive configured Avalonia online video (owner-approved 2026-11-01): one shared Windows/Linux **Open online URL** action explicitly invokes the portable YoutubeDL plugin with user-provisioned standalone yt-dlp and Deno. Tool paths start unset; setup is explicit and no tools are installed, downloaded, updated or probed on startup. Preserve ordinary local/direct HTTP media and safe Ctrl+V without valid tools, including extensionless media URLs. Preserve existing automatic A/V selection, VTT automatic-caption/language policy, chapters and headers. Cancel, replacement and close own bounded extraction cleanup and reject stale results. Format editors, arbitrary portable helper arguments, cookies/authentication, authored-caption expansion, playlist/DRM guarantees and turnkey dependency bundling are outside this block. Native/live URL acceptance is separately deferred by the owner.
 - Accept one command-line path/URL and open it at startup.
 - Drag/drop and context-menu based media/subtitle workflows through the Flyleaf host.
 - Dual subtitles: primary and secondary subtitle tracks, both text and bitmap.
