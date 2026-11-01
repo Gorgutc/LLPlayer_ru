@@ -282,6 +282,13 @@ public sealed class FakeShell : IAppShell
     public int CheatSheetShown { get; private set; }
     public List<string> Clipboard { get; } = [];
     public List<string> Themes { get; } = [];
+    public List<Uri> BrowserRequests { get; } = [];
+    public Func<Uri, Task<bool>>? BrowserHandler { get; set; }
+    public Task<bool> OpenBrowserAsync(Uri uri)
+    {
+        BrowserRequests.Add(uri);
+        return BrowserHandler?.Invoke(uri) ?? Task.FromResult(true);
+    }
     public int ExitCalls { get; private set; }
 
     public Exception? PickError { get; set; }

@@ -65,6 +65,34 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 
   **Additive F-13 Avalonia note (2026-10-26):** WPF keeps the Word Manager deck session-only; the Avalonia Word Manager seeds it from the persisted `AppPrefs.AnkiDeck` default, while an open manager keeps its session deck.
 
+## Additive shared Avalonia settings/actions — 2026-11-01
+
+The [approved design](plans/2026-11-01-f13-settings-keys-design.md) extends the existing Translation dialog with
+sampling/manual/null-token and region-map editors, narrow resets, provider guidance and explicit Check/Get Models/
+Hello. Opening/loading/saving never probes; Hello visibly sends a model request. Custom models survive discovery.
+Invalid raw drafts block Save; failed persistence/discard leaves live settings unchanged. Diagnostics use sanitized
+status and owned cancellation/drain rather than exposing provider bodies or credentials.
+
+Word Tools edits ordered Search/Clipboard/ClipboardAll actions with add/independent clone/delete/reorder. Menus
+capture their own word/cue/provenance independently of newer popup lookups. Copy-on-select, exact-modifier last
+search and Primary/Secondary/All subtitle auto-copy default off, including older preferences. Search accepts only
+escaped absolute HTTP(S) destinations through the host seam. Masked/sidebar/control/popup ownership remains intact;
+no middle-click expansion or PDIC is added. Existing Word Manager default-deck/session ownership and explicit
+TSV/APKG/AnkiConnect behavior remain unchanged. Untouched Word/Anki fields preserve concurrent latest values on
+Save; explicit Reset Word actions replaces the menu only after successful Save. Endpoint/key/APKG-options editors
+are new product decisions,
+not missing WPF parity.
+
+Hotkey source now adds action selection, add/clone/reassignment, multiple app/engine chords and opt-in app release
+rows. It preserves legacy default timing and engine custom delegates. Only implemented portable app commands are
+selectable; Settings/Word Manager/Subtitles Export add choices without default chords or new windows. Successful
+Save refreshes the effective enabled cheat sheet and retains its filter; Reset alone does not change live routing.
+Returning after genuine keyboard-context loss admits the first fresh press even if its earlier release occurred
+outside the app; actual engine-held releases retain their ownership. Source implementation and scoped reviews
+are complete; full gates and delivery remain pending in the [current status](f13-status-2026-10-18.md#remaining-settings-and-hotkeys--2026-11-01).
+All additions use one Windows/Linux UI/services implementation. WPF remains supported; native/live acceptance and
+full F-13 parity are separate gates.
+
 ## Manual Checks When Touched
 
 The 2026-10-28 search/export/input stage passed five full local gates on clean C3 `4a14dbd0`; relevant

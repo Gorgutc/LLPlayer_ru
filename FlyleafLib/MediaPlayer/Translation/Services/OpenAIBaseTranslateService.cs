@@ -538,7 +538,9 @@ public class OpenAIBaseTranslateService : ITranslateService
         return reply;
     }
 
-    public static async Task<List<string>> GetLoadedModels(OpenAIBaseTranslateSettings settings)
+    public static Task<List<string>> GetLoadedModels(OpenAIBaseTranslateSettings settings) => GetLoadedModels(settings, CancellationToken.None);
+
+    public static async Task<List<string>> GetLoadedModels(OpenAIBaseTranslateSettings settings, CancellationToken token)
     {
         using HttpClient client = settings.GetHttpClient(true);
 
@@ -548,9 +550,9 @@ public class OpenAIBaseTranslateService : ITranslateService
         // getting models
         try
         {
-            using var result = await client.GetAsync("/v1/models");
+            using var result = await client.GetAsync("/v1/models", token);
 
-            jsonResultString = await result.Content.ReadAsStringAsync();
+            jsonResultString = await result.Content.ReadAsStringAsync(token);
 
             statusCode = (int)result.StatusCode;
             result.EnsureSuccessStatusCode();
@@ -563,6 +565,7 @@ public class OpenAIBaseTranslateService : ITranslateService
 
             return models;
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             throw new InvalidOperationException($"get models error: {ex.Message}", ex)

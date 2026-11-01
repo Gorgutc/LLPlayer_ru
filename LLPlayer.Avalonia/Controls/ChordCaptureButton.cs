@@ -14,10 +14,13 @@ namespace LLPlayer.Avalonia.Controls;
 /// </summary>
 public sealed class ChordCaptureButton : Button
 {
+    protected override Type StyleKeyOverride => typeof(Button);
+
     public static readonly StyledProperty<string> ChordProperty =
         AvaloniaProperty.Register<ChordCaptureButton, string>(nameof(Chord), "");
 
     bool capturing;
+    readonly HashSet<Key> keysAwaitingRelease = [];
 
     public ChordCaptureButton()
     {
@@ -74,6 +77,7 @@ public sealed class ChordCaptureButton : Button
         }
 
         e.Handled = true;
+        keysAwaitingRelease.Add(e.Key);
         if (e.Key == Key.Escape)
         {
             StopCapture();
@@ -95,5 +99,11 @@ public sealed class ChordCaptureButton : Button
         capturing = false;
         PseudoClasses.Set(":capturing", false);
         Opacity = 1;
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        if (keysAwaitingRelease.Remove(e.Key)) { e.Handled = true; return; }
+        base.OnKeyUp(e);
     }
 }

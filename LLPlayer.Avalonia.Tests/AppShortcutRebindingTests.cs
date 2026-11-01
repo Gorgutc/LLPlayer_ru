@@ -145,7 +145,7 @@ public class AppShortcutRebindingTests
         AppPrefs prefs = new AppPrefs().Normalize();
         int commits = 0;
         SettingsViewModel draft = new(prefs, _ => commits++, new BitmapSubtitleRuntimeState(1, 1, 100));
-        draft.ShortcutRows.Should().HaveCount(AppShortcutMap.Defaults.Select(d => d.ActionName).Distinct().Count());
+        draft.ShortcutRows.Should().HaveCount(AppShortcutMap.Defaults.Count);
         draft.ShortcutRows.Single(r => r.ActionName == AppShortcutMap.ToggleSidebar).Chord.Should().Be("Ctrl+B");
 
         draft.ShortcutRows.Single(r => r.ActionName == AppShortcutMap.ToggleSidebar).Chord = "Ctrl+F";
@@ -228,7 +228,7 @@ public class AppShortcutRebindingTests
     {
         AppPrefs prefs = new AppPrefs().Normalize();
         SettingsViewModel draft = new(prefs, _ => { }, new BitmapSubtitleRuntimeState(1, 1, 100));
-        ShortcutEditRow row = draft.ShortcutRows.Single(r => r.ActionName == AppShortcutMap.OpenWindowCheatSheet);
+        ShortcutEditRow row = draft.ShortcutRows.First(r => r.ActionName == AppShortcutMap.OpenWindowCheatSheet);
         row.Chord = "Ctrl+Shift+F1";
         draft.SaveCommand.Execute(null);
         draft.AppShortcuts[AppShortcutMap.OpenWindowCheatSheet].Should().Be("Ctrl+Shift+F1");
@@ -334,7 +334,7 @@ public class AppShortcutRebindingTests
             model.SelectedSection = 2;
             Dispatcher.UIThread.RunJobs();
             ItemsControl rows = window.FindControl<ItemsControl>("ShortcutRows")!;
-            int actions = AppShortcutMap.Defaults.Select(d => d.ActionName).Distinct().Count();
+            int actions = AppShortcutMap.Defaults.Count;
             rows.ItemCount.Should().Be(actions);
             ChordCaptureButton[] captures = [.. rows.GetVisualDescendants().OfType<ChordCaptureButton>()];
             captures.Should().HaveCount(actions);

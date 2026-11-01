@@ -278,10 +278,14 @@ public class SettingsParityTests
 
         SettingsViewModel draft = main.CreateSettings();
         draft.AnkiDeck = "New settings deck";
+        draft.WordCopyOnSelected = true;
+        draft.WordMenuActions[0].Title = "Session-safe copy";
         draft.SaveCommand.Execute(null);
         Assert.Null(draft.Error);
         Assert.Equal("New settings deck", main.AnkiDeck);
         Assert.Equal("Session deck", main.WordManager.Deck);
+        Assert.True(main.CreateSettings().WordCopyOnSelected);
+        Assert.Equal("Session-safe copy", main.CreateSettings().WordMenuActions[0].Title);
 
         main.WordManagerClosed();
         main.ShowWordManagerCommand.Execute(null);

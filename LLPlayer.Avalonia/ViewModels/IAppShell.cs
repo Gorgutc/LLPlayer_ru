@@ -15,6 +15,7 @@ public interface IAppShell
     void ShowTranslation(TranslationViewModel model) { }
     void ShowOnlineVideo(OnlineVideoViewModel model) { }
     void ShowRecognition(RecognitionViewModel model) { }
+    Task<bool> OpenBrowserAsync(Uri uri) => Task.FromResult(false);
     void SetClipboardText(string text);
     void ApplyTheme(string theme);
     void Exit();

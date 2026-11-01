@@ -9,7 +9,8 @@ namespace LLPlayer.Avalonia.Services;
 /// App-level shortcut (owned by the Linux app, not by the engine). <see cref="ActionName"/> uses the WPF app's
 /// <c>CustomKeyBindingAction</c> names so configs, docs and the cheat sheet speak the same language.
 /// </summary>
-public sealed record AppShortcut(string ActionName, WpfKey Key, bool Ctrl, bool Alt, bool Shift, string Description)
+public sealed record AppShortcut(string ActionName, WpfKey Key, bool Ctrl, bool Alt, bool Shift, string Description,
+    bool IsKeyUp = false, bool IsEnabled = true)
 {
     public bool Matches(WpfKey key, bool ctrl, bool alt, bool shift)
         => Key == key && Ctrl == ctrl && Alt == alt && Shift == shift;
@@ -40,6 +41,9 @@ public sealed class AppShortcutMap
     public const string SubsPrimaryTextCopy = "SubsPrimaryTextCopy";
     public const string OpenSubtitles = "OpenSubtitles";
     public const string ToggleTheme = "ToggleTheme";
+    public const string OpenWindowSettings = "OpenWindowSettings";
+    public const string OpenWindowWordManager = "OpenWindowWordManager";
+    public const string OpenWindowSubsExporter = "OpenWindowSubsExporter";
 
     public static readonly IReadOnlyList<AppShortcut> Defaults =
     [
@@ -77,17 +81,18 @@ public sealed class AppShortcutMap
     readonly Dictionary<string, Action> actions;
     readonly IReadOnlyList<AppShortcut> effective;
 
-    public AppShortcutMap(IReadOnlyDictionary<string, Action> actions, IReadOnlyDictionary<string, string>? overrides = null)
+    public AppShortcutMap(IReadOnlyDictionary<string, Action> actions, IReadOnlyDictionary<string, string>? overrides = null,
+        IReadOnlyList<AppKeyBindingPref>? explicitRows = null)
     {
         this.actions = new Dictionary<string, Action>(actions, StringComparer.Ordinal);
-        effective = BuildEffective(overrides);
+        effective = AppKeyBindings.BuildEffective(overrides, explicitRows);
     }
 
     /// <summary>Distinct app action names in the stable default order.</summary>
     public static IReadOnlyList<string> ActionNames { get; } =
         [.. Defaults.Select(s => s.ActionName).Distinct(StringComparer.Ordinal)];
 
-    /// <summary>The effective chords: default chords with the valid persisted overrides applied (one chord per action).</summary>
+    /// <summary>Effective explicit rows, or legacy defaults with valid overrides.</summary>
     public IReadOnlyList<AppShortcut> Shortcuts => effective;
 
     public static string FormatChord(WpfKey key, bool ctrl, bool alt, bool shift)
@@ -229,6 +234,7 @@ public sealed class AppShortcutMap
         Dictionary<(WpfKey, bool, bool, bool), string> seen = [];
         foreach (AppShortcut s in shortcuts)
         {
+            if (!s.IsEnabled) continue;
             (WpfKey, bool, bool, bool) signature = (s.Key, s.Ctrl, s.Alt, s.Shift);
             if (!seen.TryAdd(signature, s.ActionName))
             {
@@ -252,13 +258,20 @@ public sealed class AppShortcutMap
     }
 
     public AppShortcut? Find(WpfKey key, bool ctrl, bool alt, bool shift)
-        => effective.FirstOrDefault(s => s.Matches(key, ctrl, alt, shift));
+        => effective.FirstOrDefault(s => s.IsEnabled && s.Matches(key, ctrl, alt, shift));
+
+    internal bool TryResolve(WpfKey key, bool ctrl, bool alt, bool shift, out AppShortcut? shortcut, out Action? action)
+    {
+        shortcut = Find(key, ctrl, alt, shift);
+        action = null;
+        return shortcut != null && actions.TryGetValue(shortcut.ActionName, out action);
+    }
 
     /// <summary>Runs the app action bound to the chord. Returns false when the chord is not an app shortcut.</summary>
     public bool TryExecute(WpfKey key, bool ctrl, bool alt, bool shift)
     {
         AppShortcut? s = Find(key, ctrl, alt, shift);
-        if (s == null || !actions.TryGetValue(s.ActionName, out Action? action))
+        if (s == null || s.IsKeyUp || !actions.TryGetValue(s.ActionName, out Action? action))
             return false;
 
         action();
@@ -275,9 +288,10 @@ public sealed class AppShortcutMap
     {
         List<ShortcutInfo> rows = [];
 
-        foreach (IGrouping<string, AppShortcut> g in (appShortcuts ?? Defaults).GroupBy(s => s.ActionName, StringComparer.Ordinal))
+        foreach (IGrouping<string, AppShortcut> g in (appShortcuts ?? Defaults).Where(s => s.IsEnabled)
+                     .GroupBy(s => s.ActionName, StringComparer.Ordinal))
         {
-            rows.Add(new ShortcutInfo(AppGroup(g.Key), g.Key, g.First().Description,
+            rows.Add(new ShortcutInfo(ShortcutActionCatalog.AppGroup(g.Key), g.Key, g.First().Description,
                 g.Select(s => string.Join("+", KeyMapper.ChordParts(s.Key, s.Ctrl, s.Alt, s.Shift))).ToList()));
         }
 
@@ -285,7 +299,7 @@ public sealed class AppShortcutMap
                      .Where(b => b.IsEnabled && b.Action != KeyBindingAction.Custom)
                      .GroupBy(b => b.Action))
         {
-            rows.Add(new ShortcutInfo(EngineGroup(g.Key), g.Key.ToString(), Describe(g.Key),
+            rows.Add(new ShortcutInfo(ShortcutActionCatalog.EngineGroup(g.Key), g.Key.ToString(), Describe(g.Key),
                 g.Select(b => string.Join("+", KeyMapper.ChordParts(b.Key, b.Ctrl, b.Alt, b.Shift))).Distinct().ToList()));
         }
 
@@ -293,28 +307,6 @@ public sealed class AppShortcutMap
         return rows.OrderBy(r => Array.IndexOf(order, r.Group) is var i && i < 0 ? order.Length : i)
                    .ThenBy(r => r.Description, StringComparer.OrdinalIgnoreCase)
                    .ToList();
-    }
-
-    static string AppGroup(string action) => action switch
-    {
-        ToggleSidebar or OpenWindowCheatSheet or ToggleTheme => "Window",
-        _ => "Subtitles",
-    };
-
-    static string EngineGroup(KeyBindingAction action)
-    {
-        string name = action.ToString();
-        if (name.StartsWith("Subs", StringComparison.Ordinal) || name.Contains("Subtitles", StringComparison.Ordinal))
-            return "Subtitles";
-        if (name.Contains("Audio", StringComparison.Ordinal) || name.Contains("Volume", StringComparison.Ordinal) || name.Contains("Mute", StringComparison.Ordinal))
-            return "Audio";
-        if (name.Contains("Zoom", StringComparison.Ordinal) || name.Contains("Video", StringComparison.Ordinal) || name.Contains("Ratio", StringComparison.Ordinal))
-            return "Video";
-        if (name.Contains("Screen", StringComparison.Ordinal))
-            return "Window";
-        if (name.StartsWith("Open", StringComparison.Ordinal) || name.StartsWith("Copy", StringComparison.Ordinal))
-            return "Other";
-        return "Playback";
     }
 
     static string Describe(KeyBindingAction action)

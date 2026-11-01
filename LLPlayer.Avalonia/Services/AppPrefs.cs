@@ -129,6 +129,8 @@ public sealed class AppPrefs
 
     /// <summary>App-level shortcut overrides (action name -> canonical chord, e.g. Ctrl+Shift+B).</summary>
     public Dictionary<string, string> AppShortcutOverrides { get; set; } = [];
+    /// <summary>Null retains legacy overrides; an explicit empty list intentionally removes app bindings.</summary>
+    public List<AppKeyBindingPref>? AppKeyBindings { get; set; }
 
     /// <summary>True when the profile stores an explicit replacement list for the engine key bindings; false uses the
     /// engine's built-in defaults (the list is ignored then). Additive/absent-defaulting.</summary>
@@ -177,6 +179,15 @@ public sealed class AppPrefs
 
     /// <summary>Default Anki deck name offered by the Word Manager for TSV/.apkg/AnkiConnect.</summary>
     public string AnkiDeck { get; set; } = DefaultAnkiDeck;
+
+    public List<WordMenuActionPref>? WordMenuActions { get; set; }
+    public bool WordCopyOnSelected { get; set; }
+    public bool WordLastSearchOnSelected { get; set; }
+    [JsonConverter(typeof(WordSearchModifierConverter))]
+    public WordSearchModifier WordLastSearchModifier { get; set; } = WordSearchModifier.Control;
+    public bool SubsAutoTextCopy { get; set; }
+    [JsonConverter(typeof(SubtitleAutoCopyTargetConverter))]
+    public SubtitleAutoCopyTarget SubsAutoTextCopyTarget { get; set; } = SubtitleAutoCopyTarget.Primary;
 
     /// <summary>Accepts only the ported word-click behaviors; null keeps the default.</summary>
     public static bool TryNormalizeWordClickAction(string? raw, out string normalized)
@@ -254,6 +265,7 @@ public sealed class AppPrefs
         Theme = string.Equals(Theme, "Light", StringComparison.OrdinalIgnoreCase) ? "Light" : "Dark";
         _ = AppShortcutMap.TryNormalizeOverrides(AppShortcutOverrides, out Dictionary<string, string> shortcuts);
         AppShortcutOverrides = shortcuts;
+        AppKeyBindings = global::LLPlayer.Avalonia.Services.AppKeyBindings.NormalizePrefs(AppKeyBindings);
         if (EngineKeysCustomized)
         {
             EngineKeyBindings = global::LLPlayer.Avalonia.Services.EngineKeyBindings.NormalizePrefs(EngineKeyBindings);
@@ -269,6 +281,9 @@ public sealed class AppPrefs
             WordTranslationService = "GoogleV1";
         WordClickAction = TryNormalizeWordClickAction(WordClickAction, out string clickAction) ? clickAction : DefaultWordClickAction;
         AnkiDeck = TryNormalizeAnkiDeck(AnkiDeck, out string deck) ? deck : DefaultAnkiDeck;
+        WordMenuActions = WordActions.NormalizeRows(WordMenuActions);
+        if (!Enum.IsDefined(WordLastSearchModifier)) WordLastSearchModifier = WordSearchModifier.Control;
+        if (!Enum.IsDefined(SubsAutoTextCopyTarget)) SubsAutoTextCopyTarget = SubtitleAutoCopyTarget.Primary;
         return this;
     }
 

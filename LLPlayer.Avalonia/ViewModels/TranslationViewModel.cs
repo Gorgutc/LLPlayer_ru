@@ -1,9 +1,10 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
 using LLPlayer.Core.Services;
 using System.Globalization;
+using LLPlayer.Avalonia.Services;
 
 namespace LLPlayer.Avalonia.ViewModels;
 
@@ -65,8 +66,9 @@ public partial class TranslationViewModel : ObservableObject
     bool loading;
     string previousEditingProvider = "Off";
 
-    public TranslationViewModel(TranslationSettings settings, Func<TranslationSettings, Task> save, string? warning = null)
+    public TranslationViewModel(TranslationSettings settings, Func<TranslationSettings, Task> save, string? warning = null, ITranslationDiagnostics? diagnostics = null)
     {
+        this.diagnostics = diagnostics ?? new TranslationDiagnostics();
         Draft = settings.Clone(); this.save = save; Warning = warning;
         dictionaryMode = Draft.DictionaryMode; provider = Draft.WordProvider; sentenceProvider = Draft.SentenceProvider; editingProvider = provider; targetLanguage = Draft.TargetLanguage;
         translateMethod = Draft.Chat.TranslateMethod; contextRetainPolicy = Draft.Chat.ContextRetainPolicy;
@@ -90,7 +92,6 @@ public partial class TranslationViewModel : ObservableObject
     public bool HasTimeout => selected != null;
     partial void OnProviderChanged(string value)
     {
-        if (Busy) return;
         try { CaptureFields(); }
         catch (ArgumentException e)
         {
@@ -132,12 +133,14 @@ public partial class TranslationViewModel : ObservableObject
         TimeoutMs = selected switch { GoogleV1TranslateSettings s => s.TimeoutMs, MicrosoftTranslateSettings s => s.TimeoutMs,
             DeepLTranslateSettings s => s.TimeoutMs, DeepLXTranslateSettings s => s.TimeoutMs, OpenAIBaseTranslateSettings s => s.TimeoutMs, _ => null };
         HealthTimeoutMs = (selected as OpenAIBaseTranslateSettings)?.TimeoutHealthMs;
+        LoadAdvanced();
         foreach (string name in new[] { nameof(HasEndpoint), nameof(HasModel), nameof(HasApiKey), nameof(HasRegion), nameof(HasChatPath), nameof(HasTimeout) }) OnPropertyChanged(name);
         loading = false;
     }
     void CaptureFields()
     {
         if (loading || selected == null) return;
+        CaptureAdvanced();
         int timeout = ToTimeout(TimeoutMs);
         switch (selected)
         {
@@ -179,17 +182,21 @@ public partial class TranslationViewModel : ObservableObject
     [RelayCommand]
     async Task SaveAsync()
     {
+        if (Busy) return;
+        IsSaving = true;
         Busy = true;
         try
         {
             CaptureChat(); CaptureFields(); Draft.WordProvider = Provider; Draft.SentenceProvider = SentenceProvider; Draft.TargetLanguage = TargetLanguage;
             Draft.Validate();
+            if (closing) return;
             await save(Draft.Clone());
+            IsSaving = false;
             Busy = false;
             Saved?.Invoke();
         }
         catch (ArgumentException e) { Message = e.Message; }
         catch (Exception) { Message = "Translation settings could not be saved. Live settings have not changed; check access to the configuration directory."; }
-        finally { Busy = false; }
+        finally { IsSaving = false; Busy = false; }
     }
 }

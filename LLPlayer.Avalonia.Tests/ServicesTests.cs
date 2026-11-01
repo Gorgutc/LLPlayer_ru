@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
@@ -43,6 +43,8 @@ public class PrefsTests
         };
         prefs.AddRecent("/a.mp4");
         prefs.AddRecent("/b.mkv");
+        prefs.Normalize();
+        prefs.WordMenuActions!.Select(row => row.Title).Should().Equal("Copy", "Copy All", "Search Google", "Search Wiktionary", "Search Longman");
 
         store.Save(prefs);
         AppPrefs loaded = store.Load();
