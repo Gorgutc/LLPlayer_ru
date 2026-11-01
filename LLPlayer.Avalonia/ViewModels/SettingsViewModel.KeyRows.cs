@@ -46,9 +46,11 @@ public sealed partial class SettingsViewModel
     {
         AppShortcut[] defaults = [.. AppShortcutMap.Defaults.Where(binding => binding.ActionName == row.ActionName)];
         if (defaults.Length == 0) { row.Chord = ""; return; }
+        ShortcutEditRow[] matchingRows = [.. ShortcutRows.Where(item => item.ActionName == row.ActionName)];
+        if (matchingRows.Length == 0) return;
+        int index = ShortcutRows.IndexOf(matchingRows[0]);
         row.Chord = AppShortcutMap.FormatChord(defaults[0].Key, defaults[0].Ctrl, defaults[0].Alt, defaults[0].Shift);
-        int index = ShortcutRows.IndexOf(row);
-        foreach (ShortcutEditRow existing in ShortcutRows.Where(item => item.ActionName == row.ActionName).ToArray())
+        foreach (ShortcutEditRow existing in matchingRows)
             ShortcutRows.Remove(existing);
         foreach (AppShortcut binding in defaults) ShortcutRows.Insert(index++, CreateAppRow(binding));
     }

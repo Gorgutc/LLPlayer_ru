@@ -92,7 +92,7 @@ public sealed class AppShortcutMap
     public static IReadOnlyList<string> ActionNames { get; } =
         [.. Defaults.Select(s => s.ActionName).Distinct(StringComparer.Ordinal)];
 
-    /// <summary>The effective chords: default chords with the valid persisted overrides applied (one chord per action).</summary>
+    /// <summary>Effective explicit rows, or legacy defaults with valid overrides.</summary>
     public IReadOnlyList<AppShortcut> Shortcuts => effective;
 
     public static string FormatChord(WpfKey key, bool ctrl, bool alt, bool shift)
