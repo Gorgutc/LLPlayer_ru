@@ -164,8 +164,12 @@ public sealed class SubtitlePlaybackRegressionTests
             player.PropertyChanged += CaptureFirstSeek;
             try
             {
+                // A sidebar command must carry a real live row. Keep the fractional engine timestamp test
+                // by refining the loaded cue below SRT's millisecond precision before taking that snapshot.
+                player.SubtitlesManager[0].Subs[0].StartTime = TimeSpan.FromTicks(35_005_000);
                 SubtitlesSidebarViewModel sidebar = new(controller);
-                CueItemViewModel cue = new(new CueInfo(0, TimeSpan.FromTicks(35_005_000), TimeSpan.FromSeconds(6), "Fractional cue"));
+                sidebar.Reload();
+                CueItemViewModel cue = Assert.Single(sidebar.Cues);
                 sidebar.SeekCommand.Execute(cue);
                 Assert.Equal(TimeSpan.FromMilliseconds(4501).Ticks, requestedTime);
             }

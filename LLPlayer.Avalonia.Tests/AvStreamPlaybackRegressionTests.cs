@@ -10,12 +10,64 @@ using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
 using LLPlayer.Avalonia.Services;
+using LLPlayer.Avalonia.ViewModels;
 
 namespace LLPlayer.Avalonia.Tests;
 
 [Collection(FlyleafGlobalsCollection.Name)]
 public sealed class AvStreamPlaybackRegressionTests
 {
+    [AvaloniaTheory]
+    [InlineData(0, false, false)]
+    [InlineData(1, false, false)]
+    [InlineData(0, true, false)]
+    [InlineData(1, true, false)]
+    [InlineData(0, true, true)]
+    [InlineData(1, true, true)]
+    public async Task Preserving_external_video_switch_refreshes_live_sidebar_cue_identity(int slot, bool embeddedSubtitles, bool failedTarget)
+    {
+        using AvStreamTestMedia media = await AvStreamTestMedia.CreateAsync();
+        using TempDir state = new();
+        await using NativeSession session = new(state);
+        Player player = session.Player; FlyleafPlaybackController controller = session.Controller;
+        Assert.Null(player.Open(media.Media).Error);
+        await LoadSubtitles(player, controller, media, embeddedSubtitles);
+        await SeekAndWait(player, 2500);
+        MainWindowViewModel vm = new(controller, new AppPrefs { SidebarShowSecondary = slot == 1 }.Normalize(), _ => { }, new FakeTranslator(), new FakeShell());
+        try
+        {
+            vm.Sidebar.Reload();
+            await controller.Recognition.MutateAsync(() => { });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(controller.PrimaryTranslationEnabled);
+            Assert.False(controller.SecondaryTranslationEnabled);
+            CueItemViewModel previous = Assert.Single(vm.Sidebar.Cues);
+            Assert.True(vm.Sidebar.IsCurrentRow(previous));
+            SubtitleData[] nativeCues = [player.SubtitlesManager[0].Subs[0], player.SubtitlesManager[1].Subs[0]];
+            ExternalVideoStream video = RegisterVideo(player, media);
+            if (failedTarget) video.Url = Path.Combine(media.DirectoryPath, "missing-sidebar-video.mkv");
+            // Drain the initial loading notifications before the source changes. A translation reset cannot
+            // incidentally reload this sidebar: translation is off and neither cue has cached translated text.
+            Dispatcher.UIThread.RunJobs();
+
+            await controller.SelectVideoTrackAsync(controller.GetVideoTracks().Single(track => track.Label.Contains("480x270", StringComparison.Ordinal)));
+            await controller.Recognition.MutateAsync(() => { });
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.False(controller.IsCueCurrent(previous.Cue, slot));
+            CueItemViewModel current = Assert.Single(vm.Sidebar.Cues);
+            Assert.True(vm.Sidebar.IsCurrentRow(current));
+            Assert.NotSame(previous, current);
+            Assert.Same(nativeCues[0], Assert.Single(player.SubtitlesManager[0].SnapshotSubs()));
+            Assert.Same(nativeCues[1], Assert.Single(player.SubtitlesManager[1].SnapshotSubs()));
+            long playhead = player.CurTime;
+            await vm.Sidebar.SyncCommand.ExecuteAsync(current);
+            Assert.Equal(playhead - current.Start.Ticks, player.Config.Subtitles[slot].Delay);
+            Assert.Equal(0, player.Config.Subtitles[1 - slot].Delay);
+        }
+        finally { vm.Dispose(); await vm.WordPopup.DisposeAsync(); }
+    }
+
     [AvaloniaFact]
     public async Task External_video_switch_preserves_both_loaded_subtitle_caches()
     {
@@ -645,10 +697,25 @@ public sealed class AvStreamPlaybackRegressionTests
         public void AssertUnchanged(Player player, FlyleafPlaybackController controller, bool checkDelays = true)
         {
             Assert.Same(Primary, Assert.Single(player.SubtitlesManager[0].SnapshotSubs())); Assert.Same(Secondary, Assert.Single(player.SubtitlesManager[1].SnapshotSubs()));
-            Assert.Equal(primaryCues, controller.GetCues(0).ToArray()); Assert.Equal(secondaryCues, controller.GetCues(1).ToArray());
+            AssertCueMetadataAndIdentity(primaryCues, controller, 0);
+            AssertCueMetadataAndIdentity(secondaryCues, controller, 1);
             Assert.True(controller.PrimaryTranslationEnabled); Assert.True(controller.SecondaryTranslationEnabled);
             Assert.Equal(TargetLanguage.Russian, player.Config.Subtitles.TranslateTargetLanguage);
             if (checkDelays) { Assert.Equal(primaryDelay, player.Config.Subtitles[0].Delay); Assert.Equal(secondaryDelay, player.Config.Subtitles[1].Delay); }
+        }
+
+        static void AssertCueMetadataAndIdentity(CueInfo[] previous, FlyleafPlaybackController controller, int slot)
+        {
+            CueInfo[] current = controller.GetCues(slot).ToArray();
+            // Cache preservation covers every visible/raw cue field. A native source rebind must instead
+            // retire its old command identity, even when it deliberately preserves the same cue objects.
+            Assert.Equal(previous.Select(cue => cue with { Identity = null }), current.Select(cue => cue with { Identity = null }));
+            for (int i = 0; i < current.Length; i++)
+            {
+                Assert.NotNull(current[i].Identity);
+                Assert.True(controller.IsCueCurrent(current[i], slot));
+                Assert.Equal(Equals(previous[i].Identity, current[i].Identity), controller.IsCueCurrent(previous[i], slot));
+            }
         }
     }
 
