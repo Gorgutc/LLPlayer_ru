@@ -68,6 +68,8 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         };
         secondaryManagerChanged = (_, e) =>
         {
+            if (e.PropertyName == nameof(SubManager.CurrentIndex))
+                Raise(nameof(SecondaryCueIndex));
             if (e.PropertyName == nameof(SubManager.IsLoading)) Raise(nameof(RecognitionStatus));
             if (e.PropertyName == nameof(SubManager.Language)) Raise("SubtitleLanguage");
         };
@@ -307,6 +309,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     public SubtitleImage? PrimaryImage => ToImage(0);
     public SubtitleImage? SecondaryImage => ToImage(1);
     public int PrimaryCueIndex => player.SubtitlesManager[0].CurrentIndex;
+    public int SecondaryCueIndex => player.SubtitlesManager[1].CurrentIndex;
 
     public bool SubtitlesVisible
     {
@@ -320,10 +323,15 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
     public IReadOnlyList<CueInfo> GetCues(int slot)
     {
+        if (slot is < 0 or > 1) return [];
+        if (player.CanPlay && !player.Subtitles[slot].Enabled) return [];
+        SubtitleCueSource? source = CaptureSubtitleCueSource(slot);
         List<SubtitleData> subs = bridge.Snapshot(player.SubtitlesManager[slot].Subs);
         List<CueInfo> cues = new(subs.Count);
         foreach (SubtitleData s in subs)
-            cues.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, player.SubtitlesManager[slot].Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391(), s.Text ?? ""));
+            cues.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, player.SubtitlesManager[slot].Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391(), s.Text ?? "",
+                source == null ? null : new SubtitleCueIdentity(new SubtitleCueToken(source, s))));
+        if (source != null && !IsCurrentSubtitleCueSource(source)) return [];
         return cues;
     }
 

@@ -79,12 +79,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Sidebar = new SubtitlesSidebarViewModel(player)
         {
+            SelectedSlot = prefs.SidebarShowSecondary ? 1 : 0,
             MatchCase = prefs.SidebarSearchMatchCase,
             WholeWord = prefs.SidebarSearchWholeWord,
             UseRegex = prefs.SidebarSearchRegex,
         };
         // Restore before subscribing so startup never rewrites preferences or persists transient search state.
         Sidebar.PropertyChanged += OnSidebarPropertyChanged;
+        Sidebar.SynchronizationFailed += OnSidebarSynchronizationFailed;
         WordPopup = new WordPopupViewModel(translator, text => shell.SetClipboardText(text));
         WordPopup.OpenSettings = ShowTranslation;
         InvalidateTranslation = () => { WordPopup.Invalidate(); (translator as FlyleafWordTranslator)?.Invalidate(); };
@@ -1203,6 +1205,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ClearPlaybackChoices();
         browserWaitCancellation.Dispose();
         Sidebar.PropertyChanged -= OnSidebarPropertyChanged;
+        Sidebar.SynchronizationFailed -= OnSidebarSynchronizationFailed;
+        Sidebar.Dispose();
         player.PropertyChanged -= OnPlayerPropertyChanged;
         player.CuesChanged -= OnCuesChanged;
         player.OpenCompleted -= OnOpenCompleted;
@@ -1269,12 +1273,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     void OnCuesChanged(int slot)
     {
-        if (slot == 0)
+        if (slot == Sidebar.SelectedSlot)
             Sidebar.Reload();
     }
 
+    void OnSidebarSynchronizationFailed(string message)
+        => ShowToast("Could not synchronize subtitles", message, ToastVariant.Destructive);
+
     void OnExternalMediaOpening()
     {
+        Sidebar.Clear();
         ClearPlaybackChoices();
         pendingMediaRequest = null;
         pendingSubtitles.Clear();
@@ -1324,6 +1332,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         switch (e.PropertyName)
         {
+            case nameof(SubtitlesSidebarViewModel.SelectedSlot):
+                prefs.SidebarShowSecondary = Sidebar.SelectedSlot == 1;
+                break;
             case nameof(SubtitlesSidebarViewModel.MatchCase):
                 prefs.SidebarSearchMatchCase = Sidebar.MatchCase;
                 break;
@@ -1368,6 +1379,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case nameof(IPlaybackController.IsOpening):
                 if (player.IsOpening)
                 {
+                    Sidebar.Clear();
                     InvalidateTranslation();
                     ClearPlaybackChoices();
                 }
@@ -1435,7 +1447,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 SecondaryImage = player.SecondaryImage;
                 break;
             case nameof(IPlaybackController.PrimaryCueIndex):
-                Sidebar.UpdateCurrent(player.PrimaryCueIndex);
+                if (Sidebar.SelectedSlot == 0)
+                    Sidebar.UpdateCurrent(player.PrimaryCueIndex);
+                break;
+            case nameof(IPlaybackController.SecondaryCueIndex):
+                if (Sidebar.SelectedSlot == 1)
+                    Sidebar.UpdateCurrent(player.SecondaryCueIndex);
                 break;
         }
     }

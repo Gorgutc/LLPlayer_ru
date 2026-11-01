@@ -138,10 +138,12 @@ public sealed class AppPrefs
     /// <summary>Explicit engine key-binding list applied at start-up; only meaningful while <see cref="EngineKeysCustomized"/>.</summary>
     public List<EngineKeyBindingPref> EngineKeyBindings { get; set; } = [];
 
-    /// <summary>Primary-sidebar search flags; absent keys keep literal case-insensitive search. Query is session-only.</summary>
+    /// <summary>Selected-sidebar search flags; absent keys keep literal case-insensitive search. Query is session-only.</summary>
     public bool SidebarSearchMatchCase { get; set; }
     public bool SidebarSearchWholeWord { get; set; }
     public bool SidebarSearchRegex { get; set; }
+    /// <summary>Show the secondary subtitle slot in the sidebar; absent keys keep the primary slot.</summary>
+    public bool SidebarShowSecondary { get; set; }
     public bool SidebarVisible { get; set; }
     public double SidebarWidth { get; set; } = DefaultSidebarWidth;
     /// <summary>Dock the sidebar left of the video (WPF <c>SidebarLeft</c>); false keeps it on the right.</summary>

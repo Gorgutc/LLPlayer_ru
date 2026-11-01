@@ -7,7 +7,17 @@ namespace LLPlayer.Avalonia.Services;
 /// <summary>One subtitle cue as the UI shows it (primary/secondary sidebar, word popup context).</summary>
 /// <param name="Text">Display text (translated when translation display is on, otherwise the source text).</param>
 /// <param name="OriginalText">Source text snapshot, used by the sidebar's show-original choice; empty when unknown.</param>
-public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "", string OriginalText = "");
+public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "", string OriginalText = "", SubtitleCueIdentity? Identity = null);
+
+/// <summary>Opaque identity of a live cue's media, subtitle source and slot. Contains no public native object.</summary>
+public sealed class SubtitleCueIdentity : IEquatable<SubtitleCueIdentity>
+{
+    internal object Source { get; }
+    internal SubtitleCueIdentity(object source) => Source = source;
+    public bool Equals(SubtitleCueIdentity? other) => other != null && Equals(Source, other.Source);
+    public override bool Equals(object? obj) => obj is SubtitleCueIdentity other && Equals(other);
+    public override int GetHashCode() => Source.GetHashCode();
+}
 
 /// <summary>A selectable subtitle track (embedded stream or external file) with its current slot assignment.</summary>
 public sealed record SubtitleTrack(string Label, bool IsExternal, bool IsPrimary, bool IsSecondary, object Source);
@@ -71,6 +81,8 @@ public interface IPlaybackController : INotifyPropertyChanged
 
     /// <summary>Index into <see cref="GetCues"/>(0) of the cue being shown, or -1.</summary>
     int PrimaryCueIndex { get; }
+    /// <summary>Index into <see cref="GetCues"/>(1) of the current secondary cue, or -1.</summary>
+    int SecondaryCueIndex { get; }
 
     /// <summary>Both slots visible (Flyleaf <c>Config.Subtitles[i].Visible</c>).</summary>
     bool SubtitlesVisible { get; set; }
@@ -88,6 +100,12 @@ public interface IPlaybackController : INotifyPropertyChanged
     event Action<string>? ErrorOccurred;
 
     IReadOnlyList<CueInfo> GetCues(int slot);
+    /// <summary>Whether this detached row still refers to the live media, slot, source and raw cue timing.</summary>
+    bool IsCueCurrent(CueInfo cue, int slot);
+    /// <summary>Seeks only when the detached cue still belongs to this slot's live source.</summary>
+    void SeekToCue(CueInfo cue, int slot);
+    /// <summary>Aligns a live cue to the current playhead by changing only its slot's runtime delay.</summary>
+    Task SynchronizeSubtitleToCurrentTimeAsync(CueInfo cue, int slot, CancellationToken cancellationToken = default);
     IReadOnlyList<SubtitleTrack> GetSubtitleTracks();
     IReadOnlyList<PlaybackStreamTrack> GetAudioTracks() => [];
     IReadOnlyList<PlaybackStreamTrack> GetVideoTracks() => [];

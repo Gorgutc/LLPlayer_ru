@@ -288,7 +288,17 @@ public sealed partial class FlyleafPlaybackController
         }
     }
 
-    void OnPlaybackChoicesCompleted(object? sender, object? args) => QueuePlaybackChoices();
+    void OnPlaybackChoicesCompleted(object? sender, object? args)
+    {
+        QueuePlaybackChoices();
+        if (args is FlyleafLib.MediaFramework.MediaContext.DecoderContext.OpenExternalVideoStreamCompletedArgs)
+        {
+            // A preserving switch (including rollback) can rebind native subtitle sources while keeping
+            // the cached cue objects/text. Publish fresh command identities even when translation is off.
+            QueueCueNotification(0);
+            QueueCueNotification(1);
+        }
+    }
 
     void RefreshPlaybackChoiceWatchers()
     {

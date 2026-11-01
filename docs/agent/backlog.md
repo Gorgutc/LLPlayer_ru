@@ -67,13 +67,53 @@
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
-**Текущий одобренный F-13 срез, 2026-11-01: A/V streams и chapters.**
+**Текущий одобренный F-13 срез, 2026-11-01: Primary/Secondary Sidebar и sync выбранного cue.**
+Общий Windows/Linux Avalonia Sidebar получил сохраняемый выбор слота (`SidebarShowSecondary`, по умолчанию
+`false` = Primary). Список, поиск, original/display, маска, текущая строка, idle auto-scroll, seek/navigation
+и word provenance следуют выбранному слоту. Отдельный Sync меняет только его runtime Delay по формуле
+`CurTimeTicks - RawCueStartTicks`; seek/play-pause/speed, другой слот и translation caches сохраняются.
+Identity media/track/cue и отмена поколения строк защищают очередь от старого выбора, same-URL reopen,
+замены track/cue и удаления строки фильтром. Контекст legacy helper временно ограничен выбранным слотом
+и восстанавливается; противоположный bitmap сохраняется. WPF и экспорт не меняются.
+База — доставленный PR № 193/main `817a02b5`, ветка `codex/f13-av-sidebar-sync`.
+[План и границы](plans/2026-11-01-f13-sidebar-sync.md),
+[текущий checkpoint](f13-status-2026-10-18.md#primarysecondary-sidebar-and-cue-sync--owner-approved-2026-11-01).
+Source реализован и заморожен; expanded integration GREEN: 228/0/0; full Windows Avalonia v3:
+engine1657/0/13, UI1428/0/1, exit 0. Manifest v2 фиксирует текущие 16 product/test файлов.
+App commit `c04dd101551ea4ed75cbba94184d7020a5dd38f5`, parent `817a02b5`, содержит эти 16 файлов.
+Final local WPF1443/0/0, package91, publish481files и оба packaged plugin loads по 1/0/0 прошли с exit 0.
+ZIP180634345bytes/SHA`744590fb2359bfcfd8374a1b8dab535024edeabb6d8138a8f24c1852deeba018`;
+независимая stage/ZIP/extracted сверка всех 481 файлов — PASS, 0 C/I. App runtime/UI/.NET/whole review — 0 C/I.
+Оба runtime Important закрыты после настоящих RED; исходные failures сохранены. Это observations на controlled
+working source, не порог качества. `product-source-proof-v2.json` — PASS: все 16 raw committed/workspace/
+manifest-v2/WinAV-v3 файлов совпали без нормализации/BOM-исключений. App tree `4099b16701e98ae1a9eca5cf4c4074cf54488ca2`;
+JSON SHA`0b3150f9581757b2021584279f775d8d88a6f1690a6eb801dba00f952108162e`. Dirty DOCS7 явно сохранены
+как `workingTreeCleanAtProof=false`; прежний helper failure остаётся в ignored diagnostic summary.
+Итоговые docs validators/commit, Linux/new PR/main CI, Desktop и Vault пока **NOT_RUN / PENDING**.
+Новый UI Important: pointer/Space press на Sync, затем rebind кнопки к другой live-строке мог менять её Delay.
+Два compiled RED и последующие canceled-release/mixed-click failures сохранены. Sealed fix держит владельца
+нажатия до matching release и не теряет его на повторном Click/OS key repeat; focused GREEN прошёл 161/0/0.
+Независимый UI re-review закрыл находки с 0 Critical/Important; прежние 149/158/161 snapshots сохранены отдельно.
+Первый full Windows Avalonia run завершился exit 1: engine 1657/0/13, UI 1408/12/1. Все 12 failures — старые
+whole-DTO comparisons с новым opaque Identity; исправленные assertions сохраняют все видимые/raw поля
+и отдельно проверяют native owners и fresh/stale identities. Дополнительно четыре настоящих RED выявили stale
+MainWindow rows после preserving video switch без перевода. Исправление уведомляет оба слота после settled
+success/rollback; шесть новых integration cases вошли в GREEN 228/0/0. Runtime re-review нового source — 0 C/I.
+Следующий full run дал UI1426/1/1: bitmap fixture не дождался собственного native seek. Настоящая no-sync
+диагностика подтвердила порядок очистки; fixture ждёт exact SeekCompleted и UI flush до seed, settled bitmap 3/0/0.
+Product source не менялся; full v3 прошёл. Все failure/diagnostic receipts сохранены, flaky/waiver не заявлены.
+Прежние WPF checkpoints предшествовали Streams-дельте; новый `full-wpf-final` прошёл на финальном app snapshot.
+Удалённая доставка и native acceptance не следуют из локальных gates.
+Native text/bitmap timing, GUI/input/A/V/providers/models/GPU/DPI проверяются отдельно и остаются **NOT_RUN**;
+нового bitmap restore/render пути нет. Полный F-13 — **IN PROGRESS**, WPF поддерживается.
+
+**Исторический source/local checkpoint F-13, 2026-11-01: A/V streams и chapters.**
 Общий Windows/Linux Avalonia UI получает Audio track / Video track / Chapters в Playback и меню видео.
 База — доставленный PR № 192/main `aa123a2`, ветка `codex/f13-av-streams-chapters`.
 [План и границы](plans/2026-11-01-f13-av-streams-chapters.md),
 [текущий source checkpoint](f13-status-2026-10-18.md#av-streams-and-chapters--owner-approved-2026-11-01).
 App commit `7063e00`; финальные локальные WPF/Windows/package gates и review завершены. Публикация и доставка
-остаются PENDING на этом pre-delivery checkpoint; фактический итог PR/main CI, Desktop и Vault фиксируется
+остаются PENDING на этом историческом pre-delivery checkpoint; фактический итог PR/main CI, Desktop и Vault фиксируется
 в `artifacts/f13-av-streams-chapters-2026-11-01/CLOSEOUT.md` и completed Vault session.
 Native acceptance согласуется отдельно и остаётся **NOT_RUN**; полный F-13 — **IN PROGRESS**.
 

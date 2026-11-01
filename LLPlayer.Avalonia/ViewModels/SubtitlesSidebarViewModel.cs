@@ -33,9 +33,15 @@ public sealed record SidebarTextAppearance(
 /// </summary>
 public sealed partial class CueItemViewModel : ObservableObject
 {
-    public CueItemViewModel(CueInfo cue) => Cue = cue;
+    public CueItemViewModel(CueInfo cue, int slot = 0)
+    {
+        Cue = cue;
+        Slot = slot;
+    }
 
     public CueInfo Cue { get; private set; }
+    /// <summary>The subtitle slot this row was created for; changing the selection creates new rows.</summary>
+    public int Slot { get; }
     public int Index => Cue.Index;
     public TimeSpan Start => Cue.Start;
     public TimeSpan End => Cue.End;
@@ -113,11 +119,11 @@ public sealed partial class CueItemViewModel : ObservableObject
 }
 
 /// <summary>
-/// Subtitles sidebar: the primary cue list (times + text), current cue highlight (the view auto-scrolls to
+/// Subtitles sidebar: the selected slot's cue list (times + text), current cue highlight (the view auto-scrolls to
 /// <see cref="CurrentCue"/>), click to seek to a cue's start and the WPF-compatible case/whole-word/regex search.
 /// Search follows the original/display text choice, through visual spoiler masks, and stops on the first timeout.
 /// </summary>
-public sealed partial class SubtitlesSidebarViewModel : ObservableObject
+public sealed partial class SubtitlesSidebarViewModel : ObservableObject, IDisposable
 {
     readonly IPlaybackController player;
     readonly SubtitleFontCatalog fonts = new();
@@ -128,6 +134,9 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     int? navigationIndex;
     string effectiveFilter = "";
     SubtitleSearcher? searcher;
+    int selectedSlot;
+    CancellationTokenSource commandLifetime = new();
+    bool disposed;
 
     public SubtitlesSidebarViewModel(IPlaybackController player)
     {
@@ -139,6 +148,21 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
 
     public int TotalCount => all.Count;
     public bool HasCues => all.Count > 0;
+
+    /// <summary>The sidebar source slot. Invalid/transient ComboBox indices retain the valid selection.</summary>
+    public int SelectedSlot
+    {
+        get => selectedSlot;
+        set
+        {
+            if (disposed || value is < 0 or > 1 || value == selectedSlot)
+                return;
+            selectedSlot = value;
+            Clear();
+            Reload();
+            OnPropertyChanged();
+        }
+    }
 
     [ObservableProperty]
     public partial string FilterText { get; set; } = "";
@@ -169,6 +193,8 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
 
     /// <summary>Raised when the view should move keyboard focus to the filter box (Ctrl+F).</summary>
     public event Action? FocusFilterRequested;
+    /// <summary>Reports a failed live cue synchronization through the main window's existing toast surface.</summary>
+    public event Action<string>? SynchronizationFailed;
 
     partial void OnFilterTextChanged(string value) => UpdateSearch();
     partial void OnMatchCaseChanged(bool value) => UpdateSearch();
@@ -198,15 +224,32 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
         ApplyFilter();
     }
 
-    /// <summary>Re-reads the primary cues from the player (called on the engine's coalesced change notification).</summary>
+    /// <summary>Retires rows immediately when media opening replaces their source.</summary>
+    public void Clear()
+    {
+        RetireCommands();
+        navigationIndex = null;
+        currentIndex = -1;
+        if (CurrentCue != null)
+            CurrentCue.IsCurrent = false;
+        CurrentCue = null;
+        all = [];
+        ApplyFilter();
+    }
+
+    /// <summary>Re-reads the selected cues from the player (called on the engine's coalesced change notification).</summary>
     public void Reload()
     {
+        if (disposed)
+            return;
         navigationIndex = null;
-        IReadOnlyList<CueInfo> cues = player.GetCues(0);
+        IReadOnlyList<CueInfo> cues = player.GetCues(SelectedSlot);
 
         bool compatible = all.Count <= cues.Count;
         for (int i = 0; compatible && i < all.Count; i++)
-            compatible = all[i].Cue.Index == cues[i].Index;
+            compatible = all[i].Cue.Index == cues[i].Index && Equals(all[i].Cue.Identity, cues[i].Identity);
+        if (!compatible)
+            RetireCommands();
 
         if (compatible && all.Count > 0)
         {
@@ -223,7 +266,7 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
             bool filterActive = effectiveFilter.Length != 0;
             for (int i = all.Count; i < cues.Count; i++)
             {
-                CueItemViewModel row = new(cues[i]);
+                CueItemViewModel row = new(cues[i], SelectedSlot);
                 row.ApplyTypography(fontSelection, appearance);
                 row.Refresh(appearance, currentIndex);
                 all.Add(row);
@@ -239,7 +282,7 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
         {
             all = cues.Select(cue =>
             {
-                CueItemViewModel row = new(cue);
+                CueItemViewModel row = new(cue, SelectedSlot);
                 row.ApplyTypography(fontSelection, appearance);
                 row.Refresh(appearance, currentIndex);
                 return row;
@@ -251,7 +294,7 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
             ApplyFilter();
         }
 
-        UpdateCurrent(player.PrimaryCueIndex);
+        UpdateCurrent(SelectedSlot == 0 ? player.PrimaryCueIndex : player.SecondaryCueIndex);
     }
 
     /// <summary>Marks the cue at <paramref name="index"/> (engine cue index) as current and refreshes the mask boundary.</summary>
@@ -282,8 +325,31 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     [RelayCommand]
     void Seek(CueItemViewModel? cue)
     {
-        if (cue != null)
-            player.SeekToSubtitle(cue.Start, 0);
+        if (cue != null && IsCurrentRow(cue))
+            player.SeekToCue(cue.Cue, cue.Slot);
+    }
+
+    /// <summary>Only a displayed row from the selected, still-current source may execute a row action.</summary>
+    public bool IsCurrentRow(CueItemViewModel row)
+        => !disposed && row.Slot == SelectedSlot && Cues.Contains(row) && player.IsCueCurrent(row.Cue, row.Slot);
+
+    [RelayCommand]
+    async Task SyncAsync(CueItemViewModel? cue)
+    {
+        if (cue == null || !IsCurrentRow(cue))
+            return;
+        try
+        {
+            await player.SynchronizeSubtitleToCurrentTimeAsync(cue.Cue, cue.Slot, commandLifetime.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Slot/source/filter changes and window shutdown retire queued commands without a failure toast.
+        }
+        catch (Exception ex)
+        {
+            SynchronizationFailed?.Invoke(ex.Message);
+        }
     }
 
     [RelayCommand]
@@ -311,6 +377,25 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
     }
 
     public void RequestFocusFilter() => FocusFilterRequested?.Invoke();
+
+    void RetireCommands()
+    {
+        if (disposed)
+            return;
+        CancellationTokenSource retired = commandLifetime;
+        commandLifetime = new();
+        retired.Cancel();
+        retired.Dispose();
+    }
+
+    public void Dispose()
+    {
+        if (disposed)
+            return;
+        disposed = true;
+        commandLifetime.Cancel();
+        commandLifetime.Dispose();
+    }
 
     void ApplyFilter()
     {
@@ -351,6 +436,9 @@ public sealed partial class SubtitlesSidebarViewModel : ObservableObject
             }
         }
 
+        HashSet<CueItemViewModel> remaining = desired.ToHashSet();
+        if (Cues.Any(row => !remaining.Contains(row)))
+            RetireCommands();
         Cues.Clear();
         foreach (CueItemViewModel item in desired)
             Cues.Add(item);

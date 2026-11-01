@@ -28,6 +28,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     readonly AvaloniaHostServices? hostServices;
     readonly DispatcherTimer idleTimer;
     MainWindowViewModel? vm;
+    SubtitleText? sidebarSelectionControl;
+    CueItemViewModel? sidebarSelectionRow;
+    CueInfo? sidebarSelectionCue;
+    sealed record CueSyncPress(Button Button, CueItemViewModel? Row, CueInfo? Cue, Key Key = Key.None);
+    CueSyncPress? cueSyncPointerPress;
+    CueSyncPress? cueSyncKeyboardPress;
     int sidebarColumnIndex = 2;
     Func<IReadOnlyList<ShortcutInfo>> cheatSheetRows = () => AppShortcutMap.BuildCheatSheet([]);
     WindowState stateBeforeFullScreen = WindowState.Normal;
@@ -127,13 +133,18 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
         AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, OnKeyUpTunnel, RoutingStrategies.Tunnel);
-        Deactivated += (_, _) => vm?.LoseKeyboardContext();
+        Deactivated += (_, _) =>
+        {
+            cueSyncPointerPress = cueSyncKeyboardPress = null;
+            vm?.LoseKeyboardContext();
+        };
         Activated += (_, _) =>
         {
             if (vm?.RestoreKeyboardContext() == true) searchKeysAwaitingRelease.Clear();
         };
         AddHandler(PointerMovedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerReleasedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
 
         AddHandler(DragDrop.DragEnterEvent, OnDragOver);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -495,7 +506,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnSidebarPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(SubtitlesSidebarViewModel.CurrentCue) && vm?.Sidebar.CurrentCue is { } cue && SidebarVisibleAndIdle())
+        if (e.PropertyName == nameof(SubtitlesSidebarViewModel.CurrentCue) && vm?.Sidebar.CurrentCue is { } cue
+            && vm.Sidebar.Cues.Contains(cue) && SidebarVisibleAndIdle())
             CueList.ScrollIntoView(cue);
     }
 
@@ -524,26 +536,69 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnWordClicked(object? sender, WordClickedEventArgs e)
     {
-        // A masked sidebar row renders only underscores; never send that placeholder (or the hidden source) to a
-        // provider or the word library. Overlay controls use the main view model as DataContext and stay unaffected.
-        if (vm == null || sender is not Visual v || sender is SubtitleText { DataContext: CueItemViewModel { IsMasked: true } })
+        // Sidebar controls can still finish a selection after a slot/source/filter change. Only a live, readable
+        // displayed row may act; overlay controls keep their independent selection ownership.
+        if (vm == null || sender is not SubtitleText text)
             return;
+        // Inherited DataContext is cleared when a virtualized row detaches. Its immutable name still identifies
+        // sidebar input, so an old event can never fall through to the overlay path after losing its row.
+        bool sidebar = text.Name == "SidebarCueText";
+        if (!sidebar && !ReferenceEquals(text, PrimarySubtitle) && !ReferenceEquals(text, SecondarySubtitle))
+            return;
+        if (sidebar)
+        {
+            if (text.DataContext is not CueItemViewModel row)
+            {
+                ClearSidebarSelection();
+                return;
+            }
+            // A recycled control can already carry a new valid DataContext when an earlier release arrives.
+            // Left selection belongs to the exact row/cue captured on press; right-click acts immediately.
+            bool sameSelection = e.Button == MouseButton.Right
+                || ReferenceEquals(sidebarSelectionControl, text) && ReferenceEquals(sidebarSelectionRow, row)
+                    && Equals(sidebarSelectionCue, row.Cue);
+            ClearSidebarSelection();
+            if (!sameSelection || row.IsMasked || !vm.Sidebar.IsCurrentRow(row)
+                || e.Slot != row.Slot || e.Text != row.DisplayText || e.IsTranslated != row.IsDisplayTranslated
+                || (e.SourceLanguage ?? "") != row.SourceLanguage || (e.TargetLanguage ?? "") != row.TargetLanguage)
+                return;
+        }
+        else
+            ClearSidebarSelection();
 
-        Point p = v.TranslatePoint(e.Position, VideoHost) ?? e.Position;
+        Point p = text.TranslatePoint(e.Position, VideoHost) ?? e.Position;
         WordSelectionSnapshot selection = new(e.Word, e.Text, e.Slot, e.IsWord, e.IsTranslated,
             e.SourceLanguage, e.TargetLanguage,
-            sender is SubtitleText { DataContext: CueItemViewModel } ? WordSelectionOrigin.Sidebar : WordSelectionOrigin.Overlay,
+            sidebar ? WordSelectionOrigin.Sidebar : WordSelectionOrigin.Overlay,
             e.Button, e.Modifiers);
-        if (e.Button == MouseButton.Right) ShowWordMenu(v, vm.CreateWordMenu(selection));
+        if (e.Button == MouseButton.Right) ShowWordMenu(text, vm.CreateWordMenu(selection));
         else vm.OnWordClicked(selection, p.X, p.Y);
     }
 
     /// <summary>A word press starts a possible drag selection; pause before the release action (WPF parity).</summary>
     void OnWordPressed(object? sender, EventArgs e)
     {
-        if (sender is SubtitleText { DataContext: CueItemViewModel { IsMasked: true } })
+        ClearSidebarSelection();
+        if (vm == null || sender is not SubtitleText text)
             return;
-        vm?.PauseForWordSelection();
+        if (text.Name == "SidebarCueText")
+        {
+            if (text.DataContext is not CueItemViewModel row || row.IsMasked || !vm.Sidebar.IsCurrentRow(row))
+                return;
+            sidebarSelectionControl = text;
+            sidebarSelectionRow = row;
+            sidebarSelectionCue = row.Cue;
+        }
+        else if (!ReferenceEquals(text, PrimarySubtitle) && !ReferenceEquals(text, SecondarySubtitle))
+            return;
+        vm.PauseForWordSelection();
+    }
+
+    void ClearSidebarSelection()
+    {
+        sidebarSelectionControl = null;
+        sidebarSelectionRow = null;
+        sidebarSelectionCue = null;
     }
 
     void OnVideoTapped(object? sender, TappedEventArgs e)
@@ -587,21 +642,76 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnCueTapped(object? sender, TappedEventArgs e)
     {
+        // Row actions and word selection own their gestures. Tapped can still be recognized after handled
+        // pointer events, so neither a sync click nor a word click may also seek to the cue.
+        if (e.Source is Visual source
+            && (source.FindAncestorOfType<Button>(true) != null || source.FindAncestorOfType<SubtitleText>(true) != null))
+            return;
         if (vm != null && e.Source is Control c && c.DataContext is CueItemViewModel cue)
             vm.Sidebar.SeekCommand.Execute(cue);
+    }
+
+    CueSyncPress CaptureCueSyncPress(Button button, Key key = Key.None)
+    {
+        CueItemViewModel? row = button.CommandParameter as CueItemViewModel;
+        return new(button, row != null && vm?.Sidebar.IsCurrentRow(row) == true ? row : null, row?.Cue, key);
+    }
+
+    static bool OwnsCueSync(CueSyncPress press, CueItemViewModel row)
+        => ReferenceEquals(press.Row, row) && press.Cue is { } cue
+            && Equals(cue.Identity, row.Cue.Identity) && cue.Index == row.Index
+            && cue.Start == row.Start && cue.End == row.End;
+
+    void OnCueSyncClicked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+            return;
+        CueItemViewModel? row = button.CommandParameter as CueItemViewModel;
+        bool valid = row != null && vm?.Sidebar.IsCurrentRow(row) == true;
+        if (ReferenceEquals(cueSyncPointerPress?.Button, button))
+        {
+            valid &= row != null && OwnsCueSync(cueSyncPointerPress!, row);
+        }
+        if (ReferenceEquals(cueSyncKeyboardPress?.Button, button))
+        {
+            valid &= row != null && OwnsCueSync(cueSyncKeyboardPress!, row);
+        }
+        // Avalonia executes the bound Command after Click only when the event remains unhandled. Automation
+        // without a physical press uses the live row; physical input must also retain its original cue owner.
+        // Only release cleanup ends a press: an unrelated Click must not erase a still-held input's owner.
+        if (!valid)
+            e.Handled = true;
     }
 
     void OnAnyPointerMoved(object? sender, PointerEventArgs e)
     {
         keys.Update(e.KeyModifiers);
         vm?.NotifyActivity();
+        if (e is PointerPressedEventArgs press)
+        {
+            cueSyncPointerPress = null;
+            if (press.GetCurrentPoint(this).Properties.IsLeftButtonPressed && e.Source is Visual source
+                && source.FindAncestorOfType<Button>(true) is { Name: "CueSyncButton" } button)
+                cueSyncPointerPress = CaptureCueSyncPress(button);
+        }
+        else if (e is PointerReleasedEventArgs { InitialPressMouseButton: MouseButton.Left })
+        {
+            // Retain ownership through the native Click, then release canceled/outside presses too. A newer
+            // pointer press must survive an older release's queued cleanup.
+            CueSyncPress? released = cueSyncPointerPress;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(cueSyncPointerPress, released)) cueSyncPointerPress = null;
+            });
+        }
     }
 
     /// <summary>
-    /// True when the focused control consumes the keyboard itself: text boxes (typing) and menus / combo boxes (arrow
-    /// navigation). Those keys are not routed to the app shortcuts or the engine's bindings.
+    /// True when the focused control consumes the keyboard itself: text boxes (typing), menus / combo boxes (arrow
+    /// navigation), and sidebar row actions (Space/Enter). Those keys do not reach app or engine bindings.
     /// </summary>
-    bool IsTextInputFocused() => FocusManager?.GetFocusedElement() is TextBox or MenuItem or ComboBox or ComboBoxItem;
+    bool IsTextInputFocused() => FocusManager?.GetFocusedElement()
+        is TextBox or MenuItem or ComboBox or ComboBoxItem or Button { Name: "CueSyncButton" };
 
     void OnKeyDownTunnel(object? sender, KeyEventArgs e)
     {
@@ -609,6 +719,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         if (vm == null)
             return;
 
+        if (e.Key is Key.Space or Key.Enter && FocusManager?.GetFocusedElement() is Button { Name: "CueSyncButton" } sync)
+        {
+            // KeyDown can repeat while held; retain the initial owner until its matching key release.
+            if (cueSyncKeyboardPress == null)
+                cueSyncKeyboardPress = CaptureCueSyncPress(sync, e.Key);
+        }
         bool textFocused = IsTextInputFocused();
         if (textFocused && e.Key == Key.Enter && FocusManager?.GetFocusedElement() == FilterBox
             && (e.KeyModifiers & ~KeyModifiers.Shift) == KeyModifiers.None)
@@ -651,8 +767,30 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             e.Handled = true;
             return;
         }
-        if (vm != null && vm.HandleKeyUp(KeyMapper.ToWpf(e.Key), IsTextInputFocused()))
+        // Drain the VM's suppressed-key ownership, but a focused row button still needs its Space/Enter release
+        // to complete the native button click. Consuming that release would leave keyboard sync inert.
+        Button? sync = FocusManager?.GetFocusedElement() is Button { Name: "CueSyncButton" } focused ? focused : null;
+        bool rowButtonRelease = e.Key is Key.Space or Key.Enter && sync != null;
+        // Button.OnKeyUp invokes Space even after focus transferred from another control. Consume releases
+        // without this button's keydown owner instead of mistaking that physical click for automation.
+        if (e.Key == Key.Space && sync != null
+            && (cueSyncKeyboardPress?.Key != Key.Space || !ReferenceEquals(cueSyncKeyboardPress.Button, sync)))
+        {
+            vm?.HandleKeyUp(KeyMapper.ToWpf(e.Key), true);
+            if (cueSyncKeyboardPress?.Key == Key.Space) cueSyncKeyboardPress = null;
             e.Handled = true;
+            return;
+        }
+        if (vm != null && vm.HandleKeyUp(KeyMapper.ToWpf(e.Key), IsTextInputFocused()) && !rowButtonRelease)
+            e.Handled = true;
+        if (e.Key is Key.Space or Key.Enter && cueSyncKeyboardPress?.Key == e.Key)
+        {
+            CueSyncPress? released = cueSyncKeyboardPress;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(cueSyncKeyboardPress, released)) cueSyncKeyboardPress = null;
+            });
+        }
     }
 
     void OnDragOver(object? sender, DragEventArgs e)

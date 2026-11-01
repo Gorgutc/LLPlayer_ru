@@ -545,6 +545,11 @@
               <TextBlock Text="Subtitles" Classes="h4" />
               <TextBlock Grid.Column="1" Text="{Binding Sidebar.CountText}" Classes="muted xs" VerticalAlignment="Center" />
             </Grid>
+            <ComboBox Name="SidebarSlot" SelectedIndex="{Binding Sidebar.SelectedSlot, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch" AutomationProperties.Name="Sidebar subtitle track"
+                      ToolTip.Tip="Show primary or secondary subtitles in the sidebar">
+              <ComboBoxItem Content="Primary" /><ComboBoxItem Content="Secondary" />
+            </ComboBox>
             <TextBox Name="FilterBox" PlaceholderText="Search subtitles…" Text="{Binding Sidebar.FilterText}">
               <TextBox.InnerLeftContent>
                 <c:LucideIcon Data="{StaticResource Icon.Search}" Size="14" Margin="10,0,0,0"
@@ -571,12 +576,18 @@
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:CueItemViewModel">
                   <Border Classes="cue" Classes.current="{Binding IsCurrent}" Padding="{Binding RowPadding}">
-                    <Grid ColumnDefinitions="Auto,*">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
                       <TextBlock Text="{Binding StartText}" Classes="muted xs mono" Margin="0,2,10,0" VerticalAlignment="Top" />
-                      <c:SubtitleText Grid.Column="1" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="0"
+                      <c:SubtitleText Name="SidebarCueText" Grid.Column="1" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="{Binding Slot}"
                                       SelectionBrush="{DynamicResource Shadcn.RingBrush}"
                                       FontFamily="{Binding RowFontFamily}" FontWeight="{Binding RowFontWeight}" FontSize="{Binding RowFontSize}"
                                       OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordPressed="OnWordPressed" WordClicked="OnWordClicked" />
+                      <Button Name="CueSyncButton" Grid.Column="2" Classes="ghost icon" Width="26" Height="26" MinWidth="0" Padding="0" Margin="4,0,0,0" VerticalAlignment="Top"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Sidebar.SyncCommand}" CommandParameter="{Binding}"
+                              Click="OnCueSyncClicked" ToolTip.Tip="Adjust subtitle track delay to current time"
+                              AutomationProperties.Name="Adjust subtitle track delay to current time">
+                        <c:LucideIcon Data="{StaticResource Icon.Repeat}" Size="16" />
+                      </Button>
                     </Grid>
                   </Border>
                 </DataTemplate>

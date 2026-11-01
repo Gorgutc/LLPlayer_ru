@@ -20,6 +20,12 @@ public class FakePlaybackController : IPlaybackController
 
     readonly List<Action<string?>?> openCompletions = [];
     public List<TimeSpan> Seeks { get; } = [];
+    public List<(TimeSpan Position, int Slot)> SubtitleSeeks { get; } = [];
+    public List<(CueInfo Cue, int Slot)> SynchronizedCues { get; } = [];
+    public Func<CueInfo, int, CancellationToken, Task>? SynchronizationAction { get; set; }
+    public Exception? SynchronizationError { get; set; }
+    readonly object[] cueSources = [new(), new()];
+    sealed record FakeCueIdentity(FakePlaybackController Owner, object Source, int Slot, int Index);
     public List<WpfKey> KeysDown { get; } = [];
     public List<WpfKey> KeysUp { get; } = [];
     public List<string> Opened { get; } = [];
@@ -97,6 +103,7 @@ public class FakePlaybackController : IPlaybackController
     }
 
     public int PrimaryCueIndex { get; set => Set(ref field, value); } = -1;
+    public int SecondaryCueIndex { get; set => Set(ref field, value); } = -1;
     public bool SubtitlesVisible { get; set => Set(ref field, value); } = true;
 
     // F-12 A-B repeat: the fake mirrors the engine truth table (both points set AND A < B => looping; the points are
@@ -212,7 +219,26 @@ public class FakePlaybackController : IPlaybackController
         ? Task.FromException(error) : PlaybackChoiceAction?.Invoke() ?? Task.CompletedTask;
     public void RaisePlaybackChoicesChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("PlaybackChoices"));
 
-    public IReadOnlyList<CueInfo> GetCues(int slot) => [.. Cues[slot]];
+    public IReadOnlyList<CueInfo> GetCues(int slot) => Cues[slot].Select(cue => cue with
+    {
+        Identity = cue.Identity ?? new SubtitleCueIdentity(new FakeCueIdentity(this, cueSources[slot], slot, cue.Index)),
+    }).ToList();
+    public void ReplaceCueSource(int slot) => cueSources[slot] = new();
+    public bool IsCueCurrent(CueInfo cue, int slot)
+        => slot is 0 or 1 && GetCues(slot).Any(current => Equals(current.Identity, cue.Identity)
+            && current.Index == cue.Index && current.Start == cue.Start && current.End == cue.End);
+    public void SeekToCue(CueInfo cue, int slot)
+    {
+        if (IsCueCurrent(cue, slot)) SeekToSubtitle(cue.Start, slot);
+    }
+    public Task SynchronizeSubtitleToCurrentTimeAsync(CueInfo cue, int slot, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!IsCueCurrent(cue, slot)) return Task.CompletedTask;
+        SynchronizedCues.Add((cue, slot));
+        return SynchronizationError is { } error ? Task.FromException(error)
+            : SynchronizationAction?.Invoke(cue, slot, cancellationToken) ?? Task.CompletedTask;
+    }
     public IReadOnlyList<SubtitleTrack> GetSubtitleTracks() => [.. Tracks];
     public void SelectSubtitleTrack(int slot, SubtitleTrack? track) => SelectedTracks.Add((slot, track));
 
@@ -246,7 +272,11 @@ public class FakePlaybackController : IPlaybackController
     }
 
     public void SeekTo(TimeSpan position) => Seeks.Add(position);
-    public void SeekToSubtitle(TimeSpan position, int slot) => Seeks.Add(position);
+    public void SeekToSubtitle(TimeSpan position, int slot)
+    {
+        Seeks.Add(position);
+        SubtitleSeeks.Add((position, slot));
+    }
 
     public bool KeyDown(WpfKey key)
     {
