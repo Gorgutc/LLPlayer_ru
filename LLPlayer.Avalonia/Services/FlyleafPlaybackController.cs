@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using FlyleafLib;
 using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer;
+using FlyleafLib.Plugins;
 using LLPlayer.Core.Services;
 using WpfKey = System.Windows.Input.Key;
 
@@ -18,6 +19,9 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
 {
     sealed record NativeMediaOpen(long RequestId, int Epoch);
     readonly AsyncLocal<int> appMediaOpenEpoch = new();
+    readonly object mediaOpenInterruption = new();
+    int interruptibleAppEpoch;
+    int cancelableAppEpoch;
     volatile NativeMediaOpen? latestNativeOpen;
     int mediaOpenEpoch;
     readonly Player player;
@@ -130,6 +134,10 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
     public bool IsOpened => player.CanPlay;
     public bool IsPlaying => player.Status == Status.Playing;
     public bool IsOpening => player.Status == Status.Opening;
+    public bool CanCancelOpen
+    {
+        get { lock (mediaOpenInterruption) return cancelableAppEpoch != 0; }
+    }
     public string? Title
     {
         get
@@ -353,27 +361,91 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         }));
 
     public void Open(string url) => Open(url, _ => { });
-    public void Open(string url, Action<string?> completed)
+    public void Open(string url, Action<string?> completed, bool onlineVideo = false)
     {
-        int epoch = Interlocked.Increment(ref mediaOpenEpoch);
-        Observe(MutateWithTranslationAsync(() =>
+        int epoch;
+        lock (mediaOpenInterruption)
+            cancelableAppEpoch = epoch = Interlocked.Increment(ref mediaOpenEpoch);
+        Raise(nameof(CanCancelOpen));
+        Observe(MutateWithTranslationAsync(token =>
         {
             // Player.Open raises Opening/OpenCompleted synchronously. Carry this request's identity through those
             // events instead of inferring ownership from a URL, which may be opened more than once.
             int previous = appMediaOpenEpoch.Value;
             appMediaOpenEpoch.Value = epoch;
             string? error;
-            try { error = player.Open(url).Error; }
-            finally { appMediaOpenEpoch.Value = previous; }
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                if (epoch != Volatile.Read(ref mediaOpenEpoch)) return;
+                using var cancellation = OnlineVideoRequest.ObserveCancellation(token, onlineVideo ? url : null);
+                // Extraction and the subsequent FFmpeg open share one owned cancellation lifetime. Disposing
+                // the registration drains a racing callback before the next serialized mutation can begin.
+                lock (mediaOpenInterruption)
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (epoch != Volatile.Read(ref mediaOpenEpoch)) return;
+                    interruptibleAppEpoch = epoch;
+                }
+                using var interruption = token.Register(() =>
+                {
+                    lock (mediaOpenInterruption)
+                        if (interruptibleAppEpoch == epoch && !player.IsDisposed) player.decoder.Interrupt = true;
+                });
+                error = player.Open(url).Error;
+                token.ThrowIfCancellationRequested();
+            }
+            finally
+            {
+                lock (mediaOpenInterruption)
+                {
+                    if (interruptibleAppEpoch == epoch) interruptibleAppEpoch = 0;
+                    if (cancelableAppEpoch == epoch) cancelableAppEpoch = 0;
+                }
+                Raise(nameof(CanCancelOpen));
+                appMediaOpenEpoch.Value = previous;
+            }
             Post(() => { if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) completed(error); });
-        }, mediaChange: true));
+        }, mediaChange: true), epoch);
+    }
+    public bool CancelOpen()
+    {
+        lock (mediaOpenInterruption)
+        {
+            if (cancelableAppEpoch == 0) return false;
+            cancelableAppEpoch = 0;
+            Interlocked.Increment(ref mediaOpenEpoch);
+            Recognition.Invalidate();
+        }
+        Raise(nameof(CanCancelOpen));
+        return true;
+    }
+
+    public Task SaveOnlineVideoSettingsAsync(OnlineVideoSettingsStore store, OnlineVideoSettings settings)
+    {
+        // A modal Save must never wait behind a stalled extraction while its owner holds the Cancel button.
+        if (Recognition.IsBusy)
+            throw new InvalidOperationException("Cancel the current opening, or wait for playback and recognition work to finish, before saving tool paths.");
+        OnlineVideoSettings detached = settings.Clone();
+        return Recognition.MutateAsync(() => { store.Save(detached); detached.Apply(player.Config); });
     }
     public void OpenSubtitles(string path) => Observe(MutateWithTranslationAsync(() => player.Open(path, forceSubtitles: true)));
-    async void Observe(Task work)
+    async void Observe(Task work, int openEpoch = 0)
     {
-        try { await work; }
+        try { await work.ConfigureAwait(false); }
         catch (RecognitionActionCanceledException) { }
+        catch (OperationCanceledException) { }
         catch (Exception e) { Post(() => { if (!disposed) ErrorOccurred?.Invoke(e.Message); }); }
+        finally
+        {
+            // A queued mutation can be rejected before its body runs.
+            if (openEpoch != 0)
+            {
+                lock (mediaOpenInterruption)
+                    if (cancelableAppEpoch == openEpoch) cancelableAppEpoch = 0;
+                Raise(nameof(CanCancelOpen));
+            }
+        }
     }
     public void Play() => player.Play();
     public void Pause() => player.Pause();
@@ -565,11 +637,21 @@ public sealed class FlyleafPlaybackController : IPlaybackController, IRecognitio
         if (e.IsSubtitles) return;
         // Native engine shortcuts open outside the app mutation queue. Invalidate immediately, before the UI
         // notification can run, so an already-posted app completion cannot attach its sidecars to the new media.
-        Recognition.Invalidate();
         if (appMediaOpenEpoch.Value == 0)
         {
-            int epoch = Interlocked.Increment(ref mediaOpenEpoch);
-            latestNativeOpen = new(e.RequestId, epoch);
+            // Native shortcuts bypass the app queue. Revoke the old callback before the new native open resets
+            // interruption; otherwise a delayed cancellation callback could interrupt the replacement instead.
+            int epoch;
+            lock (mediaOpenInterruption)
+            {
+                if (interruptibleAppEpoch != 0 && !player.IsDisposed) player.decoder.Interrupt = true;
+                interruptibleAppEpoch = 0;
+                cancelableAppEpoch = 0;
+                epoch = Interlocked.Increment(ref mediaOpenEpoch);
+                Recognition.Invalidate();
+                latestNativeOpen = new(e.RequestId, epoch);
+            }
+            Raise(nameof(CanCancelOpen));
             Post(() =>
             {
                 if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) ExternalMediaOpening?.Invoke();

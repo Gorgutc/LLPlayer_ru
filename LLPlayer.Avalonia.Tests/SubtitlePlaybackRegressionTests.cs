@@ -11,6 +11,112 @@ namespace LLPlayer.Avalonia.Tests;
 [Collection(FlyleafGlobalsCollection.Name)]
 public sealed class SubtitlePlaybackRegressionTests
 {
+    [AvaloniaTheory]
+    [InlineData("cancel")]
+    [InlineData("replace")]
+    [InlineData("shutdown")]
+    public async Task Cancel_during_native_video_open_interrupts_owned_decoder_and_never_autoplays_stale_media(string action)
+    {
+        using TempDir state = new();
+        var (player, controller, media) = Create(state);
+        player.Config.Player.AutoPlay = true;
+        TaskCompletionSource<CancellationToken> entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<bool> replacement = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int opens = 0, staleCompletions = 0;
+        bool nativeWasInterrupted = false;
+        void Stall(object? sender, Player.OpeningVideoStreamArgs args)
+        {
+            if (Interlocked.Increment(ref opens) != 1) return;
+            var token = FlyleafLib.Plugins.OnlineVideoRequest.CurrentCancellation;
+            entered.TrySetResult(token);
+            if (!token.WaitHandle.WaitOne(TimeSpan.FromSeconds(15))) return;
+            nativeWasInterrupted = SpinWait.SpinUntil(() => player.decoder.Interrupt, TimeSpan.FromSeconds(10));
+            // Return into the real native-open pipeline: cancellation must suppress its autoplay itself.
+        }
+        player.OpeningVideoStream += Stall;
+        try
+        {
+            controller.Open(media, _ => Interlocked.Increment(ref staleCompletions));
+            CancellationToken token = await entered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.True(token.CanBeCanceled);
+            Assert.False(token.IsCancellationRequested);
+            if (action == "replace")
+            {
+                player.Config.Player.AutoPlay = false;
+                controller.Open(media, error => replacement.TrySetResult(error == null));
+            }
+            else if (action == "shutdown") await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(20));
+            else controller.CancelOpen();
+            if (action == "replace") Assert.True(await replacement.Task.WaitAsync(TimeSpan.FromSeconds(30)));
+            else if (action != "shutdown") await controller.Recognition.MutateAsync(() => { }).WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.True(nativeWasInterrupted);
+            Assert.False(controller.IsPlaying);
+            if (action != "replace")
+            {
+                Assert.False(controller.IsOpened);
+                Assert.Null(player.decoder.VideoStream);
+            }
+            Assert.Equal(0, staleCompletions);
+        }
+        finally
+        {
+            player.OpeningVideoStream -= Stall;
+            await controller.DisposeAsync();
+            player.Dispose();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("cancel")]
+    [InlineData("replace")]
+    [InlineData("shutdown")]
+    public async Task App_open_scope_survives_Opening_and_releases_on_cancel_replacement_or_shutdown(string action)
+    {
+        using TempDir state = new();
+        var (player, controller, media) = Create(state);
+        TaskCompletionSource<CancellationToken> entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<bool> replacement = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int opens = 0, staleCompletions = 0;
+        bool initialTokenWasCanceled = false;
+        // Stall at the same synchronous engine boundary as the resolver without running a helper or network.
+        void Stall(object? sender, OpeningArgs args)
+        {
+            if (args.IsSubtitles || Interlocked.Increment(ref opens) != 1) return;
+            CancellationToken token = FlyleafLib.Plugins.OnlineVideoRequest.CurrentCancellation;
+            initialTokenWasCanceled = token.IsCancellationRequested;
+            entered.TrySetResult(token);
+            if (!token.WaitHandle.WaitOne(TimeSpan.FromSeconds(15))) throw new TimeoutException("Host open cancellation did not reach the engine scope.");
+            token.ThrowIfCancellationRequested();
+        }
+        player.Opening += Stall;
+        try
+        {
+            controller.Open(media, _ => Interlocked.Increment(ref staleCompletions));
+            CancellationToken token = await entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.True(token.CanBeCanceled);
+            Assert.False(initialTokenWasCanceled); // Opening must not invalidate its own app-admitted token.
+            var tools = new OnlineVideoSettingsStore(Path.Combine(state.Path, "tools.json"));
+            var settingsDialog = new OnlineVideoViewModel(new(), draft => controller.SaveOnlineVideoSettingsAsync(tools, draft), _ => { });
+            await settingsDialog.SaveCommand.ExecuteAsync(null);
+            Assert.False(settingsDialog.Busy);
+            Assert.Contains("Cancel the current opening", settingsDialog.Message);
+            Assert.False(File.Exists(Path.Combine(state.Path, "tools.json")));
+            if (action == "replace") controller.Open(media, error => replacement.TrySetResult(error == null));
+            else if (action == "shutdown") await controller.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(15));
+            else controller.CancelOpen();
+            if (action == "replace") Assert.True(await replacement.Task.WaitAsync(TimeSpan.FromSeconds(30)));
+            else if (action != "shutdown") await controller.Recognition.MutateAsync(() => { }).WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.True(token.IsCancellationRequested);
+            Assert.Equal(0, staleCompletions);
+        }
+        finally
+        {
+            player.Opening -= Stall;
+            await controller.DisposeAsync();
+            player.Dispose();
+        }
+    }
+
     [AvaloniaFact]
     public async Task Explicit_txt_subtitle_open_preserves_the_current_video()
     {
@@ -182,6 +288,96 @@ public sealed class SubtitlePlaybackRegressionTests
             Assert.Equal(openingIds.ToArray(), completionIds.ToArray());
         }
         finally { await controller.DisposeAsync(); player.Dispose(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Stale_cancel_after_native_replacement_preserves_its_completion()
+    {
+        using TempDir state = new();
+        QueuedDispatcher ui = new();
+        var (player, controller, media) = Create(state, ui);
+        using var vm = new MainWindowViewModel(controller, new AppPrefs().Normalize(), _ => { }, new FakeTranslator(), new FakeShell());
+        List<string?> completions = [];
+        controller.OpenCompleted += (url, subs, error) => { if (!subs && error == null) completions.Add(url); };
+        try
+        {
+            Assert.True(FlyleafLib.Plugins.OnlineVideoRequest.TryCreate("https://example.org/video#part", out var request));
+            TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            player.Opening += (_, args) =>
+            {
+                if (args.Url != request) return;
+                var token = FlyleafLib.Plugins.OnlineVideoRequest.CurrentCancellation;
+                entered.TrySetResult();
+                if (!token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10))) throw new TimeoutException();
+                token.ThrowIfCancellationRequested();
+            };
+            vm.OpenOnlineVideo(request);
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(vm.CancelOpenCommand.CanExecute(null));
+            // The native shortcut has replaced the app request before its UI notifications arrive.
+            player.OpenAsync(media);
+            Assert.False(controller.CanCancelOpen);
+            vm.CancelOpenCommand.Execute(null);
+            await DrainUntil(ui, () => completions.Count != 0);
+            Assert.Equal(media, Assert.Single(completions));
+            Assert.Equal(media, Assert.Single(vm.RecentFiles));
+        }
+        finally { await controller.DisposeAsync(); player.Dispose(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Controller_only_admits_explicit_online_open(bool explicitAction)
+    {
+        using TempDir state = new();
+        var (player, controller, _) = Create(state);
+        using var vm = new MainWindowViewModel(controller, new AppPrefs().Normalize(), _ => { }, new FakeTranslator(), new FakeShell());
+        Assert.True(FlyleafLib.Plugins.OnlineVideoRequest.TryCreate("https://example.org/video#part", out var request));
+        TaskCompletionSource<bool> admission = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        player.Opening += (sender, args) =>
+        {
+            var token = FlyleafLib.Plugins.OnlineVideoRequest.CurrentCancellation;
+            admission.TrySetResult(FlyleafLib.Plugins.OnlineVideoRequest.TryGetAdmittedUrl(args.Url, out _));
+            if (!token.WaitHandle.WaitOne(TimeSpan.FromSeconds(10))) throw new TimeoutException();
+            token.ThrowIfCancellationRequested();
+        };
+        try
+        {
+            if (explicitAction) vm.OpenOnlineVideo(request); else vm.Open(request);
+            Assert.Equal(explicitAction, await admission.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.True(controller.CancelOpen());
+        }
+        finally { await controller.DisposeAsync(); player.Dispose(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Cancel_can_revoke_a_queued_app_open_before_engine_dispatch()
+    {
+        using TempDir state = new();
+        var (player, controller, media) = Create(state);
+        using ManualResetEventSlim release = new();
+        TaskCompletionSource entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int openings = 0;
+        player.Opening += (_, _) => Interlocked.Increment(ref openings);
+        try
+        {
+            var previous = controller.Recognition.MutateAsync(() =>
+            {
+                entered.TrySetResult();
+                if (!release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException();
+            });
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            controller.Open(media);
+            Assert.True(controller.CanCancelOpen);
+            Assert.True(controller.CancelOpen());
+            release.Set();
+            await previous;
+            await WaitUntil(() => !controller.Recognition.IsDispatching);
+            Assert.False(controller.CanCancelOpen);
+            Assert.Equal(0, openings);
+        }
+        finally { release.Set(); await controller.DisposeAsync(); player.Dispose(); }
     }
 
     sealed class QueuedDispatcher : IUIDispatcher

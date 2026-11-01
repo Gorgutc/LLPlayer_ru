@@ -24,6 +24,16 @@ public class FakePlaybackController : IPlaybackController
     public List<WpfKey> KeysUp { get; } = [];
     public List<string> Opened { get; } = [];
     public List<string> OpenedSubtitles { get; } = [];
+    public int CancelOpenCalls { get; private set; }
+    public bool CanCancelOpen { get; private set => Set(ref field, value); }
+    public List<string> OnlineVideoRequests { get; } = [];
+    public bool CancelOpen()
+    {
+        if (!CanCancelOpen) return false;
+        CanCancelOpen = false;
+        CancelOpenCalls++;
+        return true;
+    }
     public List<(int Slot, SubtitleTrack? Track)> SelectedTracks { get; } = [];
     public int PauseCalls { get; private set; }
     public int ToggleCalls { get; private set; }
@@ -170,12 +180,14 @@ public class FakePlaybackController : IPlaybackController
     public void Open(string url)
     {
         Opened.Add(url);
+        CanCancelOpen = true;
         openCompletions.Add(null);
     }
 
-    public void Open(string url, Action<string?> completed)
+    public void Open(string url, Action<string?> completed, bool onlineVideo = false)
     {
         Open(url);
+        if (onlineVideo) OnlineVideoRequests.Add(url);
         openCompletions[^1] = completed;
     }
 
@@ -229,11 +241,16 @@ public class FakePlaybackController : IPlaybackController
     {
         Action<string?>? completed = openCompletions[requestIndex];
         openCompletions[requestIndex] = null;
+        if (requestIndex == openCompletions.Count - 1) CanCancelOpen = false;
         OpenCompleted?.Invoke(Opened[requestIndex], false, error);
         completed?.Invoke(error);
     }
 
-    public void RaiseExternalMediaOpening() => ExternalMediaOpening?.Invoke();
+    public void RaiseExternalMediaOpening()
+    {
+        CanCancelOpen = false;
+        ExternalMediaOpening?.Invoke();
+    }
 
     public void RaiseCuesChanged(int slot) => CuesChanged?.Invoke(slot);
     public void RaiseOpenCompleted(string? url, bool isSubtitles, string? error)

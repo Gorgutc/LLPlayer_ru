@@ -15,6 +15,8 @@ $shortcutName = 'LLPlayer Avalonia (Windows).lnk'
 $legacySourceCommit = '4756c2ea357a156d7aeebd487792acbbe9c4dab0'
 $script:passed = 0
 [IO.Directory]::CreateDirectory($work) | Out-Null
+$fixturePlugin = Join-Path $work 'YoutubeDL.dll'
+Add-Type -TypeDefinition '[assembly: System.Runtime.Versioning.TargetFramework(".NETCoreApp,Version=v10.0")] public class DesktopPackageFixture {}' -OutputAssembly $fixturePlugin
 if (-not ('DesktopTestProbe.Physical' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -172,6 +174,8 @@ function New-Package([string]$Name, [switch]$OmitCore) {
         'licenses/Avalonia.ANGLE.LICENSE', 'licenses/OpenALSoft.BSD-3Clause.txt', 'dub_sidecar/server.py', 'dub_sidecar/pyproject.toml', 'dub_sidecar/uv.lock', 'dub_sidecar/README.md')
     if (-not $OmitCore) { $required += 'LLPlayer.Core.dll' }
     foreach ($file in @($required) + @($native)) { Write-File $dir $file ($Name + ':' + $file) }
+    Write-File $dir 'Plugins/YoutubeDL/YoutubeDL.pdb' 'synthetic symbols'
+    Copy-Item -LiteralPath $fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
     Write-File $dir 'LLPlayer.Avalonia.deps.json' '{}'
     Write-File $dir 'LLPlayer.Avalonia.runtimeconfig.json' '{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}'
     $manifest = [ordered]@{

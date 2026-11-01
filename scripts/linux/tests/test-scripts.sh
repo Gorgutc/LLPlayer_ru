@@ -38,11 +38,16 @@ expect_ok() {
 }
 
 sonames=(libavcodec.so.62 libavdevice.so.62 libavfilter.so.11 libavformat.so.62 libavutil.so.60 libswresample.so.6 libswscale.so.9)
+# Structural managed fixture compiled once with a net10.0 TargetFrameworkAttribute. It is
+# intentionally not the production plugin; actual plugin identity/type loading is a .NET10 test.
+printf '%s' 'H4sIAAAAAAAEAO1VzWskRRR/3TMbJokbIsqSoMSOs4tBlqaXDK6CxkkyyW5k8kFmdtwVcdPTKSe929M1VFfnQ0H24qJ4ES9ePAheRDx4UHYR/BP24MGbh/Xk0YuIKBh/Vd3zkcnA5iKLsK+nXlW9eh+/96r7zeobH1OGiLIYh4dEdymhIj2YbmGMPfP9GH07fG/6rlG+N13d8SOrJXhDuE3Lc8OQS6vOLBGHlh9apfWK1eTbzD59euRs6mNjiahsZGjo6V9vtP3eJ3N61BhNQA0lsrU8mNUBNq7XZqJC1J01KDNZZqj4vlJVv+7cmTT9+SxRJU34S3NAkltEj52gFscI+HI92xz2l3v2tmT7EnM1k+jqBPriQ7xli0h4lGIr0pGatAnioi1YwL0U61bqa+SY3kI/TCefzJe1ySm6iqCfw9Y4SY4DaMqcAcKR5xcqry0YqReFabdgO/asM3vhJSU5RQH4zxj59xDbUHeOdUUKP2xESmPGTOqXv1Ihx0zuLH/pykpJ5WEmKeYXAl5P4yrIl54kGlabv87N0pkkh3ZZ2+tMuk6QjaTzEF0kB/wtKoF/Snvgd8Cpo2noZ5wmNHq13rCU/PbEnPbyOM3RGE2CP0HTpGTDmts0Chsb0ovgT+EOsrf6a/YT9by/OtZz3c3Lq3w7DtgcXeOxjOusVLa3g4A2XO+m22DL/r6MBaNm5HER+HWqHESSNWm9foN5kmxPcpHK7M04lH6T2TUmIp+HqDRVXdFgchlfK9vj4ua8xAXUY8n6TRZ5s+UHTFSY2PU9FlEicCX8bLLA3derqGufGio1HNX9wJcH3dNOKupCdBnpi89e+Oi7d78q3v7xkz/+/t34hXJ33nmzNlm4/yEUjKxlGGOK5aYMmrTXlqqLXLD5Vut8mswruxcc28ErY6Rf3ZS6oqp55nXhttZ4uLTvsZbCWN0RfC8yyMp3SzzX7i0DyMn3S64jdCkIVl0/TMrOmL4RRYfn4Gf8mJP/DRka/ETSRY/I1VfgDJArUr3jahF9vKd/lc0CeA299Tr4Em1itULrtIb9Cvgy1op+yP72z6Bu82o6D2iLVNKRa+SSgB8fvYTBZ0hvE9fnZ7VVFacupBHOXZLQ49gl9E32a0P5qEAucBJSY4CnD7SO03kKVFc1oPNAZHT0SxgRedpP60gcS9cs16NbwxDQ7uo46Ardgc8dXcTQGKTWDYE9QL1camJPdA2WMc5iYFGxy7DbhoZ6/2Y0rjLkDW21CN0WHWhkDdohmWIq6RjrqdxPY7QxhieKVdB5bcAHhyxG/vJYdv25vaht5qERQbMJrwHQWQ+0e0T/IVnJ//PG7MMG8ogeBv0LfGg+BQAMAAA=' | base64 -d | gzip -d > "$work/YoutubeDL.dll"
 
 # ---------------------------------------------------------------- publish.sh --check-package
 make_package() { # dir
     local p="$1" so
-    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets" "$p/runtimes/linux-x64"
+    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL"
+    cp "$work/YoutubeDL.dll" "$p/Plugins/YoutubeDL/YoutubeDL.dll"
+    printf 'symbols\n' > "$p/Plugins/YoutubeDL/YoutubeDL.pdb"
     for f in LLPlayer.Avalonia LLPlayer.Avalonia.dll LLPlayer.Avalonia.deps.json LLPlayer.Avalonia.runtimeconfig.json \
         FlyleafLib.dll LLPlayer.Core.dll libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libe_sqlite3.so llplayer llplayer.desktop llplayer.png llplayer.sh LLPlayer.png \
         LICENSE THIRD-PARTY-NOTICES.md FFmpeg/LICENSE.txt FFmpeg/SOURCE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
@@ -70,6 +75,28 @@ mutate() { # name command-string -> fresh copy in $work/m-<name>, prints its pat
     (cd "$dir" && eval "$2")
     printf '%s\n' "$dir"
 }
+expect_fail "missing plugin assembly" "missing required file Plugins/YoutubeDL/YoutubeDL.dll" \
+    check_pkg "$(mutate no-plugin 'rm Plugins/YoutubeDL/YoutubeDL.dll')"
+expect_fail "missing plugin symbols" "missing required file Plugins/YoutubeDL/YoutubeDL.pdb" \
+    check_pkg "$(mutate no-symbols 'rm Plugins/YoutubeDL/YoutubeDL.pdb')"
+expect_fail "empty plugin symbols" "must be a non-empty regular file" \
+    check_pkg "$(mutate empty-symbols ': > Plugins/YoutubeDL/YoutubeDL.pdb')"
+expect_fail "native plugin assembly" "managed PE assembly" \
+    check_pkg "$(mutate native-plugin 'cp libSkiaSharp.so Plugins/YoutubeDL/YoutubeDL.dll')"
+expect_fail "Windows plugin metadata" "target portable net10.0" \
+    check_pkg "$(mutate windows-plugin 'printf TargetPlatformAttribute >> Plugins/YoutubeDL/YoutubeDL.dll')"
+expect_fail "wrong plugin framework" "target portable net10.0" \
+    check_pkg "$(mutate wrong-plugin-framework 'sed -i s/Version=v10.0/Version=v09.0/ Plugins/YoutubeDL/YoutubeDL.dll')"
+expect_fail "plugin case mismatch" "missing required file Plugins/YoutubeDL/YoutubeDL.dll" \
+    check_pkg "$(mutate plugin-case 'mv Plugins/YoutubeDL/YoutubeDL.dll Plugins/YoutubeDL/youtubedl.dll')"
+expect_fail "unexpected plugin dependency" "unexpected plugin payload" \
+    check_pkg "$(mutate plugin-dependency 'echo x > Plugins/YoutubeDL/FlyleafLib.dll')"
+expect_fail "misplaced plugin assembly" "misplaced plugin payload" \
+    check_pkg "$(mutate misplaced-plugin 'cp Plugins/YoutubeDL/YoutubeDL.dll YoutubeDL.dll')"
+for helper in yt-dlp yt-dlp.exe yt-dlp_linux yt-dlp_linux_aarch64 deno deno.exe; do
+    expect_fail "nested external helper $helper" "external extractor helpers" \
+        check_pkg "$(mutate "helper-${helper//./-}" "mkdir nested; echo x > nested/$helper")"
+done
 expect_fail "missing Core assembly" "missing required file LLPlayer.Core.dll" \
     check_pkg "$(mutate missing-core 'rm LLPlayer.Core.dll')"
 expect_fail "missing FFmpeg soname" "missing required file FFmpeg/libavcodec.so.62" \
@@ -102,6 +129,28 @@ expect_fail "launcher not executable" "llplayer must be executable" \
     check_pkg "$(mutate noexec 'chmod 644 llplayer')"
 expect_fail "translation config JSON" "runtime config" \
     check_pkg "$(mutate translation 'echo {} > LLPlayer.Translation.json')"
+expect_fail "Avalonia tool configuration" "runtime config" \
+    check_pkg "$(mutate avalonia-config 'echo {} > LLPlayer.Avalonia.json')"
+expect_fail "Avalonia atomic temporary configuration" "runtime config" \
+    check_pkg "$(mutate avalonia-config-temp 'echo {} > .LLPlayer.Avalonia.json.guid.tmp')"
+for config in LLPlayer.OnlineVideo.json LLPlayer.OnlineVideo.json.bak LLPlayer.OnlineVideo.json.bad \
+    .LLPlayer.OnlineVideo.json.guid.tmp .LLPlayer.OnlineVideo.json.bak \
+    nested/LLPlayer.OnlineVideo.json nested/LLPlayer.OnlineVideo.json.bak \
+    nested/.LLPlayer.OnlineVideo.json.guid.tmp nested/.LLPlayer.OnlineVideo.json.bak; do
+    expect_fail "online configuration $config" "runtime config" \
+        check_pkg "$(mutate "online-${config//\//-}" "mkdir -p nested; echo x > $config")"
+done
+for archive in deno-x86_64-pc-windows-msvc.zip nested/deno-x86_64-unknown-linux-gnu.zip nested/deno.zip \
+    yt-dlp.tar.gz nested/yt-dlp_linux.zip nested/yt-dlp.exe.7z; do
+    expect_fail "helper archive $archive" "external extractor helpers" \
+        check_pkg "$(mutate "archive-${archive//\//-}" "mkdir -p nested; echo x > $archive")"
+done
+for cache in .deno nested/.deno .yt-dlp nested/yt-dlp-cache nested/deno-cache; do
+    expect_fail "helper cache $cache" "external extractor helpers" \
+        check_pkg "$(mutate "cache-${cache//\//-}" "mkdir -p $cache")"
+done
+expect_ok "unrelated archive remains valid" \
+    check_pkg "$(mutate unrelated-archive 'echo x > project-notes.zip')"
 expect_fail "translation atomic temporary JSON" "runtime config" \
     check_pkg "$(mutate translationdottmp 'echo {} > .LLPlayer.Translation.json.guid.tmp')"
 expect_fail "translation backup JSON" "runtime config" \

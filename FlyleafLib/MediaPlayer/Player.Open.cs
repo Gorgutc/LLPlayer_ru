@@ -205,6 +205,22 @@ unsafe partial class Player
             args.Url        = args2.Url;
             args.IOStream   = args2.IOStream;
             args.Error      = args2.Error;
+#if !WINDOWS
+            // Native stream opening can complete as the host cancels. Reject its success
+            // before the normal status/autoplay path can start playback for this request.
+            if (FlyleafLib.Plugins.OnlineVideoRequest.CurrentCancellation.IsCancellationRequested)
+            {
+                args.Error = "Cancelled";
+                lock (lockActions)
+                {
+                    // A replacement can already have opened, even the same URL. Only the
+                    // owning request may close its streams or reset the player's status.
+                    if (requestId == Interlocked.Read(ref openRequestSequence))
+                        Initialize();
+                }
+                return args;
+            }
+#endif
 
             if (!args.Success)
             {

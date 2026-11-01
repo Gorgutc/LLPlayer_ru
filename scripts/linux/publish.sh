@@ -52,6 +52,8 @@ validate_package() {
         "LLPlayer.Avalonia.runtimeconfig.json"
         "FlyleafLib.dll"
         "LLPlayer.Core.dll"
+        "Plugins/YoutubeDL/YoutubeDL.dll"
+        "Plugins/YoutubeDL/YoutubeDL.pdb"
         "libSkiaSharp.so"
         "libHarfBuzzSharp.so"
         "libonnxruntime.so"
@@ -83,15 +85,51 @@ validate_package() {
         [[ "$resolved" == "$pkg/"* && -f "$resolved" && -s "$resolved" ]] ||
             llp_die "Linux package required file $rel must be a non-empty regular file inside the package."
     done
+    # Offline structural screening; the .NET10 package-load test resolves types and checks the
+    # actual TargetFrameworkAttribute against the shared portable engine after publish/extraction.
+    local plugin="$pkg/Plugins/YoutubeDL/YoutubeDL.dll" pe magic directory cli
+    [[ "$(od -An -tx1 -N2 "$plugin" | tr -d ' \n')" == 4d5a ]] || llp_die "YoutubeDL plugin must be a managed PE assembly."
+    pe="$(od -An -tu4 -j60 -N4 "$plugin" | tr -d ' \n')"
+    [[ "$pe" =~ ^[0-9]+$ && "$pe" -le $(($(stat -c %s "$plugin") - 256)) ]] || llp_die "YoutubeDL plugin has invalid PE headers."
+    [[ "$(od -An -tx1 -j"$pe" -N4 "$plugin" | tr -d ' \n')" == 50450000 ]] || llp_die "YoutubeDL plugin has invalid PE signature."
+    magic="$(od -An -tu2 -j"$((pe + 24))" -N2 "$plugin" | tr -d ' \n')"
+    case "$magic" in
+        267) directory=$((pe + 24 + 96)) ;;
+        523) directory=$((pe + 24 + 112)) ;;
+        *) llp_die "YoutubeDL plugin has invalid PE optional header." ;;
+    esac
+    cli="$(od -An -tu4 -j"$((directory + 14 * 8))" -N4 "$plugin" | tr -d ' \n')"
+    [[ "$cli" =~ ^[0-9]+$ && "$cli" -gt 0 ]] || llp_die "YoutubeDL plugin must be a managed assembly."
+    grep -aqF 'YoutubeDL' "$plugin" && grep -aqF '.NETCoreApp,Version=v10.0' "$plugin" &&
+        ! grep -aqE 'TargetPlatformAttribute|Version=v10.0-windows|PresentationFramework|PresentationCore|WindowsBase|Microsoft.WindowsDesktop.App' "$plugin" ||
+        llp_die "YoutubeDL plugin must target portable net10.0 without WPF references."
     for exe in LLPlayer.Avalonia llplayer; do
         [[ -x "$pkg/$exe" ]] || llp_die "Linux package file $exe must be executable."
     done
 
     # ---- Negative validation (mirrors the Windows ship rules in docs/agent/dependency-baseline.md) ----
-    hits="$(find "$pkg" \( -name '.LLPlayer.Translation.json.*.tmp' -o -name 'LLPlayer.Translation.json' -o -name 'LLPlayer.Translation.json.*' -o -name '.LLPlayer.Recognition.json.*.tmp' -o -name 'LLPlayer.Recognition.json' -o -name 'LLPlayer.Recognition.json.*' -o -name 'LLPlayer.Config.json' -o -name 'LLPlayer.Engine.json' -o -name 'LLPlayer.PlayerConfig.json' \
+    hits="$(find "$pkg" \( -name '.LLPlayer.OnlineVideo.json' -o -name '.LLPlayer.OnlineVideo.json.*' -o -name 'LLPlayer.OnlineVideo.json' -o -name 'LLPlayer.OnlineVideo.json.*' -o -name '.LLPlayer.Avalonia.json.*' -o -name 'LLPlayer.Avalonia.json' -o -name 'LLPlayer.Avalonia.json.*' -o -name '.LLPlayer.Translation.json.*.tmp' -o -name 'LLPlayer.Translation.json' -o -name 'LLPlayer.Translation.json.*' -o -name '.LLPlayer.Recognition.json.*.tmp' -o -name 'LLPlayer.Recognition.json' -o -name 'LLPlayer.Recognition.json.*' -o -name 'LLPlayer.Config.json' -o -name 'LLPlayer.Engine.json' -o -name 'LLPlayer.PlayerConfig.json' \
         -o -name 'LLPlayer.WordList.json' -o -name 'LLPlayer.WordList.json.*' -o -name '.LLPlayer.WordList.json.*.tmp' -o -name 'crash.log' -o -name '*.log' -o -name '*.dmp' -o -name '*.dump' \
         -o -name '.env*' \) -print)"
     [[ -z "$hits" ]] || reject "runtime config / logs / dumps / secrets" "$hits"
+    hits="$(find "$pkg" \( -iname 'yt-dlp' -o -iname 'yt-dlp.exe' -o -iname 'yt-dlp_linux*' -o -iname deno -o -iname deno.exe \) -print)"
+    [[ -z "$hits" ]] || reject "external extractor helpers" "$hits"
+    hits="$(find "$pkg" -regextype posix-extended \( \
+        -iregex '.*/(yt-dlp|deno)([._-][^/]*)?\.(zip|tar|tar\.gz|tar\.xz|tgz|7z)' \
+        -o -iname .deno -o -iname .yt-dlp -o -iname deno-cache -o -iname yt-dlp-cache \) -print)"
+    [[ -z "$hits" ]] || reject "external extractor helpers (archives or caches)" "$hits"
+    while IFS= read -r path; do
+        rel="${path#"$pkg"/}"
+        [[ "$rel" == Plugins/YoutubeDL/YoutubeDL.dll || "$rel" == Plugins/YoutubeDL/YoutubeDL.pdb ]] ||
+            reject "a misplaced plugin payload" "$rel"
+    done < <(find "$pkg" \( -iname YoutubeDL.dll -o -iname YoutubeDL.pdb \) -print)
+    while IFS= read -r path; do
+        rel="${path#"$pkg"/}"
+        case "$rel" in
+            Plugins/YoutubeDL|Plugins/YoutubeDL/YoutubeDL.dll|Plugins/YoutubeDL/YoutubeDL.pdb) ;;
+            *) reject "an unexpected plugin payload" "$rel" ;;
+        esac
+    done < <(find "$pkg/Plugins" -mindepth 1 -print)
     hits="$(find "$pkg" -type d \( -name DubEngine -o -name dubmodels -o -name '.venv' -o -name venv -o -name __pycache__ \
         -o -name whispermodels -o -name Whisper -o -name tesseractmodels -o -name Recordings -o -name Snapshots \) -print)"
     [[ -z "$hits" ]] || reject "dubbing venv / model / user media folders" "$hits"
@@ -138,7 +176,7 @@ runtimes/linux-x64/libggml-base-whisper.so runtimes/linux-x64/libggml-cpu-whispe
 }
 
 if [[ -n "$check_dir" ]]; then
-    llp_require_cmd find readlink
+    llp_require_cmd find readlink od tr stat grep
     validate_package "$check_dir"
     exit 0
 fi
@@ -183,7 +221,14 @@ trap cleanup EXIT
 pkg="$staging/$pkg_name"
 
 llp_log "publishing $app_proj ($version) into $pkg"
-dotnet publish "$app_proj" -c Release -r linux-x64 --self-contained false -warnaserror -o "$pkg"
+dotnet publish "$app_proj" -c Release -f net10.0 -r linux-x64 --self-contained false -warnaserror -o "$pkg"
+plugin_staging="$staging/portable-plugin"
+dotnet publish Plugins/YoutubeDL/YoutubeDL.csproj -c Release -f net10.0 -r linux-x64 --self-contained false -warnaserror -o "$plugin_staging"
+mkdir -p "$pkg/Plugins/YoutubeDL"
+for plugin_file in YoutubeDL.dll YoutubeDL.pdb; do
+    [[ -f "$plugin_staging/$plugin_file" && -s "$plugin_staging/$plugin_file" ]] || llp_die "Missing portable plugin publish output $plugin_file."
+    cp "$plugin_staging/$plugin_file" "$pkg/Plugins/YoutubeDL/$plugin_file"
+done
 
 # Clean-up TesseractOCR: its build targets copy Windows-only x64/ and x86/ leptonica/tesseract DLLs regardless of
 # the RID (Linux OCR will use the system Tesseract). Remove only the known payload; anything else is drift.
@@ -279,6 +324,28 @@ tmp_archive="$(mktemp "$out_dir/.$pkg_name.XXXXXX.tar.gz")"
 tar -C "$staging" --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$mtime" -cf - "$pkg_name" |
     gzip -n -9 > "$tmp_archive"
 tar -tzf "$tmp_archive" > /dev/null || llp_die "archive integrity test failed."
+# Compare the full TAR member inventory, reject duplicates, then extract and compare content hashes
+# and symlink targets. This also checks plugin path casing, uniqueness and actual extracted bytes.
+find "$pkg" -printf '%P\n' | sed "s|^|$pkg_name/|" | LC_ALL=C sort > "$staging/expected-members"
+tar -tzf "$tmp_archive" | sed 's|/$||' | LC_ALL=C sort > "$staging/actual-members"
+sed -i 's|/$||' "$staging/expected-members"
+cmp "$staging/expected-members" "$staging/actual-members" || llp_die "TAR member inventory mismatch."
+[[ -z "$(uniq -d "$staging/actual-members")" ]] || llp_die "TAR contains duplicate members."
+mkdir "$staging/archive-readback"
+tar -xzf "$tmp_archive" -C "$staging/archive-readback"
+readback="$staging/archive-readback/$pkg_name"
+validate_package "$readback"
+while IFS= read -r -d '' file; do
+    rel="${file#"$pkg"/}"
+    expected_sha="$(sha256sum "$file" | awk '{ print $1 }')"
+    actual_sha="$(sha256sum "$readback/$rel" | awk '{ print $1 }')"
+    [[ "$actual_sha" == "$expected_sha" ]] || llp_die "TAR hash mismatch: $rel"
+    cmp "$file" "$readback/$rel" || llp_die "TAR content mismatch: $rel"
+done < <(find "$pkg" -type f -print0)
+while IFS= read -r -d '' file; do
+    rel="${file#"$pkg"/}"
+    [[ "$(readlink "$file")" == "$(readlink "$readback/$rel")" ]] || llp_die "TAR symlink mismatch: $rel"
+done < <(find "$pkg" -type l -print0)
 chmod 644 "$tmp_archive"
 mv -f "$tmp_archive" "$archive"
 tmp_archive=""

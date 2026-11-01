@@ -187,12 +187,14 @@ public class SettingsWindowTests
     [AvaloniaTheory]
     [InlineData(SettingsLink.Translation)] [InlineData(SettingsLink.Recognition)]
     [InlineData(SettingsLink.Shortcuts)] [InlineData(SettingsLink.WordManager)]
+    [InlineData(SettingsLink.OnlineVideo)]
     public async Task Main_owned_singleton_modal_links_discard_then_route_after_cleanup(SettingsLink link)
     {
         var player = new RecognitionPlayer();
         var mainWindow = new MainWindow { Width = 640, Height = 420 }; var prefs = new AppPrefs(); int writes = 0;
         using var main = new MainWindowViewModel(player, prefs, _ => writes++, new FakeTranslator(), mainWindow);
         main.TranslationDialog = () => new TranslationViewModel(new(), _ => Task.CompletedTask);
+        main.OnlineVideoDialog = () => new OnlineVideoViewModel(new(), _ => Task.CompletedTask, _ => { });
         string wordsPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".words.json");
         var words = new WordLibrary(wordsPath); words.Load();
         main.WordLibrary = words;
@@ -212,6 +214,7 @@ public class SettingsWindowTests
                 SettingsLink.Recognition => "RecognitionLink",
                 SettingsLink.Shortcuts => "ShortcutsLink",
                 SettingsLink.WordManager => "WordManagerLink",
+                SettingsLink.OnlineVideo => "OnlineVideoLink",
                 _ => throw new ArgumentOutOfRangeException(nameof(link)),
             };
             Button tool = hub.FindControl<Button>(name)!;
@@ -228,6 +231,7 @@ public class SettingsWindowTests
                 SettingsLink.Recognition => routed is RecognitionWindow,
                 SettingsLink.Shortcuts => routed is CheatSheetWindow,
                 SettingsLink.WordManager => routed is WordManagerWindow,
+                SettingsLink.OnlineVideo => routed is OnlineVideoWindow,
                 _ => throw new ArgumentOutOfRangeException(nameof(link)),
             });
             routed.Close(); await Task.Yield(); Dispatcher.UIThread.RunJobs();

@@ -87,6 +87,7 @@
         <MenuItem Header="OCR selected bitmap — secondary" Command="{Binding OcrRecognitionCommand}" CommandParameter="1" />
       </MenuItem>
       <MenuItem Header="_Media">
+            <MenuItem Header="Open online URL…" Command="{Binding ShowOnlineVideoCommand}" />
             <MenuItem Header="_Open media…" InputGesture="Ctrl+O" Command="{Binding OpenMediaCommand}">
               <MenuItem.Icon><c:LucideIcon Data="{StaticResource Icon.FolderOpen}" /></MenuItem.Icon>
             </MenuItem>
@@ -97,7 +98,7 @@
                       IsEnabled="{Binding HasRecentFiles}">
               <MenuItem.Styles>
                 <Style Selector="MenuItem#RecentMenu > MenuItem" x:DataType="x:String">
-                  <Setter Property="Header" Value="{Binding}" />
+                  <Setter Property="Header" Value="{Binding Converter={x:Static c:ViewConverters.RecentMediaLabel}}" />
                   <Setter Property="Command" Value="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).OpenRecentCommand}" />
                   <Setter Property="CommandParameter" Value="{Binding}" />
                 </Style>
@@ -288,8 +289,11 @@
 
           <!-- opening indicator -->
           <Border Classes="popover" IsVisible="{Binding IsOpening}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                  Padding="16,10" IsHitTestVisible="False">
-            <TextBlock Text="Opening…" Classes="muted" />
+                  Padding="16,10">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Opening…" Classes="muted" />
+              <Button Name="CancelOpenButton" Content="Cancel" Classes="outline" IsVisible="{Binding CanCancelOpen}" Command="{Binding CancelOpenCommand}" />
+            </StackPanel>
           </Border>
 
           <!-- word popup -->

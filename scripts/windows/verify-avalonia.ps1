@@ -138,6 +138,7 @@ Language learning with subtitles.
     # The opt-in restore includes both Windows/WPF and portable targets, retaining the original Windows asset graph.
     Invoke-Checked dotnet "restore" "-warnaserror" "-p:LLPlayerPortableTests=true"
     Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\FlyleafLib" "-f" "net10.0"
+    Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\Plugins\YoutubeDL" "-f" "net10.0"
     Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Avalonia"
     Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Avalonia.Tests"
     Invoke-Checked dotnet "test" "--no-restore" "-warnaserror" ".\FlyleafLibTests" "-f" "net10.0" "-p:LLPlayerPortableTests=true"

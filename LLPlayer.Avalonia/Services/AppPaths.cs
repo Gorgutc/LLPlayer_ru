@@ -23,6 +23,8 @@ public sealed record AppPaths(string ConfigDir, string StateDir)
 
     public string RecognitionFile => Path.Combine(ConfigDir, "LLPlayer.Recognition.json");
 
+    public string OnlineVideoFile => Path.Combine(ConfigDir, "LLPlayer.OnlineVideo.json");
+
     public string PrefsFile => Path.Combine(ConfigDir, "LLPlayer.Avalonia.json");
 
     /// <summary>Unhandled-exception log.</summary>

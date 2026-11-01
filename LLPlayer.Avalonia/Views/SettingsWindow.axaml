@@ -215,6 +215,7 @@
             <TextBlock Text="Language learning" FontWeight="SemiBold" />
             <Button Name="TranslationLink" Content="Translation settings…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Translation}" HorizontalAlignment="Stretch" />
             <Button Name="RecognitionLink" Content="Recognition (ASR / OCR)…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Recognition}" HorizontalAlignment="Stretch" />
+            <Button Name="OnlineVideoLink" Content="Online video and external tools…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.OnlineVideo}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Word" FontWeight="SemiBold" />
             <TextBlock Text="Word click action (dictionary definition is edited in Translation settings)" Classes="dialog-description" TextWrapping="Wrap" />
             <ComboBox Name="WordClickActionEditor" ItemsSource="{x:Static vm:SettingsViewModel.WordClickActions}" SelectedItem="{Binding WordClickAction, Mode=TwoWay}" HorizontalAlignment="Stretch"

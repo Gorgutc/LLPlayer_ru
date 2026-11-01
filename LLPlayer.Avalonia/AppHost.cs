@@ -72,7 +72,12 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
             return;
         }
 
-        player = new Player(EngineBootstrap.CreatePlayerConfig(prefs));
+        // Engine.Start discovers the packaged managed plugin before Config creates its default plugin options.
+        var onlineStore = new OnlineVideoSettingsStore(paths.OnlineVideoFile);
+        var onlineSettings = onlineStore.Load();
+        var playerConfig = EngineBootstrap.CreatePlayerConfig(prefs);
+        onlineSettings.Apply(playerConfig);
+        player = new Player(playerConfig);
         RecognitionSettingsStore recognitionStore = new(paths.RecognitionFile);
         RecognitionSettings? recognition = recognitionStore.Load();
         recognition?.Apply(player.Config.Subtitles);
@@ -86,6 +91,12 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         window = new MainWindow(keys, hostServices);
         viewModel = new MainWindowViewModel(controller, prefs, SavePrefs, translator, window)
         { SubtitleExportSource = new FlyleafSubtitleExportSource(player) };
+        viewModel.OnlineVideoDialog = () => new OnlineVideoViewModel(onlineSettings,
+            async draft =>
+            {
+                await controller.SaveOnlineVideoSettingsAsync(onlineStore, draft);
+                onlineSettings = draft.Clone();
+            }, viewModel.OpenOnlineVideo, onlineStore.LoadWarning);
         var wordLibrary = new WordLibrary(paths.WordListFile);
         wordLibrary.Load();
         viewModel.WordLibrary = wordLibrary;

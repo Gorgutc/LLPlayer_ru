@@ -72,6 +72,14 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         wordManagerWindow.Show(this);
     }
     TranslationWindow? translationWindow;
+    OnlineVideoWindow? onlineVideoWindow;
+    public void ShowOnlineVideo(OnlineVideoViewModel model)
+    {
+        if (onlineVideoWindow != null) { onlineVideoWindow.Activate(); return; }
+        onlineVideoWindow = new OnlineVideoWindow(model);
+        onlineVideoWindow.Closed += (_, _) => onlineVideoWindow = null;
+        _ = onlineVideoWindow.ShowDialog(this);
+    }
     public Func<Task>? ShutdownRequested { get; set; }
     bool shutdownComplete;
     bool shutdownStarted;
@@ -285,6 +293,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         settingsWindow?.Close();
         cheatSheet?.Close();
         translationWindow?.Close();
+        onlineVideoWindow?.Close();
         recognitionWindow?.Close();
         subtitlesExportWindow?.Close();
         ReleaseSleepInhibition();

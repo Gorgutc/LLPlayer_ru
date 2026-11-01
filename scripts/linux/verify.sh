@@ -136,6 +136,7 @@ fi
 
 step "Portable builds"
 run dotnet build --no-restore -warnaserror FlyleafLib -f net10.0
+run dotnet build --no-restore -warnaserror Plugins/YoutubeDL -f net10.0
 run dotnet build --no-restore -warnaserror "$app_proj"
 run dotnet build --no-restore -warnaserror "$app_tests_proj"
 
