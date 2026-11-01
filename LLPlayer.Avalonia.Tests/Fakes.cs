@@ -173,6 +173,45 @@ public class FakePlaybackController : IPlaybackController
 
     void RaiseAb(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
+    // A/V and chapter snapshots are scriptable while the view model owns stale-menu invalidation.
+    public List<PlaybackStreamTrack> AudioTracks { get; } = [];
+    public List<PlaybackStreamTrack> VideoTracks { get; } = [];
+    public List<PlaybackChapter> Chapters { get; } = [];
+    public List<PlaybackStreamTrack> SelectedAudioTracks { get; } = [];
+    public List<PlaybackStreamTrack> SelectedVideoTracks { get; } = [];
+    public List<PlaybackChapter> SelectedChapters { get; } = [];
+    public int PlaybackChoicesReads { get; private set; }
+    public Exception? PlaybackChoicesError { get; set; }
+    public Exception? PlaybackChoiceActionError { get; set; }
+    public Func<Task>? PlaybackChoiceAction { get; set; }
+
+    public IReadOnlyList<PlaybackStreamTrack> GetAudioTracks()
+    {
+        PlaybackChoicesReads++;
+        if (PlaybackChoicesError != null) throw PlaybackChoicesError;
+        return [.. AudioTracks];
+    }
+    public IReadOnlyList<PlaybackStreamTrack> GetVideoTracks() => [.. VideoTracks];
+    public IReadOnlyList<PlaybackChapter> GetChapters() => [.. Chapters];
+    public Task SelectAudioTrackAsync(PlaybackStreamTrack track)
+    {
+        SelectedAudioTracks.Add(track);
+        return RunPlaybackChoiceAsync();
+    }
+    public Task SelectVideoTrackAsync(PlaybackStreamTrack track)
+    {
+        SelectedVideoTracks.Add(track);
+        return RunPlaybackChoiceAsync();
+    }
+    public Task SeekToChapterAsync(PlaybackChapter chapter)
+    {
+        SelectedChapters.Add(chapter);
+        return RunPlaybackChoiceAsync();
+    }
+    Task RunPlaybackChoiceAsync() => PlaybackChoiceActionError is { } error
+        ? Task.FromException(error) : PlaybackChoiceAction?.Invoke() ?? Task.CompletedTask;
+    public void RaisePlaybackChoicesChanged() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("PlaybackChoices"));
+
     public IReadOnlyList<CueInfo> GetCues(int slot) => [.. Cues[slot]];
     public IReadOnlyList<SubtitleTrack> GetSubtitleTracks() => [.. Tracks];
     public void SelectSubtitleTrack(int slot, SubtitleTrack? track) => SelectedTracks.Add((slot, track));

@@ -151,7 +151,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.DoubleTapped += OnVideoDoubleTapped;
         VideoHost.Tapped += OnVideoTapped;
         VideoHost.PointerWheelChanged += OnVideoWheel;
-        VideoContextMenu.Opening += (_, _) => { vm?.CancelAppShortcuts(); vm?.RefreshTracks(); };
+        VideoContextMenu.Opening += (_, _) => { vm?.CancelAppShortcuts(); vm?.RefreshTracks(); vm?.RefreshPlaybackChoices(); };
         VideoHost.AddHandler(ContextRequestedEvent, OnVideoContextRequested, RoutingStrategies.Tunnel);
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => PositionWordPopup();
@@ -166,6 +166,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             double width = ContentGrid.ColumnDefinitions[sidebarColumnIndex].ActualWidth;
             if (vm != null && vm.SidebarVisible && width > 0)
                 vm.SidebarWidth = width;
+        };
+        PlaybackMenu.SubmenuOpened += (_, e) =>
+        {
+            // Opening a nested choice menu bubbles too; keep its live containers and snapshot intact.
+            if (e.Source == PlaybackMenu)
+                vm?.RefreshPlaybackChoices();
         };
         SubtitlesMenu.SubmenuOpened += (_, e) =>
         {

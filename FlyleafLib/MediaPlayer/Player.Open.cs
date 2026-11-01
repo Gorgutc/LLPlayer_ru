@@ -112,6 +112,14 @@ unsafe partial class Player
     private void Decoder_OpenSubtitlesStreamCompleted(object sender, OpenSubtitlesStreamCompletedArgs e)
     {
         int i = SubtitlesSelectedHelper.CurIndex;
+#if !WINDOWS
+        if (preservingSubtitleOwners)
+        {
+            Subtitles[i].RefreshRetainedStream();
+            UIAll();
+            return;
+        }
+#endif
 
         Config.Subtitles[i].SetDelay(0);
         Subtitles[i].Refresh();
@@ -176,6 +184,10 @@ unsafe partial class Player
     }
     private void Decoder_OpenExternalSubtitlesStreamCompleted(object sender, OpenExternalSubtitlesStreamCompletedArgs e)
     {
+#if !WINDOWS
+        if (preservingSubtitleOwners)
+            return;
+#endif
         if (e.Success)
         {
             lock (lockSubtitles)
@@ -509,6 +521,9 @@ unsafe partial class Player
          */
 
         ExternalStreamOpenedArgs args = null;
+#if !WINDOWS
+        streamIndex = RetainedStreamIndex(extStream, streamIndex);
+#endif
 
         try
         {

@@ -12,6 +12,12 @@ public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Tex
 /// <summary>A selectable subtitle track (embedded stream or external file) with its current slot assignment.</summary>
 public sealed record SubtitleTrack(string Label, bool IsExternal, bool IsPrimary, bool IsSecondary, object Source);
 
+/// <summary>A detached audio/video choice. Token is an opaque, media-scoped adapter handle.</summary>
+public sealed record PlaybackStreamTrack(string Label, bool IsSelected, object Token);
+
+/// <summary>A detached chapter choice. Token is an opaque, media-scoped adapter handle.</summary>
+public sealed record PlaybackChapter(string Title, TimeSpan Start, object Token);
+
 /// <summary>Bitmap subtitle placed in video coordinates (<see cref="VideoWidth"/> x <see cref="VideoHeight"/>).</summary>
 public sealed record SubtitleImage(BgraBitmap Bitmap, int X, int Y, int Width, int Height, int VideoWidth, int VideoHeight);
 
@@ -83,6 +89,12 @@ public interface IPlaybackController : INotifyPropertyChanged
 
     IReadOnlyList<CueInfo> GetCues(int slot);
     IReadOnlyList<SubtitleTrack> GetSubtitleTracks();
+    IReadOnlyList<PlaybackStreamTrack> GetAudioTracks() => [];
+    IReadOnlyList<PlaybackStreamTrack> GetVideoTracks() => [];
+    IReadOnlyList<PlaybackChapter> GetChapters() => [];
+    Task SelectAudioTrackAsync(PlaybackStreamTrack track) => Task.CompletedTask;
+    Task SelectVideoTrackAsync(PlaybackStreamTrack track) => Task.CompletedTask;
+    Task SeekToChapterAsync(PlaybackChapter chapter) => Task.CompletedTask;
     void SelectSubtitleTrack(int slot, SubtitleTrack? track);
 
     void Open(string url);

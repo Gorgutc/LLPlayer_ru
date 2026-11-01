@@ -71,6 +71,10 @@ unsafe partial class Player
             }
         }
 
+#if !WINDOWS
+        StartRetainedSubtitleDecoders();
+#endif
+
         if (Data.isOpened && Config.Data.Enabled)
         {
             if (DataDecoder.OnVideoDemuxer)

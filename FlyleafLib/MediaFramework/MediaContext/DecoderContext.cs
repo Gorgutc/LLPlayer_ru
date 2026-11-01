@@ -34,6 +34,12 @@ public unsafe partial class DecoderContext : PluginHandler
         get => base.Interrupt;
         set
         {
+#if !WINDOWS
+            lock (interruptOwnership)
+            {
+                // Every write supersedes an older owner, including true -> true native requests.
+                interruptWriteRevision++;
+#endif
             base.Interrupt = value;
 
             if (value)
@@ -58,6 +64,9 @@ public unsafe partial class DecoderContext : PluginHandler
                 }
                 DataDemuxer.Interrupter.ForceInterrupt = 0;
             }
+#if !WINDOWS
+            }
+#endif
         }
     }
 
@@ -275,6 +284,12 @@ public unsafe partial class DecoderContext : PluginHandler
             RequiresResync = true;
         }
 
+#if !WINDOWS
+        // A variant switch can retain uncached bitmap subtitles on their original independent input.
+        int subtitleSeekResult = (Tag as Player)?.SeekRetainedSubtitleSources(ms) ?? 0;
+        if (subtitleSeekResult < 0)
+            ret = subtitleSeekResult;
+#endif
         return ret;
     }
     public int SeekAudio(long ms = -1, bool forward = false)

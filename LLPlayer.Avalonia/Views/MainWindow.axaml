@@ -109,7 +109,7 @@
             <MenuItem Header="E_xit" Command="{Binding ExitCommand}" />
           </MenuItem>
 
-          <MenuItem Header="_Playback">
+          <MenuItem Name="PlaybackMenu" Header="_Playback">
             <MenuItem Header="Play / Pause" InputGesture="Space" Command="{Binding TogglePlayPauseCommand}" />
             <MenuItem Header="Mute" InputGesture="M" Command="{Binding ToggleMuteCommand}"
                       ToggleType="CheckBox" IsChecked="{Binding IsMuted, Mode=OneWay}" />
@@ -120,6 +120,35 @@
                   <Setter Property="Command" Value="{Binding Command}" />
                   <Setter Property="ToggleType" Value="Radio" />
                   <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                </Style>
+              </MenuItem.Styles>
+            </MenuItem>
+            <Separator />
+            <MenuItem Header="Audio track" ItemsSource="{Binding AudioTracks}">
+              <MenuItem.Styles>
+                <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                  <Setter Property="Header" Value="{Binding Label}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
+                  <Setter Property="ToggleType" Value="Radio" />
+                  <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                </Style>
+              </MenuItem.Styles>
+            </MenuItem>
+            <MenuItem Header="Video track" ItemsSource="{Binding VideoTracks}">
+              <MenuItem.Styles>
+                <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                  <Setter Property="Header" Value="{Binding Label}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
+                  <Setter Property="ToggleType" Value="Radio" />
+                  <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                </Style>
+              </MenuItem.Styles>
+            </MenuItem>
+            <MenuItem Header="Chapters" ItemsSource="{Binding Chapters}">
+              <MenuItem.Styles>
+                <Style Selector="MenuItem > MenuItem" x:DataType="vm:ChapterMenuItem">
+                  <Setter Property="Header" Value="{Binding Label}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
                 </Style>
               </MenuItem.Styles>
             </MenuItem>
@@ -204,6 +233,35 @@
           <Panel.ContextMenu>
             <ContextMenu Name="VideoContextMenu">
               <MenuItem Header="Play / Pause" Command="{Binding TogglePlayPauseCommand}" />
+              <Separator />
+              <MenuItem Header="Audio track" ItemsSource="{Binding AudioTracks}">
+                <MenuItem.Styles>
+                  <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                    <Setter Property="Header" Value="{Binding Label}" />
+                    <Setter Property="Command" Value="{Binding Command}" />
+                    <Setter Property="ToggleType" Value="Radio" />
+                    <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                  </Style>
+                </MenuItem.Styles>
+              </MenuItem>
+              <MenuItem Header="Video track" ItemsSource="{Binding VideoTracks}">
+                <MenuItem.Styles>
+                  <Style Selector="MenuItem > MenuItem" x:DataType="vm:TrackMenuItem">
+                    <Setter Property="Header" Value="{Binding Label}" />
+                    <Setter Property="Command" Value="{Binding Command}" />
+                    <Setter Property="ToggleType" Value="Radio" />
+                    <Setter Property="IsChecked" Value="{Binding IsSelected, Mode=OneWay}" />
+                  </Style>
+                </MenuItem.Styles>
+              </MenuItem>
+              <MenuItem Header="Chapters" ItemsSource="{Binding Chapters}">
+                <MenuItem.Styles>
+                  <Style Selector="MenuItem > MenuItem" x:DataType="vm:ChapterMenuItem">
+                    <Setter Property="Header" Value="{Binding Label}" />
+                    <Setter Property="Command" Value="{Binding Command}" />
+                  </Style>
+                </MenuItem.Styles>
+              </MenuItem>
               <MenuItem Name="VideoSubtitlesMenu" Header="Subtitles">
                 <MenuItem Header="Primary track" ItemsSource="{Binding PrimaryTracks}">
                   <MenuItem.Styles>
