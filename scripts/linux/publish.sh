@@ -100,9 +100,10 @@ validate_package() {
     esac
     cli="$(od -An -tu4 -j"$((directory + 14 * 8))" -N4 "$plugin" | tr -d ' \n')"
     [[ "$cli" =~ ^[0-9]+$ && "$cli" -gt 0 ]] || llp_die "YoutubeDL plugin must be a managed assembly."
-    grep -aqF 'YoutubeDL' "$plugin" && grep -aqF '.NETCoreApp,Version=v10.0' "$plugin" &&
-        ! grep -aqE 'TargetPlatformAttribute|Version=v10.0-windows|PresentationFramework|PresentationCore|WindowsBase|Microsoft.WindowsDesktop.App' "$plugin" ||
+    if ! grep -aqF 'YoutubeDL' "$plugin" || ! grep -aqF '.NETCoreApp,Version=v10.0' "$plugin" ||
+        grep -aqE 'TargetPlatformAttribute|Version=v10.0-windows|PresentationFramework|PresentationCore|WindowsBase|Microsoft.WindowsDesktop.App' "$plugin"; then
         llp_die "YoutubeDL plugin must target portable net10.0 without WPF references."
+    fi
     for exe in LLPlayer.Avalonia llplayer; do
         [[ -x "$pkg/$exe" ]] || llp_die "Linux package file $exe must be executable."
     done
