@@ -83,8 +83,14 @@ $ffmpeg = @('avcodec-62.dll','avdevice-62.dll','avfilter-11.dll','avformat-62.dl
 $publishSucceeded = $false
 Push-Location $repoRoot
 try {
-    & dotnet publish 'LLPlayer.Avalonia/LLPlayer.Avalonia.csproj' -c Release -r win-x64 --self-contained false -warnaserror -o $package | Out-Host
+    & dotnet publish 'LLPlayer.Avalonia/LLPlayer.Avalonia.csproj' -c Release -f net10.0 -r win-x64 --self-contained false -warnaserror -o $package | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Avalonia publish failed with exit code $LASTEXITCODE." }
+    $pluginStaging = Join-Path $staging 'portable-plugin'
+    & dotnet publish 'Plugins/YoutubeDL/YoutubeDL.csproj' -c Release -f net10.0 -r win-x64 --self-contained false -warnaserror -o $pluginStaging | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Portable YoutubeDL publish failed with exit code $LASTEXITCODE." }
+    foreach ($file in @('YoutubeDL.dll','YoutubeDL.pdb')) {
+        Copy-RegularFile (Join-Path $pluginStaging $file) (Join-Path $package ('Plugins/YoutubeDL/' + $file))
+    }
     Assert-NormalPath $package
     # TesseractOCR's transitive targets copy both Windows native folders. Portable OCR remains Linux-only.
     # Reject drift before removing just the known unused Tesseract payload.
@@ -175,6 +181,10 @@ This receipt does not establish public release or source-offer acceptance.
     & $validator -PackageDir $package
     $stagedArchive = Join-Path $staging ($name + '.zip')
     & (Join-Path $PSScriptRoot 'write-avalonia-archive.ps1') -PackageDir $package -ArchivePath $stagedArchive | Out-Null
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $extracted = Join-Path $staging 'archive-readback'
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($stagedArchive, $extracted)
+    & $validator -PackageDir (Join-Path $extracted $name)
     $sha = (Get-FileHash -LiteralPath $stagedArchive -Algorithm SHA256).Hash.ToLowerInvariant()
     Assert-NormalPath $archive
     Copy-Item -LiteralPath $stagedArchive -Destination $archive -Force

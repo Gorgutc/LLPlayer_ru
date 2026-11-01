@@ -31,13 +31,23 @@ $cpu = @('ggml-base-whisper.dll','ggml-cpu-whisper.dll','ggml-whisper.dll','whis
 $native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll') +
     @($cpu | ForEach-Object { 'runtimes/win-x64/' + $_ }) + @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
 $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
-    'FlyleafLib.dll','LLPlayer.Core.dll','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
+    'FlyleafLib.dll','LLPlayer.Core.dll','Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
     'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
     'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native
 foreach ($relative in $required) {
     $path = Join-Path $root $relative
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Windows Avalonia package is missing required file $relative." }
     if ((Get-Item -LiteralPath $path -Force).Length -le 0) { throw "Windows Avalonia package requires a non-empty regular file $relative." }
+}
+$pluginPath = Join-Path $root 'Plugins/YoutubeDL/YoutubeDL.dll'
+try { $pluginIdentity = [System.Reflection.AssemblyName]::GetAssemblyName($pluginPath) }
+catch { throw 'Windows Avalonia YoutubeDL plugin must be a valid managed assembly.' }
+# Read-only metadata screening works in Windows PowerShell 5.1 with an empty PATH. The .NET10
+# package-load regression additionally resolves its types against the portable shared engine.
+$pluginMetadata = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($pluginPath))
+if ($pluginIdentity.Name -cne 'YoutubeDL' -or -not $pluginMetadata.Contains('.NETCoreApp,Version=v10.0') -or
+    $pluginMetadata -match 'TargetPlatformAttribute|Version=v10.0-windows|PresentationFramework|PresentationCore|WindowsBase|Microsoft.WindowsDesktop.App') {
+    throw 'Windows Avalonia YoutubeDL plugin must target portable net10.0 without WPF references.'
 }
 function Test-ManagedDll([string]$Path) {
     $stream = [System.IO.File]::OpenRead($Path)
@@ -62,6 +72,17 @@ function Test-ManagedDll([string]$Path) {
 foreach ($item in $items) {
     $relative = $item.FullName.Substring($root.Length + 1).Replace('\','/')
     $name = $item.Name
+    if ($name -match '^YoutubeDL\.(dll|pdb)$' -and $relative -notin @('Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb')) {
+        throw "Windows Avalonia package contains misplaced plugin payload $relative."
+    }
+    if ($name -match '^(yt-dlp(\.exe|_linux.*)?|deno(\.exe)?)$') { throw "Windows Avalonia package contains forbidden runtime helper $relative." }
+    if ($name -match '^(yt-dlp|deno)([._-].*)?\.(zip|tar|tar\.gz|tar\.xz|tgz|7z)$' -or
+        $name -match '^(\.deno|\.yt-dlp|deno-cache|yt-dlp-cache)$') {
+        throw "Windows Avalonia package contains forbidden runtime helper archive or cache $relative."
+    }
+    if ($relative -like 'Plugins/*' -and $relative -notin @('Plugins/YoutubeDL','Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb')) {
+        throw "Windows Avalonia package contains unexpected plugin payload $relative."
+    }
     if ($item.PSIsContainer) {
         if ($name -match '^(DubEngine|dubmodels|\.venv|venv|__pycache__|whispermodels|Whisper|tesseractmodels|Recordings|Snapshots|x86|x64|cuda|vulkan|openvino|noavx|linux-x64|win-x86|win-arm64|osx-x64|osx-arm64)$') {
             throw "Windows Avalonia package contains forbidden runtime directory $relative."
@@ -69,7 +90,7 @@ foreach ($item in $items) {
         if ($relative -like 'runtimes/*' -and $relative -ne 'runtimes/win-x64') { throw "Windows Avalonia package contains an unexpected runtime directory $relative." }
         continue
     }
-    if ($name -match '^\.?LLPlayer\.(Avalonia|Translation|Recognition|WordList|Config|Engine|PlayerConfig)\.json($|\.)' -or
+    if ($name -match '^\.?LLPlayer\.(OnlineVideo|Avalonia|Translation|Recognition|WordList|Config|Engine|PlayerConfig)\.json($|\.)' -or
         $name -match '^\.env|\.log$|\.dmp$|\.dump$|\.ru\.dub\.|\.ru\.voices\.json$|^ggml-.*\.bin$|\.traineddata$|^yt-dlp\.exe$') {
         throw "Windows Avalonia package contains forbidden runtime file $relative."
     }

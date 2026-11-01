@@ -4,6 +4,7 @@ Do not commit these files unless a user explicitly requests and reviews the chan
 
 - `bin/`, `obj/`, `TestResults/`, coverage output, publish folders, and temporary package directories.
 - Downloaded `yt-dlp.exe`, Whisper models, faster-whisper engines, Tesseract data, OCR/ASR caches.
+- External Avalonia online-video tools (`yt-dlp`, `yt-dlp_linux*`, Deno), their downloaded archives/caches, `LLPlayer.OnlineVideo.json` and `.LLPlayer.OnlineVideo.json.<guid>.tmp` atomic-write files.
 - AI dubbing runtime data: the dub Python venv (`DubEngine/`), downloaded TTS model weights (`dubmodels/`), rendered dub tracks (`*.ru.dub.*`), and per-line voice companion files (`*.ru.voices.json`). NOTE: `dub_sidecar/` (server.py, pyproject.toml, uv.lock) IS committed GPLv3 source.
 - Local media output folders such as `Recordings/` and `Snapshots/`.
 - Runtime config and local state: `LLPlayer.Config.json`, `LLPlayer.Engine.json`, `LLPlayer.PlayerConfig.json`, `LLPlayer.WordList.json`, `LLPlayer.Avalonia.json`, `LLPlayer.Recognition.json`, `LLPlayer.Translation.json`, `crash.log`, logs, dumps. Keep leading-dot atomic-write temps such as `.LLPlayer.Recognition.json.<guid>.tmp` and `.LLPlayer.Translation.json.<guid>.tmp` out of source control too.

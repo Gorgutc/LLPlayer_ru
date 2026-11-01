@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlyleafLib\FlyleafLib.csproj" />
+    <ProjectReference Include="..\Plugins\YoutubeDL\YoutubeDL.csproj" />
     <ProjectReference Include="..\LLPlayer.Core\LLPlayer.Core.csproj" />
   </ItemGroup>
 

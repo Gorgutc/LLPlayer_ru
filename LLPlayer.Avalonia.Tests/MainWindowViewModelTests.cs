@@ -216,9 +216,9 @@ public class MainWindowViewModelTests
         player.Tracks.AddRange([embedded, file]);
 
         vm.RefreshTracks();
-        vm.PrimaryTracks.Select(t => t.Label).Should().Equal("Off", "Embedded #2 English", "File: movie.ru.srt (Russian)");
+        vm.PrimaryTracks.Select(t => t.Label).Should().Equal("Off", "Embedded #2 English", "External: movie.ru.srt (Russian)");
         vm.PrimaryTracks.Single(t => t.IsSelected).Label.Should().Be("Embedded #2 English");
-        vm.SecondaryTracks.Single(t => t.IsSelected).Label.Should().Be("File: movie.ru.srt (Russian)");
+        vm.SecondaryTracks.Single(t => t.IsSelected).Label.Should().Be("External: movie.ru.srt (Russian)");
 
         vm.SecondaryTracks[1].Command.Execute(null);
         vm.PrimaryTracks[0].Command.Execute(null);

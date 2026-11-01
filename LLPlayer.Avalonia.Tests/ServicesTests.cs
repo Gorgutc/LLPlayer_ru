@@ -554,6 +554,6 @@ public class EngineConfigTests
         ec.FFmpegPath.Should().Be("/ff");
         ec.LogOutput.Should().Be(Path.Combine("/s", "flyleaf.log"));
         ec.UIRefresh.Should().BeTrue();
-        typeof(EngineConfig).GetProperty(nameof(EngineConfig.PluginsPath), BindingFlags.Public | BindingFlags.Instance)!.GetValue(ec).Should().BeNull();
+        typeof(EngineConfig).GetProperty(nameof(EngineConfig.PluginsPath), BindingFlags.Public | BindingFlags.Instance)!.GetValue(ec).Should().Be(Path.Combine(AppContext.BaseDirectory, "Plugins"));
     }
 }

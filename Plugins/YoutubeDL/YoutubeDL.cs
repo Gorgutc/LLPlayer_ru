@@ -15,7 +15,7 @@ using static FlyleafLib.Utils;
 
 namespace FlyleafLib.Plugins;
 
-public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExternalVideo
+public partial class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExternalVideo
 {
     /* TODO
      * 1) Check Audio streams if we need to add also video streams with audio
@@ -34,10 +34,11 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
      */
 
     public new int      Priority        { get; set; } = 1999;
-    static string       plugin_path     = "yt-dlp.exe";
     static JsonSerializerOptions
                         jsonSettings    = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
 
+#if WINDOWS
+    static string       plugin_path     = "yt-dlp.exe";
     FileSystemWatcher   watcher;
     string              workingDir;
 
@@ -50,6 +51,7 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
     bool                errGenericImpersonate;
     long                sessionId = -1; // same for playlists
     int                 retries;
+#endif
 
     static HashSet<string>
                         subsExt = new(StringComparer.OrdinalIgnoreCase) { "vtt" };
@@ -57,7 +59,12 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
     public override Dictionary<string, string> GetDefaultOptions()
         => new()
         {
+#if WINDOWS
             { "ExtraArguments", "" }, // TBR: Restore default functionality with --cookies-from-browser {defaultBrowser} || https://github.com/yt-dlp/yt-dlp/issues/7271
+#else
+            { OnlineVideoRequest.YtDlpPath, "" },
+            { OnlineVideoRequest.DenoPath, "" },
+#endif
             { "MaxVideoHeight", "720" },
             { "PreferVideoWithAudio", "False" },
         };
@@ -196,6 +203,7 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
         return false;
     }
 
+#if WINDOWS
     private void DisposeInternal()
     {
         lock (procLocker)
@@ -282,8 +290,6 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
         if (ytdl._type == "playlist")
             return;
 
-        PlaylistItem item = new();
-
         if (Playlist.ExpectingItems == 0)
             Playlist.ExpectingItems = (int)ytdl.playlist_count;
 
@@ -301,7 +307,15 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
             }
         }
 
-        item.Title = ytdl.title;
+        var item = BuildItem(ytdl, () => sessionId != Handler.OpenCounter);
+        if (item != null && sessionId == Handler.OpenCounter)
+            AddPlaylistItem(item, ytdl);
+    }
+#endif
+
+    private PlaylistItem BuildItem(YoutubeDLJson ytdl, Func<bool> cancelled)
+    {
+        PlaylistItem item = new() { Title = ytdl.title };
         Log.Debug($"Adding {item.Title}");
 
         item.DirectUrl = ytdl.webpage_url;
@@ -326,8 +340,8 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
         // Audio / Video Streams
         for (int i = 0; i < ytdl.formats.Count; i++)
         {
-            if (sessionId != Handler.OpenCounter)
-                return;
+            if (cancelled())
+                return null;
 
             Format fmt = ytdl.formats[i];
 
@@ -394,7 +408,7 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
         if (GetBestMatch(ytdl) == null && GetAudioOnly(ytdl) == null)
         {
             Log.Warn("No streams found");
-            return;
+            return null;
         }
 
         // Subtitles Streams
@@ -406,8 +420,8 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
             {
                 foreach (var subtitle1 in ytdl.automatic_captions)
                 {
-                    if (sessionId != Handler.OpenCounter)
-                        return;
+                    if (cancelled())
+                        return null;
 
                     // original (source) language has this suffix
                     const string suffix = "-orig";
@@ -458,7 +472,7 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
             }
         } catch (Exception e) { Log.Warn($"Failed to add subtitles ({e.Message})"); }
 
-        AddPlaylistItem(item, ytdl);
+        return item;
     }
     public void AddHeaders(ExternalStream extStream, Format fmt)
     {
@@ -484,6 +498,7 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
         }
     }
 
+#if WINDOWS
     public bool CanOpen()
     {
         try
@@ -640,6 +655,7 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
         return new();
     }
 
+#endif
     public OpenResults OpenItem()
         => new();
 

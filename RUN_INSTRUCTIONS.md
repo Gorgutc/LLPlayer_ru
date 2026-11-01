@@ -6,6 +6,25 @@ Themes and shared Core serves both OSes; use the matching commands below. WPF re
 replacement acceptance. Native desktop/model results are recorded separately in
 [current F-13 status](docs/agent/f13-status-2026-10-18.md).
 
+## Configured Avalonia online video
+
+Both Avalonia packages include the portable managed YoutubeDL plugin. Supply your own official standalone
+yt-dlp and Deno executables, then use **Media → Open online URL…** (also available from Settings → Tools).
+Enter absolute paths and explicitly save them; opening uses the saved paths, while closing discards edits.
+The app does not download, install, update or run these tools at startup. On Linux, `/usr/bin/setsid` from
+util-linux must also be available and the chosen executables must have execute permission.
+
+Use the standalone Windows `yt-dlp.exe` or Linux `yt-dlp_linux` build with EJS support and a supported Deno
+runtime; the upstream file named `yt-dlp` is a Python-dependent alternative. See
+[upstream requirements](https://github.com/yt-dlp/yt-dlp#dependencies) and the
+[EJS guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS). This slice does not bundle those dependencies or add
+authentication/cookies, arbitrary helper arguments, format editing or general downloading.
+
+The explicit command extracts one online item using the existing automatic audio/video and VTT auto-caption
+policy. Ordinary local files, direct media URLs and safe Ctrl+V keep their existing routes without the tools.
+Cancel interrupts an opening request; replacement and shutdown also clean up its owned processes. Native/live
+provider playback acceptance is separately deferred by the owner; automated gates do not establish it.
+
 ## Baseline
 
 ```powershell

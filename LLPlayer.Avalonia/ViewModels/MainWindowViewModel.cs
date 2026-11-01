@@ -8,6 +8,7 @@ using Avalonia.Media.Immutable;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib;
+using FlyleafLib.Plugins;
 using LLPlayer.Avalonia.Services;
 using WpfKey = System.Windows.Input.Key;
 
@@ -370,12 +371,31 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             case SettingsLink.Translation: ShowTranslation(); break;
             case SettingsLink.Recognition: ShowRecognition(); break;
+            case SettingsLink.OnlineVideo: ShowOnlineVideo(); break;
             case SettingsLink.Shortcuts: ShowCheatSheet(); break;
             case SettingsLink.WordManager: ShowWordManager(); break;
         }
     }
 
     public Func<TranslationViewModel>? TranslationDialog { get; set; }
+    public Func<OnlineVideoViewModel>? OnlineVideoDialog { get; set; }
+    [RelayCommand]
+    void ShowOnlineVideo()
+    {
+        if (OnlineVideoDialog is { } create) shell.ShowOnlineVideo(create());
+        else ShowToast("Online video unavailable", "The online video service is not configured.", ToastVariant.Destructive);
+    }
+
+    public bool CanCancelOpen => player.CanCancelOpen;
+
+    [RelayCommand(CanExecute = nameof(CanCancelOpen))]
+    public void CancelOpen()
+    {
+        if (!player.CancelOpen()) return;
+        pendingMediaRequest = null;
+        pendingSubtitles.Clear();
+        IsOpening = false;
+    }
     public Action InvalidateTranslation { get; }
     [RelayCommand]
     void ShowTranslation()
@@ -783,7 +803,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SavePrefs();
             return;
         }
-        Open(path);
+        if (RecentFiles.Contains(path) && OnlineVideoRequest.TryGetUrl(path, out _))
+            OpenOnlineVideo(path);
+        else
+            Open(path);
     }
 
     [RelayCommand]
@@ -906,7 +929,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             foreach (SubtitleTrack t in tracks)
             {
                 SubtitleTrack track = t;
-                string label = (t.IsExternal ? "File: " : "Embedded ") + t.Label;
+                string label = (t.IsExternal ? "External: " : "Embedded ") + t.Label;
                 target.Add(new TrackMenuItem(label, slot == 0 ? t.IsPrimary : t.IsSecondary,
                     new RelayCommand(() => player.SelectSubtitleTrack(slot, track))));
             }
@@ -918,6 +941,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Opens a media path / URL (or loads it as subtitles when it is a subtitle file). Subtitle files given in
     /// <paramref name="subtitles"/> are loaded once the media has opened (drag &amp; drop, command-line --sub).</summary>
     public void Open(string path, IEnumerable<string>? subtitles = null)
+        => Open(path, subtitles, onlineVideo: false);
+
+    public void OpenOnlineVideo(string request) => Open(request, null, onlineVideo: true);
+
+    void Open(string path, IEnumerable<string>? subtitles, bool onlineVideo)
     {
         if (Utils.ExtensionsSubtitles.Contains(Utils.GetUrlExtention(path)))
         {
@@ -941,7 +969,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             if (error == null)
                 foreach (string subtitle in subs)
                     player.OpenSubtitles(subtitle);
-        });
+        }, onlineVideo);
     }
 
     public void OpenSubtitlesFile(string path)
@@ -1245,6 +1273,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 if (IsPlaying && WordPopup.IsOpen)
                     WordPopup.Close();   // WPF: popup closes when playback resumes
                 UpdateIdle();
+                break;
+            case nameof(IPlaybackController.CanCancelOpen):
+                OnPropertyChanged(nameof(CanCancelOpen));
+                CancelOpenCommand.NotifyCanExecuteChanged();
                 break;
             case nameof(IPlaybackController.IsOpening):
                 if (player.IsOpening) InvalidateTranslation();

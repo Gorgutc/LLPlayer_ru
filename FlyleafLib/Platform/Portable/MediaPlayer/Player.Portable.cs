@@ -19,6 +19,8 @@ unsafe partial class Player
         if (url == null || Utils.HostServices == null)
             return;
 
+        if (Plugins.OnlineVideoRequest.TryGetUrl(url, out string page))
+            url = page;
         Utils.HostServices.SetClipboardText(url);
         OSDMessage = $"Copy {url}";
     }

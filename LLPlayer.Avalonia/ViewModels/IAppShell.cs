@@ -13,6 +13,7 @@ public interface IAppShell
     void ShowWordManager(WordManagerViewModel model) { }
     void ShowSubtitlesExport(SubtitlesExportViewModel model) { }
     void ShowTranslation(TranslationViewModel model) { }
+    void ShowOnlineVideo(OnlineVideoViewModel model) { }
     void ShowRecognition(RecognitionViewModel model) { }
     void SetClipboardText(string text);
     void ApplyTheme(string theme);

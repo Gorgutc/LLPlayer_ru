@@ -401,3 +401,10 @@ LLPlayer.Recognition.json.*
 LLPlayer.Translation.json
 LLPlayer.Translation.json.*
 .LLPlayer.Translation.json.*.tmp
+LLPlayer.OnlineVideo.json
+LLPlayer.OnlineVideo.json.*
+.LLPlayer.OnlineVideo.json.*.tmp
+yt-dlp
+yt-dlp_linux*
+deno
+deno.exe

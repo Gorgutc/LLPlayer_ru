@@ -30,8 +30,7 @@ public static class EngineBootstrap
         FFmpegPath = ffmpegDir,
         FFmpegHLSLiveSeek = true,
         FFmpegLoadProfile = Flyleaf.FFmpeg.LoadProfile.Filters,
-        // No plugins on Linux yet (the YoutubeDL plugin drives yt-dlp.exe).
-        PluginsPath = null,
+        PluginsPath = Path.Combine(AppContext.BaseDirectory, "Plugins"),
         UIRefresh = true,
         UIRefreshInterval = 100,
         LogOutput = paths.EngineLogFile,

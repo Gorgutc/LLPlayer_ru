@@ -25,7 +25,7 @@ The human-facing version of this note lives in the top-level `README.md` ("About
 - `FlyleafLib/`: media engine, FFmpeg integration, DirectX/Vortice rendering, audio, video, subtitles, ASR, OCR, translation, playlists, and plugin interfaces. Targets `net10.0-windows10.0.18362.0` and portable `net10.0`.
 - `LLPlayer.Avalonia/`: shared Windows/Linux desktop app (Avalonia 12.1.3, FluentTheme + own shadcn-token theme, CommunityToolkit.Mvvm) on FlyleafLib `net10.0`.
 - `LLPlayer.Avalonia.Tests/`: shared Avalonia.Headless.XUnit tests plus explicitly opted-in native/media checks.
-- `Plugins/YoutubeDL/`: runtime plugin that integrates `yt-dlp.exe` for online video.
+- `Plugins/YoutubeDL/`: dual-target runtime plugin: the retained WPF target integrates bundled `yt-dlp.exe`; portable `net10.0` supports explicitly requested online video with external configured standalone yt-dlp/Deno on both Avalonia hosts.
 - `WpfColorFontDialog/`: WPF color/font dialog support.
 - `FlyleafLibTests/`: xUnit tests.
 
@@ -124,7 +124,9 @@ the 2026-10-03 Linux-first deferral for future work; dated plans and receipts re
    receipts do not establish Windows portable-runtime support.
 4. Continue shared Core extraction and remaining feature parity. The catalog, recognition/translation settings and
    actions, word library/snapshots, and Anki/APKG exporters already exist; full app-config, service and view-model
-   migration, fuller settings, faster-whisper/batch, plugins and dubbing remain open.
+   migration, fuller settings, faster-whisper/batch, broader plugins and dubbing remain open. The owner-approved
+   configured online-video block adds only explicit portable YoutubeDL admission and managed plugin delivery;
+   turnkey helper bundling, broader plugin settings and native/live acceptance remain separate.
 5. Add GPU decode/render paths as separately measured and reviewed work. Linux software playback and the
    Windows software baseline do not establish VAAPI, OpenGL, or Windows GPU behavior.
 6. Obtain native desktop acceptance on both operating systems for the relevant feature set, including playback,

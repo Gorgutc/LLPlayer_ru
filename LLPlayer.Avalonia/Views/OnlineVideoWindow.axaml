@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.OnlineVideoWindow"
+        x:DataType="vm:OnlineVideoViewModel" Classes="dialog" Title="Online video — LLPlayer"
+        Width="660" Height="520" MinWidth="460" MinHeight="420" WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,16,0,0">
+      <Button Content="Close" Classes="outline" IsEnabled="{Binding !Busy}" Click="OnClose" />
+      <Button Name="OpenOnlineButton" Content="Open online URL" Command="{Binding OpenCommand}" IsEnabled="{Binding !Busy}" />
+    </StackPanel>
+    <TextBlock DockPanel.Dock="Bottom" Name="OnlineMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="12">
+        <TextBlock Text="Open online video" Classes="dialog-title" />
+        <TextBlock Text="Enter one public video URL. Available automatic captions appear in the existing Primary and Secondary subtitle menus." TextWrapping="Wrap" Classes="dialog-description" />
+        <TextBlock Text="Video URL" />
+        <TextBox Name="OnlineUrlBox" Text="{Binding Url}" PlaceholderText="https://…" AutomationProperties.Name="Online video URL" />
+        <Separator />
+        <TextBlock Text="External tools" FontWeight="SemiBold" />
+        <TextBlock Text="Choose installed standalone executables. Nothing is downloaded or installed. Open uses saved paths; Close discards unsaved path edits." TextWrapping="Wrap" Classes="dialog-description" />
+        <TextBlock Text="yt-dlp executable (absolute path)" />
+        <TextBox Name="YtDlpPathBox" Text="{Binding YtDlpPath}" AutomationProperties.Name="yt-dlp executable absolute path" IsEnabled="{Binding !Busy}" />
+        <TextBlock Text="Deno executable (absolute path)" />
+        <TextBox Name="DenoPathBox" Text="{Binding DenoPath}" AutomationProperties.Name="Deno executable absolute path" IsEnabled="{Binding !Busy}" />
+        <Button Name="SaveOnlineToolsButton" Content="Save tool paths" Classes="outline" Command="{Binding SaveCommand}" IsEnabled="{Binding !Busy}" HorizontalAlignment="Left" />
+        <TextBlock Name="OnlineLoadWarning" Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

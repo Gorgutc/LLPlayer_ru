@@ -60,7 +60,26 @@ jobs:
       run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
 
     - name: Publish Windows Avalonia package
-      run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1 -OutDir "$env:RUNNER_TEMP\windows-avalonia-package"
+      run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1 -OutDir "$env:RUNNER_TEMP\windows-avalonia-package" -StagingDir "$env:GITHUB_WORKSPACE\artifacts\ci-windows-online-package"
+
+    - name: Verify staged and archived portable plugin load
+      shell: pwsh
+      run: |
+        function Test-PluginLoad([string]$PackageRoot) {
+          $env:LLPLAYER_PACKAGE_DIR = $PackageRoot
+          dotnet test .\FlyleafLibTests\FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 -p:LLPlayerPortableTests=true --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
+          if ($LASTEXITCODE -ne 0) { throw "Portable packaged plugin load failed: $PackageRoot" }
+        }
+        $staged = @(Get-ChildItem -LiteralPath "$env:GITHUB_WORKSPACE\artifacts\ci-windows-online-package" -Directory -Filter 'LLPlayer-Avalonia-*-win-x64')
+        if ($staged.Count -ne 1) { throw 'Expected exactly one staged Windows package.' }
+        Test-PluginLoad $staged[0].FullName
+        $archives = @(Get-ChildItem -LiteralPath "$env:RUNNER_TEMP\windows-avalonia-package" -File -Filter '*.zip')
+        if ($archives.Count -ne 1) { throw 'Expected exactly one Windows ZIP.' }
+        $readback = "$env:RUNNER_TEMP\windows-plugin-readback"
+        Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $readback
+        $extracted = @(Get-ChildItem -LiteralPath $readback -Directory)
+        if ($extracted.Count -ne 1) { throw 'Expected exactly one extracted Windows package.' }
+        Test-PluginLoad $extracted[0].FullName
 
     - name: Upload Windows Avalonia package
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

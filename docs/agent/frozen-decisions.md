@@ -24,7 +24,7 @@ These are current decisions, not universal preferences.
   WPF release flow or establishes public-release acceptance. Shared changes require Windows Avalonia and Linux
   gates in addition to WPF compatibility verification.
 - `FFmpeg/*.dll` and `LLPlayer/lib/7z.dll` are tracked required native assets. The Linux FFmpeg shared libraries are fetched by `scripts/linux/fetch-ffmpeg.sh` and never tracked.
-- `yt-dlp.exe` is downloaded for release packaging and is not a normal source artifact.
+- `yt-dlp.exe` is downloaded for WPF release packaging and is not a normal source artifact. The additive Avalonia online-video block (owner-approved 2026-11-01) ships only the portable managed YoutubeDL plugin and uses explicitly configured external standalone yt-dlp/Deno; it never installs, downloads or updates those tools.
 - No web/Node quality stack is part of baseline verification.
 - No `global.json` is added in this first Codex infrastructure pass; environment checks report the .NET 10 SDK requirement.
 

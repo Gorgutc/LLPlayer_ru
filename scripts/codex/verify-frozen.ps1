@@ -92,7 +92,7 @@ try {
     Require-Text ".\LLPlayer\LLPlayer.csproj" "<TargetFramework>net10\.0-windows10\.0\.18362\.0</TargetFramework>" "LLPlayer must target net10.0-windows10.0.18362.0."
     Require-Text ".\LLPlayer\LLPlayer.csproj" "<UseWPF>true</UseWPF>" "LLPlayer must remain a WPF app."
     Require-Text ".\LLPlayer\LLPlayer.csproj" "<OutputType>WinExe</OutputType>" "LLPlayer must remain a WinExe."
-    Require-Text ".\Plugins\YoutubeDL\YoutubeDL.csproj" "<TargetFramework>net10\.0-windows10\.0\.18362\.0</TargetFramework>" "YoutubeDL plugin must target the LLPlayer framework."
+    Require-Text ".\Plugins\YoutubeDL\YoutubeDL.csproj" "<TargetFrameworks>net10\.0-windows10\.0\.18362\.0;net10\.0</TargetFrameworks>" "YoutubeDL must retain the WPF framework and the additive portable net10.0 target."
     Require-Text ".\LLPlayer\Properties\PublishProfiles\FolderProfile.pubxml" "<RuntimeIdentifier>win-x64</RuntimeIdentifier>" "LLPlayer publish profile must target win-x64."
     Require-Text ".\LLPlayer\Properties\PublishProfiles\FolderProfile.pubxml" "<SelfContained>false</SelfContained>" "LLPlayer publish profile must remain framework-dependent."
     Require-Text ".\LLPlayer\Properties\PublishProfiles\FolderProfile.pubxml" "<PublishSingleFile>true</PublishSingleFile>" "LLPlayer publish profile must keep PublishSingleFile=true."

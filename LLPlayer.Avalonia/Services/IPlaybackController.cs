@@ -32,6 +32,7 @@ public interface IPlaybackController : INotifyPropertyChanged
     bool IsOpened { get; }
     bool IsPlaying { get; }
     bool IsOpening { get; }
+    bool CanCancelOpen { get; }
     string? Title { get; }
     string? Url { get; }
 
@@ -88,7 +89,9 @@ public interface IPlaybackController : INotifyPropertyChanged
 
     /// <summary>Opens media and reports this particular request's result on the UI thread, even when URLs repeat.
     /// Requests superseded before engine dispatch need not complete.</summary>
-    void Open(string url, Action<string?> completed);
+    void Open(string url, Action<string?> completed, bool onlineVideo = false);
+    /// <summary>Invalidates the current app-owned open. A stale click cannot cancel an engine-native request.</summary>
+    bool CancelOpen();
     void OpenSubtitles(string path);
     void Play();
     void Pause();

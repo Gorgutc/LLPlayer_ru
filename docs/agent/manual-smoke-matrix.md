@@ -499,6 +499,17 @@ null audio). These checks cover what the headless suite cannot.
   until the file is reopened (the app does not call `AudioEngine.RefreshDevices()`; backlog F-13 parity item 14);
   record the result until that item lands.
 
+## Configured online video — owner-deferred native checks (2026-11-01)
+
+These are acceptance requirements, **NOT_RUN / DEFERRED BY OWNER** until separately authorized on each native OS.
+
+- Record exact app commit/package and external standalone yt-dlp/Deno versions and hashes. Save absolute tool paths containing spaces/Unicode; Close without Save must discard edits. Missing/malformed settings remain untouched; startup must not run tools or install anything.
+- With paths unset/invalid, open a local clip, direct HTTP media and an extensionless direct-media URL through their ordinary routes. Safe Ctrl+V must retain its existing replacement guard. Explicit Open online URL reports missing dependencies without breaking subsequent direct opens.
+- Open a supported public online URL through the explicit command; verify actual video and audio, seeking where the source permits, current VTT automatic captions in both slots, chapters and required request headers. Do not infer provider support from `--version` or fixture success.
+- Cancel a stalled extraction before and after metadata arrives; replace with a different URL, repeat the identical URL, open a local file, close the dialog and shut down. Waits stay bounded, only current results/messages publish, and owned process trees/temp state are released. Confirm nonzero exit/bad metadata/permission errors permit recovery.
+- On native Linux repeat executable-permission failure and recovery. No downloader, cookie/authentication, format editor, broader caption or playlist/DRM acceptance is implied.
+- Automated package checks separately require the portable managed plugin DLL/PDB at exact-cased `Plugins/YoutubeDL`, verify archive integrity/loadability, and reject helper executables and user runtime state. These checks do not substitute for the native cases above.
+
 ## Dated bounded Windows candidate receipt — 2026-10-26
 
 After the owner's explicit Windows Computer Use/visual GO, candidate

@@ -39,6 +39,8 @@ function New-Fixture([string]$Name) {
         'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
         'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md')
     foreach ($path in @($required) + @($natives)) { Write-FixtureFile $dir $path }
+    Write-FixtureFile $dir 'Plugins/YoutubeDL/YoutubeDL.pdb'
+    Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
     $files = @($natives | ForEach-Object { [ordered]@{ path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $dir $_) -Algorithm SHA256).Hash.ToLowerInvariant() } })
     $manifest = [ordered]@{ schema=1; runtime='win-x64'; components=@(
         [ordered]@{ name='FFmpeg'; version='n8.0-16-gd8605a6b55-20250925'; license='GPL'; source='https://git.ffmpeg.org/ffmpeg.git'; provenance='Tracked binaries; original build recipe and corresponding source offer remain unverified.' },
@@ -64,7 +66,34 @@ function Assert-Rejected([string]$Label, [scriptblock]$Mutation, [string]$Patter
 }
 Assert-SafeFixturePath $work
 try {
-    Assert-Accepted 'valid synthetic package' (New-Fixture 'valid')
+    [System.IO.Directory]::CreateDirectory($work) | Out-Null
+    $script:fixturePlugin = Join-Path $work 'YoutubeDL.dll'
+    Add-Type -TypeDefinition '[assembly: System.Runtime.Versioning.TargetFramework(".NETCoreApp,Version=v10.0")] public class PackageFixture {}' -OutputAssembly $script:fixturePlugin
+    $validPackage = New-Fixture 'valid'
+    Write-FixtureFile $validPackage 'project-notes.zip'
+    Assert-Accepted 'valid synthetic package including unrelated archive' $validPackage
+    Assert-Rejected 'missing portable YoutubeDL assembly' { param($d) Remove-Item -LiteralPath (Join-Path $d 'Plugins/YoutubeDL/YoutubeDL.dll') } 'missing required file.*Plugins/YoutubeDL/YoutubeDL.dll'
+    Assert-Rejected 'missing portable YoutubeDL symbols' { param($d) Remove-Item -LiteralPath (Join-Path $d 'Plugins/YoutubeDL/YoutubeDL.pdb') } 'missing required file.*YoutubeDL.pdb'
+    Assert-Rejected 'empty portable YoutubeDL symbols' { param($d) Write-FixtureFile $d 'Plugins/YoutubeDL/YoutubeDL.pdb' '' } 'non-empty regular file.*YoutubeDL.pdb'
+    Assert-Rejected 'invalid plugin assembly' { param($d) Write-FixtureFile $d 'Plugins/YoutubeDL/YoutubeDL.dll' } 'valid managed assembly'
+    Assert-Rejected 'native plugin assembly' { param($d) Copy-Item -LiteralPath (Join-Path $repoRoot 'FFmpeg/avcodec-62.dll') -Destination (Join-Path $d 'Plugins/YoutubeDL/YoutubeDL.dll') -Force } 'valid managed assembly'
+    Assert-Rejected 'Windows-targeted plugin metadata' { param($d) [IO.File]::AppendAllText((Join-Path $d 'Plugins/YoutubeDL/YoutubeDL.dll'), 'TargetPlatformAttribute Windows10.0.18362.0') } 'target portable net10.0'
+    Assert-Rejected 'wrong framework plugin metadata' {
+        param($d)
+        $path = Join-Path $d 'Plugins/YoutubeDL/YoutubeDL.dll'
+        $bytes = [IO.File]::ReadAllBytes($path)
+        # Find the actual byte sequence (UTF8 decoding before it can collapse non-ASCII bytes).
+        $needle = [Text.Encoding]::UTF8.GetBytes('.NETCoreApp,Version=v10.0')
+        for ($i = 0; $i -le $bytes.Length - $needle.Length; $i++) {
+            $match = $true
+            for ($j = 0; $j -lt $needle.Length; $j++) { if ($bytes[$i + $j] -ne $needle[$j]) { $match = $false; break } }
+            if ($match) { $bytes[$i + $needle.Length - 3] = [byte][char]'9'; break }
+        }
+        if (-not $match) { throw 'Fixture target framework marker not found.' }
+        [IO.File]::WriteAllBytes($path, $bytes)
+    } 'target portable net10.0'
+    Assert-Rejected 'unexpected plugin payload' { param($d) Write-FixtureFile $d 'Plugins/YoutubeDL/FlyleafLib.dll' } 'unexpected plugin payload'
+    Assert-Rejected 'misplaced plugin assembly' { param($d) Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $d 'YoutubeDL.dll') } 'misplaced plugin payload'
     Assert-Rejected 'missing Avalonia ANGLE native' { param($d) Remove-Item -LiteralPath (Join-Path $d 'av_libglesv2.dll') } 'missing required file.*av_libglesv2'
     Assert-Rejected 'missing Core' { param($d) Remove-Item -LiteralPath (Join-Path $d 'LLPlayer.Core.dll') } 'missing required file.*LLPlayer.Core.dll'
     Assert-Rejected 'empty legal file' { param($d) Write-FixtureFile $d 'LICENSE' '' } 'non-empty regular file.*LICENSE'
@@ -72,15 +101,22 @@ try {
     Assert-Rejected 'missing OpenAL' { param($d) Remove-Item -LiteralPath (Join-Path $d 'soft_oal.dll') } 'missing required file.*soft_oal.dll'
     Assert-Rejected 'missing OpenAL BSD notice' { param($d) Remove-Item -LiteralPath (Join-Path $d 'licenses/OpenALSoft.BSD-3Clause.txt') } 'missing required file.*OpenALSoft.BSD-3Clause'
     Assert-Rejected 'missing uv.lock' { param($d) Remove-Item -LiteralPath (Join-Path $d 'dub_sidecar/uv.lock') } 'missing required file.*uv.lock'
-    foreach ($name in @('LLPlayer.Avalonia.json','LLPlayer.Avalonia.json.bad','.LLPlayer.Avalonia.json.token.tmp',
+    foreach ($name in @('LLPlayer.OnlineVideo.json','LLPlayer.OnlineVideo.json.bak','LLPlayer.OnlineVideo.json.bad',
+        '.LLPlayer.OnlineVideo.json.token.tmp','.LLPlayer.OnlineVideo.json.bak','nested/LLPlayer.OnlineVideo.json',
+        'nested/LLPlayer.OnlineVideo.json.bak','nested/.LLPlayer.OnlineVideo.json.token.tmp','nested/.LLPlayer.OnlineVideo.json.bak',
+        'LLPlayer.Avalonia.json','LLPlayer.Avalonia.json.bad','.LLPlayer.Avalonia.json.token.tmp',
         'LLPlayer.Translation.json','.LLPlayer.Translation.json.token.tmp','LLPlayer.Recognition.json.bad',
         'LLPlayer.WordList.json','LLPlayer.Config.json','crash.log','nested/session.LOG','.env.local','.envtoken',
-        'movie.ru.dub.flac','movie.ru.voices.json','ggml-base.bin','eng.traineddata','yt-dlp.exe')) {
+        'movie.ru.dub.flac','movie.ru.voices.json','ggml-base.bin','eng.traineddata','yt-dlp.exe','yt-dlp','deno','deno.exe',
+        'nested/yt-dlp_linux','nested/yt-dlp_linux_aarch64','nested/yt-dlp.exe','nested/deno.exe','nested/deno',
+        'deno-x86_64-pc-windows-msvc.zip','nested/deno-x86_64-unknown-linux-gnu.zip','nested/deno.zip',
+        'yt-dlp.tar.gz','nested/yt-dlp_linux.zip','nested/yt-dlp.exe.7z')) {
         $fixtureName = $name
         Assert-Rejected ("forbidden file " + $name) { param($d) Write-FixtureFile $d $fixtureName } 'forbidden runtime|foreign native'
     }
     foreach ($name in @('DubEngine','dubmodels','dub_sidecar/.venv','whispermodels','tesseractmodels','Recordings','Snapshots',
-        'cuda','runtimes/linux-x64','runtimes/cuda/win-x64','runtimes/win-x86','x86')) {
+        'cuda','runtimes/linux-x64','runtimes/cuda/win-x64','runtimes/win-x86','x86','.deno','nested/.deno',
+        '.yt-dlp','nested/yt-dlp-cache','nested/deno-cache')) {
         $fixtureName = $name
         Assert-Rejected ("forbidden directory " + $name) { param($d) [System.IO.Directory]::CreateDirectory((Join-Path $d $fixtureName)) | Out-Null } 'forbidden runtime|unexpected runtime'
     }
@@ -135,8 +171,15 @@ try {
         $lock = @($zip.Entries | Where-Object { $_.FullName -eq 'LLPlayer-Avalonia-fixture-win-x64/dub_sidecar/uv.lock' })
         if ($lock.Count -ne 1 -or $lock[0].Length -eq 0) { throw 'Real archive has no non-empty uv.lock source entry.' }
         $passed++
+        foreach ($file in @('YoutubeDL.dll','YoutubeDL.pdb')) {
+            $members = @($zip.Entries | Where-Object { $_.FullName -ceq ('LLPlayer-Avalonia-fixture-win-x64/Plugins/YoutubeDL/' + $file) })
+            if ($members.Count -ne 1 -or $members[0].Length -eq 0) { throw "ZIP has no unique nonempty portable plugin member $file." }
+        }
     }
     finally { $zip.Dispose() }
+    $extracted = Join-Path $work 'extracted'
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $extracted)
+    Assert-Accepted 'extracted archive' (Join-Path $extracted 'LLPlayer-Avalonia-fixture-win-x64')
     $publisher = Join-Path $PSScriptRoot 'publish-avalonia.ps1'
     $savedPath = $env:PATH
     try {

@@ -265,6 +265,15 @@ public partial class DecoderContext
         try
         {
             Initialize();
+#if !WINDOWS
+            // Stop inside Initialize clears the native interrupt flag. A host cancellation
+            // admitted before that reset still belongs to this synchronous media request.
+            if (FlyleafLib.Plugins.OnlineVideoRequest.CurrentCancellation.IsCancellationRequested)
+            {
+                args.Error = "Cancelled";
+                return args;
+            }
+#endif
 
             if (input is Stream iostream)
                 Playlist.IOStream = iostream;
@@ -407,6 +416,15 @@ public partial class DecoderContext
         {
             long stoppedTime = GetCurTime();
             InitializeSwitch();
+#if !WINDOWS
+            // The item switch performs its own Stop and can also clear Interrupt after
+            // playlist admission, immediately before opening the selected native stream.
+            if (FlyleafLib.Plugins.OnlineVideoRequest.CurrentCancellation.IsCancellationRequested)
+            {
+                args.Error = "Cancelled";
+                return args;
+            }
+#endif
 
             // Disables old item
             if (Playlist.Selected != null)

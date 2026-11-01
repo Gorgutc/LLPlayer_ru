@@ -109,3 +109,12 @@ Additive: everything above still applies to the Windows target unchanged. These 
 - Extension points are interfaces in `PluginBase.cs`: `IOpen`, `IOpenSubtitles`, `ISuggest*`, `ISearch*`, `IScrapeItem`, and `IDownloadSubtitles`.
 - Prefer new plugin/provider interfaces over adding special cases to `Player`.
 - `YoutubeDL` manages an external process, watcher, temp folder, and stream suggestions. It needs process cleanup and race-aware file reads.
+
+### Configured portable online extraction (2026-11-01)
+
+- Preserve the WPF plugin's helper location, options, flags and separate publish flow. The portable plugin only admits explicit online requests; it must not claim ordinary HTTP(S) media or change direct playback when tools are absent or invalid.
+- Standalone yt-dlp and Deno are external, explicitly configured absolute executables. Portable invocation uses structured arguments, isolated helper configuration/plugins/cache, an explicit Deno path and normal TLS verification. No arbitrary portable `ExtraArguments`, shell invocation, startup probes, download, update or PATH fallback.
+- Each extraction owns immutable request identity, process, redirected streams and temporary state. Cancellation, a newer media request and shutdown interrupt stalled extraction and terminate its owned process tree with bounded waits. Cleanup never waits on callbacks while holding a UI-sensitive lock; late completion cannot publish to another request, including a repeat of the same URL.
+- Descendant ownership outlives root exit: Windows starts the helper suspended, assigns a kill-on-close Job Object, then resumes it; Linux explicitly uses system `/usr/bin/setsid` (util-linux, no `--fork`) and terminates the owned process group. Missing containment prerequisites fail explicit extraction clearly, without installation or changing direct media playback.
+- Reuse current format selection and metadata mapping, including HTTP headers, chapters and the existing VTT `automatic_captions` subset. Authored captions and broader playlist support are not added. Failures remain actionable and recoverable by opening other media.
+- Deterministic/headless/package evidence is distinct from separately authorized native/live video-and-audio acceptance on Windows and Linux.

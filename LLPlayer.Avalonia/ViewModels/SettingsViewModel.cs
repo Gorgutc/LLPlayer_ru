@@ -10,7 +10,7 @@ using WpfKey = System.Windows.Input.Key;
 
 namespace LLPlayer.Avalonia.ViewModels;
 
-public enum SettingsLink { Translation, Recognition, Shortcuts, WordManager }
+public enum SettingsLink { Translation, Recognition, Shortcuts, WordManager, OnlineVideo }
 
 /// <summary>Detached preferences draft. Persistence and live application are owned by the main view model.</summary>
 public sealed partial class SettingsViewModel : ObservableObject
