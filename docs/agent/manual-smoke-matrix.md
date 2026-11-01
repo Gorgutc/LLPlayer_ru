@@ -499,6 +499,37 @@ null audio). These checks cover what the headless suite cannot.
   until the file is reopened (the app does not call `AudioEngine.RefreshDevices()`; backlog F-13 parity item 14);
   record the result until that item lands.
 
+## Remaining settings/hotkeys — owner-deferred native checks (2026-11-01)
+
+The [approved design](plans/2026-11-01-f13-settings-keys-design.md) and automated/fake/headless evidence do not
+establish native acceptance. Every case below is **NOT_RUN / DEFERRED BY OWNER** on both native OSes until
+separately authorized. Use an isolated profile and record the actual package/source identity.
+
+- At Translation 400×360 and Settings 560×440 verify Dark/Light scroll/footer reachability, Tab/focus, raw errors,
+  Escape and capture cancellation. Save/reopen/restart sampling/manual/null-token and known-region edits; retain
+  a custom model and unowned map entries. Check narrow reset/discard and recoverable failed Save.
+- Open/load/save must issue no provider diagnostic or Anki probe. Only an explicitly authorized Check/Get Models/
+  Hello contacts the selected real provider; Hello visibly sends a model request. Cancel, change provider and
+  close/retry without stale models/status, raw error bodies or secrets. Fake/loopback tests do not accept a provider.
+- With old-file defaults confirm no automatic clipboard/browser effect. Explicitly opt in and check exact modifier
+  versus extra modifiers, ordered menu edits/clones, escaped Unicode word/cue templates, non-HTTP(S) refusal,
+  menu A after popup B, masked/sidebar/popup ownership and nonempty Primary/Secondary/All subtitle copying.
+  Hold a diagnostic open during owner close: a child veto must preserve the parent until a later accepted retry;
+  unfinished browser work must not indefinitely block accepted shutdown or publish a late effect.
+- After integrated hotkey gates pass, bind and invoke an unbound A-B action; add/clone/reassign engine/app rows,
+  multiple free chords per action, enabled/release flags and both-direction collisions regardless of phase. Check
+  held immediate repeats, matching/modifier-first release, focus/owned-child/capture transitions and text-input
+  suppression. Hold a key, switch to an external app, release there and return: the first fresh press must work;
+  returning alone must not execute canceled work or synthesize a native engine release. Save/restart and keep an
+  open filtered cheat sheet; Reset without Save and failed Save leave live
+  behavior unchanged. Preserve custom engine delegates through automated real-adapter coverage as well.
+- While a Settings draft is open, change Word/Anki fields through another permitted owner; a hotkey-only Save must
+  preserve those latest values for each untouched field. Explicit Reset Word actions then Save must intentionally
+  replace the menu; Reset alone must not. Retain the saved next-open Anki default and already-open session deck
+  through Tools edits. TSV/APKG/send stay
+  explicit; a real send creates notes and is never a connection test. No endpoint/key/APKG-options editor, PDIC,
+  real-model/GPU/audio acceptance or complete F-13 parity is implied.
+
 ## Configured online video — owner-deferred native checks (2026-11-01)
 
 These are acceptance requirements, **NOT_RUN / DEFERRED BY OWNER** until separately authorized on each native OS.

@@ -48,6 +48,55 @@ action. Native GUI used complete installed .NET10.0.7; build/tests used SDK10.0.
 The earlier temp-runtime missing-Brotli SRT failure recovered with unchanged payload on installed10.0.7;
 it does not authorize a new dependency/config change or establish native C3 acceptance.
 
+## Additive Avalonia settings and action rows — 2026-11-01
+
+The owner approved the [shared settings/hotkeys design](plans/2026-11-01-f13-settings-keys-design.md).
+Translation, Word and hotkey source are complete with scoped reviews reporting no open Critical/Important.
+Focused verification is recorded separately from pending full gates and delivery in the
+[current status](f13-status-2026-10-18.md#remaining-settings-and-hotkeys--2026-11-01).
+The earlier dated slices below retain their historical exclusions; this addendum defines the new scope.
+
+- **Translation:** existing provider records in `LLPlayer.Translation.json` now expose Temperature (0–2), top_p
+  (0–1), frequency/presence penalties (−2–2), their existing manual flags, and nullable positive-Int32
+  `MaxTokens`/`MaxCompletionTokens`. Blank token drafts unset the value; invalid raw input stays visible and
+  blocks Save/provider switching. Known `zh`/`fr`/`pt` region edits for Google/Bing/Azure preserve custom/unowned
+  map entries and display engine fallbacks for absent known keys. Endpoint and OpenAI-like chat-path resets
+  change only the named draft field. Existing defaults and provider schema are unchanged.
+- **Explicit diagnostics:** Check/Get Models/Hello capture a validated detached provider snapshot. Opening,
+  loading and saving never probe. Hello visibly sends a model request. One operation owns the editor; Save
+  cannot race it. Editor/provider changes cancel/invalidate results; close/shutdown cancels and drains owned
+  work. Discovery preserves a typed custom model. Unsupported/failure status is explicit and sanitized; no
+  provider response body, credential or full config JSON is displayed or logged.
+- **Word preferences:** `LLPlayer.Avalonia.json` adds `WordMenuActions` (ordered `Kind`, `Title`, `IsEnabled`,
+  `Url`, `ToLower` rows), `WordCopyOnSelected` (false), `WordLastSearchOnSelected` (false),
+  `WordLastSearchModifier` (Control), `SubsAutoTextCopy` (false), and `SubsAutoTextCopyTarget` (Primary).
+  Missing/null menu rows seed defaults; explicit `[]` stays empty. Malformed loaded rows are inert; invalid
+  draft rows, including disabled ones, block Save. Unknown/wrong-type modifier/target values fall back to
+  Control/Primary. Entirely corrupt preferences retain existing recovery behavior. Automation is opt-in for
+  older files too; this intentionally preserves Avalonia defaults rather than WPF's automatic-copy defaults.
+  Search expands escaped `%w`/`%lw`/`%s` once and admits only absolute HTTP(S) destinations. Lowercase applies
+  only to Clipboard/ClipboardAll. Selection/auto-copy provenance and lifecycle belong to the runtime contract.
+- **App key rows:** nullable `AppPrefs.AppKeyBindings` stores ordered `AppKeyBindingPref` rows with `ActionName`,
+  canonical `Key`, `Ctrl`, `Alt`, `Shift`, `IsEnabled` and `IsKeyUp`. Null/absent retains legacy
+  `AppShortcutOverrides`, dual F1 defaults and immediate-on-down timing. Explicit `[]` removes all app keys;
+  valid explicit rows own routing over legacy overrides. Invalid-only nonempty input normalizes to null and
+  falls back to legacy; mixed input keeps valid rows, order, disabled flags and duplicates. Unknown actions,
+  numeric/composite/noncanonical/modifier-only keys are dropped. Save rejects enabled duplicates and enabled
+  app/engine overlaps in either direction regardless of release phase; disabled rows do not reserve chords.
+  The editor adds/clones/deletes/reassigns app and engine rows, including unbound engine A-B actions. Custom
+  engine objects/delegates remain engine-owned. Reset is draft-only; successful Reset-app-keys Save restores
+  null rows, empty legacy overrides and full defaults. An unrelated Save retains null/legacy representation.
+
+Settings fresh-merges owned fields, including deep-cloned nested rows, into current preferences and atomically
+persists before publishing live state and refreshing an open filtered cheat sheet. Word/Anki Tools fields are
+compared individually with their opening baseline: untouched fields retain concurrent latest values, including
+when saving only hotkeys. Explicit Reset Word actions records replacement intent even if its defaults equal the
+opening menu; only successful Save applies that replacement. Reset alone is draft-only. Failed Save retains
+disk/live state and retry draft; Close/Escape discard. Word edits preserve `AnkiDeck`: the saved default seeds the next
+Word Manager, while an open manager owns its session deck. Fixed localhost/version-6 AnkiConnect and five-field
+TSV/APKG behavior remain unchanged. WPF has no endpoint/API-key/APKG-options editors to port; these are separate
+additive product decisions. PDIC is outside this block. Native/live acceptance remains deferred.
+
 ## Load Order
 
 1. `FlyleafLoader.StartEngine()` loads engine config and starts `Engine`.
@@ -153,7 +202,7 @@ remain a separate later block. The owner-approved 2026-10-26 Subtitles Sidebar b
 - Key matching requires exact key/modifier/enabled state.
 - `IsKeyUp` actions are intentionally delayed until key-up, with a guard for missed key-up.
 - Settings Keys edits the live key-binding list through an editable DataGrid. Preserve Add, Load, Apply, clone row, delete row, duplicate detection, Apply blocking on duplicates, grouped action selection, custom action names, key capture, and Enter commit.
-- The Avalonia F-13 bounded port (2026-10-26) edits only the engine's existing built-in key-binding rows and adds the app↔engine collision policy above; the WPF `SettingsKeys` grid remains the source of the full editable-grid contract.
+- The Avalonia F-13 bounded port (2026-10-26) initially edited only existing engine rows. The additive 2026-11-01 action-row scope is specified above; focused verification and full-stage acceptance remain separate. WPF `SettingsKeys` retains its existing editable-grid contract.
 - CheatSheet reads only enabled key bindings, groups them by action group, filters by action description or shortcut text, and can execute an action from the dialog.
 - The Command Palette (`Ctrl+K`) reuses the same enabled-key-binding list as a flat, filterable dialog and runs the selected action's delegate (`ActionInternal`).
 
