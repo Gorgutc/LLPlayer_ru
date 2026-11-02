@@ -708,9 +708,24 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 **Идея от SubtitleEdit.** **Остаток (waveform):** рендер waveform из аудио FlyleafLib для визуального sync.
 **Рассуждение:** A-B повтор — заметный single-session UX-win для изучения языка; waveform — крупный effort, не топ.
 
-### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-11-01; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
+### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-11-02; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 
-**Текущий одобренный срез, 2026-11-01: A/V streams и chapters.**
+**Текущий одобренный блок, 2026-11-02: Player UI + Mouse + Always On Top.**
+Одна поставка в рамках существующего Settings parity: восемь контролов WPF Player UI и три Mouse,
+без новых F-карточек и отдельных продуктовых этапов. База — доставленный PR № 194/main `78557c7d`,
+ветка `codex/f13-av-player-ui`. [Единый план и точное соответствие 11 контролов](plans/2026-11-02-f13-player-ui.md).
+В общем Windows/Linux Avalonia исходнике добавлены detached Settings → Player, persist-before-apply,
+idle/hover-only, независимые fade-in/out, геометрия seek bar, `Topmost` и три переключателя mouse gestures.
+Существующие Avalonia defaults сохранены: idle `2500` ms, fade `200/200` ms, bar/thumb/track `20/12/4` DIP,
+hover-only/Always On Top выключены, три mouse actions включены. Idle `0` означает отсутствие ожидания
+при прежних условиях idle; fade `0` — немедленный переход соответствующего направления.
+Это текущая source implementation: свежие полные gates, независимый `/review`, PR/main CI, final-main Desktop
+и scoped Vault closeout ещё должны быть завершены и записаны в `artifacts/f13-player-ui-2026-11-02/CLOSEOUT.md`.
+Native Windows/Linux GUI/physical input/A/V/GPU/DPI — **NOT_RUN / DEFERRED BY OWNER**.
+Полный Settings/F-13 parity и executable palette/help остаются открытыми; текущий keyboard-only help не расширяется.
+[Текущий статус и границы доказательств](f13-status-2026-10-18.md#player-ui-mouse-and-always-on-top--owner-approved-2026-11-02).
+
+**Предыдущий датированный source/local checkpoint, 2026-11-01: A/V streams и chapters.**
 База — доставленный PR № 192/main `aa123a2`, ветка `codex/f13-av-streams-chapters`.
 Реализован общий выбор embedded/external audio/video и глав через Playback и меню видео с текущими metadata
 и checked state. Portable switching сохраняет time/play-pause, audio delay, оба subtitle/translation owners;

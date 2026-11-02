@@ -2,6 +2,20 @@
 
 Automated tests do not cover every LLPlayer behavior. Use these manual checks when touching related areas.
 
+## Player UI, Mouse and Always On Top — owner-deferred native checks, 2026-11-02
+
+All scenarios below are **NOT_RUN / DEFERRED BY OWNER** on native Windows and Linux. Execute only within separately
+agreed native acceptance, recording the installed payload/source identity. Current implementation and automated
+evidence are tracked in the [current status](f13-status-2026-10-18.md#player-ui-mouse-and-always-on-top--owner-approved-2026-11-02);
+the [plan](plans/2026-11-02-f13-player-ui.md) maps the eleven controls. These rows add no controls or product stages.
+
+- With old/absent preferences, confirm idle `2500` ms, fades `200/200` ms, bar/thumb/track `20/12/4` DIP, hover-only/Topmost off and all three mouse actions on. Edit every Player field, Save, reopen/restart and confirm committed values. Close/Escape must discard edits; a controlled save failure leaves live state unchanged and permits retry. An unrelated preference changed while Settings is open must survive Save.
+- Enter blank/malformed/out-of-range numeric drafts, non-finite dimensions and `track > thumb` or `thumb > bar`. Save must reject them without applying a partial draft; correction restores Save. Check legal boundary values, including idle `0` (no wait under normal idle conditions) and each fade `0` (immediate in that direction).
+- With hover-only off, confirm idle hiding/cursor behavior still requires fullscreen and playing, respects seeking and an open word popup, and responds to the committed timeout. Use different fade-in/out values, then reverse activity during a transition; each direction must use its own committed duration.
+- Enable hover-only, move into and out of the stable transport reveal region, and confirm hidden controls remain reachable. Exercise keyboard reveal, focus within transport, seek drag/capture loss and open transport/word popups; no premature hiding or unrelated control activation should occur. Verify min/default/max geometry retains seek input plus aligned non-interactive waveform/A-B overlays.
+- Toggle Always On Top, Save and restart; confirm the main player follows committed `Topmost` in normal/fullscreen transitions and remains usable with owned dialogs. Discard an opposite draft and confirm it does not change the committed window state.
+- Toggle each mouse switch independently. Bare-video single-click play/pause, second-tap fullscreen and wheel volume must follow their switches. The first click still dismisses an open word popup without playback; no second playback toggle occurs. Subtitle words/phrase drags, popup/toolbar/seek/volume controls and right-click menu retain their own input. Existing keyboard-only help stays keyboard-only.
+
 ## Playback
 
 - F-13 shared Avalonia video input (2026-10-28): with media playing, single-click bare video and confirm immediate pause; single-click again to resume. With a word popup open, the first bare-video click must only dismiss it. Double-click bare video: the first tap performs its immediate action and the second changes fullscreen without a second playback toggle. Right-click bare video and check subtitle/track/settings menu commands and current track checks. Subtitle words, phrase drags, masked rows, popup content, buttons and seek/volume controls must retain their own pointer actions; wheel volume remains usable. Bounded native C2 Windows evidence confirms video opening, left pause holding time and right-video menu; it does not accept all remaining pointer/DPI scenarios or C3. Native Linux NOT_RUN.

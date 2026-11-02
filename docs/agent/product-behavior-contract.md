@@ -2,6 +2,25 @@
 
 This document freezes the current user-facing behavior from `main`. Future work should change only the requested surface and preserve unrelated behavior.
 
+## Additive Avalonia Player UI and Mouse — owner-approved 2026-11-02
+
+One shared Windows/Linux Settings → Player page maps the eight WPF Player UI controls and three Mouse controls
+listed in the [approved plan](plans/2026-11-02-f13-player-ui.md). It preserves Avalonia defaults: idle `2500` ms,
+fade-in/out `200/200` ms, bar/thumb/track `20/12/4` DIP, hover-only/Always On Top off and all three mouse actions on.
+Successful Save applies the persisted draft live; invalid drafts, failed writes and Close/Escape do not apply edits.
+
+Hover-only off retains classic fullscreen/playing/not-seeking/closed-word-popup idle and cursor behavior.
+Idle `0` applies immediately under those conditions; each independent fade `0` is immediate in that direction.
+Hover-only keeps a stable transport reveal region and preserves keyboard/focus/popup/seek access. Geometry changes
+retain seek ownership and display-only waveform/A-B overlays. Always On Top controls the main Avalonia window's
+`Topmost` on startup and committed Save. Each mouse switch controls its video action while preserving popup closing,
+word/selection/drag/control ownership and the immediate first-tap/no-second-playback-toggle rule.
+
+This extends the historical default input behavior below without changing WPF, Core/engine or package topology.
+The keyboard-only help adds no Mouse tab; full executable palette/help and remaining Settings parity stay in the
+existing F-13 backlog. Current source implementation, verification/delivery and native acceptance are separate in
+the [current status](f13-status-2026-10-18.md#player-ui-mouse-and-always-on-top--owner-approved-2026-11-02).
+
 ## Product Position
 
 LLPlayer is a specialized Windows media player for language learning. It is not a general replacement for VLC/mpv. The core value is video playback plus subtitle-centric learning workflows.

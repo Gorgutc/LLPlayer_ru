@@ -2,6 +2,33 @@
 
 This document freezes current config, persistence, and local data decisions from `main`.
 
+## Additive Avalonia Player UI preferences — owner-approved 2026-11-02
+
+The existing shared `AppPrefs`/`PrefsStore` owner in `LLPlayer.Avalonia.json` stores exactly the eleven preferences
+mapped from WPF Player UI/Mouse in the [approved plan](plans/2026-11-02-f13-player-ui.md). WPF config/defaults and
+Core/engine ownership are unchanged; no new config file or schema migration is introduced.
+
+| Preference | Absent/default | Valid draft value |
+| --- | --- | --- |
+| `ActivityTimeoutMs` | `2500` ms | Integer `0..600000`; zero means no idle wait |
+| `SeekBarShowOnlyMouseOver` | `false` | Boolean |
+| `SeekBarFadeInTimeMs` | `200` ms | Integer `0..10000`; zero means immediate fade-in |
+| `SeekBarFadeOutTimeMs` | `200` ms | Integer `0..10000`; zero means immediate fade-out |
+| `SeekBarHeight` | `20` DIP | Finite double `8..80` |
+| `SeekBarThumbHeight` | `12` DIP | Finite double `4..80` |
+| `SeekBarTrackHeight` | `4` DIP | Finite double `1..40` |
+| `AlwaysOnTop` | `false` | Boolean |
+| `MouseSingleClickToPlay` | `true` | Boolean |
+| `MouseDoubleClickToFullScreen` | `true` | Boolean |
+| `MouseWheelToVolumeUpDown` | `true` | Boolean |
+
+Geometry additionally requires `track <= thumb <= bar`. Raw invalid drafts remain visible and block Save rather
+than silently committing a coerced value. Loaded timings clamp to range; non-finite dimensions use their defaults
+before bounded geometry normalization. Existing whole-file JSON error policy remains unchanged; load does not write.
+Save merges these fields into the latest preference snapshot, preserves unrelated concurrent state, writes atomically
+before live apply and leaves the retry draft/live state intact on persistence failure. Close/Escape discards edits.
+The settings are shared by both hosts; runtime JSON/temporary files remain excluded from source and packages.
+
 ## Runtime Config Files
 
 Runtime JSON files live beside the exe/base directory:
