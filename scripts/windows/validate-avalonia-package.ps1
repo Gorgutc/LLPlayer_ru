@@ -28,10 +28,13 @@ while ($pending.Count -gt 0) {
 }
 $ffmpeg = @('avcodec-62.dll','avdevice-62.dll','avfilter-11.dll','avformat-62.dll','avutil-60.dll','swresample-6.dll','swscale-9.dll')
 $cpu = @('ggml-base-whisper.dll','ggml-cpu-whisper.dll','ggml-whisper.dll','whisper.dll')
-$native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll') +
+$native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll',
+    'lib/7z.dll','runtimes/win-x64/leptonica-1.85.0.dll','runtimes/win-x64/tesseract55.dll') +
     @($cpu | ForEach-Object { 'runtimes/win-x64/' + $_ }) + @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
 $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
-    'FlyleafLib.dll','LLPlayer.Core.dll','Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
+    'FlyleafLib.dll','LLPlayer.Core.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll',
+    'licenses/Tesseract.LICENSE','licenses/Leptonica.LICENSE','licenses/SevenZip.LICENSE','licenses/SevenZipSharp.LICENSE',
+    'Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
     'LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
     'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
     'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native
@@ -91,7 +94,7 @@ foreach ($item in $items) {
         if ($relative -like 'runtimes/*' -and $relative -ne 'runtimes/win-x64') { throw "Windows Avalonia package contains an unexpected runtime directory $relative." }
         continue
     }
-    if ($name -match '^\.?LLPlayer\.(OnlineVideo|Avalonia|Translation|Recognition|WordList|Playback|Pdic|Config|Engine|PlayerConfig)\.json($|\.)' -or
+    if ($name -match '^\.?LLPlayer\.(OnlineVideo|Avalonia|Translation|Recognition|WordList|Playback|Pdic|Batch|Dubbing|Config|Engine|PlayerConfig)\.json($|\.)' -or
         $name -match '^\.env|\.log$|\.dmp$|\.dump$|\.ru\.dub\.|\.ru\.voices\.json$|^ggml-.*\.bin$|\.traineddata$|^yt-dlp\.exe$') {
         throw "Windows Avalonia package contains forbidden runtime file $relative."
     }
@@ -120,7 +123,7 @@ foreach ($record in @($manifest.files)) {
 foreach ($relative in $native) {
     if (-not $seen.ContainsKey($relative)) { throw "Windows Avalonia native manifest is missing $relative." }
 }
-foreach ($name in @('FFmpeg','OpenAL Soft')) {
+foreach ($name in @('FFmpeg','OpenAL Soft','Tesseract','Leptonica','7-Zip')) {
     $components = @($manifest.components | Where-Object { $_.name -eq $name })
     if ($components.Count -ne 1 -or -not $components[0].version -or -not $components[0].license -or
         -not $components[0].source -or -not $components[0].provenance) { throw "Windows Avalonia native manifest is missing component provenance for $name." }

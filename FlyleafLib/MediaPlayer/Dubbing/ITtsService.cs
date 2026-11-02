@@ -18,3 +18,9 @@ public interface ITtsService : IAsyncDisposable
     /// <summary>Available voices for the voice-bank / override UI.</summary>
     Task<IReadOnlyList<TtsVoice>> GetVoicesAsync(CancellationToken token);
 }
+
+/// <summary>The existing local sidecar also assembles its synthesized clips into one continuous track.</summary>
+public interface IDubbingTtsService : ITtsService
+{
+    Task AssembleAsync(AssembleRequest request, CancellationToken token);
+}

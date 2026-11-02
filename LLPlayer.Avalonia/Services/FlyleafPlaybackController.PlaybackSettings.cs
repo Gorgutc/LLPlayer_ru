@@ -100,7 +100,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackSettingsControl
                 ? () => rememberVolume(desiredVolume, desiredMute) : null;
             (PlaybackStore ?? throw new InvalidOperationException("Playback settings storage is unavailable.")).Save(merged, persistVolume);
             savedPlaybackSettings = merged.Clone();
-            merged.ApplyTo(player.Config, includeAudio: false);
+            PublishLanguageConfiguration(() => merged.ApplyTo(player.Config, includeAudio: false));
             if (previous != null && (runtime.AudioDevice ?? "") != (previous.AudioDevice ?? ""))
                 selectedAudioDeviceId = runtime.AudioDevice ?? "";
             ApplyAudioSettingsCore(new(merged.AudioEnabled, merged.AudioFiltersEnabled,

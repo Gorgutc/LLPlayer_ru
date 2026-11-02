@@ -252,14 +252,14 @@ public class FasterWhisperConfig : NotifyPropertyChanged
 #if WINDOWS
     public static string DefaultEnginePath { get; } = Path.Combine(WhisperConfig.EnginesDirectory, "Faster-Whisper-XXL", "faster-whisper-xxl.exe");
 #else
-    public static string DefaultEnginePath { get; } = Path.Combine(WhisperConfig.EnginesDirectory, "Faster-Whisper-XXL", "faster-whisper-xxl");
+    public static string DefaultEnginePath { get; } = Path.Combine(WhisperConfig.EnginesDirectory, "Faster-Whisper-XXL", OperatingSystem.IsWindows() ? "faster-whisper-xxl.exe" : "faster-whisper-xxl");
 
     internal bool ValidateEngine(out string error)
     {
         string? path = UseManualEngine ? ManualEnginePath : DefaultEnginePath;
         if (!File.Exists(path))
         {
-            error = $"faster-whisper XXL executable does not exist: '{path}'. Configure the Linux XXL executable path.";
+            error = $"faster-whisper XXL executable does not exist: '{path}'. Configure a compatible {(OperatingSystem.IsWindows() ? "Windows" : "Linux")} XXL executable path.";
             return false;
         }
         if (!OperatingSystem.IsWindows())

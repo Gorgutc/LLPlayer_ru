@@ -24,7 +24,8 @@ public sealed class DubbingRenderer : IDubbingRenderer
     // os.replace lands after the HTTP request is cancelled). Re-cleaned at the next render of the same target and in
     // DisposeAsync (once the sidecar is reaped).
     private readonly DubOrphanCleanup _orphans = new();
-    private DubSidecarHost? _host;
+    private IDubbingTtsService? _host;
+    private readonly Func<IDubbingTtsService> _hostFactory;
     private bool _disposed;
 
     /// <param name="config">Live dubbing config; scalar fields are snapshotted here so a later config
@@ -42,7 +43,11 @@ public sealed class DubbingRenderer : IDubbingRenderer
             : config.OutputFormat.TrimStart('.').Trim().ToLowerInvariant();
         _mock = mock;
         _sidecarSnapshot = DubSidecarHost.DubbingSnapshot.From(config);
+        _hostFactory = () => DubSidecarHost.Create(_sidecarSnapshot, _mock);
     }
+
+    internal DubbingRenderer(DubbingConfig config, Func<IDubbingTtsService> hostFactory) : this(config)
+        => _hostFactory = hostFactory ?? throw new ArgumentNullException(nameof(hostFactory));
 
     public async Task RenderAsync(
         IReadOnlyList<SubtitleData> translatedSubtitles,
@@ -54,16 +59,13 @@ public sealed class DubbingRenderer : IDubbingRenderer
         ArgumentNullException.ThrowIfNull(translatedSubtitles);
         ArgumentException.ThrowIfNullOrWhiteSpace(mediaPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-
-        // HC-43: if a prior render of this same target was canceled, an orphaned dub may have landed after the fact —
-        // delete it before we (re)render, and forget the record so a fresh success is not re-cleaned on dispose.
-        _orphans.ClearAndClean(outputPath, TryDeleteOutput);
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         List<DubbingLine> lines = BuildLines(translatedSubtitles);
         if (lines.Count == 0)
             return;
 
-        DubSidecarHost host = await GetHostAsync(token).ConfigureAwait(false);
+        IDubbingTtsService host = await GetHostAsync(token).ConfigureAwait(false);
 
         // 1. Synthesize each line; record the atempo fit and the resulting (post-stretch) duration.
         double[] renderedMs = new double[lines.Count];
@@ -97,11 +99,20 @@ public sealed class DubbingRenderer : IDubbingRenderer
 
         // 3. Assemble + duck + encode in the sidecar (decodes the original via libav in Python).
         progress?.Report(new DubbingProgress(lines.Count, lines.Count, "assemble"));
+        // The renderer owns only this unique sibling until successful publication. A failed overwrite must never
+        // delete the user's prior usable dub; a late sidecar response can only recreate our private staging file.
+        string fullOutputPath = Path.GetFullPath(outputPath);
+        string stagingPath = Path.Combine(Path.GetDirectoryName(fullOutputPath)!,
+            $".{Path.GetFileName(fullOutputPath)}.{Guid.NewGuid():N}.tmp");
         try
         {
             await host.AssembleAsync(
-                new AssembleRequest(mediaPath, outputPath, _outputFormat, _duckingPercent, totalMs, clips),
+                new AssembleRequest(mediaPath, stagingPath, _outputFormat, _duckingPercent, totalMs, clips),
                 token).ConfigureAwait(false);
+            token.ThrowIfCancellationRequested();
+            if (!File.Exists(stagingPath) || new FileInfo(stagingPath).Length == 0)
+                throw new InvalidOperationException("The dubbing engine did not produce a non-empty audio track.");
+            File.Move(stagingPath, fullOutputPath, overwrite: true);
         }
         catch
         {
@@ -110,8 +121,8 @@ public sealed class DubbingRenderer : IDubbingRenderer
             // (the HTTP cancel doesn't stop the worker), so also record the target (HC-43) for a reliable re-clean at
             // the next render of this file and in DisposeAsync, once the sidecar is reaped. Rethrow so the caller
             // marks the job Canceled/Failed.
-            TryDeleteOutput(outputPath);
-            _orphans.MarkCanceled(outputPath);
+            TryDeleteOutput(stagingPath);
+            _orphans.MarkCanceled(stagingPath);
             throw;
         }
     }
@@ -127,12 +138,12 @@ public sealed class DubbingRenderer : IDubbingRenderer
             if (_disposed)
                 return;
 
-            _disposed = true;
             if (_host is not null)
             {
                 await _host.DisposeAsync().ConfigureAwait(false);
                 _host = null;
             }
+            _disposed = true;
 
             // HC-43: the sidecar process is now reaped (DubSidecarHost.DisposeAsync waits for exit / kills the tree),
             // so any orphaned dub from a canceled render has finished landing. Re-delete the recorded targets — this
@@ -145,7 +156,7 @@ public sealed class DubbingRenderer : IDubbingRenderer
         }
     }
 
-    private async Task<DubSidecarHost> GetHostAsync(CancellationToken token)
+    private async Task<IDubbingTtsService> GetHostAsync(CancellationToken token)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -159,7 +170,7 @@ public sealed class DubbingRenderer : IDubbingRenderer
             if (_host is not null)
                 return _host;
 
-            DubSidecarHost host = DubSidecarHost.Create(_sidecarSnapshot, _mock);
+            IDubbingTtsService host = _hostFactory();
             try
             {
                 if (!await host.TryInitializeAsync(token).ConfigureAwait(false))

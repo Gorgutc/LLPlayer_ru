@@ -43,6 +43,7 @@ public sealed partial class CueItemViewModel : ObservableObject
     /// <summary>The subtitle slot this row was created for; changing the selection creates new rows.</summary>
     public int Slot { get; }
     public int Index => Cue.Index;
+    public string VoiceLabel => Cue.AssignedVoiceId ?? "Default";
     public TimeSpan Start => Cue.Start;
     public TimeSpan End => Cue.End;
     /// <summary>Current display text from the player (translated when translation display is on).</summary>
@@ -83,6 +84,7 @@ public sealed partial class CueItemViewModel : ObservableObject
         CueInfo previous = Cue;
         Cue = cue;
         OnPropertyChanged(nameof(Cue));
+        if (previous.AssignedVoiceId != cue.AssignedVoiceId) OnPropertyChanged(nameof(VoiceLabel));
         OnPropertyChanged(nameof(ShowBitmap));
         OnPropertyChanged(nameof(ShowText));
         if (previous.Index != cue.Index) OnPropertyChanged(nameof(Index));

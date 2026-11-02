@@ -9,6 +9,22 @@ public sealed class CurrentDirectorySensitiveCollection;
 public class DubbingVoiceAssignmentSaveQueueTests
 {
     [Fact]
+    public void Linux_case_distinct_media_retain_both_pending_save_targets()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows paths intentionally preserve case-insensitive matching.");
+        List<(string Media, string? Voice)> writes = [];
+        using DubbingVoiceAssignmentSaveQueue queue = new(() => true,
+            (media, cues) => writes.Add((media, cues.Single().AssignedVoiceId)), TimeSpan.FromHours(1));
+        string upper = NewMediaPath("Film.mkv"), lower = Path.Combine(Path.GetDirectoryName(upper)!, "film.mkv");
+        queue.Enqueue(upper, [Cue(1, 2, "upper")]);
+        queue.Enqueue(lower, [Cue(1, 2, "lower")]);
+        queue.Dispose();
+        writes.Should().HaveCount(2);
+        writes.Should().Contain((upper, "upper"));
+        writes.Should().Contain((lower, "lower"));
+    }
+
+    [Fact]
     public async Task Enqueue_DifferentMediaWithinDebounce_WritesBothMedia()
     {
         List<(string MediaPath, IReadOnlyList<SubtitleData> Subtitles)> writes = [];

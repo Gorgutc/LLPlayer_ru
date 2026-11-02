@@ -67,13 +67,26 @@
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
-**Текущая одобренная поставка F-13, 2026-11-02: настройки, субтитры/слова и плейлисты/онлайн-видео.**
-Владелец объединил три существующих раздела паритета в одну поставку от PR № 195/main `280f5827`.
-Общий Windows/Linux исходник сохраняет WPF и текущие defaults; состав и адаптации перечислены в
-[едином плане](plans/2026-11-02-f13-settings-subtitles-online.md) и [актуальном статусе](f13-status-2026-10-18.md).
-Фактические gates, независимые reviews и доставка фиксируются отдельно:
-`artifacts/f13-settings-subtitles-online-2026-11-02/CLOSEOUT.md`.
-Native acceptance остаётся **NOT_RUN / DEFERRED BY OWNER**; полный F-13 parity не заявлен.
+**Текущая одобренная поставка F-13, 2026-11-02: ASR/OCR и модели + языковые рабочие процессы.**
+База — доставленные PR № 196/197, actual main `b11d168776dfab503f53af9681357702713a2ca3`.
+Владелец объединил распознавание/менеджеры ресурсов, Batch/watch/background/tray, существующий дубляж
+и AI Insights в одну поставку. Общий Windows/Linux UI/Core сохраняет WPF и defaults; полный состав —
+в [едином плане](plans/2026-11-02-f13-language-workflows.md) и [актуальном статусе](f13-status-2026-10-18.md).
+Исходники реализованы; guardian сопоставил 257 исходных требований с кодом и тестами без найденного
+пропуска; это отдельно от исполнения и нативной приёмки. Локальные full WPF02 (1496/0/2), Windows Avalonia02
+(engine1762/0/15, UI1863/0/1), focused UI07 (176/0/0), Core02 (120/0/2), Python4 и package fixtures157 — PASS.
+Fresh Windows publish02 прошёл content/ZIP readback: 503 файла, ZIP206504499 bytes; точные receipts и SHA —
+в [актуальном статусе](f13-status-2026-10-18.md). Это текущие наблюдения на uncommitted source от `b11d1687`,
+а не пороги качества, final-HEAD run или native acceptance. Исходные FAIL сохранены.
+Независимые native/package reviews настоящего архива — 0 Critical/Important; staged/extracted plugin loads —
+по 1/0/0 PASS. Linux gates/CI, финальный `/review`, PR/merge, отдельный actual-main CI, свежая сборка за синим
+ярлыком и scoped Second Brain sync ещё PENDING.
+Receipts: `artifacts/f13-language-workflows-2026-11-02/`. Текущая поставка **IN PROGRESS**.
+
+После её полного ритуала уже разрешён второй цельный блок — **Команды и служебные экраны + медиабэкенды**.
+После второго ритуала разрешён Computer Use для сверки всех пунктов F-13 и необходимых исправлений.
+Нативная приёмка пока **NOT_RUN**; прежняя отсрочка в исторических записях не отменяет эту последовательность.
+Новых F-карточек и дополнительных продуктовых этапов не добавлено; полный паритет ещё не заявлен.
 
 **Исторический source/local checkpoint, 2026-11-01: Primary/Secondary Sidebar и sync выбранного cue.**
 Общий Windows/Linux Avalonia Sidebar получил сохраняемый выбор слота (`SidebarShowSecondary`, по умолчанию

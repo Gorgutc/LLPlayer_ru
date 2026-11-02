@@ -4,8 +4,11 @@ namespace FlyleafLib.MediaPlayer.Batch;
 
 public static class BatchVideoScanner
 {
-    public static IReadOnlyList<string> Scan(string folderPath, bool recursive)
+    public static IReadOnlyList<string> Scan(string folderPath, bool recursive) => Scan(folderPath, recursive, CancellationToken.None);
+
+    public static IReadOnlyList<string> Scan(string folderPath, bool recursive, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentException.ThrowIfNullOrWhiteSpace(folderPath);
 
         if (!Directory.Exists(folderPath))
@@ -18,6 +21,21 @@ public static class BatchVideoScanner
             MatchCasing = MatchCasing.CaseInsensitive
         };
 
-        return Utils.GetMoviesSorted(Directory.GetFiles(folderPath, "*", options).ToList());
+        return ScanPaths(Directory.EnumerateFiles(folderPath, "*", options), cancellationToken);
+    }
+
+    internal static IReadOnlyList<string> ScanPaths(IEnumerable<string> paths, CancellationToken cancellationToken)
+    {
+        List<string> collected = [];
+        using var entries = paths.GetEnumerator();
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!entries.MoveNext()) break;
+            cancellationToken.ThrowIfCancellationRequested();
+            collected.Add(entries.Current);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return Utils.GetMoviesSorted(collected);
     }
 }

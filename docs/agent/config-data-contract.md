@@ -2,6 +2,49 @@
 
 This document freezes current config, persistence, and local data decisions from `main`.
 
+## Shared recognition, batch and dubbing state — owner-approved 2026-11-02
+
+The [first coordinated language delivery](plans/2026-11-02-f13-language-workflows.md) keeps the existing
+per-user Avalonia `AppPaths` owner and WPF files/defaults. `LLPlayer.Recognition.json` now retains ASR engine,
+both engine configurations, chunk limits, per-slot OCR engine and Tesseract/Microsoft region maps alongside the
+existing recognition fields. Absent values preserve whisper.cpp, 20 MB/20 seconds and Tesseract defaults. The
+six-field advanced reset remains scoped; ordered runtime preferences may contain optional unavailable libraries
+without implying installed support. General Playback remains the sole hosted editable fallback-language owner;
+a Recognition save retains its latest values rather than overwriting them from a stale draft.
+
+`LLPlayer.Batch.json` adds only batch policy: LastFolder empty; Recursive, SerializeAsrAndTranslate,
+RunOnCpuWhenActive and PreferRussianAudio true; idle threshold 45 seconds; OverwriteExisting,
+GenerateDubbing and WatchFolder false. The idle threshold accepts 5..600 seconds. Queue rows, audio overrides,
+watch sessions, progress and active work are runtime state, not serialized jobs. Loading saved watch intent does
+not authorize a hidden startup scan/run. Explicit Start/Save/Watch actions own their runtime transitions.
+Batch has no separate BOM preference or checkbox: each run reads the existing
+`PlaybackSettings.SubtitleExportUtf8Bom` owner once when creating its output writer, with the global default
+remaining true. Later edits affect a subsequent run, not an already-created writer.
+
+`LLPlayer.Dubbing.json` stores a detached existing `DubbingConfig` and `PersistPerLineVoices=false`. Existing
+defaults remain LocalCosyVoice, cosyvoice2-0.5b, ru-preset-1, no custom IDs/manual override, ducking 15,
+atempo 0.9/1.15, stress normalization true and FLAC. Settings fresh-merge fields changed by that editor so an
+untouched voice draft preserves a newer Batch choice. Batch similarly preserves a newer default voice unless
+its picker was explicitly changed. Both stores validate and persist before live application; Close discards.
+For the explicit combined Batch-options/default-voice save, Batch writes first and a failed voice save triggers
+ownership-checked compensation to the exact previous Batch bytes/absence. A newer replacement is preserved and
+rollback failure is reported. This is bounded compensation, not a crash-atomic transaction across both files.
+
+The existing opt-in `<media>.ru.voices.json` schema remains one voice per SRT-millisecond timing window. A clear
+removes only that timing claim; unrelated saved entries and pending edits from a replaced subtitle source survive.
+The latest explicit assignment/clear wins a collision across slots consistently in saved and immediate batch
+inputs. Media identity follows platform path casing. Per-line edits without opt-in remain session-only.
+AI Insights window state/results are session-only; explicit Add to List atomically merges deduplicated vocabulary
+into the existing word library with AIInsights provenance, languages and timestamp.
+
+Writable resources live under `AppPaths.StateDir`: `Models/Whisper`, `Models/Tesseract` and
+`Engines/FasterWhisper`, preserving downloaded resources across immutable Desktop payload refreshes. A configured
+custom whisper directory remains authoritative. Explicit `TESSDATA_PREFIX` overrides managed/legacy/system
+discovery; no system tessdata is implicitly changed. Engine/manual paths are preferences, not bundled executables.
+No startup model/engine download, Python provisioning or provider request is added. New config files, their
+temporary/backup variants, downloaded resources/venvs, companion/output files, logs and secrets are excluded from
+source and both packages. Implemented source is separate from fresh gates, delivery and native acceptance.
+
 ## Additive Avalonia playback, online and PDIC preferences — owner-approved 2026-11-02
 
 The coordinated [Settings/Subtitles/Playlists plan](plans/2026-11-02-f13-settings-subtitles-online.md) adds

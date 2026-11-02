@@ -765,6 +765,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     void ShowRecognition()
     {
+        if (RecognitionDialog != null) { shell.ShowRecognition(RecognitionDialog()); return; }
         if (player is IRecognitionController controller && controller.RecognitionStore is { } store)
             shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, controller.RecognitionWarning,
                 draft => controller.SaveRecognitionSettingsAsync(draft, store), fallbackLanguagesEditable: player is not IPlaybackSettingsController));
@@ -774,6 +775,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         string detail = message + (string.IsNullOrWhiteSpace(actionHint) ? "" : "\n" + actionHint);
         ShowToast("Recognition", detail, ToastVariant.Destructive);
+        if (RecognitionDialog != null)
+        {
+            RecognitionViewModel model = RecognitionDialog();
+            model.Message = detail;
+            shell.ShowRecognition(model);
+            return;
+        }
         if (player is IRecognitionController controller && controller.RecognitionStore is { } store)
             shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, detail,
                 draft => controller.SaveRecognitionSettingsAsync(draft, store), fallbackLanguagesEditable: player is not IPlaybackSettingsController));
@@ -1298,6 +1306,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (slot == Sidebar.SelectedSlot)
             Sidebar.Reload();
+        insights?.Refresh();
     }
 
     void OnSidebarSynchronizationFailed(string message)
@@ -1305,6 +1314,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     void OnExternalMediaOpening()
     {
+        insights?.Invalidate();
         Sidebar.Clear();
         ClearPlaybackChoices();
         pendingMediaRequest = null;

@@ -181,6 +181,9 @@
             <MenuItem Header="Open subtitles file…" InputGesture="Ctrl+Shift+O" Command="{Binding OpenSubtitlesCommand}" />
             <MenuItem Header="Download subtitles…" Command="{Binding ShowSubtitleDownloadCommand}" />
             <MenuItem Header="Export subtitles…" Command="{Binding ShowSubtitlesExportCommand}" />
+            <MenuItem Header="Batch subtitles…" Command="{Binding ShowBatchSubtitlesCommand}" />
+            <MenuItem Header="AI Insights…" Command="{Binding ShowAiInsightsCommand}" />
+            <MenuItem Header="Dubbing settings…" Command="{Binding ShowDubbingSettingsCommand}" />
             <Separator />
             <MenuItem Header="Show subtitles" InputGesture="V" Command="{Binding ToggleSubtitlesCommand}"
                       ToggleType="CheckBox" IsChecked="{Binding SubtitlesVisible, Mode=OneWay}" />
@@ -605,7 +608,7 @@
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:CueItemViewModel">
                   <Border Classes="cue" Classes.current="{Binding IsCurrent}" Padding="{Binding RowPadding}">
-                    <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                       <TextBlock Text="{Binding StartText}" Classes="muted xs mono" Margin="0,2,10,0" VerticalAlignment="Top" />
                       <c:SubtitleText Name="SidebarCueText" Grid.Column="1" IsVisible="{Binding ShowText}" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="{Binding Slot}"
                                       SelectionBrush="{DynamicResource Shadcn.RingBrush}"
@@ -618,6 +621,10 @@
                               AutomationProperties.Name="Adjust subtitle track delay to current time">
                         <c:LucideIcon Data="{StaticResource Icon.Repeat}" Size="16" />
                       </Button>
+                      <Button Name="CueVoiceButton" Grid.Column="3" Classes="ghost" Content="{Binding VoiceLabel}"
+                              Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AssignCueVoiceCommand}" CommandParameter="{Binding}"
+                              Width="62" Height="26" MinWidth="0" Padding="2" Margin="2,0,0,0" VerticalAlignment="Top"
+                              Click="OnCueVoiceClick" ToolTip.Tip="Assign dubbing voice" AutomationProperties.Name="Assign dubbing voice" />
                     </Grid>
                   </Border>
                 </DataTemplate>

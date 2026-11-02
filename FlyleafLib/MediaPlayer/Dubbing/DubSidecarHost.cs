@@ -19,7 +19,7 @@ namespace FlyleafLib.MediaPlayer.Dubbing;
 /// explicit restart. Orphan-safe: the child is placed in a kill-on-close Job Object (<see
 /// cref="JobObjectGuard"/>) and is also told the parent PID so it can self-terminate.
 /// </summary>
-public sealed class DubSidecarHost : ITtsService
+public sealed class DubSidecarHost : IDubbingTtsService
 {
     private static readonly SemaphoreSlim _singleInstance = new(1, 1);
 
@@ -27,10 +27,14 @@ public sealed class DubSidecarHost : ITtsService
     private readonly bool _mock;
 
     private Process? _process;
+    private bool _processStarted;
     private SafeFileHandle? _job;
     private HttpClient? _http;
     private string? _workDir;
     private bool _singleHeld;
+    private int _initializationStarted;
+    private readonly SemaphoreSlim _disposeGate = new(1, 1);
+    private bool _disposed;
 
     private DubSidecarHost(DubbingSnapshot cfg, bool mock)
     {
@@ -60,13 +64,19 @@ public sealed class DubSidecarHost : ITtsService
     /// </summary>
     public async Task<bool> TryInitializeAsync(CancellationToken token)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (Interlocked.CompareExchange(ref _initializationStarted, 1, 0) != 0)
+            throw new InvalidOperationException("This dubbing sidecar has already been initialized. Create a new run-scoped host.");
         if (!await _singleInstance.WaitAsync(TimeSpan.FromSeconds(30), token).ConfigureAwait(false))
             throw new InvalidOperationException("Another dubbing sidecar is already running.");
         _singleHeld = true;
 
         try
         {
-            return await StartProcessAsync(token).ConfigureAwait(false);
+            bool ready = await StartProcessAsync(token).ConfigureAwait(false);
+            if (!ready)
+                await DisposeAsync().ConfigureAwait(false);
+            return ready;
         }
         catch
         {
@@ -105,6 +115,14 @@ public sealed class DubSidecarHost : ITtsService
         psi.ArgumentList.Add(_cfg.ModelsDir);
         psi.ArgumentList.Add("--parent-pid");
         psi.ArgumentList.Add(Environment.ProcessId.ToString());
+        if (OperatingSystem.IsLinux())
+        {
+            string? parentStartTime = ParseLinuxStartTime(File.ReadAllText("/proc/self/stat"));
+            if (parentStartTime is null)
+                throw new InvalidOperationException("Cannot identify the Linux parent process for safe dubbing containment.");
+            psi.ArgumentList.Add("--parent-start-time");
+            psi.ArgumentList.Add(parentStartTime);
+        }
         psi.ArgumentList.Add("--work-dir");
         psi.ArgumentList.Add(_workDir);
         if (_mock)
@@ -134,6 +152,7 @@ public sealed class DubSidecarHost : ITtsService
 
         if (!_process.Start())
             throw new InvalidOperationException("Failed to start the dubbing sidecar process.");
+        _processStarted = true;
 
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
@@ -201,6 +220,14 @@ public sealed class DubSidecarHost : ITtsService
         return SidecarStartFault.ExitedEarly;
     }
 
+    internal static string? ParseLinuxStartTime(string stat)
+    {
+        int commandEnd = stat.LastIndexOf(')');
+        if (commandEnd < 0) return null;
+        string[] fields = stat[(commandEnd + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return fields.Length > 19 && ulong.TryParse(fields[19], out _) ? fields[19] : null;
+    }
+
     // Map a classified fault to the exception the caller sees (unit-tested). This is the behavioural payload of
     // HC-30: a cancel must surface as an OperationCanceledException (job Canceled) and a timeout as a
     // TimeoutException, never as the InvalidOperationException("exited before…") the fix set out to eliminate.
@@ -221,9 +248,13 @@ public sealed class DubSidecarHost : ITtsService
         while (sw.Elapsed < budget)
         {
             token.ThrowIfCancellationRequested();
+            if (_process is { HasExited: true })
+                throw new InvalidOperationException("The dubbing sidecar exited before it became ready.");
             try
             {
-                HealthDto? health = await _http!.GetFromJsonAsync<HealthDto>("/health", token).ConfigureAwait(false);
+                using CancellationTokenSource probeTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                probeTimeout.CancelAfter(TimeSpan.FromSeconds(5));
+                HealthDto? health = await _http!.GetFromJsonAsync<HealthDto>("/health", probeTimeout.Token).ConfigureAwait(false);
                 if (health is { Ready: true })
                     return true;
             }
@@ -295,54 +326,76 @@ public sealed class DubSidecarHost : ITtsService
 
     public async ValueTask DisposeAsync()
     {
-        // Best-effort graceful shutdown first.
-        if (_http is not null)
+        await _disposeGate.WaitAsync().ConfigureAwait(false);
+        try
         {
-            try
+            if (_disposed) return;
+            // Best-effort graceful shutdown first.
+            if (_http is not null)
             {
-                using CancellationTokenSource cts = new(TimeSpan.FromSeconds(3));
-                using HttpRequestMessage req = new(HttpMethod.Post, "/shutdown");
-                await _http.SendAsync(req, cts.Token).ConfigureAwait(false);
-            }
-            catch { /* ignore — we kill below */ }
-
-            _http.Dispose();
-            _http = null;
-        }
-
-        if (_process is not null)
-        {
-            try
-            {
-                if (!_process.HasExited)
+                try
                 {
-                    if (!_process.WaitForExit(2000))
-                        _process.Kill(entireProcessTree: true);
+                    using CancellationTokenSource cts = new(TimeSpan.FromSeconds(3));
+                    using HttpRequestMessage req = new(HttpMethod.Post, "/shutdown");
+                    using HttpResponseMessage response = await _http.SendAsync(req, cts.Token).ConfigureAwait(false);
                 }
+                catch { /* ignore — we kill below */ }
+
+                _http.Dispose();
+                _http = null;
             }
-            catch { /* already gone */ }
 
-            _process.Dispose();
-            _process = null;
+            if (_process is not null)
+            {
+                try
+                {
+                    if (_processStarted && !_process.HasExited)
+                    {
+                        using CancellationTokenSource exitTimeout = new(TimeSpan.FromSeconds(2));
+                        try { await _process.WaitForExitAsync(exitTimeout.Token).ConfigureAwait(false); }
+                        catch (OperationCanceledException)
+                        {
+                            _process.Kill(entireProcessTree: true);
+                            // Do not clean owned clips/output while an assembly worker can still write them.
+                            await _process.WaitForExitAsync().ConfigureAwait(false);
+                        }
+                    }
+                }
+                catch
+                {
+                    // Closing the Windows job is also a kill operation. On other hosts a failed tree kill must
+                    // retain ownership and the global lease: starting another GPU process would be unsafe.
+                    _job?.Dispose();
+                    _job = null;
+                    if (_processStarted && !_process.HasExited)
+                        throw new InvalidOperationException("The dubbing process could not be stopped; its run remains owned. Retry shutdown before starting another render.");
+                }
+
+                _process.Dispose();
+                _process = null;
+                _processStarted = false;
+            }
+
+            // Closing the job handle reaps anything still assigned (belt-and-suspenders with Kill above).
+            _job?.Dispose();
+            _job = null;
+
+            // Remove our per-run temp clips (we own this dir; the process is reaped above first).
+            if (_workDir != null)
+            {
+                try { Directory.Delete(_workDir, recursive: true); }
+                catch { /* temp dir — OS reclaims it if a handle lingers */ }
+                _workDir = null;
+            }
+
+            if (_singleHeld)
+            {
+                _singleHeld = false;
+                _singleInstance.Release();
+            }
+            _disposed = true;
         }
-
-        // Closing the job handle reaps anything still assigned (belt-and-suspenders with Kill above).
-        _job?.Dispose();
-        _job = null;
-
-        // Remove our per-run temp clips (we own this dir; the process is reaped above first).
-        if (_workDir != null)
-        {
-            try { Directory.Delete(_workDir, recursive: true); }
-            catch { /* temp dir — OS reclaims it if a handle lingers */ }
-            _workDir = null;
-        }
-
-        if (_singleHeld)
-        {
-            _singleHeld = false;
-            _singleInstance.Release();
-        }
+        finally { _disposeGate.Release(); }
     }
 
     internal sealed record DubbingSnapshot(string PythonPath, string ServerScript, string Model, string ModelsDir)
@@ -351,7 +404,9 @@ public sealed class DubSidecarHost : ITtsService
         {
             string python = c.UseManualEngine && !string.IsNullOrWhiteSpace(c.ManualVenvPython)
                 ? c.ManualVenvPython!
-                : Path.Combine(DubbingConfig.DefaultEngineDir, "Scripts", "python.exe");
+                : Path.Combine(DubbingConfig.DefaultEngineDir,
+                    OperatingSystem.IsWindows() ? "Scripts" : "bin",
+                    OperatingSystem.IsWindows() ? "python.exe" : "python");
 
             return new DubbingSnapshot(python, DubbingConfig.DefaultServerScript, c.Model, DubbingConfig.ModelsDirectory);
         }

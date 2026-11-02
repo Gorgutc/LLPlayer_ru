@@ -27,6 +27,7 @@ import math
 import os
 import shutil
 import struct
+import sys
 import tempfile
 import threading
 import wave
@@ -40,6 +41,7 @@ _OWN_WORKDIR = False  # True only when WE created the work dir (manual run, no -
 _MODEL = None
 _MODEL_LOCK = threading.Lock()
 _SYNTH_RATE = 24000  # CosyVoice2 native sample rate (mono)
+_OWN_POSIX_SESSION = None  # Managed Linux runs own a fresh session; never signal an inherited group.
 
 # A tiny preset "voice bank" for the MVP override path. The real engine maps these to model voices.
 # NOTE: the C# UI mirrors this list in VoiceBankResolver.BuiltIn (FlyleafLib/MediaPlayer/Dubbing/
@@ -310,7 +312,7 @@ def _shutdown():
     # reaping us), so we only rmtree a work dir WE created (manual run).
     if _OWN_WORKDIR and ARGS and ARGS.work_dir:
         shutil.rmtree(ARGS.work_dir, ignore_errors=True)
-    os._exit(0)
+    _exit_owned_run()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -353,7 +355,55 @@ class Handler(BaseHTTPRequestHandler):
             self._send(500, {"error": str(ex)})
 
 
-def watch_parent(parent_pid):
+def _proc_start_time(stat_text):
+    """Linux /proc stat field 22; the parenthesized command may itself contain spaces or ')'."""
+    end = stat_text.rfind(")")
+    fields = stat_text[end + 1:].split() if end >= 0 else []
+    return fields[19] if len(fields) > 19 and fields[19].isdigit() else None
+
+
+def _read_parent_start_time(parent_pid):
+    try:
+        with open("/proc/%d/stat" % int(parent_pid), "r", encoding="utf-8") as stream:
+            return _proc_start_time(stream.read())
+    except (OSError, ValueError):
+        return None
+
+
+def _establish_managed_session(parent_pid, parent_start_time):
+    global _OWN_POSIX_SESSION
+    if not sys.platform.startswith("linux") or not parent_pid:
+        return
+    # Fail before model initialization if the spawning parent already disappeared or its PID was reused.
+    if (os.getppid() != int(parent_pid) or not parent_start_time or
+            _read_parent_start_time(parent_pid) != parent_start_time):
+        raise RuntimeError("The dubbing parent process identity is no longer valid.")
+    os.setsid()
+    own_pid = os.getpid()
+    if os.getsid(0) != own_pid or os.getpgrp() != own_pid:
+        raise RuntimeError("The dubbing sidecar could not establish its own process session.")
+    _OWN_POSIX_SESSION = own_pid
+
+
+def _exit_owned_run():
+    # Only signal a session established by this process for this managed run. A manually started server,
+    # a failed setsid, or a changed session must never signal LLPlayer's or the user's terminal's group.
+    own_pid = _OWN_POSIX_SESSION
+    if (own_pid is not None and own_pid == os.getpid() and
+            os.getsid(0) == own_pid and os.getpgrp() == own_pid):
+        import signal
+        try:
+            os.killpg(own_pid, signal.SIGKILL)
+        except OSError:
+            pass
+    os._exit(0)
+
+
+def _parent_identity_matches(parent_pid, expected_start_time):
+    return not expected_start_time or _read_parent_start_time(parent_pid) == expected_start_time
+
+
+def watch_parent(parent_pid, parent_start_time=None):
     """Self-terminate if the parent (LLPlayer) disappears — redundant with the host's Job Object."""
     if not parent_pid:
         return
@@ -376,10 +426,11 @@ def watch_parent(parent_pid):
                         ctypes.windll.kernel32.CloseHandle(h)
                 else:
                     os.kill(int(parent_pid), 0)
+                    alive = _parent_identity_matches(parent_pid, parent_start_time)
             except Exception:
                 alive = False
             if not alive:
-                os._exit(0)
+                _exit_owned_run()
             time.sleep(2.0)
 
     threading.Thread(target=_loop, daemon=True).start()
@@ -392,9 +443,11 @@ def main():
     parser.add_argument("--model", default="cosyvoice2-0.5b")
     parser.add_argument("--models-dir", default=".")
     parser.add_argument("--parent-pid", type=int, default=0)
+    parser.add_argument("--parent-start-time", default=None)
     parser.add_argument("--work-dir", default="")
     parser.add_argument("--mock", action="store_true")
     ARGS = parser.parse_args()
+    _establish_managed_session(ARGS.parent_pid, ARGS.parent_start_time)
 
     # Per-run temp dir for synth clips so they never leak into %TEMP%. The C# host normally passes one it
     # owns + deletes; a manual run gets its own (cleaned on /shutdown).
@@ -404,7 +457,7 @@ def main():
     else:
         os.makedirs(ARGS.work_dir, exist_ok=True)
 
-    watch_parent(ARGS.parent_pid)
+    watch_parent(ARGS.parent_pid, ARGS.parent_start_time)
 
     server = ThreadingHTTPServer(("127.0.0.1", ARGS.port), Handler)
     # Report the actual bound port so the C# host can connect (port 0 => OS-assigned).

@@ -2,6 +2,60 @@
 
 This document freezes runtime boundaries and high-risk invariants from `main`.
 
+## Shared recognition and language workflows — owner-approved 2026-11-02
+
+The [approved first delivery](plans/2026-11-02-f13-language-workflows.md) extends the existing shared
+Windows/Linux Avalonia UI and Core; WPF remains supported. This section describes the implemented source
+boundary. Full gates, exact-source packages, independent final review and delivery require separate receipts.
+The owner has authorized commands/service screens plus media backends after the first delivery ritual, then
+Computer Use of the complete F-13 surface after the second ritual. That native acceptance has not run.
+
+Recognition retains its serialized `RecognitionActions` owner. ASR start and OCR acquire resource-use leases
+inside admitted execution; batch holds a lease for its run-scoped engines and renderer. Final model promotion
+and deletion acquire exclusive mutation admission after checking the selected/in-use resource. Network download
+and extraction do not hold the player queue. Downloads use owned temporary files/staging, preserve existing
+targets on cancellation/failure and reject unsafe archive entries. Managed engine deletion validates its exact
+root and ownership manifest, stages that installation, and removes only verified owned files with nonrecursive
+directory cleanup; foreign files are preserved. Window/app close cancels and drains owned operations.
+
+Both ASR engines reuse Flyleaf's existing implementations. Ordered runtime preferences preserve optional values
+without claiming their native libraries are bundled; loaded-library status is separate. Faster-whisper supports
+an explicit existing executable/model directory. Its existing Windows XXL archive has an explicit download
+action and guarded extraction adapter; Linux automatic installation is unavailable and a compatible manual
+executable is required. Clipboard help/debug previews never start the tool. Opening settings or the manager
+does not download a model, execute inference or provision an engine.
+
+Tesseract is a lazy portable adapter. An explicit `TESSDATA_PREFIX` is authoritative; otherwise each language
+resolves from the writable managed directory, existing app-local tessdata and available Linux system paths in
+that order. Installing one managed language does not hide other available languages. The Windows adapter loads
+the allowlisted app-local x64 native pair; Linux retains system Tesseract. Microsoft OCR is a Windows-only lazy
+WinRT adapter with installed-language enumeration, slot/region selection and actual recognition/error handling.
+Linux shows it unavailable. Projection DLLs in a ZIP do not establish successful unpackaged WinRT activation.
+
+Core batch orchestration reuses the scanner, processor, transcriber, translator and output writer. A run captures
+detached configuration including plugin/data and voice inputs; later settings changes cannot mix its fields.
+Its SRT writer reads the existing Playback/export BOM setting once at run creation; Batch adds no separate owner.
+Per-job audio overrides win over preferred Russian audio. Watch events carry session identity, coalesce stable
+files, preserve scan-time admissions and use natural order. Repointing retires the old automatic queue and scan;
+lost-root handling changes session activity without silently persisting Watch off. Close during active work can
+retain a reachable background app, pause hidden playback and restore its windows. Explicit Quit cancels and
+awaits one shared teardown before disposing the player, including concurrent quit paths and retired watchers.
+Linux without usable tray/global-idle support keeps a controllable window and reports conservative CPU policy.
+
+Existing local dubbing remains opt-in and reuses the provisioned CosyVoice sidecar, FLAC renderer and voice bank.
+Per-cue edits revalidate media/slot/source/cue identity, merge pending same-media edits across subtitle replacement,
+and use the same latest explicit timing claim for persistence and batch rendering, including clears. Linux media
+paths remain case-sensitive. Companion writes and renderer assembly publish atomically from owned staging;
+failed/canceled assembly preserves a prior output. Windows JobObject and verified Linux process-group/parent
+watchdog ownership terminate and drain children before cleanup. Discovering an existing dub attaches a selectable
+external track; it does not select/play it automatically. No Python environment, weights or new provider is installed.
+
+AI Insights reuses the configured existing LLM resolver/service and bounded transcript chunking. Inputs/results
+carry current media/subtitle identity; transient capture failure retires stale state as retryable unavailable
+input without a provider request. Cancel/close invalidates late progress/results and drains work. Explicit Copy,
+Save and deduplicated Add to List retain provenance; library persistence precedes publication. Source/headless
+checks do not establish real provider, model, tray, OCR activation or native desktop acceptance.
+
 ## Additive shared Settings, subtitles and playlists runtime — owner-approved 2026-11-02
 
 The [coordinated plan](plans/2026-11-02-f13-settings-subtitles-online.md) uses existing controller/recognition/

@@ -49,10 +49,36 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `LLPlayer.Avalonia` (shared Windows/Linux) | `LibNMeCab` | `0.10.2` |
 | `LLPlayer.Avalonia` (shared Windows/Linux) | `LibNMeCab.IpaDicBin` | `0.10.0` |
 | `LLPlayer.Avalonia` (Windows native payload only) | `Silk.NET.OpenAL.Soft.Native` | `1.23.1` |
+| `LLPlayer.Avalonia` (Windows OCR projection download only) | `Microsoft.Windows.SDK.NET.Ref` | `10.0.18362.57` |
+| `LLPlayer.Avalonia` (Windows engine archive adapter only) | `Squid-Box.SevenZipSharp.Lite` | `1.6.2.24` |
+| `LLPlayer.Avalonia` (Windows OCR native payload only) | `TesseractOCR` | `5.5.2` |
 | `FlyleafLibTests` | `AwesomeAssertions` | `9.4.0` |
 | `FlyleafLibTests` | `Microsoft.NET.Test.Sdk` | `18.4.0` |
 | `FlyleafLibTests` | `xunit.v3` | `3.2.2` |
 | `FlyleafLibTests` | `xunit.runner.visualstudio` | `3.1.5` |
+
+## Shared recognition and language-workflow adapters — owner-approved 2026-11-02
+
+The [language-workflows plan](plans/2026-11-02-f13-language-workflows.md) retains one `net10.0` Avalonia host
+and portable Flyleaf/Core on Windows and Linux. Windows-only RID conditions add the same pinned SDK projection,
+SevenZip and Tesseract sources already used by the WPF product; the WPF publish flow and GPU dependency scope are
+unchanged. `PackageDownload` of `Microsoft.Windows.SDK.NET.Ref` is paired with explicit private references to
+`Microsoft.Windows.SDK.NET.dll` and `WinRT.Runtime.dll` from its `lib/net8.0` directory. No Windows TFM, MSIX
+identity or projection dependency is added to the Linux app; Windows adapter sources are excluded there.
+
+The Windows allowlist adds `runtimes/win-x64/leptonica-1.85.0.dll`, `runtimes/win-x64/tesseract55.dll` and the
+tracked `lib/7z.dll`, with source/hash/architecture checks and accompanying notices/licenses. SevenZipSharp
+license text and the original 7-Zip summary/source link are distinct; packaging does not establish an unverified
+build recipe/source offer. Linux rejects those Windows assemblies/native files and continues to use system
+Tesseract and existing Linux libraries. Neither platform packages downloaded models/XXL archives or binaries,
+DubEngine/venvs, mutable settings, credentials, logs or generated subtitles/dubs/voice companions.
+
+The existing Windows XXL release is available only through an explicit resource-manager download; Linux exposes
+the manual compatible-engine route and does not rename a Windows artifact as Linux support. The committed
+CosyVoice sidecar and lock remain the dependency source of truth; the lifecycle adapter supports Windows and Linux Python
+venv layouts without installing environments, weights or providers. CPU Whisper/OpenAL/FFmpeg and previous
+managed MeCab packaging remain. Fresh staged/extracted package contents and native runtime activation require
+their own evidence; source declarations and fixture tests are not clean-host/native acceptance.
 
 ## Shared Japanese segmentation and external helpers — owner-approved 2026-11-02
 

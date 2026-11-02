@@ -14,6 +14,7 @@ public static class BatchSubtitleConfigSnapshot
     {
         Config snapshot = new(true)
         {
+            Version = source.Version,
             Audio = CloneAudioConfig(source.Audio),
             Video = source.Video.Clone(),
             Subtitles = CreateSubtitlesConfig(source.Subtitles),

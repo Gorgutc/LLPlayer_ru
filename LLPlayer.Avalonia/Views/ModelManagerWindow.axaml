@@ -1,0 +1,37 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.ModelManagerWindow"
+        x:DataType="vm:ModelManagerViewModel" Title="Recognition model manager" Width="680" Height="480"
+        MinWidth="420" MinHeight="360" WindowStartupLocation="CenterOwner">
+  <Grid Margin="24" RowDefinitions="*,Auto" RowSpacing="16">
+    <ScrollViewer>
+      <StackPanel Spacing="12">
+        <TextBlock Text="Recognition models and engines" Classes="h2" />
+        <StackPanel IsEnabled="{Binding !Busy}" Spacing="10">
+          <TextBlock Text="Resource type" />
+          <ComboBox Name="ModelKindBox" ItemsSource="{Binding Kinds}" SelectedItem="{Binding SelectedKind}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="Model / quantization" />
+          <ComboBox Name="ModelCatalogBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="{Binding DirectoryPath}" TextWrapping="Wrap" Classes="small muted" />
+          <StackPanel IsVisible="{Binding HasSource}" Spacing="4">
+            <TextBlock Text="{Binding ArtifactName}" TextWrapping="Wrap" />
+            <Button Content="Open engine source / release notes" Classes="outline" HorizontalAlignment="Left" Command="{Binding OpenSourceCommand}" />
+          </StackPanel>
+          <WrapPanel>
+            <Button Content="Download" Command="{Binding DownloadCommand}" Margin="0,0,8,8" />
+            <Button Content="Delete selected" Classes="outline" Command="{Binding DeleteCommand}" Margin="0,0,8,8" />
+            <Button Content="Refresh" Classes="outline" Command="{Binding RefreshCommand}" Margin="0,0,8,8" />
+            <Button Content="Open folder" Classes="outline" Command="{Binding OpenFolderCommand}" Margin="0,0,8,8" />
+          </WrapPanel>
+        </StackPanel>
+        <ProgressBar IsVisible="{Binding Busy}" IsIndeterminate="{Binding Indeterminate}" Minimum="0" Maximum="{Binding TotalBytes}" Value="{Binding DownloadedBytes}" />
+        <TextBlock Text="{Binding ProgressText}" Classes="small muted" />
+        <TextBlock Text="{Binding Message}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+        <TextBlock Text="Downloads run only when requested. Selected or active resources cannot be deleted. User-installed or changed engine files are preserved." TextWrapping="Wrap" Classes="small muted" />
+      </StackPanel>
+    </ScrollViewer>
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Cancel download" Classes="outline" IsVisible="{Binding Busy}" Command="{Binding CancelCommand}" />
+      <Button Content="Close" Classes="outline" Click="OnClose" />
+    </StackPanel>
+  </Grid>
+</Window>

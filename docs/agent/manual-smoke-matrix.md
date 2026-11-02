@@ -2,6 +2,50 @@
 
 Automated tests do not cover every LLPlayer behavior. Use these manual checks when touching related areas.
 
+## ASR/OCR, resource management and language workflows — authorized sequence, 2026-11-02
+
+The owner authorized the [complete first coordinated delivery](plans/2026-11-02-f13-language-workflows.md),
+then commands/service screens plus media backends with a second full delivery ritual, then Computer Use for
+the entire F-13 matrix and necessary fixes. This updates the earlier deferred authorization below: native
+acceptance is authorized **after the second ritual**, has **NOT_RUN**, and must not be claimed from source,
+headless/native-library tests, package checks or earlier screenshots. Record the actual installed source/payload,
+OS and available devices/models/providers; unavailable cases retain precise NOT_RUN reasons.
+
+- Open Recognition and all three resource managers with an isolated profile. Verify engine-specific editors,
+  installed state, language/region lists, all runtime preference add/remove/reorder controls and loaded-runtime
+  status. Saving preferences alone starts no model/tool/provider. Check detached cancel, invalid paths/numbers,
+  persistence failure/retry and latest shared fallback preservation; unavailable GPU/native libraries are honest.
+- Explicitly download/cancel/delete a suitable small model where network/resources are available; check byte/total
+  progress, errors, original-target preservation and refresh. Windows XXL installation adopts its EXE path only
+  after that engine download; ordinary model actions preserve a custom engine choice. Linux automatic XXL
+  installation is explicitly unavailable and a valid executable manual route remains. Verify in-use deletion
+  rejection, close/quit drain and preservation of foreign files; do not mutate a user installation as a test fixture.
+- Exercise ASR on each slot, pause/resume/cancel, source replacement and shutdown with actual available models.
+  Exercise Tesseract per-language managed/legacy fallback and explicit TESSDATA_PREFIX. On Windows, separately
+  record real Microsoft OCR language enumeration/activation and bitmap recognition; absent package identity or
+  language support must produce a recoverable message. Linux retains Tesseract and explicit Microsoft unavailability.
+- Scan a natural-order recursive batch with mixed inclusion, preferred Russian audio and explicit row override;
+  verify output skip/overwrite policy, transcript/counts/time/ETA, Retry, cancellation and error recovery. Each new
+  run uses the existing Playback/export BOM preference and retains that snapshot if it changes during processing;
+  Batch exposes no independent BOM setting. Watch slow copies/rename/duplicates, add files during Scan,
+  repoint the root with queued files, remove the root and
+  toggle off. Old-session files must not auto-run under the new folder/options. Fail the combined options/voice
+  save: both prior settings remain, while a foreign replacement is preserved with a visible rollback conflict.
+- Close main and Batch windows while running/watching, restore via available tray/taskbar and verify hidden
+  playback pause, progress/notifications and reachable Cancel. Explicit Quit and concurrent close paths drain
+  watchers/runs and leave no owned background work. On desktops without tray/global idle support, verify the
+  visible-window/conservative-CPU fallback rather than reporting measured inactivity.
+- With an already provisioned local dubbing environment, check settings, custom/default voices, per-line default/
+  assignment/clear in both slots, equal-timing latest-edit behavior, rapid subtitle replacement and opt-in companion
+  restoration. Immediate batch voice input and saved companion agree. Existing dub attachment stays selectable
+  without automatic playback. Cancel assembly and quit during work: earlier output survives and owned children
+  drain without late output resurrection. Missing engine/models remain recoverable; do not auto-provision them.
+- In AI Insights check both slots/original-translated/modes and configured provider/model. Opening sends no request.
+  Generate/Cancel, late results after source replacement, temporary unready captures, long-transcript coverage,
+  malformed/truncated replies and close remain safe. Verify summary/vocabulary Copy/Save and deduplicated Add to
+  List with provenance; Word Manager/Anki paths continue to work. Real provider results require actual available
+  credentials/service and explicit run, not a fake-service regression result.
+
 ## Settings, Subtitles/words and Playlists/online video — owner-deferred native checks, 2026-11-02
 
 These checks cover the single coordinated [approved delivery](plans/2026-11-02-f13-settings-subtitles-online.md).

@@ -7,7 +7,7 @@ namespace LLPlayer.Avalonia.Services;
 /// <summary>One subtitle cue as the UI shows it (primary/secondary sidebar, word popup context).</summary>
 /// <param name="Text">Display text (translated when translation display is on, otherwise the source text).</param>
 /// <param name="OriginalText">Source text snapshot, used by the sidebar's show-original choice; empty when unknown.</param>
-public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "", string OriginalText = "", SubtitleCueIdentity? Identity = null, bool IsBitmap = false);
+public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "", string OriginalText = "", SubtitleCueIdentity? Identity = null, bool IsBitmap = false, string? AssignedVoiceId = null);
 
 /// <summary>Opaque identity of a live cue's media, subtitle source and slot. Contains no public native object.</summary>
 public sealed class SubtitleCueIdentity : IEquatable<SubtitleCueIdentity>

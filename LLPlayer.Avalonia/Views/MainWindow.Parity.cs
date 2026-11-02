@@ -100,7 +100,9 @@ public partial class MainWindow
 
     public async Task<bool> RevealMediaAsync(string path)
     {
-        if (!File.Exists(path) || Path.GetDirectoryName(Path.GetFullPath(path)) is not { } directory) return false;
+        if (!File.Exists(path) && !Directory.Exists(path)) return false;
+        string? directory = Directory.Exists(path) ? Path.GetFullPath(path) : Path.GetDirectoryName(Path.GetFullPath(path));
+        if (directory == null) return false;
         try { return await Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(directory)); }
         catch (Exception) { return false; }
     }

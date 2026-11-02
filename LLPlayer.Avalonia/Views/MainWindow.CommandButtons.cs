@@ -29,7 +29,7 @@ public partial class MainWindow
     Button? FocusedParityCommandButton()
     {
         if (FocusManager?.GetFocusedElement() is not Button button) return null;
-        return ReferenceEquals(button, MediaTitleButton) || ReferenceEquals(button, PreviousPlaylistButton)
+        return button.Name == "CueVoiceButton" || ReferenceEquals(button, MediaTitleButton) || ReferenceEquals(button, PreviousPlaylistButton)
             || ReferenceEquals(button, NextPlaylistButton) ? button : null;
     }
 

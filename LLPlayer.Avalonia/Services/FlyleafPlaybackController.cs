@@ -47,11 +47,15 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     {
         RecognitionSettings detached = settings.Clone();
         // Fallback languages have one editor in Playback settings. A model draft cannot restore older values.
-        RecognitionSettings current = RecognitionSettings.FromConfig(player.Config.Subtitles);
-        detached.OcrPrimaryLanguage = current.OcrPrimaryLanguage;
-        detached.OcrSecondaryLanguage = current.OcrSecondaryLanguage;
-        detached.OcrSecondarySame = current.OcrSecondarySame;
-        return Recognition.SaveAndApplyAsync(detached, store);
+        return Recognition.MutateIfIdleAsync(_ =>
+        {
+            RecognitionSettings current = RecognitionSettings.FromConfig(player.Config.Subtitles);
+            detached.OcrPrimaryLanguage = current.OcrPrimaryLanguage;
+            detached.OcrSecondaryLanguage = current.OcrSecondaryLanguage;
+            detached.OcrSecondarySame = current.OcrSecondarySame;
+            store.Save(detached);
+            PublishLanguageConfiguration(() => detached.Apply(player.Config.Subtitles));
+        });
     }
 
     public FlyleafPlaybackController(Player player, IUIDispatcher? ui, CollectionSyncBridge bridge)
@@ -59,7 +63,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         this.player = player;
         this.ui = ui;
         this.bridge = bridge;
-        Recognition = new RecognitionActions(new PlayerRecognitionBackend(player));
+        Recognition = new RecognitionActions(new PlayerRecognitionBackend(player), LanguageResources.AcquireUse);
 
         playerChanged = (_, e) => OnPlayerChanged(e.PropertyName);
         audioChanged = (_, e) =>
@@ -130,7 +134,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             int slot = i;
             cueChanged[slot] = (_, e) =>
             {
-                if (e.PropertyName is nameof(SubtitleData.DisplayText) or nameof(SubtitleData.UseTranslated)) QueueCueNotification(slot);
+                if (e.PropertyName is nameof(SubtitleData.DisplayText) or nameof(SubtitleData.UseTranslated) or nameof(SubtitleData.AssignedVoiceId)) QueueCueNotification(slot);
             };
             cueWatchers[i] = bridge.Watch(player.SubtitlesManager[slot].Subs, () => { WatchCues(slot); QueueCueNotification(slot); Raise(nameof(RecognitionStatus)); });
             WatchCues(slot);
@@ -255,14 +259,19 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     public void ApplyTranslationSettings(TranslationSettings settings)
     {
         SuspendTranslations();
-        settings.Apply(player.Config.Subtitles);
-        sentenceAvailable = settings.SentenceProvider != "Off";
+        PublishLanguageConfiguration(() =>
+        {
+            settings.Apply(player.Config.Subtitles);
+            sentenceAvailable = settings.SentenceProvider != "Off";
+            for (int slot = 0; slot < 2; slot++)
+            {
+                bool enabled = sentenceAvailable && player.Config.Subtitles[slot].EnabledTranslated;
+                player.Config.Subtitles[slot].EnabledTranslated = false;
+                player.Config.Subtitles[slot].EnabledTranslated = enabled;
+            }
+        });
         for (int slot = 0; slot < 2; slot++)
         {
-            bool enabled = sentenceAvailable && player.Config.Subtitles[slot].EnabledTranslated;
-            // Existing toggle seam resets sFramesPrev and refreshes paused overlay as well as sidebar cues.
-            player.Config.Subtitles[slot].EnabledTranslated = false;
-            player.Config.Subtitles[slot].EnabledTranslated = enabled;
             player.SubtitlesManager[slot].Translator.Resume();
             RefreshOverlay(slot);
         }
@@ -346,7 +355,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         List<CueInfo> cues = new(subs.Count);
         foreach (SubtitleData s in subs)
             cues.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, player.SubtitlesManager[slot].Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391(), s.Text ?? "",
-                source == null ? null : new SubtitleCueIdentity(new SubtitleCueToken(source, s)), s.IsBitmap));
+                source == null ? null : new SubtitleCueIdentity(new SubtitleCueToken(source, s)), s.IsBitmap, s.AssignedVoiceId));
         if (source != null && !IsCurrentSubtitleCueSource(source)) return [];
         return cues;
     }
@@ -455,7 +464,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         if (Recognition.IsBusy)
             throw new InvalidOperationException("Cancel the current opening, or wait for playback and recognition work to finish, before saving tool paths.");
         OnlineVideoSettings detached = settings.Clone();
-        return Recognition.MutateAsync(() => { store.Save(detached); detached.Apply(player.Config); });
+        return Recognition.MutateAsync(() => { store.Save(detached); PublishLanguageConfiguration(() => detached.Apply(player.Config)); });
     }
     public void OpenSubtitles(string path) => Observe(MutateWithTranslationAsync(() => player.Open(path, forceSubtitles: true)));
     async void Observe(Task work, int openEpoch = 0)

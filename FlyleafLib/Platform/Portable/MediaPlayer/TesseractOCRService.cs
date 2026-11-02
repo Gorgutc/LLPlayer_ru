@@ -6,12 +6,28 @@ namespace FlyleafLib.MediaPlayer;
 
 #nullable enable
 
-/// <summary>Resident, per-track Linux OCR engine using system Tesseract 5 and its installed tessdata.</summary>
+/// <summary>Resident, per-track Tesseract 5 engine with managed, legacy and system language discovery.</summary>
 public sealed class TesseractOCRService : IOCRService
 {
+    /// <summary>Host-owned writable model directory. Setting this performs no I/O or native loading.</summary>
+    public static string? ManagedDataDirectory { get; set; }
+    /// <summary>Read-only inventory locations; does not load native code or create directories.</summary>
+    public static IReadOnlyList<string> GetDataDirectories()
+    {
+        string? prefix = Environment.GetEnvironmentVariable("TESSDATA_PREFIX");
+        if (!string.IsNullOrEmpty(prefix)) return [Path.GetFullPath(prefix)];
+        List<string> directories = [];
+        if (!string.IsNullOrWhiteSpace(ManagedDataDirectory)) directories.Add(Path.GetFullPath(ManagedDataDirectory));
+        directories.Add(TesseractModel.ModelsDirectory);
+        if (OperatingSystem.IsLinux())
+            directories.AddRange(["/usr/share/tesseract-ocr/5/tessdata", "/usr/share/tessdata", "/usr/local/share/tessdata"]);
+        return directories.Distinct(StringComparer.Ordinal).ToArray();
+    }
     readonly Config.SubtitlesConfig config;
     readonly Func<ITesseractNative> loadNative;
     readonly Func<string?> tessdataPrefix;
+    readonly Func<string?> managedDirectory;
+    readonly Func<string?> legacyDirectory;
     readonly object gate = new();
     ITesseractNative? native;
     nint engine;
@@ -22,10 +38,17 @@ public sealed class TesseractOCRService : IOCRService
         : this(config, () => TesseractNative.Shared, () => Environment.GetEnvironmentVariable("TESSDATA_PREFIX")) { }
 
     internal TesseractOCRService(Config.SubtitlesConfig config, Func<ITesseractNative> loadNative, Func<string?> tessdataPrefix)
+        : this(config, loadNative, tessdataPrefix, () => ManagedDataDirectory,
+            () => TesseractModel.ModelsDirectory) { }
+
+    internal TesseractOCRService(Config.SubtitlesConfig config, Func<ITesseractNative> loadNative, Func<string?> tessdataPrefix,
+        Func<string?> managedDirectory, Func<string?> legacyDirectory)
     {
         this.config = config;
         this.loadNative = loadNative;
         this.tessdataPrefix = tessdataPrefix;
+        this.managedDirectory = managedDirectory;
+        this.legacyDirectory = legacyDirectory;
     }
 
     public bool TryInitialize(Language lang, out string err)
@@ -57,15 +80,23 @@ public sealed class TesseractOCRService : IOCRService
                 if (candidate == 0) throw new InvalidOperationException("Tesseract could not create an OCR engine.");
                 if (native.Initialize(candidate, string.IsNullOrEmpty(prefix) ? null : prefix, "") != 0)
                     throw new InvalidOperationException("Tesseract could not initialize tessdata discovery. Check TESSDATA_PREFIX and installed language packages.");
-                string[] installed = native.AvailableLanguages(candidate);
+                Dictionary<string, string> sources = native.AvailableLanguages(candidate)
+                    .ToDictionary(code => code, _ => native.DataPath(candidate), StringComparer.Ordinal);
                 string path = native.DataPath(candidate);
                 native.Delete(candidate);
                 candidate = 0;
+                // A user override remains exclusive. Otherwise choose a source per language: installing
+                // one managed language must not hide the other languages supplied by the operating system.
+                if (string.IsNullOrEmpty(prefix))
+                {
+                    AddModelSources(sources, legacyDirectory());
+                    AddModelSources(sources, managedDirectory());
+                }
 
                 string iso = lang.ISO6391 == "nb" ? "no" : lang.ISO6391;
                 List<TesseractModel> mapped = TesseractModel.TesseractLangToISO6391
                     .Where(pair => pair.Value == iso).Select(pair => new TesseractModel { Lang = pair.Key }).ToList();
-                List<TesseractModel> available = mapped.Where(model => installed.Contains(model.LangCode, StringComparer.Ordinal)).ToList();
+                List<TesseractModel> available = mapped.Where(model => sources.ContainsKey(model.LangCode)).ToList();
                 if (available.Count == 0)
                 {
                     string codes = mapped.Count == 0 ? iso : string.Join(", ", mapped.Select(m => m.LangCode));
@@ -75,6 +106,7 @@ public sealed class TesseractOCRService : IOCRService
                 TesseractModel selected = available[0];
                 if (config.TesseractOcrRegions?.TryGetValue(iso, out string? preferred) == true)
                     selected = available.FirstOrDefault(model => model.LangCode == preferred) ?? selected;
+                path = sources[selected.LangCode];
                 candidate = native.Create();
                 if (candidate == 0) throw new InvalidOperationException("Tesseract could not create an OCR engine.");
                 if (native.Initialize(candidate, path, selected.LangCode) != 0)
@@ -89,10 +121,11 @@ public sealed class TesseractOCRService : IOCRService
                 err = "";
                 return true;
             }
-            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or NotSupportedException or InvalidOperationException or ArgumentException or IOException)
+            catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or
+                NotSupportedException or InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
             {
                 string platformHelp = OperatingSystem.IsWindows()
-                    ? "Use the supported WPF installation for OCR."
+                    ? "Check/install the app-local Windows x64 Tesseract libraries, Visual C++ x64 Redistributable 2022 and the selected language data."
                     : "Check/install system Tesseract 5 (libtesseract.so.5) and the selected language data.";
                 err = $"Tesseract OCR initialization failed: {e.Message} {platformHelp}";
                 return false;
@@ -102,6 +135,14 @@ public sealed class TesseractOCRService : IOCRService
                 if (candidate != 0) native!.Delete(candidate);
             }
         }
+    }
+
+    static void AddModelSources(Dictionary<string, string> sources, string? directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory)) return;
+        string full = Path.GetFullPath(directory);
+        foreach (string file in Directory.EnumerateFiles(full, "*.traineddata", SearchOption.TopDirectoryOnly))
+            if (new FileInfo(file).Length > 0) sources[Path.GetFileNameWithoutExtension(file)] = full;
     }
 
     public Task<string> RecognizeTextAsync(BgraBitmap bitmap)

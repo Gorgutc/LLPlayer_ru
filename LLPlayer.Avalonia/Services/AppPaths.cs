@@ -27,6 +27,11 @@ public sealed record AppPaths(string ConfigDir, string StateDir)
 
     public string PlaybackFile => Path.Combine(ConfigDir, "LLPlayer.Playback.json");
     public string PdicFile => Path.Combine(ConfigDir, "LLPlayer.Pdic.json");
+    public string BatchFile => Path.Combine(ConfigDir, "LLPlayer.Batch.json");
+    public string DubbingFile => Path.Combine(ConfigDir, "LLPlayer.Dubbing.json");
+    public string WhisperModelsDirectory => Path.Combine(StateDir, "Models", "Whisper");
+    public string TesseractModelsDirectory => Path.Combine(StateDir, "Models", "Tesseract");
+    public string WhisperEngineDirectory => Path.Combine(StateDir, "Engines", "FasterWhisper");
 
     public string PrefsFile => Path.Combine(ConfigDir, "LLPlayer.Avalonia.json");
 

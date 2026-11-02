@@ -6,17 +6,35 @@ namespace FlyleafLib.Platform;
 public class PortableOcrPlatformTests
 {
     [Fact]
-    public void WindowsRealNativeLoader_ReportsUnsupportedPlaybackBaselineWithWpfFallback()
+    public void WindowsLoader_LoadsOnlyAbsoluteApprovedPaths_InDependencyOrder()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows Avalonia playback-baseline diagnostic.");
-        // Detached settings avoid process-global engine/UI initialization; the real loader still runs.
-        using TesseractOCRService service = new(new Config.SubtitlesConfig(), () => TesseractNative.Shared, () => null);
+        string root = Path.Combine(Path.GetTempPath(), "llp-native-root");
+        List<string> loaded = [];
+        var handles = TesseractNative.LoadWindowsLibraries(root, path => { loaded.Add(path); return loaded.Count; },
+            _ => throw new InvalidOperationException("Successful load must remain resident"));
+        loaded.Should().Equal(Path.Combine(root, "runtimes", "win-x64", "leptonica-1.85.0.dll"),
+            Path.Combine(root, "runtimes", "win-x64", "tesseract55.dll"));
+        handles.Dependency.Should().Be((nint)1);
+        handles.Library.Should().Be((nint)2);
+    }
 
-        service.TryInitialize(Language.English, out string error).Should().BeFalse();
+    [Fact]
+    public void WindowsLoader_ReleasesDependency_WhenEngineLoadFails()
+    {
+        List<nint> freed = [];
+        int calls = 0;
+        Assert.Throws<DllNotFoundException>(() => TesseractNative.LoadWindowsLibraries(Path.GetTempPath(),
+            _ => ++calls == 1 ? (nint)7 : throw new DllNotFoundException("fixture"), freed.Add));
+        freed.Should().Equal((nint)7);
+    }
 
-        error.Should().Contain("Windows Avalonia").And.Contain("not supported")
-            .And.Contain("playback baseline").And.Contain("WPF");
-        error.Should().NotContain("libtesseract.so").And.NotContain("Ubuntu");
+    [Fact]
+    public void Construction_DoesNotLoadNativeLibraries()
+    {
+        bool loaded = false;
+        using TesseractOCRService service = new(new Config.SubtitlesConfig(),
+            () => { loaded = true; throw new InvalidOperationException("No eager native activation"); }, () => null);
+        loaded.Should().BeFalse();
     }
 
     [Fact]
@@ -29,7 +47,7 @@ public class PortableOcrPlatformTests
 
         error.Should().Contain("fixture native failure");
         if (OperatingSystem.IsWindows())
-            error.Should().Contain("WPF").And.NotContain("libtesseract.so").And.NotContain("Ubuntu");
+            error.Should().Contain("Windows x64 Tesseract").And.Contain("Redistributable").And.NotContain("libtesseract.so");
         else
             error.Should().Contain("Check/install system Tesseract 5 (libtesseract.so.5)");
     }
