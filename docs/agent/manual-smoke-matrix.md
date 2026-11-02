@@ -2,6 +2,84 @@
 
 Automated tests do not cover every LLPlayer behavior. Use these manual checks when touching related areas.
 
+## Settings, Subtitles/words and Playlists/online video — owner-deferred native checks, 2026-11-02
+
+These checks cover the single coordinated [approved delivery](plans/2026-11-02-f13-settings-subtitles-online.md).
+All native Windows/Linux UI, real provider/helper/PDIC, physical audio/input and DPI scenarios below are
+**NOT_RUN / DEFERRED BY OWNER** until separately authorized. Use an isolated profile and record the installed
+source/payload identity. Automated/publish/PR/Desktop/Vault results require their own actual receipts; none is
+declared by this checklist. Preserve earlier dated observations below as historical evidence.
+
+- Open Settings → Player → Playback settings. Check every Audio/software Video/Player/Subtitles/Startup editor
+  against the plan mapping, legal boundaries and invalid raw text. Close/Escape discards; Save applies after durable
+  persistence; an unwritable playback/prefs file preserves live state and the retry draft. Exercise the secondary
+  remembered-volume write failure and compensating rollback without overwriting a different concurrent file.
+- With old/absent files, confirm remembered volume `100`, max `150`, buffer `500/30000` ms, frames `5/4`, timeouts
+  `300000/10000/20000/8000` ms and previous defaults. While the editor is open, change transport volume/mute and
+  subtitle sync/viewport from other controls. Unedited fields keep fresh state; a changed Default Volume updates
+  current/remembered volume after Save. A lower maximum clamps safely; unrelated Save must not set volume to `75`.
+- Exercise Audio enable, filters, delay and ordered languages, then default/explicit output selection and refresh.
+  Unplug the selected USB/Bluetooth device while playing: effective output should fall back to default or the
+  temporary silent clock, and recover on the two-second serialized refresh without replaying lost PCM. Reconnect:
+  return to the remembered target. Change the OS default; test failed enumeration/open and AL operational errors.
+  Audio Off stays off; forced Null stays silent. Pause/seek/close during recovery must remain bounded. Record audible
+  continuity and A/V timing as physical observations, not inferred unit-test success.
+- Change aspect/custom ratio, software deinterlace/double-rate, decoder threads, zoom unit, latency, HDR method/nits
+  and all four colour filters/reset. Exercise session zoom/pan/rotation/flips/crop. Check delayed/paused rendering,
+  default reset and current-media guards. Hardware acceleration/D3D/profile mismatch/super resolution/VSync remain
+  honestly unavailable/ineffective on the software backend; selecting a stored field must not claim GPU rendering.
+- Change buffers/frame/resolution/timeouts/accurate seek and validate buffer/latency constraints. Edit log output,
+  levels/cache and FFmpeg profile: changes are labelled next-start and do not restart the engine. Restart within an
+  authorized smoke, check effective values and `LLPLAYER_LOG_LEVEL` precedence. Main-profile filter limitations are
+  visible; saved filter intent survives a profile that cannot load filters.
+- Exercise subtitle enable/local search/paths/cache/automatic captions, ordered languages, auto-detect and shared
+  primary/secondary fallback. Recognition shows the hosted fallback read-only and points to Playback settings;
+  stale Recognition Save must not undo new values. Test all eleven cue-generation policy/limit editors without
+  starting a model merely to save them. Both numeric subtitle delays stay session-only and reject stale-source edits.
+  Change BOM default, then verify later SRT/VTT/TXT export and manual provider save; an open export keeps its snapshot.
+- With cached bitmap subtitles in each selected sidebar slot, scroll/current-highlight/seek and spoiler masking
+  work without OCR or hidden-image leaks. Change track, media, slot and same-URL media while images load: no stale
+  thumbnail, disposed resource or unbounded retained image should publish. Preserve existing overlay bitmap layout.
+- Middle-click a rendered primary/secondary text cue: one sentence lookup uses the full displayed text and correct
+  translated/source language. Left word/drag/right menu/popup/toolbar actions remain independent. For Japanese and
+  Chinese overlays test repeated words, whitespace, punctuation, mixed Latin/CJK, supplementary Han and exact word
+  offsets; Japanese uses the packaged managed dictionary. Preserve mask/original/display selection provenance.
+- Open Download subtitles: no request occurs before explicit Search. Enter session API key/account, search/title/
+  language and page; verify preferred-language order and filename/format/year/downloads/rating/release. Duration
+  explicitly reads Unavailable. Change media/title: query refreshes and results cancel/retire without auto-search.
+  Verify rejected credentials/quota/rate limits, malformed responses, cancellation and retry without secrets in logs.
+- Use Load in Primary and verify downloaded-language/source metadata, `ManualDownloaded`, subtitle seek and primary
+  assignment while the secondary slot remains intact. Cancel/change media/same-URL reopen across HTTP/temp waits:
+  stale results cannot load. Adopted temp files remain available after dialog close and are removed only after
+  full player shutdown; failed/unused files are cleaned by exact ownership. Text save uses the explicit picker/BOM
+  and overwrite confirmation; cancelling the picker consumes no download. Bitmap/archive downloads are explicitly
+  unsupported by this REST adaptation. Closing clears credentials and drains pending requests.
+- On Windows, configure PDIC by manual path/Browse/explicit Auto Set; startup and opening settings must not probe or
+  start the bridge. Select PDIC for a single Japanese word: repeated overlay/sidebar actions share one app process,
+  receive the unchanged sentence and exact one-based UTF-16 offset, and retain word/popup routing. Invalid offsets,
+  missing/dead executable, stalled writes and changed paths fail recoverably. Popup close keeps the singleton;
+  full app shutdown sends Close where possible and removes its owned process. On Linux, verify the explicit
+  unavailable state without process execution or dictionary substitution.
+- Open a safe configured online single video and playlist/multi-video fixture. Check title, actual/expected counts,
+  selected mark, choose/reopen and no-wrap previous/next in the dialog/menus/transport. Unavailable entries are
+  reported honestly. Exercise cancellation/replacement/close, removed/foreign items and repeated identical URLs;
+  old item tokens/results cannot mutate new media. Verify formats/languages/headers/chapters/automatic VTT captions.
+- Edit shared plugin height/prefer-combined/extra-argument options in both entry points. Validate quoted allowed
+  extraction/network/authentication options and bounded closed playlist ranges; reject config/plugin/runtime/output/
+  file-producing switches without starting a helper. Direct local/HTTP playback and Ctrl+V still work with tools unset.
+  No yt-dlp/Deno install/update/PATH probe is introduced. Provider/network credentials used for this smoke must stay
+  outside logs/receipts/packages. This acceptance does not guarantee DRM or newly authored-caption support.
+- Use title Open next/prev on files numbered `1`, `2`, `10` with mixed-case matching extensions and a different
+  extension nearby: natural same-extension order, no wrap. Copy uses the selected file/page rather than a collection
+  URL or signed CDN URL. Open path reveals an existing local path or opens the selected safe credential-free HTTP(S)
+  page in the browser. A changed source during adapter waits cannot retarget the click. Missing local, relative,
+  malformed, credential-bearing and other-scheme destinations report a contextual error; unavailable/failing browser
+  or file-manager adapters remain recoverable. No folder scan occurs merely by starting the app or opening the menu.
+- Inspect both platform packages for `LibNMeCab.dll`, `LibNMeCab.IpaDicBin.dll`, all six IpaDic data/legal assets and
+  notices. Reject user Playback/PDIC/OnlineVideo/preferences/temp files, external helper executables/archives/caches
+  and unrelated native/model files; retain required app deps/runtimeconfig. Package checks do not replace the native
+  dictionary/audio/provider/GUI cases above.
+
 ## Player UI, Mouse and Always On Top — owner-deferred native checks, 2026-11-02
 
 All scenarios below are **NOT_RUN / DEFERRED BY OWNER** on native Windows and Linux. Execute only within separately
@@ -62,7 +140,7 @@ They do not mark any scenario below executed or authorize native/Desktop accepta
 - With text in one slot and a bitmap in the other, sync the text row while the last track-picker action selected the opposite slot. Confirm the opposite bitmap remains visible and its delay is untouched. Separately exercise selected bitmap timing in paused/playing states under the existing clear/resync path. This block adds no bitmap sidebar renderer or selected-bitmap restoration; deterministic opposite-bitmap identity checks do not accept encoded native bitmap timing.
 - Click/keyboard-activate the row Sync button and confirm it does not also seek/toggle playback. Press Sync with pointer or Space, then rebind/recycle its row before release: even if the new row is live, no sync may transfer to it. While holding the press, issue a rejected automation Click and then release; rejection must not drop the original owner and authorize the rebound row. Cancel by releasing the pointer outside the button, then confirm a fresh legitimate activation works. Hold Enter through OS repeat/rebind and verify no command transfers; the next fresh matching key still works. Tap the timestamp to verify the normal selected-slot seek includes its delay/fractional rounding. Word click/phrase drag/right-click retains the selected row's slot/languages/display text; masked rows never send hidden text or underscores to lookup/library. Retire or recycle a row between pointer press and release; it must not pause, seek or look up a newer row. Check dark/light themes, 220 DIP sidebar width, focus traversal and idle auto-scroll; hovering the list continues to suppress automatic scrolling.
 
-Existing WPF checks below retain their scope. Middle-click/CJK/PDIC/export expansion is excluded from this additive
+Existing WPF checks below retain their scope. Middle-click/CJK/PDIC/export expansion was excluded from this dated additive
 Avalonia stage; [plan and current evidence](plans/2026-11-01-f13-sidebar-sync.md) retain its full delivery boundaries.
 
 - Toggle sidebar, move it left/right, resize it.
@@ -530,9 +608,9 @@ null audio). These checks cover what the headless suite cannot.
   F-13 engine slice package SHA-256 (`LLPlayer-0.3.62-linux-x64.tar.gz`, 2026-10-02):
   hash: `artifacts/f13-asr-2026-10-02/package.sha256`; see the evidence bundle for native-load and positive/negative
   content checks.
-- **Audio hot-plug (owner, known gap):** unplug the USB/Bluetooth output during playback. Today audio stays silent
-  until the file is reopened (the app does not call `AudioEngine.RefreshDevices()`; backlog F-13 parity item 14);
-  record the result until that item lands.
+- **Audio hot-plug:** the reopen-only gap described by this older Linux checkpoint is superseded in source by the
+  two-second serialized recovery policy above. Execute the current device-removal/return/default-change cases only
+  under native owner authorization; physical audible recovery remains **NOT_RUN / DEFERRED BY OWNER**.
 
 ## Remaining settings/hotkeys — owner-deferred native checks (2026-11-01)
 
@@ -573,7 +651,9 @@ These are acceptance requirements, **NOT_RUN / DEFERRED BY OWNER** until separat
 - With paths unset/invalid, open a local clip, direct HTTP media and an extensionless direct-media URL through their ordinary routes. Safe Ctrl+V must retain its existing replacement guard. Explicit Open online URL reports missing dependencies without breaking subsequent direct opens.
 - Open a supported public online URL through the explicit command; verify actual video and audio, seeking where the source permits, current VTT automatic captions in both slots, chapters and required request headers. Do not infer provider support from `--version` or fixture success.
 - Cancel a stalled extraction before and after metadata arrives; replace with a different URL, repeat the identical URL, open a local file, close the dialog and shut down. Waits stay bounded, only current results/messages publish, and owned process trees/temp state are released. Confirm nonzero exit/bad metadata/permission errors permit recovery.
-- On native Linux repeat executable-permission failure and recovery. No downloader, cookie/authentication, format editor, broader caption or playlist/DRM acceptance is implied.
+- On native Linux repeat executable-permission failure and recovery. This initial single-video checklist did not
+  accept playlists or helper arguments; the current coordinated checklist above adds them with bounded options.
+  No helper installer/downloader, broader authored-caption support or DRM acceptance is implied.
 - Automated package checks separately require the portable managed plugin DLL/PDB at exact-cased `Plugins/YoutubeDL`, verify archive integrity/loadability, and reject helper executables and user runtime state. These checks do not substitute for the native cases above.
 
 ## Dated bounded Windows candidate receipt — 2026-10-26

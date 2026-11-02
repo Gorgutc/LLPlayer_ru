@@ -64,6 +64,7 @@ public partial class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISugg
 #else
             { OnlineVideoRequest.YtDlpPath, "" },
             { OnlineVideoRequest.DenoPath, "" },
+            { "ExtraArguments", "" },
 #endif
             { "MaxVideoHeight", "720" },
             { "PreferVideoWithAudio", "False" },

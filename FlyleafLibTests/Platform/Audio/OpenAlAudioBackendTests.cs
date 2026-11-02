@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using AwesomeAssertions;
 
 namespace FlyleafLib.Platform.Audio;
@@ -127,7 +127,9 @@ public class OpenAlAudioBackendTests
 
         var backend = AudioBackendFactory.Create(null, () => Loaded(al), log.Add);
 
-        backend.Should().BeSameAs(NullAudioBackend.Instance);
+        backend.Name.Should().Be("Null");
+        using var sink = backend.CreateSink(null, 48000, 2);
+        sink.Should().BeOfType<NullAudioSink>();
         log.Should().ContainSingle().Which.Should().Contain("Null").And.Contain("default device cannot be opened");
     }
 

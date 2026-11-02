@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace FlyleafLib.Platform.Audio;
 
@@ -89,6 +89,9 @@ internal sealed class FakeOpenAl : IOpenAl
     public bool                 FailOpenDevice { get; set; }
     public bool                 FailCreateContext { get; set; }
     public bool                 FailSetContext { get; set; }
+    public bool                 FailClockRead { get; set; }
+    public bool                 FailLatencyRead { get; set; }
+    public bool                 FailGainUpdate { get; set; }
     public long                 SourceLatencyNs { get; set; } = 20_000_000;
     public long                 DeviceLatencyNs { get; set; } = -1;
     public Action?              BeforeQueueBuffer { get; set; }
@@ -484,6 +487,8 @@ internal sealed class FakeOpenAl : IOpenAl
             var s = Src(source);
             if (s.Deleted)
                 return 0;
+            if (FailClockRead && param == Al.SAMPLE_OFFSET)
+                { s.Context.Error = AL_INVALID_OPERATION; return 0; }
 
             return param switch
             {
@@ -500,7 +505,9 @@ internal sealed class FakeOpenAl : IOpenAl
     {
         lock (locker)
         {
-            Src(source);
+            var s = Src(source);
+            if (FailLatencyRead)
+                { s.Context.Error = AL_INVALID_OPERATION; latencyNs = 0; return true; }
             latencyNs = SourceLatencyNs;
             return AlExtensions.Contains("AL_SOFT_source_latency");
         }
@@ -567,6 +574,8 @@ internal sealed class FakeOpenAl : IOpenAl
         lock (locker)
         {
             var s = Src(source);
+            if (FailGainUpdate && param == Al.GAIN)
+                { s.Context.Error = AL_INVALID_OPERATION; return; }
             if (!s.Deleted)
                 s.Floats[param] = value;
         }

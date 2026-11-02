@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FlyleafLib;
 using FlyleafLib.Plugins;
 
@@ -9,12 +9,27 @@ public sealed class OnlineVideoSettings
 {
     public string YtDlpPath { get; set; } = "";
     public string DenoPath { get; set; } = "";
-    public OnlineVideoSettings Clone() => new() { YtDlpPath = YtDlpPath, DenoPath = DenoPath };
+    public string ExtraArguments { get; set; } = "";
+    public int MaxVideoHeight { get; set; } = 720;
+    public bool PreferVideoWithAudio { get; set; }
+    public OnlineVideoSettings Clone() => new()
+    {
+        YtDlpPath = YtDlpPath, DenoPath = DenoPath, ExtraArguments = ExtraArguments,
+        MaxVideoHeight = MaxVideoHeight, PreferVideoWithAudio = PreferVideoWithAudio
+    };
 
     public void Validate()
     {
         ValidatePath(YtDlpPath, "yt-dlp");
         ValidatePath(DenoPath, "Deno");
+        ValidateOptions();
+    }
+
+    public void ValidateOptions()
+    {
+        if (MaxVideoHeight is < 0 or > 32768)
+            throw new ArgumentException("Maximum video height must be between 0 (engine limit) and 32768 pixels.");
+        OnlineVideoArguments.Parse(ExtraArguments);
     }
 
     static void ValidatePath(string? path, string name)
@@ -36,6 +51,9 @@ public sealed class OnlineVideoSettings
         {
             options[OnlineVideoRequest.YtDlpPath] = YtDlpPath;
             options[OnlineVideoRequest.DenoPath] = DenoPath;
+            options["ExtraArguments"] = ExtraArguments;
+            options["MaxVideoHeight"] = MaxVideoHeight.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            options["PreferVideoWithAudio"] = PreferVideoWithAudio.ToString();
         }
     }
 }
@@ -55,6 +73,7 @@ public sealed class OnlineVideoSettingsStore(string path)
             // editable; admission revalidates the executable immediately before an explicit online request.
             var settings = JsonSerializer.Deserialize<OnlineVideoSettings>(File.ReadAllText(path)) ?? throw new JsonException();
             if (settings.YtDlpPath == null || settings.DenoPath == null) throw new JsonException();
+            settings.ValidateOptions();
             return settings;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)

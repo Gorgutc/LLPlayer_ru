@@ -56,11 +56,16 @@
                     HorizontalAlignment="Left" Command="{Binding ResetAdvancedCommand}" />
           </StackPanel>
         </Expander>
-        <TextBlock Text="OCR fallback for unknown primary language" />
-        <TextBox Text="{Binding Draft.OcrPrimaryLanguage}" />
-        <CheckBox Content="Secondary OCR uses primary fallback" IsChecked="{Binding Draft.OcrSecondarySame}" />
-        <TextBlock Text="OCR fallback for unknown secondary language" />
-        <TextBox Text="{Binding Draft.OcrSecondaryLanguage}" />
+        <TextBlock Name="RecognitionFallbackManagedNote" IsVisible="{Binding !CanEditFallbackLanguages}"
+                   Text="Fallback languages are shared with subtitle playback. Edit them in Settings → Player → Playback settings → Subtitles."
+                   TextWrapping="Wrap" Classes="small muted" />
+        <StackPanel Name="RecognitionFallbackGroup" IsEnabled="{Binding CanEditFallbackLanguages}" Spacing="8">
+          <TextBlock Text="OCR fallback for unknown primary language" />
+          <TextBox Name="OcrPrimaryFallbackEditor" Text="{Binding Draft.OcrPrimaryLanguage}" />
+          <CheckBox Content="Secondary OCR uses primary fallback" IsChecked="{Binding Draft.OcrSecondarySame}" />
+          <TextBlock Text="OCR fallback for unknown secondary language" />
+          <TextBox Name="OcrSecondaryFallbackEditor" Text="{Binding Draft.OcrSecondaryLanguage}" />
+        </StackPanel>
         </StackPanel>
       </StackPanel>
     </ScrollViewer>

@@ -65,7 +65,10 @@
             BorderBrush="{DynamicResource Shadcn.BorderBrush}" BorderThickness="0,0,0,1" Padding="4,2">
       <Grid ColumnDefinitions="Auto,*,Auto,Auto">
         <Menu Name="MainMenu">
-          <MenuItem Header="Words"><MenuItem Header="Word Manager…" Command="{Binding ShowWordManagerCommand}" /></MenuItem>
+          <MenuItem Header="Words">
+            <MenuItem Header="Word Manager…" Command="{Binding ShowWordManagerCommand}" />
+            <MenuItem Header="PDIC settings…" Command="{Binding ShowPdicSettingsCommand}" />
+          </MenuItem>
           <MenuItem Header="Translation">
             <MenuItem Header="Translate primary subtitles" ToggleType="CheckBox" IsChecked="{Binding PrimaryTranslationEnabled, Mode=OneWay}" Command="{Binding TogglePrimaryTranslationCommand}" />
             <MenuItem Header="Translate secondary subtitles" ToggleType="CheckBox" IsChecked="{Binding SecondaryTranslationEnabled, Mode=OneWay}" Command="{Binding ToggleSecondaryTranslationCommand}" />
@@ -84,6 +87,8 @@
       </MenuItem>
       <MenuItem Header="_Media">
             <MenuItem Header="Open online URL…" Command="{Binding ShowOnlineVideoCommand}" />
+            <MenuItem Header="Playlist…" Command="{Binding ShowPlaylistCommand}" />
+            <MenuItem Header="yt-dlp preferences…" Command="{Binding ShowPluginOptionsCommand}" />
             <MenuItem Header="_Open media…" InputGesture="Ctrl+O" Command="{Binding OpenMediaCommand}">
               <MenuItem.Icon><c:LucideIcon Data="{StaticResource Icon.FolderOpen}" /></MenuItem.Icon>
             </MenuItem>
@@ -107,6 +112,8 @@
 
           <MenuItem Name="PlaybackMenu" Header="_Playback">
             <MenuItem Header="Play / Pause" InputGesture="Space" Command="{Binding TogglePlayPauseCommand}" />
+            <MenuItem Header="Previous playlist item" Command="{Binding Playlist.PreviousCommand}" IsVisible="{Binding Playlist.HasPrevious}" />
+            <MenuItem Header="Next playlist item" Command="{Binding Playlist.NextCommand}" IsVisible="{Binding Playlist.HasNext}" />
             <MenuItem Header="Mute" InputGesture="M" Command="{Binding ToggleMuteCommand}"
                       ToggleType="CheckBox" IsChecked="{Binding IsMuted, Mode=OneWay}" />
             <MenuItem Header="Speed" ItemsSource="{Binding SpeedItems}">
@@ -172,6 +179,7 @@
               </MenuItem.Styles>
             </MenuItem>
             <MenuItem Header="Open subtitles file…" InputGesture="Ctrl+Shift+O" Command="{Binding OpenSubtitlesCommand}" />
+            <MenuItem Header="Download subtitles…" Command="{Binding ShowSubtitleDownloadCommand}" />
             <MenuItem Header="Export subtitles…" Command="{Binding ShowSubtitlesExportCommand}" />
             <Separator />
             <MenuItem Header="Show subtitles" InputGesture="V" Command="{Binding ToggleSubtitlesCommand}"
@@ -185,6 +193,7 @@
 
           <MenuItem Header="_View">
             <MenuItem Name="SettingsMenu" Header="Settings…" Command="{Binding ShowSettingsCommand}" />
+            <MenuItem Header="Playback settings…" Command="{Binding ShowPlaybackSettingsCommand}" />
             <MenuItem Header="Subtitles sidebar" InputGesture="Ctrl+B" Command="{Binding ToggleSidebarCommand}"
                       ToggleType="CheckBox" IsChecked="{Binding SidebarVisible, Mode=OneWay}" />
             <MenuItem Header="Search subtitles" InputGesture="Ctrl+F" Command="{Binding ActivateSubsSearchCommand}" />
@@ -203,8 +212,20 @@
           </MenuItem>
         </Menu>
 
-        <TextBlock Grid.Column="1" Text="{Binding MediaTitle}" Classes="muted xs" HorizontalAlignment="Stretch"
-                   VerticalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Margin="12,0" />
+        <Button Name="MediaTitleButton" Grid.Column="1" Classes="ghost" Command="{Binding OpenMediaCommand}"
+                HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Center"
+                Margin="12,0" Padding="0" ToolTip.Tip="Open media" AutomationProperties.Name="Open media">
+          <TextBlock Text="{Binding MediaTitle}" Classes="muted xs" VerticalAlignment="Center"
+                     TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+          <Button.ContextMenu>
+            <ContextMenu>
+              <MenuItem Header="Open previous local file" Command="{Binding OpenPreviousLocalMediaCommand}" />
+              <MenuItem Header="Open next local file" Command="{Binding OpenNextLocalMediaCommand}" />
+              <MenuItem Header="Open media location" Command="{Binding OpenMediaLocationCommand}" />
+              <MenuItem Header="Copy media path" Command="{Binding CopyMediaPathCommand}" />
+            </ContextMenu>
+          </Button.ContextMenu>
+        </Button>
 
         <Button Name="SettingsButton" Grid.Column="2" Classes="ghost icon-sm" Command="{Binding ShowSettingsCommand}" ToolTip.Tip="Settings" AutomationProperties.Name="Settings">
           <c:LucideIcon>
@@ -297,14 +318,14 @@
 
           <!-- dual subtitle overlay: secondary above primary; the separator supplies the primary/secondary gap when dual -->
           <StackPanel Name="SubtitleOverlay" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,24">
-            <c:SubtitleText Name="SecondarySubtitle" IsTranslated="{Binding SecondaryTextTranslated}" Slot="1" Text="{Binding SecondaryText}" IsVisible="{Binding SecondaryVisible}"
+            <c:SubtitleText Name="SecondarySubtitle" EnableLanguageSegmentation="True" SourceLanguage="{Binding SecondarySourceLanguage}" TargetLanguage="{Binding SubtitleTargetLanguage}" IsTranslated="{Binding SecondaryTextTranslated}" Slot="1" Text="{Binding SecondaryText}" IsVisible="{Binding SecondaryVisible}"
                             SelectionBrush="{DynamicResource Shadcn.RingBrush}"
                             TextAlignment="{Binding SubtitleTextAlignment}" IgnoreLineBreaks="{Binding SubtitleIgnoreLineBreak}"
                             FontSize="{Binding SecondaryFontSize}" FontFamily="{Binding SecondarySubtitleFontFamily}" FontWeight="{Binding SecondarySubtitleFontWeight}" FontStyle="{Binding SecondarySubtitleFontStyle}" Fill="{Binding SecondarySubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SecondarySubtitleOutlineThickness}" Background="{Binding SecondarySubtitleBackgroundBrush}" />
             <Border Name="SubtitleSeparator" IsVisible="{Binding SecondaryVisible}" Height="{Binding SubtitlePrimarySecondaryDistance}"
                     MaxWidth="{Binding SubtitleSeparatorMaxWidth}" Opacity="{Binding SubtitleSeparatorOpacity}"
                     Background="White" IsHitTestVisible="False" />
-            <c:SubtitleText Name="PrimarySubtitle" IsTranslated="{Binding PrimaryTextTranslated}" Slot="0" Text="{Binding PrimaryText}" IsVisible="{Binding PrimaryVisible}"
+            <c:SubtitleText Name="PrimarySubtitle" EnableLanguageSegmentation="True" SourceLanguage="{Binding PrimarySourceLanguage}" TargetLanguage="{Binding SubtitleTargetLanguage}" IsTranslated="{Binding PrimaryTextTranslated}" Slot="0" Text="{Binding PrimaryText}" IsVisible="{Binding PrimaryVisible}"
                             SelectionBrush="{DynamicResource Shadcn.RingBrush}"
                             TextAlignment="{Binding SubtitleTextAlignment}" IgnoreLineBreaks="{Binding SubtitleIgnoreLineBreak}"
                             FontSize="{Binding SubtitleFontSize}" FontFamily="{Binding SubtitleFontFamily}" FontWeight="{Binding SubtitleFontWeight}" FontStyle="{Binding SubtitleFontStyle}" Fill="{Binding SubtitleTextBrush}" Outline="{Binding SubtitleOutlineBrush}" OutlineThickness="{Binding SubtitleOutlineThickness}" Background="{Binding SubtitleBackgroundBrush}" />
@@ -441,13 +462,23 @@
                                BandBrush="{DynamicResource Shadcn.PrimaryBrush}" />
             </Panel>
             <v:TransportPanel>
-              <Button Name="PlayPauseButton" Classes="ghost icon" Command="{Binding TogglePlayPauseCommand}"
-                      IsEnabled="{Binding IsOpened}" ToolTip.Tip="Play / Pause (Space)">
-                <Panel>
-                  <c:LucideIcon Data="{StaticResource Icon.Play}" Size="18" Fill="True" IsVisible="{Binding !IsPlaying}" />
-                  <c:LucideIcon Data="{StaticResource Icon.Pause}" Size="18" Fill="True" IsVisible="{Binding IsPlaying}" />
-                </Panel>
-              </Button>
+              <StackPanel Orientation="Horizontal">
+                <Button Name="PreviousPlaylistButton" Classes="ghost icon" Command="{Binding Playlist.PreviousCommand}"
+                        IsVisible="{Binding Playlist.HasPrevious}" ToolTip.Tip="Previous playlist item" AutomationProperties.Name="Previous playlist item">
+                  <c:LucideIcon Data="M5,5 L5,19 M19,5 L9,12 L19,19 Z" Size="18" />
+                </Button>
+                <Button Name="PlayPauseButton" Classes="ghost icon" Command="{Binding TogglePlayPauseCommand}"
+                        IsEnabled="{Binding IsOpened}" ToolTip.Tip="Play / Pause (Space)">
+                  <Panel>
+                    <c:LucideIcon Data="{StaticResource Icon.Play}" Size="18" Fill="True" IsVisible="{Binding !IsPlaying}" />
+                    <c:LucideIcon Data="{StaticResource Icon.Pause}" Size="18" Fill="True" IsVisible="{Binding IsPlaying}" />
+                  </Panel>
+                </Button>
+                <Button Name="NextPlaylistButton" Classes="ghost icon" Command="{Binding Playlist.NextCommand}"
+                        IsVisible="{Binding Playlist.HasNext}" ToolTip.Tip="Next playlist item" AutomationProperties.Name="Next playlist item">
+                  <c:LucideIcon Data="M19,5 L19,19 M5,5 L15,12 L5,19 Z" Size="18" />
+                </Button>
+              </StackPanel>
               <Button Classes="ghost icon" Command="{Binding OpenMediaCommand}" ToolTip.Tip="Open media (Ctrl+O)">
                 <c:LucideIcon Data="{StaticResource Icon.FolderOpen}" Size="18" />
               </Button>
@@ -576,10 +607,11 @@
                   <Border Classes="cue" Classes.current="{Binding IsCurrent}" Padding="{Binding RowPadding}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                       <TextBlock Text="{Binding StartText}" Classes="muted xs mono" Margin="0,2,10,0" VerticalAlignment="Top" />
-                      <c:SubtitleText Name="SidebarCueText" Grid.Column="1" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="{Binding Slot}"
+                      <c:SubtitleText Name="SidebarCueText" Grid.Column="1" IsVisible="{Binding ShowText}" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="{Binding Slot}"
                                       SelectionBrush="{DynamicResource Shadcn.RingBrush}"
                                       FontFamily="{Binding RowFontFamily}" FontWeight="{Binding RowFontWeight}" FontSize="{Binding RowFontSize}"
                                       OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordPressed="OnWordPressed" WordClicked="OnWordClicked" />
+                      <c:BitmapCuePreview Grid.Column="1" Row="{Binding}" Player="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Player}" IsVisible="{Binding ShowBitmap}" />
                       <Button Name="CueSyncButton" Grid.Column="2" Classes="ghost icon" Width="26" Height="26" MinWidth="0" Padding="0" Margin="4,0,0,0" VerticalAlignment="Top"
                               Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Sidebar.SyncCommand}" CommandParameter="{Binding}"
                               Click="OnCueSyncClicked" ToolTip.Tip="Adjust subtitle track delay to current time"

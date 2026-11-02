@@ -149,6 +149,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         AddHandler(KeyUpEvent, OnKeyUpTunnel, RoutingStrategies.Tunnel);
         Deactivated += (_, _) =>
         {
+            ClearCommandButtonKeys();
             cueSyncPointerPress = cueSyncKeyboardPress = null;
             transportRevealPress = null;
             transportRevealSequence = false;
@@ -328,6 +329,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             RoutingStrategies.Tunnel, handledEventsToo: true);
         window.AddHandler(KeyUpEvent, (_, e) =>
         {
+            TryHandleCommandButtonKeyUp(e, fromOwnedChild: true);
+        }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        window.AddHandler(KeyUpEvent, (_, e) =>
+        {
             if (vm?.HandleTrackedKeyUp(KeyMapper.ToWpf(e.Key)) == true) e.Handled = true;
         }, RoutingStrategies.Bubble, handledEventsToo: true);
     }
@@ -380,6 +385,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     {
         base.OnClosing(e);
         if (e.Cancel || shutdownComplete) return;
+        ClearCommandButtonKeys();
         vm?.BeginWordActionsShutdown();
         vm?.CancelAppShortcuts();
         if (ShutdownRequested == null) { vm?.SavePrefs(); return; }
@@ -394,6 +400,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             if (translationWindow?.DataContext is TranslationViewModel translation)
                 await translation.DrainDiagnosticsAsync();
             if (vm != null) await vm.DrainBrowserOperationsAsync();
+            await DrainParityWindowsAsync();
             await ShutdownRequested!();
         }
         finally { shutdownComplete = true; Close(); }
@@ -412,6 +419,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         onlineVideoWindow?.Close();
         recognitionWindow?.Close();
         subtitlesExportWindow?.Close();
+        CloseParityWindows();
         ReleaseSleepInhibition();
         Video.Renderer = null;
         base.OnClosed(e);
@@ -695,7 +703,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         WordSelectionSnapshot selection = new(e.Word, e.Text, e.Slot, e.IsWord, e.IsTranslated,
             e.SourceLanguage, e.TargetLanguage,
             sidebar ? WordSelectionOrigin.Sidebar : WordSelectionOrigin.Overlay,
-            e.Button, e.Modifiers);
+            e.Button, e.Modifiers, e.WordOffset);
         if (e.Button == MouseButton.Right) ShowWordMenu(text, vm.CreateWordMenu(selection));
         else vm.OnWordClicked(selection, p.X, p.Y);
     }
@@ -873,6 +881,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         if (vm == null)
             return;
         vm.NotifyKeyboardActivity();
+        if (TryHandleCommandButtonKeyDown(e)) return;
 
         if (e.Key is Key.Space or Key.Enter && FocusManager?.GetFocusedElement() is Button { Name: "CueSyncButton" } sync)
         {
@@ -915,6 +924,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     void OnKeyUpTunnel(object? sender, KeyEventArgs e)
     {
         keys.Update(e.KeyModifiers);
+        if (TryHandleCommandButtonKeyUp(e)) return;
         if (searchKeysAwaitingRelease.Remove(e.Key))
         {
             vm?.HandleTrackedKeyUp(KeyMapper.ToWpf(e.Key));

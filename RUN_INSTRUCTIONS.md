@@ -17,11 +17,15 @@ util-linux must also be available and the chosen executables must have execute p
 Use the standalone Windows `yt-dlp.exe` or Linux `yt-dlp_linux` build with EJS support and a supported Deno
 runtime; the upstream file named `yt-dlp` is a Python-dependent alternative. See
 [upstream requirements](https://github.com/yt-dlp/yt-dlp#dependencies) and the
-[EJS guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS). This slice does not bundle those dependencies or add
-authentication/cookies, arbitrary helper arguments, format editing or general downloading.
+[EJS guide](https://github.com/yt-dlp/yt-dlp/wiki/EJS). These dependencies remain external. Use **Media → yt-dlp
+preferences…** (also Settings → Tools) to edit maximum video height, prefer combined audio/video and allowlisted
+extraction/network/authentication arguments, including existing cookie files. Side-effect flags, arbitrary commands,
+tool/plugin/config loading and general downloading are rejected. Arguments containing credentials stay local.
 
-The explicit command extracts one online item using the existing automatic audio/video and VTT auto-caption
-policy. Ordinary local files, direct media URLs and safe Ctrl+V keep their existing routes without the tools.
+The explicit command extracts single videos or bounded playlists/multi-video entries using the existing automatic
+audio/video and VTT auto-caption policy. **Media → Playlist…** shows title, playable/expected counts, current item,
+selection, previous/next and reopen. Unavailable/unselected entries are reported; oversized results fail explicitly.
+Ordinary local files, direct media URLs and safe Ctrl+V keep their existing routes without the tools.
 Cancel interrupts an opening request; replacement and shutdown also clean up its owned processes. Native/live
 provider playback acceptance is separately deferred by the owner; automated gates do not establish it.
 

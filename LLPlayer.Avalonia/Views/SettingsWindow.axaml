@@ -24,6 +24,7 @@
       <ScrollViewer Name="SettingsScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="18">
           <StackPanel Name="PlayerPage" IsVisible="{Binding PlayerSelected}" Spacing="14">
+            <Button Name="PlaybackSettingsLink" Content="Playback settings…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Playback}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Player UI" Classes="dialog-title" />
             <TextBlock Text="Idle timeout (0–600000 ms; 0 applies no idle wait)" TextWrapping="Wrap" />
             <TextBox Name="ActivityTimeoutMsEditor" Text="{Binding ActivityTimeoutMsText, Mode=TwoWay}"
@@ -257,6 +258,8 @@
             <Button Name="TranslationLink" Content="Translation settings…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Translation}" HorizontalAlignment="Stretch" />
             <Button Name="RecognitionLink" Content="Recognition (ASR / OCR)…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Recognition}" HorizontalAlignment="Stretch" />
             <Button Name="OnlineVideoLink" Content="Online video and external tools…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.OnlineVideo}" HorizontalAlignment="Stretch" />
+            <Button Name="PluginOptionsLink" Content="yt-dlp preferences…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.PluginOptions}" HorizontalAlignment="Stretch" />
+            <Button Name="PdicLink" Content="PDIC settings…" Classes="outline" Command="{Binding OpenToolCommand}" CommandParameter="{x:Static vm:SettingsLink.Pdic}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Word" FontWeight="SemiBold" />
             <TextBlock Text="Word click action (dictionary definition is edited in Translation settings)" Classes="dialog-description" TextWrapping="Wrap" />
             <ComboBox Name="WordClickActionEditor" ItemsSource="{x:Static vm:SettingsViewModel.WordClickActions}" SelectedItem="{Binding WordClickAction, Mode=TwoWay}" HorizontalAlignment="Stretch"

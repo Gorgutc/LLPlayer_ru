@@ -1,4 +1,4 @@
-#if !WINDOWS
+﻿#if !WINDOWS
 using System.Diagnostics;
 using System.Text;
 using System.Collections.Concurrent;
@@ -159,8 +159,8 @@ public sealed class YoutubeDLExtractionTests : IDisposable
         Assert.Equal(helper, received.FileName);
         Assert.False(received.UseShellExecute);
         Assert.Empty(received.Arguments);
-        Assert.Equal(["--ignore-config", "--no-plugin-dirs", "--no-cache-dir", "--no-js-runtimes",
-            "--js-runtimes", "deno:" + deno, "--no-remote-components", "--no-playlist", "--playlist-end", "1", "--skip-download",
+        Assert.Equal(["--playlist-items", "1:1001", "--ignore-config", "--no-plugin-dirs", "--no-cache-dir", "--no-js-runtimes",
+            "--js-runtimes", "deno:" + deno, "--no-remote-components", "--skip-download",
             "--dump-single-json", "--encoding", "utf-8", "--", Url], received.ArgumentList);
         var item = Assert.Single(decoder.Playlist.Items);
         Assert.True(decoder.Playlist.Completed);
@@ -179,6 +179,31 @@ public sealed class YoutubeDLExtractionTests : IDisposable
         var subtitle = Assert.Single(item.ExternalSubtitlesStreamsAll);
         Assert.True(subtitle.Automatic);
         Assert.Equal("https://youtube.example/api/timedtext?en", subtitle.Url);
+    }
+
+    [Fact]
+    public void PlaylistPublishesAllPlayableItemsInOrderAndKeepsUnavailableCountVisible()
+    {
+        ProcessStartInfo? received = null;
+        string second = Metadata.Replace("\"lesson\"", "\"second lesson\"", StringComparison.Ordinal)
+            .Replace("https://video.example/watch", "https://video.example/second", StringComparison.Ordinal);
+        string playlist = "{\"_type\":\"playlist\",\"title\":\"Study collection\",\"playlist_count\":3,\"entries\":[" + Metadata + ",null," + second + "]}";
+        launch = info => { received = info; return Fixture(playlist); };
+        plugin.Options["ExtraArguments"] = "--cookies-from-browser firefox --playlist-items 1:3";
+        var result = OpenAdmitted(decoder.Open, TestContext.Current.CancellationToken);
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(received);
+        Assert.Equal(["--playlist-items", "1:1001", "--cookies-from-browser", "firefox", "--playlist-items", "1:3"], received.ArgumentList.Take(6));
+        Assert.DoesNotContain("--no-playlist", received.ArgumentList);
+        Assert.Equal("--", received.ArgumentList[^2]);
+        Assert.Equal(Url, received.ArgumentList[^1]);
+        Assert.Equal("Study collection", decoder.Playlist.Title);
+        Assert.Equal(3, decoder.Playlist.ExpectingItems);
+        Assert.True(decoder.Playlist.Completed);
+        Assert.Equal(["lesson", "second lesson"], decoder.Playlist.Items.Select(item => item.Title));
+        decoder.Playlist.Selected = decoder.Playlist.Items[1];
+        Assert.Equal("https://cdn.example/v", plugin.SuggestExternalVideo().Url);
+        Assert.Equal("https://video.example/second", decoder.Playlist.Selected.DirectUrl);
     }
 
     [Theory]

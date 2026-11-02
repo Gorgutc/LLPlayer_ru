@@ -2,6 +2,64 @@
 
 This document freezes current config, persistence, and local data decisions from `main`.
 
+## Additive Avalonia playback, online and PDIC preferences — owner-approved 2026-11-02
+
+The coordinated [Settings/Subtitles/Playlists plan](plans/2026-11-02-f13-settings-subtitles-online.md) adds
+`LLPlayer.Playback.json` and `LLPlayer.Pdic.json` under the existing per-user Avalonia config directory. These files,
+their temp/backup variants and all existing user config remain excluded from source and both platform packages.
+WPF keeps its current files/defaults. Application `.deps.json`/`.runtimeconfig.json` deployment metadata is distinct
+from user config and remains required in packages.
+
+`PlaybackSettings` contains only portable playback policy: Audio enable/filters/max/default volume/languages;
+software Video aspect/custom ratio/deinterlace/double rate/threads/zoom unit/latency/tone mapping/nits/colour filters;
+buffer/frame/resolution/timeout/seek settings; general subtitle/local search/cache/languages/fallbacks/BOM and the
+eleven existing generation-policy/length-limit fields; and next-start logging/FFmpeg profile. Missing files preserve
+the current effective startup configuration, including remembered volume `100`, rather than applying the stored
+policy's default-volume field `75` to every startup or unrelated Save. Engine max volume `150`, buffer `500/30000` ms,
+frame limits `5/4`, timeouts `300000/10000/20000/8000` ms, logging Warn/Warn and FFmpeg Filters remain unchanged.
+Resegment/WordTimestamps/VadCueSnapping/FixAllCaps default on; ASRDenoise/ASRPerSegmentLanguage default off; cue
+limits remain `3/48/24` and `7/1` seconds; BOM defaults on. Ordered language lists use canonical known unique languages.
+
+The editor retains invalid raw text and validates finite/ranged values, ticks conversion, buffer/latency coupling,
+positive custom ratios, filter ranges and cue-duration relationships before Save. A detached draft merges only
+actual field changes into fresh settings. Persistence precedes live application. When a changed default volume or
+lower maximum requires updating `LLPlayer.Avalonia.json`, the playback store performs the atomic secondary prefs
+write before live apply; if that write fails, it restores the original playback bytes/absence only while its own
+candidate still owns the file. It never overwrites a concurrent replacement. Rollback failure is reported. This is
+compensating two-file persistence, not a crash-atomic multi-file transaction. Untouched default volume preserves
+latest transport volume/mute; an edited default updates remembered/current volume after successful persistence.
+
+Audio/primary/secondary delays, selected output device, recovery/effective-output state, zoom/pan/rotation/flips/crop
+and opaque media identity are session-only and never serialized by this store. Edited delay/geometry fields apply
+only to their captured current media/source; untouched fields retain newer live edits. Device selection retains the
+requested target during fallback and is not a persisted global output choice. Log output/levels/cache/profile are
+saved for next startup; `LLPLAYER_LOG_LEVEL` remains authoritative. Main-profile filter intent is retained while the
+UI reports the unavailable effective filters instead of claiming a live library reload.
+
+General Playback settings is the single editable owner of shared subtitle/OCR fallback languages in the hosted
+application. Existing Recognition fallback values seed startup when no saved playback file exists; its dialog shows
+the shared values read-only and points to Playback settings, so a stale Recognition save cannot overwrite them.
+The persisted BOM field seeds subsequent export operations and manual OpenSubtitles downloads; an open export
+retains its own detached operation choices. Search/result cursors, subtitle slots/delays and provider credentials
+are not newly persisted.
+
+`LLPlayer.OnlineVideo.json` retains explicit external yt-dlp/Deno paths and adds `ExtraArguments=""`,
+`MaxVideoHeight=720` (`0` uses the engine limit, maximum `32768`) and `PreferVideoWithAudio=false`. Both online and
+plugin editors share this owner; each detached draft retains the other fields from its opening snapshot and Save
+serializes persistence before applying. This is not a claim of fresh per-field merge between concurrent editors.
+Load never launches a tool or scans PATH; explicit Open
+revalidates saved executable paths. Extra arguments are bounded to one line, `16384` characters/`256` tokens and an
+allowlist; positive closed playlist ranges select at most `1000` entries. Raw secrets supplied as permitted helper
+arguments are user config and must not appear in logs, receipts or packages.
+
+`LLPlayer.Pdic.json` stores only `ExecutablePath`, empty by default. Load validates syntax without checking the
+filesystem or starting a process; explicit Browse/Auto Set/Save may check the external Windows executable. Invalid
+files are preserved with a warning until explicit replacement. Linux keeps an explicit unavailable state. PDIC
+lookup text, offsets, process/pipe state and lifetime are not persisted. OpenSubtitles API key/username/password and
+login token exist only in the dialog/client lifetime, are not included in diagnostic strings, and are cleared on close.
+Loaded temp subtitle children are separately owned runtime files; adopted files are removed only after full
+`Player.Dispose`, using exact owned paths and nonrecursive empty-child cleanup.
+
 ## Additive Avalonia Player UI preferences — owner-approved 2026-11-02
 
 The existing shared `AppPrefs`/`PrefsStore` owner in `LLPlayer.Avalonia.json` stores exactly the eleven preferences
@@ -62,8 +120,9 @@ ordinary translations may resume for slots explicitly enabled in the current ses
 `LLPlayer.Avalonia.json` adds three `AppPrefs` booleans: `SidebarSearchMatchCase`,
 `SidebarSearchWholeWord`, `SidebarSearchRegex`. All default to `false`, including absent keys in older files;
 the shared Windows/Linux sidebar restores and saves them without changing WPF `AppConfig` defaults.
-The search query, result/navigation cursor and regex errors are session-only. Export slot/text/format/BOM choices
-are session-only; UTF-8 BOM starts on. Export captures detached text/timing and copied original-source styles
+The search query, result/navigation cursor and regex errors are session-only. At this dated checkpoint export
+slot/text/format/BOM choices were session-only; the 2026-11-02 playback owner above now persists the BOM default,
+while each export still owns its detached choices. Export captures detached text/timing and copied original-source styles
 before the native save picker. Only an explicitly confirmed path is written, through a sibling temporary file
 and atomic replacement; cancellation preserves an existing destination. Close/shutdown cancels and drains the
 operation before disposing the player. Existing word-list TSV/APKG export and config ownership stay unchanged.
@@ -122,7 +181,8 @@ opening menu; only successful Save applies that replacement. Reset alone is draf
 disk/live state and retry draft; Close/Escape discard. Word edits preserve `AnkiDeck`: the saved default seeds the next
 Word Manager, while an open manager owns its session deck. Fixed localhost/version-6 AnkiConnect and five-field
 TSV/APKG behavior remain unchanged. WPF has no endpoint/API-key/APKG-options editors to port; these are separate
-additive product decisions. PDIC is outside this block. Native/live acceptance remains deferred.
+additive product decisions. PDIC was outside this dated block; the owner-selected adapter is described in the
+coordinated 2026-11-02 section above. Native/live acceptance remains deferred.
 
 ## Load Order
 
@@ -139,7 +199,7 @@ Do not reorder this without explicit migration work.
 ## Defaults And Migration
 
 - Default engine keeps `PluginsPath`, `FFmpegPath`, HLS live seek, UI refresh, and FFmpeg filter load profile.
-- **Configured Avalonia online video (2026-11-01):** `LLPlayer.OnlineVideo.json` in `AppPaths.ConfigDir` owns only the external standalone yt-dlp and Deno paths, both unset by default. It is separate from autosaved appearance preferences and WPF config. The shared dialog edits a detached draft; explicit Save validates existing absolute executables and atomically writes before applying the committed snapshot. Close discards edits; Open uses committed settings. Missing file uses defaults; malformed/unreadable input stays untouched and is reported. Load/startup never probes processes, searches PATH, downloads or updates tools. The file and atomic-write temporary files are runtime state excluded from source and packages; existing configs are not migrated or rewritten.
+- **Configured Avalonia online video (initial 2026-11-01 owner, extended above on 2026-11-02):** `LLPlayer.OnlineVideo.json` in `AppPaths.ConfigDir` owns external standalone yt-dlp/Deno paths, both unset by default, and the additive plugin options described above. It remains separate from autosaved appearance preferences and WPF config. Detached Save validates/atomically writes before applying; Close discards and explicit Open uses committed tools. Missing input uses defaults; malformed/unreadable input stays untouched and is reported. Load/startup never starts probes, scans PATH or installs/downloads/updates tools. User settings/temp variants remain excluded from source/packages; no rewrite occurs merely on load.
 - Default player config passes HLS query options, leaves GPU adapter empty for later persistence, enables local subtitle search, and derives target translation language from original culture.
 - Default custom key bindings are applied only for new config files. Exception: a newly-introduced custom action's default binding may be backfilled into an existing config when absent (e.g. `Ctrl+K` command palette), scoped to that single action so bindings the user removed for pre-existing actions are not re-added. The backfill is one-shot and chord-safe (HC-09, since 0.3.46): it runs only for configs predating `0.3.45` (the load-time version stamp then makes it never re-run, so a later intentional removal of the binding is respected), and only when the action's chord is still free — it never overwrites a chord the user reassigned to another action, which would otherwise add a duplicate binding that blocks Settings ▸ Keys Apply. The decision is the pure, unit-tested `KeyBindingBackfill.ShouldBackfill`.
 - Existing key bindings may be migrated through Flyleaf config `UpdateDefault()`.

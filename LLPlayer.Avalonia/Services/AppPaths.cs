@@ -1,4 +1,4 @@
-namespace LLPlayer.Avalonia.Services;
+﻿namespace LLPlayer.Avalonia.Services;
 
 /// <summary>
 /// Per-user file locations of the Avalonia app. Platform-neutral (F-13 target "one core + one UI"):
@@ -24,6 +24,9 @@ public sealed record AppPaths(string ConfigDir, string StateDir)
     public string RecognitionFile => Path.Combine(ConfigDir, "LLPlayer.Recognition.json");
 
     public string OnlineVideoFile => Path.Combine(ConfigDir, "LLPlayer.OnlineVideo.json");
+
+    public string PlaybackFile => Path.Combine(ConfigDir, "LLPlayer.Playback.json");
+    public string PdicFile => Path.Combine(ConfigDir, "LLPlayer.Pdic.json");
 
     public string PrefsFile => Path.Combine(ConfigDir, "LLPlayer.Avalonia.json");
 

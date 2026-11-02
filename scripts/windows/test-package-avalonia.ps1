@@ -36,11 +36,15 @@ function New-Fixture([string]$Name) {
     $dir = Join-Path $work $Name
     $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
         'LLPlayer.Core.dll','FlyleafLib.dll','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md',
+        'IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
         'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
         'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md')
     foreach ($path in @($required) + @($natives)) { Write-FixtureFile $dir $path }
     Write-FixtureFile $dir 'Plugins/YoutubeDL/YoutubeDL.pdb'
     Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
+    foreach ($assembly in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll')) {
+        Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir $assembly)
+    }
     $files = @($natives | ForEach-Object { [ordered]@{ path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $dir $_) -Algorithm SHA256).Hash.ToLowerInvariant() } })
     $manifest = [ordered]@{ schema=1; runtime='win-x64'; components=@(
         [ordered]@{ name='FFmpeg'; version='n8.0-16-gd8605a6b55-20250925'; license='GPL'; source='https://git.ffmpeg.org/ffmpeg.git'; provenance='Tracked binaries; original build recipe and corresponding source offer remain unverified.' },
@@ -72,6 +76,12 @@ try {
     $validPackage = New-Fixture 'valid'
     Write-FixtureFile $validPackage 'project-notes.zip'
     Assert-Accepted 'valid synthetic package including unrelated archive' $validPackage
+    foreach ($relative in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic',
+        'IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS')) {
+        $fixtureRelative = $relative
+        Assert-Rejected ("missing Japanese segmenter asset " + $relative) { param($d) Remove-Item -LiteralPath (Join-Path $d $fixtureRelative) } 'missing required file'
+        Assert-Rejected ("empty Japanese segmenter asset " + $relative) { param($d) Write-FixtureFile $d $fixtureRelative '' } 'non-empty regular file'
+    }
     Assert-Rejected 'missing portable YoutubeDL assembly' { param($d) Remove-Item -LiteralPath (Join-Path $d 'Plugins/YoutubeDL/YoutubeDL.dll') } 'missing required file.*Plugins/YoutubeDL/YoutubeDL.dll'
     Assert-Rejected 'missing portable YoutubeDL symbols' { param($d) Remove-Item -LiteralPath (Join-Path $d 'Plugins/YoutubeDL/YoutubeDL.pdb') } 'missing required file.*YoutubeDL.pdb'
     Assert-Rejected 'empty portable YoutubeDL symbols' { param($d) Write-FixtureFile $d 'Plugins/YoutubeDL/YoutubeDL.pdb' '' } 'non-empty regular file.*YoutubeDL.pdb'
@@ -106,8 +116,13 @@ try {
         'nested/LLPlayer.OnlineVideo.json.bak','nested/.LLPlayer.OnlineVideo.json.token.tmp','nested/.LLPlayer.OnlineVideo.json.bak',
         'LLPlayer.Avalonia.json','LLPlayer.Avalonia.json.bad','.LLPlayer.Avalonia.json.token.tmp',
         'LLPlayer.Translation.json','.LLPlayer.Translation.json.token.tmp','LLPlayer.Recognition.json.bad',
+        'LLPlayer.Playback.json','LLPlayer.Playback.json.bak','LLPlayer.Playback.json.bad','.LLPlayer.Playback.json.token.tmp',
+        'nested/LLPlayer.Playback.json','nested/LLPlayer.Playback.json.bak','nested/.LLPlayer.Playback.json.token.tmp',
+        'LLPlayer.Pdic.json','LLPlayer.Pdic.json.bak','LLPlayer.Pdic.json.bad','.LLPlayer.Pdic.json.token.tmp',
+        'nested/LLPlayer.Pdic.json','nested/LLPlayer.Pdic.json.bak','nested/.LLPlayer.Pdic.json.token.tmp',
         'LLPlayer.WordList.json','LLPlayer.Config.json','crash.log','nested/session.LOG','.env.local','.envtoken',
         'movie.ru.dub.flac','movie.ru.voices.json','ggml-base.bin','eng.traineddata','yt-dlp.exe','yt-dlp','deno','deno.exe',
+        'pdic-pipe.exe','pdic-pipe','nested/pdic-pipe.exe','nested/pdic-pipe','nested/pdic-pipe.exe.zip','pdic-pipe.7z',
         'nested/yt-dlp_linux','nested/yt-dlp_linux_aarch64','nested/yt-dlp.exe','nested/deno.exe','nested/deno',
         'deno-x86_64-pc-windows-msvc.zip','nested/deno-x86_64-unknown-linux-gnu.zip','nested/deno.zip',
         'yt-dlp.tar.gz','nested/yt-dlp_linux.zip','nested/yt-dlp.exe.7z')) {

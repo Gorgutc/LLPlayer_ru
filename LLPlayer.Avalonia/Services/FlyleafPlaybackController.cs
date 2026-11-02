@@ -37,12 +37,22 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     public RecognitionActions Recognition { get; }
     public RecognitionSettingsStore? RecognitionStore { get; set; }
     public string? RecognitionWarning { get; set; }
-    public RecognitionSettings RecognitionSettings => RecognitionStore?.Load() ?? RecognitionSettings.FromConfig(player.Config.Subtitles);
+    public RecognitionSettings RecognitionSettings => RecognitionSettings.FromConfig(player.Config.Subtitles);
     public string RecognitionStatus => $"ASR: {(player.IsASRRunning ? player.IsASRPaused ? "paused" : "running" : "idle")} · Primary: {(player.Subtitles[0].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[0].IsLoading ? "loading" : "ready")}, {GetCues(0).Count} cues · Secondary: {(player.Subtitles[1].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[1].IsLoading ? "loading" : "ready")}, {GetCues(1).Count} cues";
     public Task StartRecognitionAsync(int slot) => Recognition.StartAsync(slot);
     public Task CancelRecognitionAsync(int slot) => Recognition.CancelAsync(slot);
     public Task OcrRecognitionAsync(int slot) => Recognition.OcrAsync(slot);
     public Task ToggleRecognitionPauseAsync() => Recognition.TogglePauseAsync();
+    public Task SaveRecognitionSettingsAsync(RecognitionSettings settings, RecognitionSettingsStore store)
+    {
+        RecognitionSettings detached = settings.Clone();
+        // Fallback languages have one editor in Playback settings. A model draft cannot restore older values.
+        RecognitionSettings current = RecognitionSettings.FromConfig(player.Config.Subtitles);
+        detached.OcrPrimaryLanguage = current.OcrPrimaryLanguage;
+        detached.OcrSecondaryLanguage = current.OcrSecondaryLanguage;
+        detached.OcrSecondarySame = current.OcrSecondarySame;
+        return Recognition.SaveAndApplyAsync(detached, store);
+    }
 
     public FlyleafPlaybackController(Player player, IUIDispatcher? ui, CollectionSyncBridge bridge)
     {
@@ -112,6 +122,8 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         player.KnownErrorOccurred += OnKnownError;
         player.UnknownErrorOccurred += OnUnknownError;
         InitializePlaybackChoices();
+        InitializePlaylistChoices();
+        InitializeAudioSettings();
 
         for (int i = 0; i < cueWatchers.Length; i++)
         {
@@ -254,6 +266,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             player.SubtitlesManager[slot].Translator.Resume();
             RefreshOverlay(slot);
         }
+        Raise("SubtitleLanguage");
     }
 
     void SuspendTranslations()
@@ -262,13 +275,16 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     Task MutateWithTranslationAsync(Action mutation, bool mediaChange = false)
         => MutateWithTranslationAsync(_ => mutation(), mediaChange);
 
-    Task MutateWithTranslationAsync(Action<CancellationToken> mutation, bool mediaChange = false)
-        => Recognition.MutateAsync(token =>
+    Task MutateWithTranslationAsync(Action<CancellationToken> mutation, bool mediaChange = false, bool requireIdle = false)
+    {
+        Action<CancellationToken> run = token =>
         {
             SuspendTranslations();
             try { mutation(token); }
             finally { for (int slot = 0; slot < 2; slot++) { player.SubtitlesManager[slot].Translator.Resume(); RefreshOverlay(slot); } }
-        }, mediaChange);
+        };
+        return requireIdle ? Recognition.MutateIfIdleAsync(run) : Recognition.MutateAsync(run, mediaChange);
+    }
 
     void WatchCues(int slot)
     {
@@ -330,7 +346,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         List<CueInfo> cues = new(subs.Count);
         foreach (SubtitleData s in subs)
             cues.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, player.SubtitlesManager[slot].Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391(), s.Text ?? "",
-                source == null ? null : new SubtitleCueIdentity(new SubtitleCueToken(source, s))));
+                source == null ? null : new SubtitleCueIdentity(new SubtitleCueToken(source, s)), s.IsBitmap));
         if (source != null && !IsCurrentSubtitleCueSource(source)) return [];
         return cues;
     }
@@ -514,9 +530,12 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         Language? lang = player.SubtitlesManager[slot].Language;
         return lang == null || lang == Language.Unknown ? null : lang.ISO6391;
     }
+    public string? GetSubtitleTargetLanguage() => player.Config.Subtitles.TranslateTargetLanguage.ToISO6391();
 
     public async ValueTask DisposeAsync()
     {
+        Recognition.Invalidate();
+        await StopAudioRecoveryAsync();
         await Recognition.DisposeAsync();
         await Task.WhenAll(player.SubtitlesManager[0].Translator.DisposeAsync().AsTask(), player.SubtitlesManager[1].Translator.DisposeAsync().AsTask());
         Dispose();
@@ -526,7 +545,9 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     {
         if (disposed)
             return;
+        CancelAudioRecovery();
         disposed = true;
+        DisposePlaylistChoices();
         DisposePlaybackChoices();
         Recognition.Dispose();
 

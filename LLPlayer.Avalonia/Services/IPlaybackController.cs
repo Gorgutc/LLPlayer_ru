@@ -7,7 +7,7 @@ namespace LLPlayer.Avalonia.Services;
 /// <summary>One subtitle cue as the UI shows it (primary/secondary sidebar, word popup context).</summary>
 /// <param name="Text">Display text (translated when translation display is on, otherwise the source text).</param>
 /// <param name="OriginalText">Source text snapshot, used by the sidebar's show-original choice; empty when unknown.</param>
-public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "", string OriginalText = "", SubtitleCueIdentity? Identity = null);
+public sealed record CueInfo(int Index, TimeSpan Start, TimeSpan End, string Text, bool IsTranslated = false, string SourceLanguage = "", string TargetLanguage = "", string OriginalText = "", SubtitleCueIdentity? Identity = null, bool IsBitmap = false);
 
 /// <summary>Opaque identity of a live cue's media, subtitle source and slot. Contains no public native object.</summary>
 public sealed class SubtitleCueIdentity : IEquatable<SubtitleCueIdentity>
@@ -27,6 +27,9 @@ public sealed record PlaybackStreamTrack(string Label, bool IsSelected, object T
 
 /// <summary>A detached chapter choice. Token is an opaque, media-scoped adapter handle.</summary>
 public sealed record PlaybackChapter(string Title, TimeSpan Start, object Token);
+
+/// <summary>A detached playlist choice; the adapter validates its opaque media-scoped token before opening.</summary>
+public sealed record PlaybackPlaylistItem(int Index, string Title, bool IsCurrent, object Token);
 
 /// <summary>Bitmap subtitle placed in video coordinates (<see cref="VideoWidth"/> x <see cref="VideoHeight"/>).</summary>
 public sealed record SubtitleImage(BgraBitmap Bitmap, int X, int Y, int Width, int Height, int VideoWidth, int VideoHeight);
@@ -51,6 +54,7 @@ public interface IPlaybackController : INotifyPropertyChanged
     bool CanCancelOpen { get; }
     string? Title { get; }
     string? Url { get; }
+    string? CurrentMediaPath => Url;
 
     /// <summary>Playback position / duration in ticks.</summary>
     long CurTime { get; }
@@ -100,6 +104,9 @@ public interface IPlaybackController : INotifyPropertyChanged
     event Action<string>? ErrorOccurred;
 
     IReadOnlyList<CueInfo> GetCues(int slot);
+    /// <summary>Copies a live bitmap cue into owned, bounded BGRA data; stale or text cues return null.</summary>
+    Task<BgraBitmap?> GetCueBitmapAsync(CueInfo cue, int slot, CancellationToken cancellationToken = default)
+        => Task.FromResult<BgraBitmap?>(null);
     /// <summary>Whether this detached row still refers to the live media, slot, source and raw cue timing.</summary>
     bool IsCueCurrent(CueInfo cue, int slot);
     /// <summary>Seeks only when the detached cue still belongs to this slot's live source.</summary>
@@ -110,6 +117,11 @@ public interface IPlaybackController : INotifyPropertyChanged
     IReadOnlyList<PlaybackStreamTrack> GetAudioTracks() => [];
     IReadOnlyList<PlaybackStreamTrack> GetVideoTracks() => [];
     IReadOnlyList<PlaybackChapter> GetChapters() => [];
+    IReadOnlyList<PlaybackPlaylistItem> GetPlaylistItems() => [];
+    string PlaylistTitle => Title ?? "Playlist";
+    int PlaylistExpectedCount => 0;
+    event Action? PlaylistChanged { add { } remove { } }
+    Task SelectPlaylistItemAsync(PlaybackPlaylistItem item) => Task.CompletedTask;
     Task SelectAudioTrackAsync(PlaybackStreamTrack track) => Task.CompletedTask;
     Task SelectVideoTrackAsync(PlaybackStreamTrack track) => Task.CompletedTask;
     Task SeekToChapterAsync(PlaybackChapter chapter) => Task.CompletedTask;
@@ -137,6 +149,7 @@ public interface IPlaybackController : INotifyPropertyChanged
 
     /// <summary>ISO 639-1 language of a subtitle slot (null when unknown).</summary>
     string? GetSubtitleLanguage(int slot);
+    string? GetSubtitleTargetLanguage() => null;
 
     // ---- engine key bindings (Avalonia editor) ------------------------------------------------------------------
     // The engine owns the default list; the app persists an optional full replacement list and applies it here.

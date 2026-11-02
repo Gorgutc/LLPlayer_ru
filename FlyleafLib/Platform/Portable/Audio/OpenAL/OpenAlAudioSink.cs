@@ -1,4 +1,4 @@
-namespace FlyleafLib;
+﻿namespace FlyleafLib;
 
 #nullable enable
 
@@ -124,6 +124,24 @@ public sealed class OpenAlAudioSink : IAudioSink
     /// <summary>Why the sink became unusable (null while healthy); see <see cref="Fault"/>.</summary>
     public string?  FaultReason { get; private set; }
 
+    public bool IsOperational
+    {
+        get
+        {
+            lock (locker)
+            {
+                if (disposed || faulted) return false;
+                try
+                {
+                    if (al.AlcIsConnected(device)) return true;
+                    Fault(new InvalidOperationException($"OpenAL: device '{DeviceName ?? "(default)"}' was disconnected"));
+                }
+                catch (Exception e) { Fault(e); }
+                return false;
+            }
+        }
+    }
+
     /// <summary>AL buffers currently queued on the source (diagnostics/tests).</summary>
     public int QueuedBuffers
     {
@@ -174,7 +192,11 @@ public sealed class OpenAlAudioSink : IAudioSink
                 try
                 {
                     using (new OpenAlContextScope(al, context))
-                        return UpdatePlayed();
+                    {
+                        ulong played = UpdatePlayed();
+                        Check("reading played samples");
+                        return played;
+                    }
                 }
                 catch (Exception e)
                 {
@@ -201,13 +223,16 @@ public sealed class OpenAlAudioSink : IAudioSink
                     {
                         if (hasSourceLatency)
                             using (new OpenAlContextScope(al, context))
+                            {
                                 if (al.TryGetSourceLatencyNs(source, out long srcNs))
                                     ns = srcNs;
+                                Check("reading source latency");
+                            }
 
                         if (ns < 0)
                             ns = al.AlcGetDeviceLatencyNs(device);
                     }
-                    catch (Exception) { ns = -1; }
+                    catch (Exception e) { Fault(e); ns = -1; }
                 }
 
                 if (ns < 0)
@@ -239,7 +264,7 @@ public sealed class OpenAlAudioSink : IAudioSink
                 Reclaim();
 
                 if (queued.Count >= MaxQueuedBuffers)
-                    throw new InvalidOperationException($"OpenAL: too many queued buffers ({queued.Count})");
+                    throw new AudioQueueFullException($"OpenAL: too many queued buffers ({queued.Count})");
 
                 uint buffer;
                 if (free.Count > 0)
@@ -403,7 +428,10 @@ public sealed class OpenAlAudioSink : IAudioSink
         try
         {
             using (new OpenAlContextScope(al, context))
+            {
                 ApplyGains();
+                Check("gain update");
+            }
         }
         catch (Exception e)
         {
@@ -413,8 +441,8 @@ public sealed class OpenAlAudioSink : IAudioSink
 
     /// <summary>
     /// Marks the sink unusable after an unexpected AL failure (broken context): the clock freezes at the last reported
-    /// value with nothing queued, Submit throws (the player then flushes, as after an XAudio2 device error) and the
-    /// read paths never throw on the playback thread.
+    /// value with nothing queued and the read paths never throw on the playback thread. The portable output owner
+    /// observes <see cref="IsOperational"/> and retires the failed clock without waiting for another Submit.
     /// </summary>
     void Fault(Exception e)
     {

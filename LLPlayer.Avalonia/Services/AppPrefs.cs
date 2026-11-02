@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using FlyleafLib;
 
 namespace LLPlayer.Avalonia.Services;
 
@@ -83,8 +84,8 @@ public sealed class AppPrefs
     public const string DefaultWordClickAction = "Translation";
     public const string DefaultAnkiDeck = "LLPlayer";
     public const int MaxAnkiDeckLength = 64;
-    /// <summary>Word-click behaviors ported to Avalonia (PDIC has no Avalonia surface).</summary>
-    public static IReadOnlyList<string> WordClickActions { get; } = ["Translation", "Clipboard", "ClipboardAll"];
+    /// <summary>Shared word-click choices; PDIC explicitly reports its Windows-only host capability.</summary>
+    public static IReadOnlyList<string> WordClickActions { get; } = ["Translation", "Clipboard", "ClipboardAll", "PDIC"];
 
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
@@ -425,6 +426,27 @@ public sealed class PrefsStore(string path)
     };
 
     public string Path { get; } = path;
+
+    /// <summary>A playback-settings commit owns only remembered volume/mute, merging the latest persisted document.</summary>
+    public void SaveRememberedVolume(int volume, bool mute)
+    {
+        if (volume is < 0 or > 1000) throw new ArgumentOutOfRangeException(nameof(volume));
+        string full = System.IO.Path.GetFullPath(Path);
+        System.Text.Json.Nodes.JsonObject document;
+        try
+        {
+            document = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(full), documentOptions: new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true
+            }) as System.Text.Json.Nodes.JsonObject ?? throw new JsonException("Preferences must contain a JSON object.");
+        }
+        catch (FileNotFoundException) { document = new(); }
+        catch (DirectoryNotFoundException) { document = new(); }
+        document[nameof(AppPrefs.Volume)] = volume;
+        document[nameof(AppPrefs.Mute)] = mute;
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(full)!);
+        AtomicFile.WriteAllText(full, JsonSerializer.Serialize(document, JsonOptions));
+    }
 
     /// <summary>Last load problem (corrupt file), shown to the user once; null when the load was clean.</summary>
     public string? LoadWarning { get; private set; }

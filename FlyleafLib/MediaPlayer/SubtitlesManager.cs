@@ -1,4 +1,4 @@
-using System.Collections.Specialized;
+﻿using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -1214,6 +1214,50 @@ public class SubtitleBitmapData : IDisposable
     private bool _isDisposed;
 
     public AVSubtitle Sub;
+
+    /// <summary>
+    /// Copies a bounded paletted subtitle to owned, tightly packed straight BGRA. Native rects are only inspected
+    /// while the read lock excludes disposal; padded native scanlines never become an output-buffer stride.
+    /// </summary>
+    public unsafe bool TryCopyBitmap(int maxPixels, CancellationToken cancellationToken,
+        out byte[] data, out int width, out int height)
+    {
+        data = [];
+        width = height = 0;
+        if (maxPixels <= 0) return false;
+        cancellationToken.ThrowIfCancellationRequested();
+        _rwLock.EnterReadLock();
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_isDisposed || Sub.num_rects == 0 || Sub.rects == null || Sub.rects[0] == null) return false;
+            AVSubtitleRect* rect = Sub.rects[0];
+            if (rect->type != AVSubtitleType.Bitmap || rect->w <= 0 || rect->h <= 0 || rect->w > 8192 || rect->h > 8192
+                || (long)rect->w * rect->h > maxPixels
+                || (long)rect->w * rect->h > int.MaxValue / 4 || rect->linesize[0] < rect->w
+                || rect->nb_colors is < 1 or > 256 || rect->data[0] == 0 || rect->data[1] == 0) return false;
+            byte[] copy = new byte[checked(rect->w * rect->h * 4)];
+            uint* palette = (uint*)rect->data[1];
+            fixed (byte* output = copy)
+                for (int y = 0; y < rect->h; y++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    byte* source = (byte*)rect->data[0] + (long)y * rect->linesize[0];
+                    uint* target = (uint*)output + (long)y * rect->w;
+                    for (int x = 0; x < rect->w; x++)
+                    {
+                        int color = source[x];
+                        if (color >= rect->nb_colors) return false;
+                        target[x] = palette[color];
+                    }
+                }
+            width = rect->w;
+            height = rect->h;
+            data = copy;
+            return true;
+        }
+        finally { _rwLock.ExitReadLock(); }
+    }
 
 #if WINDOWS
     public WriteableBitmap SubToWritableBitmap(bool isGrey)

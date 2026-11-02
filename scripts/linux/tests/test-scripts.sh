@@ -45,11 +45,13 @@ printf '%s' 'H4sIAAAAAAAEAO1VzWskRRR/3TMbJokbIsqSoMSOs4tBlqaXDK6CxkkyyW5k8kFmdtw
 # ---------------------------------------------------------------- publish.sh --check-package
 make_package() { # dir
     local p="$1" so
-    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL"
+    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL" "$p/IpaDic"
     cp "$work/YoutubeDL.dll" "$p/Plugins/YoutubeDL/YoutubeDL.dll"
     printf 'symbols\n' > "$p/Plugins/YoutubeDL/YoutubeDL.pdb"
     for f in LLPlayer.Avalonia LLPlayer.Avalonia.dll LLPlayer.Avalonia.deps.json LLPlayer.Avalonia.runtimeconfig.json \
-        FlyleafLib.dll LLPlayer.Core.dll libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libe_sqlite3.so llplayer llplayer.desktop llplayer.png llplayer.sh LLPlayer.png \
+        FlyleafLib.dll LLPlayer.Core.dll LibNMeCab.dll LibNMeCab.IpaDicBin.dll \
+        IpaDic/sys.dic IpaDic/unk.dic IpaDic/matrix.bin IpaDic/char.bin IpaDic/COPYING IpaDic/AUTHORS \
+        libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libe_sqlite3.so llplayer llplayer.desktop llplayer.png llplayer.sh LLPlayer.png \
         LICENSE THIRD-PARTY-NOTICES.md FFmpeg/LICENSE.txt FFmpeg/SOURCE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
         dub_sidecar/README.md Assets/silero_vad.onnx runtimes/linux-x64/libwhisper.so \
         runtimes/linux-x64/libggml-whisper.so runtimes/linux-x64/libggml-base-whisper.so \
@@ -75,6 +77,13 @@ mutate() { # name command-string -> fresh copy in $work/m-<name>, prints its pat
     (cd "$dir" && eval "$2")
     printf '%s\n' "$dir"
 }
+for asset in LibNMeCab.dll LibNMeCab.IpaDicBin.dll IpaDic/sys.dic IpaDic/unk.dic \
+    IpaDic/matrix.bin IpaDic/char.bin IpaDic/COPYING IpaDic/AUTHORS; do
+    expect_fail "missing Japanese segmenter asset $asset" "missing required file $asset" \
+        check_pkg "$(mutate "no-segmenter-${asset//\//-}" "rm $asset")"
+    expect_fail "empty Japanese segmenter asset $asset" "must be a non-empty regular file" \
+        check_pkg "$(mutate "empty-segmenter-${asset//\//-}" ": > $asset")"
+done
 expect_fail "missing plugin assembly" "missing required file Plugins/YoutubeDL/YoutubeDL.dll" \
     check_pkg "$(mutate no-plugin 'rm Plugins/YoutubeDL/YoutubeDL.dll')"
 expect_fail "missing plugin symbols" "missing required file Plugins/YoutubeDL/YoutubeDL.pdb" \
@@ -93,9 +102,18 @@ expect_fail "unexpected plugin dependency" "unexpected plugin payload" \
     check_pkg "$(mutate plugin-dependency 'echo x > Plugins/YoutubeDL/FlyleafLib.dll')"
 expect_fail "misplaced plugin assembly" "misplaced plugin payload" \
     check_pkg "$(mutate misplaced-plugin 'cp Plugins/YoutubeDL/YoutubeDL.dll YoutubeDL.dll')"
-for helper in yt-dlp yt-dlp.exe yt-dlp_linux yt-dlp_linux_aarch64 deno deno.exe; do
+for helper in yt-dlp yt-dlp.exe yt-dlp_linux yt-dlp_linux_aarch64 deno deno.exe pdic-pipe pdic-pipe.exe; do
     expect_fail "nested external helper $helper" "external extractor helpers" \
         check_pkg "$(mutate "helper-${helper//./-}" "mkdir nested; echo x > nested/$helper")"
+done
+for family in Playback Pdic; do
+    for config in "LLPlayer.$family.json" "LLPlayer.$family.json.bak" "LLPlayer.$family.json.bad" \
+        ".LLPlayer.$family.json.guid.tmp" ".LLPlayer.$family.json.bak" \
+        "nested/LLPlayer.$family.json" "nested/LLPlayer.$family.json.bak" \
+        "nested/.LLPlayer.$family.json.guid.tmp" "nested/.LLPlayer.$family.json.bak"; do
+        expect_fail "playback/PDIC configuration $config" "runtime config" \
+            check_pkg "$(mutate "owned-config-${config//\//-}" "mkdir -p nested; echo x > $config")"
+    done
 done
 expect_fail "missing Core assembly" "missing required file LLPlayer.Core.dll" \
     check_pkg "$(mutate missing-core 'rm LLPlayer.Core.dll')"
@@ -141,7 +159,7 @@ for config in LLPlayer.OnlineVideo.json LLPlayer.OnlineVideo.json.bak LLPlayer.O
         check_pkg "$(mutate "online-${config//\//-}" "mkdir -p nested; echo x > $config")"
 done
 for archive in deno-x86_64-pc-windows-msvc.zip nested/deno-x86_64-unknown-linux-gnu.zip nested/deno.zip \
-    yt-dlp.tar.gz nested/yt-dlp_linux.zip nested/yt-dlp.exe.7z; do
+    yt-dlp.tar.gz nested/yt-dlp_linux.zip nested/yt-dlp.exe.7z pdic-pipe.7z nested/pdic-pipe.exe.zip; do
     expect_fail "helper archive $archive" "external extractor helpers" \
         check_pkg "$(mutate "archive-${archive//\//-}" "mkdir -p nested; echo x > $archive")"
 done

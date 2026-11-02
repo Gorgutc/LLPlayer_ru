@@ -1,4 +1,4 @@
-using FlyleafLib.MediaFramework.MediaFrame;
+﻿using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaPlayer;
 
@@ -15,7 +15,7 @@ public partial class Audio
         get
         {
             lock (locker)
-                return sink == null || Mute ? _Volume : (int) ((decimal)sink.Volume * 100);
+                return output == null || Mute ? _Volume : (int) ((decimal)output.Volume * 100);
         }
         set
         {
@@ -32,8 +32,8 @@ public partial class Audio
             else
             {
                 lock (locker)
-                    if (sink != null)
-                        sink.Volume = Math.Max(0, value / 100.0f);
+                    if (output != null)
+                        output.Volume = Math.Max(0, value / 100.0f);
             }
 
             Set(ref _Volume, value, false);
@@ -51,10 +51,8 @@ public partial class Audio
         {
             lock (locker)
             {
-                if (sink == null)
-                    return;
-
-                sink.Volume = value ? 0 : _Volume / 100.0f;
+                if (output != null)
+                    output.Volume = value ? 0 : _Volume / 100.0f;
             }
 
             Set(ref mute, value, false);
@@ -63,14 +61,40 @@ public partial class Audio
     private bool mute = false;
 
     /// <summary>The active output stream (null while audio is not initialized).</summary>
-    internal IAudioSink sink;
+    internal IAudioSink sink => output?.CurrentSink;
+    PortableAudioOutput output;
+
+    /// <summary>Output loss is independent from the user's enabled setting.</summary>
+    public bool OutputRecoveryRequired
+    {
+        get
+        {
+            lock (locker)
+            {
+                bool recovering = output?.Recovering == true;
+                submittedSamples = output?.SubmittedSamples ?? 0;
+                return recovering;
+            }
+        }
+    }
+
+    /// <summary>The host calls this through its serialized command owner, at a bounded refresh interval.</summary>
+    public void RecoverOutput(bool force = false)
+    {
+        lock (locker)
+            if (Config.Audio.Enabled && isOpened)
+            {
+                output?.TryRecover(_Device == Engine.Audio.DefaultDevice ? null : _Device.Id, force);
+                submittedSamples = output?.SubmittedSamples ?? 0;
+            }
+    }
 
     /// <summary>Applies Config.Audio.VolumeMax (the XAudio2 mastering-voice volume on Windows).</summary>
     internal void SetMasterVolume(float volume)
     {
         lock (locker)
-            if (sink != null)
-                sink.MasterVolume = volume;
+            if (output != null)
+                output.MasterVolume = volume;
     }
 
     internal void Initialize()
@@ -78,10 +102,7 @@ public partial class Audio
         lock (locker)
         {
             if (Engine.Audio.Failed)
-            {
-                Task.Run(() => { Config.Audio.Enabled = false; }); // Deadlock during Stop (same thread with RunThread)
                 return;
-            }
 
             if (!isOpened || sampleRate <= 0)
                 return;
@@ -91,40 +112,29 @@ public partial class Audio
 
             Dispose();
 
-            try
+            output = new PortableAudioOutput(backend, _Device == Engine.Audio.DefaultDevice ? null : _Device.Id, sampleRate, ChannelsOut)
             {
-                sink = backend.CreateSink(_Device == Engine.Audio.DefaultDevice ? null : _Device.Id, sampleRate, ChannelsOut);
-
-                submittedSamples    = sink.SamplesPlayed;
-                Timebase            = 1000 * 10000.0 / sampleRate;
-                sink.MasterVolume   = Config.Audio.VolumeMax / 100.0f;
-                sink.Volume         = mute ? 0 : Math.Max(0, _Volume / 100.0f);
-                curSampleRate       = sampleRate;
-            }
-            catch (Exception e)
-            {
-                player.Log.Info($"Audio initialization failed ({e.Message})");
-                sink?.Dispose();
-                sink = null;
-                Config.Audio.Enabled = false;
-            }
+                MasterVolume = Config.Audio.VolumeMax / 100.0f,
+                Volume = mute ? 0 : Math.Max(0, _Volume / 100.0f)
+            };
+            submittedSamples = output.SubmittedSamples;
+            Timebase = 1000 * 10000.0 / sampleRate;
+            curSampleRate = sampleRate;
         }
     }
     internal void Dispose()
     {
         lock (locker)
         {
-            if (sink == null)
-                return;
-
-            sink.Dispose();
-            sink = null;
+            output?.Dispose();
+            output = null;
+            submittedSamples = 0;
         }
     }
 
     internal void AddSamples(AudioFrame aFrame)
     {
-        lock (locker) // required for submittedSamples only? (ClearBuffer() can be called during audio decocder circular buffer reallocation)
+        lock (locker) // Output replacement, buffer clear and the PCM clock must remain one atomic operation.
         {
             try
             {
@@ -133,10 +143,9 @@ public partial class Audio
 
                 framesDisplayed++;
 
-                submittedSamples += (ulong) (aFrame.dataLen / 4); // ASampleBytes
-                SamplesAdded?.Invoke(this, aFrame);
-
-                sink.Submit(aFrame.dataPtr, aFrame.dataLen);
+                bool accepted = output?.Submit(aFrame.dataPtr, aFrame.dataLen) == true;
+                submittedSamples = output?.SubmittedSamples ?? 0;
+                if (accepted) SamplesAdded?.Invoke(this, aFrame);
             }
             catch (Exception e) // Happens on audio device changed/removed
             {
@@ -151,21 +160,22 @@ public partial class Audio
     {
         lock (locker)
         {
-            if (sink == null)
+            if (output == null)
                 return 0;
-
-            ulong played = sink.SamplesPlayed;
-            return played >= submittedSamples ? 0 : (long) ((submittedSamples - played) * Timebase);
+            ulong buffered = output.BufferedSamples;
+            submittedSamples = output.SubmittedSamples;
+            return (long)(buffered * Timebase);
         }
     }
     internal long GetDeviceDelay()
     {
         lock (locker)
         {
-            if (sink == null)
+            if (output == null)
                 return 0;
 
-            int latencySamples = sink.LatencySamples;
+            int latencySamples = output.LatencySamples;
+            submittedSamples = output.SubmittedSamples;
             if (latencySamples <= 0)
                 return 0;
 
@@ -180,11 +190,8 @@ public partial class Audio
     {
         lock (locker)
         {
-            if (submittedSamples == 0 || sink == null)
-                return;
-
-            sink.Flush();
-            submittedSamples = sink.SamplesPlayed;
+            output?.Flush();
+            submittedSamples = output?.SubmittedSamples ?? 0;
         }
     }
 }

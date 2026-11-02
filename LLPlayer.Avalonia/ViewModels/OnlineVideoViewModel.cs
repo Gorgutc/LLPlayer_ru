@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib.Plugins;
 using LLPlayer.Avalonia.Services;
@@ -33,7 +33,9 @@ public sealed partial class OnlineVideoViewModel : ObservableObject
         Busy = true;
         try
         {
-            var draft = new OnlineVideoSettings { YtDlpPath = YtDlpPath, DenoPath = DenoPath };
+            var draft = saved.Clone();
+            draft.YtDlpPath = YtDlpPath;
+            draft.DenoPath = DenoPath;
             draft.Validate();
             await save(draft.Clone());
             saved = draft;

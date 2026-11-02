@@ -1,4 +1,4 @@
-using Avalonia.Input;
+﻿using Avalonia.Input;
 using LLPlayer.Avalonia.Services;
 
 namespace LLPlayer.Avalonia.ViewModels;
@@ -59,7 +59,7 @@ public sealed partial class MainWindowViewModel
 
     public void OnWordClicked(WordSelectionSnapshot selection, double x, double y)
     {
-        if (disposed || wordActionsStopping || selection.Button != MouseButton.Left) return;
+        if (disposed || wordActionsStopping || selection.Button is not (MouseButton.Left or MouseButton.Middle)) return;
         if (WordClickAction is "Clipboard" or "ClipboardAll")
         {
             if (player.IsPlaying) player.Pause();
@@ -72,6 +72,12 @@ public sealed partial class MainWindowViewModel
             return;
         }
         if (player.IsPlaying) player.Pause();
+        if (WordClickAction == "PDIC" && selection.IsWord)
+        {
+            if (prefs.WordCopyOnSelected && !string.IsNullOrWhiteSpace(selection.Word)) shell.SetClipboardText(selection.Word);
+            SendPdicSelection(selection);
+            return;
+        }
         popupSelection = selection;
         if (prefs.WordCopyOnSelected && !string.IsNullOrWhiteSpace(selection.Word)) shell.SetClipboardText(selection.Word);
         RefreshLastWordSearch();

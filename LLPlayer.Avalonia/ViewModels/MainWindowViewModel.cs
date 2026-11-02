@@ -74,6 +74,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         this.savePrefs = savePrefs;
         this.shell = shell;
         this.time = time ?? TimeProvider.System;
+        Playlist = new PlaylistViewModel(player);
         appKeyDispatcher = new(this.time);
         lastActivity = this.time.GetUtcNow();
 
@@ -181,7 +182,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     void ShowSubtitlesExport()
     {
         if (disposed || SubtitleExportSource == null) return;
-        SubtitlesExport ??= new SubtitlesExportViewModel(SubtitleExportSource);
+        SubtitlesExport ??= new SubtitlesExportViewModel(SubtitleExportSource) { IsUtf8Bom = SubtitleExportBom?.Invoke() ?? true };
         shell.ShowSubtitlesExport(SubtitlesExport);
     }
 
@@ -398,6 +399,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case SettingsLink.OnlineVideo: ShowOnlineVideo(); break;
             case SettingsLink.Shortcuts: ShowCheatSheet(); break;
             case SettingsLink.WordManager: ShowWordManager(); break;
+            case SettingsLink.Playback: ShowPlaybackSettings(); break;
+            case SettingsLink.PluginOptions: ShowPluginOptions(); break;
+            case SettingsLink.Pdic: ShowPdicSettings(); break;
         }
     }
 
@@ -762,7 +766,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     void ShowRecognition()
     {
         if (player is IRecognitionController controller && controller.RecognitionStore is { } store)
-            shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, controller.RecognitionWarning));
+            shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, controller.RecognitionWarning,
+                draft => controller.SaveRecognitionSettingsAsync(draft, store), fallbackLanguagesEditable: player is not IPlaybackSettingsController));
     }
 
     void OnRecognitionError(string message, string? settingsTab, string? actionHint)
@@ -770,7 +775,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         string detail = message + (string.IsNullOrWhiteSpace(actionHint) ? "" : "\n" + actionHint);
         ShowToast("Recognition", detail, ToastVariant.Destructive);
         if (player is IRecognitionController controller && controller.RecognitionStore is { } store)
-            shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, detail));
+            shell.ShowRecognition(new RecognitionViewModel(controller.RecognitionSettings, controller.Recognition, store, detail,
+                draft => controller.SaveRecognitionSettingsAsync(draft, store), fallbackLanguagesEditable: player is not IPlaybackSettingsController));
     }
 
     [RelayCommand]
@@ -1222,6 +1228,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Sidebar.PropertyChanged -= OnSidebarPropertyChanged;
         Sidebar.SynchronizationFailed -= OnSidebarSynchronizationFailed;
         Sidebar.Dispose();
+        Playlist.Dispose();
         WordPopup.PropertyChanged -= OnPlayerUiWordPopupChanged;
         player.PropertyChanged -= OnPlayerPropertyChanged;
         player.CuesChanged -= OnCuesChanged;
@@ -1372,7 +1379,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (e.PropertyName is nameof(IPlaybackController.PrimaryTextTranslated) or nameof(IPlaybackController.SecondaryTextTranslated)) OnPropertyChanged(e.PropertyName);
         if (e.PropertyName is nameof(IPlaybackController.PrimaryTranslationEnabled) or nameof(IPlaybackController.SecondaryTranslationEnabled)) OnPropertyChanged(e.PropertyName);
-        if (e.PropertyName == "SubtitleLanguage") InvalidateTranslation();
+        if (e.PropertyName == "SubtitleLanguage") { RefreshOverlayLanguages(); InvalidateTranslation(); }
         if (e.PropertyName == "RecognitionStatus") OnPropertyChanged(nameof(RecognitionStatus));
         switch (e.PropertyName)
         {
@@ -1415,6 +1422,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 break;
             case nameof(IPlaybackController.Title):
                 SyncTitle();
+                break;
+            case nameof(IPlaybackController.VolumeMax):
+                // The slider coerces its value synchronously when the maximum shrinks. This is an engine update,
+                // so its binding write-back must not become a user volume action (which would unmute playback).
+                bool wasUpdatingVolume = updatingFromPlayer;
+                updatingFromPlayer = true;
+                try { OnPropertyChanged(nameof(VolumeMax)); }
+                finally { updatingFromPlayer = wasUpdatingVolume; }
+                SyncVolume();
                 break;
             case nameof(IPlaybackController.Volume):
             case nameof(IPlaybackController.Mute):
@@ -1549,11 +1565,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             updatingFromPlayer = false;
         }
         IsMuted = player.Mute || player.Volume == 0;
+        prefs.Volume = player.Volume;
         prefs.Mute = player.Mute;
     }
 
     void SyncSubtitles()
     {
+        RefreshOverlayLanguages();
         SubtitlesVisible = player.SubtitlesVisible;
         prefs.SubtitlesVisible = SubtitlesVisible;
         PrimaryText = player.PrimaryText;

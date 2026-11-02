@@ -8,17 +8,20 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
 using Avalonia.Rendering.SceneGraph;
+using LLPlayer.Avalonia.Services;
 
 namespace LLPlayer.Avalonia.Controls;
 
 /// <summary>A word clicked in a <see cref="SubtitleText"/>.</summary>
-public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position, bool isTranslated = false, string? sourceLanguage = null, string? targetLanguage = null, bool isWord = true, MouseButton button = MouseButton.Left, KeyModifiers modifiers = KeyModifiers.None)
+public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, string text, int slot, Point position, bool isTranslated = false, string? sourceLanguage = null, string? targetLanguage = null, bool isWord = true, MouseButton button = MouseButton.Left, KeyModifiers modifiers = KeyModifiers.None, int wordOffset = -1)
     : RoutedEventArgs(routedEvent)
 {
     /// <summary>True for a single word, false for a dragged phrase.</summary>
     public bool IsWord { get; } = isWord;
     public MouseButton Button { get; } = button;
     public KeyModifiers Modifiers { get; } = modifiers;
+    /// <summary>Original UTF-16 position within Text; -1 when an old caller has no precise hit snapshot.</summary>
+    public int WordOffset { get; } = wordOffset;
     public bool IsTranslated { get; } = isTranslated;
     public string? SourceLanguage { get; } = sourceLanguage;
     public string? TargetLanguage { get; } = targetLanguage;
@@ -37,6 +40,10 @@ public sealed class WordClickedEventArgs(RoutedEvent routedEvent, string word, s
 /// </summary>
 public sealed class SubtitleText : Control
 {
+    public static readonly StyledProperty<bool> EnableLanguageSegmentationProperty =
+        AvaloniaProperty.Register<SubtitleText, bool>(nameof(EnableLanguageSegmentation));
+    /// <summary>WPF overlay parity: Japanese MeCab / Chinese per-Han ranges. Sidebar keeps its existing policy.</summary>
+    public bool EnableLanguageSegmentation { get => GetValue(EnableLanguageSegmentationProperty); set => SetValue(EnableLanguageSegmentationProperty, value); }
     public static readonly StyledProperty<bool> IsTranslatedProperty = AvaloniaProperty.Register<SubtitleText, bool>(nameof(IsTranslated));
     public bool IsTranslated { get => GetValue(IsTranslatedProperty); set => SetValue(IsTranslatedProperty, value); }
     public static readonly StyledProperty<string?> SourceLanguageProperty = AvaloniaProperty.Register<SubtitleText, string?>(nameof(SourceLanguage));
@@ -108,6 +115,8 @@ public sealed class SubtitleText : Control
     int currentStart = -1;
     int currentEnd = -1;
     IPointer? selectionPointer;
+    IPointer? sentencePointer;
+    string? sentenceText;
 
     static SubtitleText()
     {
@@ -219,6 +228,10 @@ public sealed class SubtitleText : Control
         {
             Invalidate();
         }
+        else if (change.Property == SlotProperty || change.Property == IsTranslatedProperty
+            || change.Property == SourceLanguageProperty || change.Property == TargetLanguageProperty
+            || change.Property == EnableLanguageSegmentationProperty)
+            ClearSelection();
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -310,14 +323,26 @@ public sealed class SubtitleText : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        if (e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed)
+        {
+            if (dragActive || sentencePointer != null) { e.Handled = true; return; }
+            if (!TryGetWordAt(e.GetPosition(this), out _)) return;
+            e.Handled = true;
+            sentenceText = DisplayText;
+            sentencePointer = e.Pointer;
+            e.Pointer.Capture(this);
+            WordPressed?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        if (sentencePointer != null) { e.Handled = true; return; }
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
             Point point = e.GetPosition(this);
-            if (TryGetWordAt(point, out string word))
+            if (TryGetWordRangeAt(point, out int wordStart, out int wordEnd))
             {
                 e.Handled = true;
-                RaiseEvent(new WordClickedEventArgs(WordClickedEvent, word, DisplayText, Slot, point, IsTranslated,
-                    SourceLanguage, TargetLanguage, true, MouseButton.Right, e.KeyModifiers));
+                RaiseEvent(new WordClickedEventArgs(WordClickedEvent, DisplayText[wordStart..wordEnd], DisplayText, Slot, point, IsTranslated,
+                    SourceLanguage, TargetLanguage, true, MouseButton.Right, e.KeyModifiers, wordStart));
             }
             return;
         }
@@ -361,6 +386,22 @@ public sealed class SubtitleText : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (e.InitialPressMouseButton == MouseButton.Middle && sentencePointer != null)
+        {
+            string? captured = sentenceText;
+            IPointer middlePointer = sentencePointer;
+            sentencePointer = null;
+            sentenceText = null;
+            middlePointer.Capture(null);
+            e.Handled = true;
+            if (captured != DisplayText || string.IsNullOrWhiteSpace(captured)
+                || !TryGetWordAt(e.GetPosition(this), out _)) return;
+            RaiseEvent(new WordClickedEventArgs(WordClickedEvent, captured.ReplaceLineEndings(" "), captured,
+                Slot, e.GetPosition(this), IsTranslated, SourceLanguage, TargetLanguage, false,
+                MouseButton.Middle, e.KeyModifiers, 0));
+            return;
+        }
+        if (e.InitialPressMouseButton != MouseButton.Left) return;
         if (!dragActive)
             return;
 
@@ -393,12 +434,14 @@ public sealed class SubtitleText : Control
         Point anchor = SelectionAnchor(start, end, e.GetPosition(this));
         e.Handled = true;
         RaiseEvent(new WordClickedEventArgs(WordClickedEvent, words, text, Slot, anchor, IsTranslated,
-            SourceLanguage, TargetLanguage, isWord, e.InitialPressMouseButton, e.KeyModifiers));
+            SourceLanguage, TargetLanguage, isWord, e.InitialPressMouseButton, e.KeyModifiers, start));
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        sentencePointer = null;
+        sentenceText = null;
         if (!dragActive)
             return;
         dragActive = false;
@@ -414,6 +457,12 @@ public sealed class SubtitleText : Control
 
     void CancelSelection()
     {
+        if (sentencePointer is { } middle)
+        {
+            sentencePointer = null;
+            sentenceText = null;
+            middle.Capture(null);
+        }
         dragActive = false;
         if (selectionPointer is { } pointer)
         {
@@ -499,7 +548,9 @@ public sealed class SubtitleText : Control
         if (!IsWordChar(text[index]) && index > 0 && IsWordChar(text[index - 1]))
             index--;
 
-        return WordRangeAt(text, index, out start, out end);
+        return EnableLanguageSegmentation && SubtitleWordSegmenter.IsCjkLanguage(IsTranslated ? TargetLanguage : SourceLanguage)
+            ? SubtitleWordSegmenter.TryGetRange(text, index, IsTranslated ? TargetLanguage : SourceLanguage, out start, out end)
+            : WordRangeAt(text, index, out start, out end);
     }
 
     /// <summary>Word under <paramref name="point"/> (control coordinates); false when the point is not on a word.</summary>

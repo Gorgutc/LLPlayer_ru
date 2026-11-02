@@ -1,4 +1,4 @@
-#if !WINDOWS
+﻿#if !WINDOWS
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Runtime.Versioning;
@@ -110,7 +110,7 @@ public class YoutubeDLPackageTests
             Assert.Equal("", options[OnlineVideoRequest.YtDlpPath]);
             Assert.Equal("", options[OnlineVideoRequest.DenoPath]);
             Assert.Equal("720", options["MaxVideoHeight"]);
-            Assert.DoesNotContain("ExtraArguments", options.Keys);
+            Assert.Equal("", options["ExtraArguments"]);
         }
         finally { context.Unload(); }
     }

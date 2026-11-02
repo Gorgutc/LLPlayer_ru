@@ -1,4 +1,4 @@
-namespace FlyleafLib;
+﻿namespace FlyleafLib;
 
 #nullable enable
 
@@ -37,6 +37,12 @@ public interface IAudioSink : IDisposable
     /// <summary>Additional output latency of the device beyond the queued audio, in samples (0 when unknown).</summary>
     int LatencySamples { get; }
 
+    /// <summary>
+    /// Whether this output can still consume its accepted PCM. A sink that catches native read/gain failures must
+    /// report false so its owner can retire a frozen clock before playback reaches another Submit. Never opens a device.
+    /// </summary>
+    bool IsOperational => true;
+
     /// <summary>Discards every queued (not yet played) sample.</summary>
     void Flush();
 
@@ -67,7 +73,8 @@ public interface IAudioBackend
 
     /// <summary>
     /// Creates an output stream on <paramref name="deviceId"/> (null = system default device).
-    /// Throws when the device cannot be opened (the player then disables audio, like the Windows build).
+    /// Throws when the device cannot be opened. The portable player's output owner retains enabled intent,
+    /// uses a silent clock, and retries only when its host requests recovery.
     /// </summary>
     IAudioSink CreateSink(string? deviceId, int sampleRate, int channels);
 }

@@ -1,4 +1,4 @@
-using LLPlayer.Core.Services;
+﻿using LLPlayer.Core.Services;
 
 namespace LLPlayer.Avalonia.Services;
 
@@ -15,4 +15,6 @@ public interface IRecognitionController
     Task CancelRecognitionAsync(int slot);
     Task OcrRecognitionAsync(int slot);
     Task ToggleRecognitionPauseAsync();
+    Task SaveRecognitionSettingsAsync(RecognitionSettings settings, RecognitionSettingsStore store)
+        => Recognition.SaveAndApplyAsync(settings, store);
 }

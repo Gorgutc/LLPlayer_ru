@@ -1,8 +1,31 @@
-# Third-party notices — LLPlayer.Avalonia (Linux app)
+# Third-party notices — LLPlayer.Avalonia (shared Windows/Linux app)
 
 LLPlayer.Avalonia is part of LLPlayer (GPL-3.0, see `../LICENSE`). This file records notices for third-party material
 and bundled dependencies requiring attribution or license text; other NuGet package dependencies keep their own
 licenses.
+
+## NMeCab and the IPAdic Japanese dictionary
+
+The shared Windows/Linux application references the same packages as the supported WPF application:
+
+- `LibNMeCab` **0.10.2**: managed Japanese morphological analysis, Copyright Tsuyoshi Komuta;
+  MeCab attribution: Taku Kudo and Nippon Telegraph and Telephone Corporation.
+- `LibNMeCab.IpaDicBin` **0.10.0**: managed dictionary loader and the compiled IPAdic data.
+
+Both pinned NuGet packages declare the license expression **GPL-2.0-or-later OR LGPL-2.1-or-later**.
+LLPlayer distributes them under the GPL alternative using GPL-3.0; the package-root `LICENSE` contains that
+license. Package metadata and source links:
+
+- <https://www.nuget.org/packages/LibNMeCab/0.10.2>
+- <https://www.nuget.org/packages/LibNMeCab.IpaDicBin/0.10.0>
+- source repository: <https://github.com/komutan/NMeCab>
+
+The dictionary data also carries the separate NAIST and ICOT terms. Copyright 2000–2003 Nara Institute of Science
+and Technology. Its complete redistribution and warranty terms are shipped verbatim in **`IpaDic/COPYING`**;
+the dictionary's original author list is shipped in **`IpaDic/AUTHORS`**. These files accompany `sys.dic`, `unk.dic`,
+`matrix.bin` and `char.bin` from the pinned dictionary package. Keep the data and legal files together when
+redistributing either platform package. These are managed assemblies and dictionary data; no native MeCab library
+or downloaded language model is bundled.
 
 ## shadcn/ui — design tokens (MIT)
 

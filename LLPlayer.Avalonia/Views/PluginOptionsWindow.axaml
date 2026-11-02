@@ -1,0 +1,25 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.PluginOptionsWindow"
+        x:DataType="vm:PluginOptionsViewModel" Classes="dialog" Title="Plugins — LLPlayer"
+        Width="640" Height="520" MinWidth="440" MinHeight="400" WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,16,0,0">
+      <Button Content="Close" Classes="outline" IsEnabled="{Binding !Busy}" Click="OnClose" />
+      <Button Name="SavePluginOptionsButton" Content="Save and close" Command="{Binding SaveCommand}" IsEnabled="{Binding !Busy}" />
+    </StackPanel>
+    <TextBlock DockPanel.Dock="Bottom" Name="PluginOptionsMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="12">
+        <TextBlock Text="YoutubeDL plugin" Classes="dialog-title" />
+        <TextBlock Text="Options apply the next time a video or playlist is opened. Audio language priority comes from Settings → Audio." TextWrapping="Wrap" Classes="dialog-description" />
+        <TextBlock Text="Maximum video height (pixels; 0 uses the engine limit)" />
+        <TextBox Name="MaxVideoHeightBox" Text="{Binding MaxVideoHeight}" AutomationProperties.Name="Maximum online video height" IsEnabled="{Binding !Busy}" />
+        <CheckBox Name="PreferVideoWithAudioBox" Content="Prefer video with audio" IsChecked="{Binding PreferVideoWithAudio}" IsEnabled="{Binding !Busy}" />
+        <TextBlock Text="Extra arguments" />
+        <TextBox Name="ExtraArgumentsBox" Text="{Binding ExtraArguments}" PasswordChar="●" AutomationProperties.Name="Extra yt-dlp arguments" IsEnabled="{Binding !Busy}" />
+        <TextBlock Text="Extraction, playlist range, network and authentication options are supported. Quote values containing spaces. Options that run commands, load configuration/plugins, download files or change output are rejected. Arguments are masked because they may contain credentials." TextWrapping="Wrap" Classes="dialog-description" />
+        <TextBlock Text="External yt-dlp and Deno paths are configured in Open online URL. Nothing is downloaded, installed, updated or probed when these options are opened." TextWrapping="Wrap" Classes="dialog-description" />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>
