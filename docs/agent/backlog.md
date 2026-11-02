@@ -67,7 +67,14 @@
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
-**Текущий одобренный F-13 срез, 2026-11-01: Primary/Secondary Sidebar и sync выбранного cue.**
+**Текущий одобренный F-13 блок, 2026-11-02: Player UI + Mouse + Always On Top.**
+Реализованы ровно 11 согласованных контролов в общем Windows/Linux Settings → Player, одной поставкой внутри
+существующего F-13 Settings parity. [План и mapping](plans/2026-11-02-f13-player-ui.md),
+[актуальный source/status](f13-status-2026-10-18.md#player-ui-mouse-and-always-on-top--owner-approved-2026-11-02).
+Фактические проверки, независимые reviews и delivery receipts: `artifacts/f13-player-ui-2026-11-02/CLOSEOUT.md`.
+Native acceptance остаётся **NOT_RUN / DEFERRED BY OWNER**; полный F-13 parity не заявлен.
+
+**Исторический source/local checkpoint, 2026-11-01: Primary/Secondary Sidebar и sync выбранного cue.**
 Общий Windows/Linux Avalonia Sidebar получил сохраняемый выбор слота (`SidebarShowSecondary`, по умолчанию
 `false` = Primary). Список, поиск, original/display, маска, текущая строка, idle auto-scroll, seek/navigation
 и word provenance следуют выбранному слоту. Отдельный Sync меняет только его runtime Delay по формуле
@@ -719,8 +726,8 @@ idle/hover-only, независимые fade-in/out, геометрия seek bar
 Существующие Avalonia defaults сохранены: idle `2500` ms, fade `200/200` ms, bar/thumb/track `20/12/4` DIP,
 hover-only/Always On Top выключены, три mouse actions включены. Idle `0` означает отсутствие ожидания
 при прежних условиях idle; fade `0` — немедленный переход соответствующего направления.
-Это текущая source implementation: свежие полные gates, независимый `/review`, PR/main CI, final-main Desktop
-и scoped Vault closeout ещё должны быть завершены и записаны в `artifacts/f13-player-ui-2026-11-02/CLOSEOUT.md`.
+Source implementation завершена. Фактические результаты полных gates, независимого `/review`, PR/main CI,
+final-main Desktop и scoped Vault closeout фиксируются в `artifacts/f13-player-ui-2026-11-02/CLOSEOUT.md`.
 Native Windows/Linux GUI/physical input/A/V/GPU/DPI — **NOT_RUN / DEFERRED BY OWNER**.
 Полный Settings/F-13 parity и executable palette/help остаются открытыми; текущий keyboard-only help не расширяется.
 [Текущий статус и границы доказательств](f13-status-2026-10-18.md#player-ui-mouse-and-always-on-top--owner-approved-2026-11-02).
