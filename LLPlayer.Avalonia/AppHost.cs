@@ -26,6 +26,7 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
     FlyleafPlaybackController? controller;
     FlyleafWordTranslator? translator;
     MainWindowViewModel? viewModel;
+    PdicClient? pdicClient;
 
     public MainWindow? MainWindow { get; private set; }
 
@@ -60,9 +61,14 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         AvaloniaHostServices hostServices = new(() => window);
         EngineBootstrap.InstallSeams(dispatcher, hostServices, bridge, keys);
 
+        PlaybackSettingsStore playbackStore = new(paths.PlaybackFile);
+        PlaybackSettings playbackSettings = playbackStore.Load();
+
         try
         {
-            EngineBootstrap.Start(EngineBootstrap.CreateEngineConfig(ffmpeg.Directory, paths));
+            EngineConfig engineConfig = EngineBootstrap.CreateEngineConfig(ffmpeg.Directory, paths);
+            if (playbackStore.HasSavedSettings) playbackSettings.ApplyStartupTo(engineConfig);
+            EngineBootstrap.Start(engineConfig);
         }
         catch (Exception ex)
         {
@@ -77,12 +83,18 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         var onlineSettings = onlineStore.Load();
         var playerConfig = EngineBootstrap.CreatePlayerConfig(prefs);
         onlineSettings.Apply(playerConfig);
-        player = new Player(playerConfig);
         RecognitionSettingsStore recognitionStore = new(paths.RecognitionFile);
         RecognitionSettings? recognition = recognitionStore.Load();
-        recognition?.Apply(player.Config.Subtitles);
+        recognition?.Apply(playerConfig.Subtitles);
+        if (playbackStore.HasSavedSettings) playbackSettings.ApplyTo(playerConfig);
+        player = new Player(playerConfig);
         controller = new FlyleafPlaybackController(player, dispatcher, bridge)
         { RecognitionStore = recognitionStore, RecognitionWarning = recognitionStore.LoadWarning };
+        PlaybackSettings initialPlaybackSettings = playbackStore.HasSavedSettings
+            ? playbackSettings : PlaybackSettings.FromConfig(playerConfig, Engine.Config);
+        if (!playbackStore.HasSavedSettings && recognition?.OcrSecondaryLanguage is { } secondaryFallback)
+            initialPlaybackSettings.LanguageFallbackSecondary = Language.Get(secondaryFallback).CultureName;
+        controller.ConfigurePlaybackSettings(playbackStore, initialPlaybackSettings);
         var translationStore = new TranslationSettingsStore(paths.TranslationFile);
         var translationSettings = translationStore.Load(prefs.WordTranslationService, prefs.TranslateTargetLanguage);
         controller.ApplyTranslationSettings(translationSettings);
@@ -97,6 +109,40 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
                 await controller.SaveOnlineVideoSettingsAsync(onlineStore, draft);
                 onlineSettings = draft.Clone();
             }, viewModel.OpenOnlineVideo, onlineStore.LoadWarning);
+        viewModel.PluginOptionsDialog = () => new PluginOptionsViewModel(onlineSettings,
+            async draft =>
+            {
+                await controller.SaveOnlineVideoSettingsAsync(onlineStore, draft);
+                onlineSettings = draft.Clone();
+            });
+        viewModel.PlaybackSettingsDialog = () => new PlaybackSettingsViewModel(controller.GetPlaybackSettings(),
+            controller.GetPlaybackRuntimeSettings(), async (edited, baseline, runtime, defaultVolumeEdited) =>
+            {
+                await controller.SavePlaybackSettingsAndRememberAsync(edited, baseline, runtime, defaultVolumeEdited, (volume, mute) =>
+                {
+                    prefsStore!.SaveRememberedVolume(volume, mute);
+                });
+            }, playbackStore.LoadWarning, async () =>
+            {
+                await controller.RefreshPlaybackDevicesAsync();
+                return controller.GetPlaybackRuntimeSettings();
+            });
+        viewModel.SubtitleExportBom = () => controller.GetPlaybackSettings().SubtitleExportUtf8Bom;
+        PdicSettingsStore pdicStore = new(paths.PdicFile);
+        PdicSettings pdicSettings = pdicStore.Load();
+        pdicClient = new PdicClient(() => pdicSettings.ExecutablePath);
+        viewModel.PdicSender = pdicClient.SendAsync;
+        viewModel.PdicSettingsDialog = () => new PdicSettingsViewModel(pdicSettings, draft =>
+        {
+            pdicStore.Save(draft);
+            pdicSettings = draft.Clone();
+            return Task.CompletedTask;
+        });
+        viewModel.SubtitleDownloadDialog = () => new OpenSubtitlesDownloadViewModel(new OpenSubtitlesClient(),
+            controller.Title ?? "", viewModel.SubtitleExportBom,
+            capturePrimaryLoadTarget: controller.CaptureSubtitlePrimaryLoadTarget,
+            media: controller,
+            preferredLanguages: () => player.Config.Subtitles.Languages.Select(language => language.ISO6391).ToArray());
         var wordLibrary = new WordLibrary(paths.WordListFile);
         wordLibrary.Load();
         viewModel.WordLibrary = wordLibrary;
@@ -115,13 +161,23 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
             viewModel.ShowToast("Recognition settings", recognitionWarning, ToastVariant.Destructive);
         if (prefsStore.LoadWarning is { } warning)
             viewModel.ShowToast("Preferences reset", warning, ToastVariant.Destructive);
+        if (playbackStore.LoadWarning is { } playbackWarning)
+            viewModel.ShowToast("Playback settings", playbackWarning, ToastVariant.Destructive);
+        if (pdicStore.LoadWarning is { } pdicWarning)
+            viewModel.ShowToast("PDIC settings", pdicWarning, ToastVariant.Destructive);
 
         if (options.Theme != null)
             viewModel.ShowSessionTheme(options.Theme);
         if (options.ShowSidebar && !viewModel.SidebarVisible)
             viewModel.ToggleSidebar();
 
-        window.Closed += (_, _) => { player?.Dispose(); player = null; };
+        window.Closed += (_, _) =>
+        {
+            player?.Dispose();
+            foreach (string failure in controller.CleanupDownloadedSubtitleFiles())
+                CrashLog.Write("Downloaded subtitle cleanup", new IOException(failure));
+            player = null;
+        };
         desktop.MainWindow = window;
         window.Show();
 
@@ -184,7 +240,9 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         Task popupDrain = viewModel?.WordPopup.DisposeAsync().AsTask() ?? Task.CompletedTask;
         Task translationDrain = translator?.DisposeAsync().AsTask() ?? Task.CompletedTask;
         Task recognitionDrain = controller?.DisposeAsync().AsTask() ?? Task.CompletedTask;
-        await Task.WhenAll(popupDrain, managerDrain, translationDrain, recognitionDrain, exportDrain);
+        Task pdicDrain = viewModel?.DrainPdicOperationsAsync() ?? Task.CompletedTask;
+        await Task.WhenAll(popupDrain, managerDrain, translationDrain, recognitionDrain, exportDrain, pdicDrain);
+        if (pdicClient != null) await pdicClient.DisposeAsync();
     }
 
     /// <summary>Developer option --screenshot: render <paramref name="window"/> to a PNG after the delay and exit.</summary>

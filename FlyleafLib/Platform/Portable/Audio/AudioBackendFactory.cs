@@ -1,4 +1,4 @@
-namespace FlyleafLib;
+﻿namespace FlyleafLib;
 
 #nullable enable
 
@@ -16,9 +16,10 @@ namespace FlyleafLib;
 /// Selection (<see cref="BackendVariable"/> = <c>LLPLAYER_AUDIO_BACKEND</c>, case-insensitive):
 /// <list type="bullet">
 /// <item>unset / empty / <c>auto</c>: <see cref="OpenAlAudioBackend"/> when the OpenAL library loads and its default device
-/// opens, otherwise <see cref="NullAudioBackend"/> (silent, real-time clock) with a logged warning.</item>
+/// opens; with no output it retains the loaded backend behind a silent real-time clock until a host device refresh
+/// succeeds. A missing library uses <see cref="NullAudioBackend"/> with a logged warning.</item>
 /// <item><c>openal</c>: OpenAL whenever the library loads, without probing a device (a device may appear later; a sink that
-/// cannot open its device disables audio for that player, as on Windows). Falls back to Null only when the library
+/// cannot open its device uses a silent clock until the host retries). Falls back to Null only when the library
 /// itself is missing.</item>
 /// <item><c>null</c>: always <see cref="NullAudioBackend"/> (headless runs, CI).</item>
 /// <item>anything else: warning, then <c>auto</c>.</item>
@@ -83,17 +84,42 @@ public static class AudioBackendFactory
         catch (Exception e)
         {
             log($"Audio backend: Null (no sound output) because probing the OpenAL default device failed: {e.Message}");
-            return NullAudioBackend.Instance;
+            return new RecoverableAutoAudioBackend(backend);
         }
 
         if (!canOpen)
         {
             log("Audio backend: Null (no sound output) because the OpenAL default device cannot be opened (no sound card / sound server?)");
-            return NullAudioBackend.Instance;
+            return new RecoverableAutoAudioBackend(backend);
         }
 
         log("Audio backend: OpenAL");
         return backend;
+    }
+
+    /// <summary>Retains the loaded backend when auto starts before an output exists. Refresh owns all probes.</summary>
+    sealed class RecoverableAutoAudioBackend(OpenAlAudioBackend candidate) : IAudioBackend
+    {
+        readonly object gate = new();
+        bool available;
+        public string Name { get { lock (gate) return available ? candidate.Name : "Null"; } }
+        public IReadOnlyList<AudioEngine.AudioEndpoint> EnumerateDevices()
+        {
+            lock (gate)
+            {
+                if (!available)
+                    try { available = candidate.CanOpenDefaultDevice(); }
+                    catch { available = false; }
+                return available ? candidate.EnumerateDevices() : [];
+            }
+        }
+        public AudioEngine.AudioEndpoint? GetDefaultDevice()
+        { lock (gate) return available ? candidate.GetDefaultDevice() : null; }
+        public IAudioSink CreateSink(string? deviceId, int sampleRate, int channels)
+        {
+            lock (gate)
+                return available ? candidate.CreateSink(deviceId, sampleRate, channels) : new NullAudioSink(sampleRate, channels);
+        }
     }
 
     static void DefaultLog(string message)

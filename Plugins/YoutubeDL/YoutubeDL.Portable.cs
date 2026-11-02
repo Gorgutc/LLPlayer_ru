@@ -1,4 +1,4 @@
-#if !WINDOWS
+﻿#if !WINDOWS
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -68,23 +68,10 @@ public partial class YoutubeDL
             if (Cancelled())
                 return new("Cancelled");
 
-            var data = Extract(CreateStartInfo(helper, deno, url), Cancelled);
-            if (data == null || data._type == "playlist" || data._type == "multi_video")
-                return new("The extractor did not return a single video.");
-
-            // A URL-less root object is not a single-format stream. Reject non-web results from
-            // generic extractors too; playback must never reinterpret web metadata as local files.
-            data.formats = (data.formats ?? [data]).Where(f => f != null && IsSafeProcessUrl(f.url)).ToList();
-            if (!IsSafeProcessUrl(data.webpage_url)) data.webpage_url = url;
-            if (!IsSafeProcessUrl(data.manifest_url)) data.manifest_url = null;
-            foreach (var format in data.formats)
-                if (!IsSafeProcessUrl(format.manifest_url)) format.manifest_url = null;
-            if (data.automatic_captions != null)
-                foreach (var subtitles in data.automatic_captions.Values)
-                    subtitles?.RemoveAll(s => !IsSafeProcessUrl(s?.url));
-
-            var item = BuildItem(data, Cancelled);
-            if (item == null)
+            var data = Extract(CreateStartInfo(helper, deno, url), url, Cancelled);
+            var items = data.Items.Select(metadata => (Item: BuildItem(metadata, Cancelled), Metadata: metadata))
+                .Where(entry => entry.Item != null).ToList();
+            if (items.Count == 0)
                 return new(Cancelled() ? "Cancelled" : "No playable streams were found.");
 
             // AddItem registers collections synchronously with the UI. Post first, then
@@ -98,7 +85,13 @@ public partial class YoutubeDL
                     {
                         if (Cancelled()) { published.SetResult(new("Cancelled")); return; }
                         Playlist.InputType = InputType.Web;
-                        AddPlaylistItem(item, data);
+                        Playlist.Title = data.Title;
+                        Playlist.ExpectingItems = data.ExpectedCount;
+                        foreach (var entry in items)
+                        {
+                            if (Cancelled()) { published.SetResult(new("Cancelled")); return; }
+                            AddPlaylistItem(entry.Item, entry.Metadata);
+                        }
                         Handler.OnPlaylistCompleted();
                         published.SetResult(new());
                     }
@@ -120,7 +113,7 @@ public partial class YoutubeDL
         catch (Exception e) { return new($"Online video extraction failed: {e.Message}"); }
     }
 
-    static ProcessStartInfo CreateStartInfo(string helper, string deno, string url)
+    ProcessStartInfo CreateStartInfo(string helper, string deno, string url)
     {
         ProcessStartInfo start = new(helper)
         {
@@ -130,25 +123,30 @@ public partial class YoutubeDL
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8
         };
-        // Dump one JSON object to stdout. No watcher, writable metadata path or quoted command line.
+        // A single overflow sentinel makes an oversized default playlist fail visibly while
+        // bounding extractor work before it writes JSON. Explicit validated ranges override it.
+        start.ArgumentList.Add("--playlist-items"); start.ArgumentList.Add("1:1001");
+        if (Options.TryGetValue("ExtraArguments", out string extras))
+            foreach (string argument in OnlineVideoArguments.Parse(extras)) start.ArgumentList.Add(argument);
+        // Invariant flags follow user options. No watcher, writable metadata path or quoted command line.
         foreach (string arg in new[] { "--ignore-config", "--no-plugin-dirs", "--no-cache-dir", "--no-js-runtimes",
-            "--js-runtimes", "deno:" + deno, "--no-remote-components", "--no-playlist", "--playlist-end", "1", "--skip-download",
+            "--js-runtimes", "deno:" + deno, "--no-remote-components", "--skip-download",
             "--dump-single-json", "--encoding", "utf-8", "--", url })
             start.ArgumentList.Add(arg);
         return start;
     }
 
-    YoutubeDLJson Extract(ProcessStartInfo start, Func<bool> cancelled)
+    PortablePlaylistData Extract(ProcessStartInfo start, string requestedUrl, Func<bool> cancelled)
     {
         using var process = StartHelper(start);
-        var json = JsonSerializer.DeserializeAsync<YoutubeDLJson>(process.Output, portableJson).AsTask();
+        var json = ReadBoundedMetadataAsync(process.Output);
         var stderr = process.Error.CopyToAsync(Stream.Null);
         while (!process.WaitForExit(35))
         {
             if (cancelled())
                 throw new OperationCanceledException();
             if (json.IsFaulted)
-                return json.GetAwaiter().GetResult();
+                json.GetAwaiter().GetResult();
         }
         if (cancelled())
             throw new OperationCanceledException();
@@ -167,7 +165,21 @@ public partial class YoutubeDL
             Thread.Sleep(15);
         }
         stderr.GetAwaiter().GetResult();
-        return json.GetAwaiter().GetResult();
+        return ParsePortablePlaylist(json.GetAwaiter().GetResult(), requestedUrl);
+    }
+
+    static async Task<string> ReadBoundedMetadataAsync(Stream output)
+    {
+        using MemoryStream buffer = new();
+        byte[] block = new byte[16384];
+        int count;
+        while ((count = await output.ReadAsync(block).ConfigureAwait(false)) != 0)
+        {
+            if (buffer.Length + count > MaximumMetadataBytes)
+                throw new IOException("Online metadata exceeds the 32 MiB limit. Select a smaller playlist range.");
+            buffer.Write(block, 0, count);
+        }
+        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
     }
 }
 #endif

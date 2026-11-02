@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Translation;
@@ -44,7 +44,8 @@ public static class EngineBootstrap
     /// </summary>
     public static void Start(EngineConfig config)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(config.LogOutput) ?? ".");
+        string? logDirectory = GetLogDirectory(config.LogOutput);
+        if (logDirectory != null) Directory.CreateDirectory(logDirectory);
         IReadOnlyList<string> audioMessages = AudioBackendSelector.Apply();
         Engine.Start(config);
         LogHandler log = new("[LLPlayer      ] ");
@@ -56,6 +57,10 @@ public static class EngineBootstrap
                 log.Info(message);
         }
     }
+
+    internal static string? GetLogDirectory(string output)
+        => output.Length == 0 || output is ":console" or ":debug" or ":custom"
+            ? null : Path.GetDirectoryName(Path.GetFullPath(output));
 
     /// <summary>Default player config of the Linux app (the WPF app's DefaultConfig plus a smoother time bar).</summary>
     public static Config CreatePlayerConfig(AppPrefs prefs)

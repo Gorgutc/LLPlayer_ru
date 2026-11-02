@@ -1,4 +1,5 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
+using System.Linq;
 using System.Windows.Data;
 
 using FlyleafLib.MediaFramework.MediaDevice;
@@ -78,9 +79,10 @@ public class AudioEngine : INotifyPropertyChanged
 
     /// <summary>
     /// Re-enumerates the playback devices of <see cref="Backend"/> (hosts call this on device hot-plug).
-    /// Players whose device disappeared fall back to <see cref="DefaultDevice"/>.
+    /// Players whose device disappeared fall back to <see cref="DefaultDevice"/>, unless the host passes false
+    /// and applies its retained output selection through its own serialized command owner.
     /// </summary>
-    public void RefreshDevices()
+    public void RefreshDevices(bool updatePlayers = true)
     {
         var backend = Backend ?? NullAudioBackend.Instance;
         List<AudioEndpoint> removed = [];
@@ -126,7 +128,7 @@ public class AudioEngine : INotifyPropertyChanged
             var defaultDevice = backend.GetDefaultDevice();
             string id   = defaultDevice?.Id   ?? DefaultDevice.Id;
             string name = defaultDevice?.Name ?? DefaultDevice.Name;
-            if (CurrentDevice.Id != id)
+            if (CurrentDevice.Id != id || CurrentDevice.Name != name)
             {
                 CurrentDevice.Id    = id;
                 CurrentDevice.Name  = name;
@@ -150,14 +152,12 @@ public class AudioEngine : INotifyPropertyChanged
                     Devices.Add(DefaultDevice);
         }
 
-        if (removed.Count > 0)
-            Task.Run(() =>
-            {
-                foreach (var device in removed)
-                    foreach (var player in Engine.Players)
-                        if (player.Audio.Device == device)
-                            player.Audio.Device = DefaultDevice;
-            });
+        // A host with its own serialized command owner passes false and applies its retained selection there.
+        // Do not dispatch unowned work that can outlive player disposal or a new media generation.
+        if (updatePlayers && removed.Count > 0)
+            foreach (var player in Engine.Players.ToArray())
+                if (removed.Any(device => player.Audio.Device.Id == device.Id))
+                    player.Audio.Device = DefaultDevice;
     }
 
     public class AudioEndpoint

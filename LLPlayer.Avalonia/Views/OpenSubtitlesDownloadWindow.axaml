@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:s="using:LLPlayer.Avalonia.Services"
+        x:Class="LLPlayer.Avalonia.Views.OpenSubtitlesDownloadWindow" x:DataType="vm:OpenSubtitlesDownloadViewModel"
+        Classes="dialog" Title="Download subtitles — OpenSubtitles.com" Width="820" Height="720"
+        MinWidth="600" MinHeight="560" WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,16,0,0">
+      <Button Content="Cancel operation" Classes="outline" Command="{Binding CancelCommand}" IsEnabled="{Binding Busy}" />
+      <Button Content="Close" Classes="outline" Click="OnClose" />
+      <Button Name="LoadPrimarySubtitleButton" Content="Load in Primary" Classes="outline" Command="{Binding LoadPrimaryCommand}" />
+      <Button Name="DownloadSubtitleButton" Content="Save selected subtitle" Command="{Binding DownloadCommand}" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="8">
+      <TextBlock Text="Download subtitles" Classes="dialog-title" />
+      <TextBlock Text="OpenSubtitles.com requires your application API key and account. These values stay in this dialog and are cleared on close. Search sends the title and language to OpenSubtitles; saving a file consumes your account's download quota." TextWrapping="Wrap" Classes="dialog-description" />
+      <TextBlock Text="UTF-8 text subtitles only. Bitmap subtitles and archives are unavailable through this provider adaptation. Duration is shown as Unavailable because the current search API does not provide it." TextWrapping="Wrap" Classes="small muted" />
+      <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="6" IsEnabled="{Binding !Busy}">
+        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Application API key" />
+        <TextBox Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding ApiKey}" PasswordChar="●" AutomationProperties.Name="OpenSubtitles application API key" />
+        <TextBlock Grid.Row="2" Text="Username" /><TextBlock Grid.Row="2" Grid.Column="1" Text="Password" />
+        <TextBox Grid.Row="3" Text="{Binding Username}" AutomationProperties.Name="OpenSubtitles.com username" />
+        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding Password}" PasswordChar="●" AutomationProperties.Name="OpenSubtitles.com password" />
+      </Grid>
+      <Grid ColumnDefinitions="*,130,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="6">
+        <TextBlock Text="Title or release name" /><TextBlock Grid.Column="1" Text="Language code" />
+        <TextBox Grid.Row="1" Name="SubtitleQuery" Text="{Binding Query}" IsEnabled="{Binding !Busy}" AutomationProperties.Name="Subtitle title or release name" />
+        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Language}" PlaceholderText="en, ja…" IsEnabled="{Binding !Busy}" AutomationProperties.Name="Subtitle language code, empty for all" />
+        <Button Grid.Row="1" Grid.Column="2" Content="Search" Command="{Binding SearchCommand}" />
+      </Grid>
+      <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,4">
+        <Button Content="Previous page" Classes="outline" Command="{Binding PreviousPageCommand}" />
+        <TextBlock Text="{Binding PageText}" VerticalAlignment="Center" />
+        <Button Content="Next page" Classes="outline" Command="{Binding NextPageCommand}" />
+      </StackPanel>
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <TextBlock Name="SubtitleDownloadMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+    </StackPanel>
+    <ListBox Name="SubtitleDownloadResults" ItemsSource="{Binding Results}" SelectedItem="{Binding SelectedResult}" IsEnabled="{Binding !Busy}" Margin="0,8,0,0" AutomationProperties.Name="OpenSubtitles search results">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="s:OpenSubtitlesResult">
+          <StackPanel Spacing="3" Margin="6">
+            <TextBlock Text="{Binding FileName}" TextWrapping="Wrap" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Release}" TextWrapping="Wrap" Classes="small muted" />
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="{Binding LanguageName}" /><TextBlock Text="{Binding DownloadCount, StringFormat='Downloads: {0}'}" Classes="small muted" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <TextBlock Text="{Binding Format, StringFormat='Format: {0}'}" Classes="small muted" />
+              <TextBlock Text="{Binding YearText, StringFormat='Year: {0}'}" Classes="small muted" />
+              <TextBlock Text="{Binding Duration, StringFormat='Duration: {0}'}" Classes="small muted" />
+              <TextBlock Text="{Binding Rating, StringFormat='Rating: {0}'}" Classes="small muted" />
+            </StackPanel>
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</Window>

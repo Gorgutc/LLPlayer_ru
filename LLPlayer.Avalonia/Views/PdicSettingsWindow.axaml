@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.PdicSettingsWindow"
+        x:DataType="vm:PdicSettingsViewModel" Classes="dialog" Title="PDIC — LLPlayer"
+        Width="620" Height="410" MinWidth="440" MinHeight="340" WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,16,0,0">
+      <Button Content="Close" Classes="outline" Click="OnClose" IsEnabled="{Binding !Busy}" />
+      <Button Name="SavePdicSettingsButton" Content="Save and close" Command="{Binding SaveCommand}" />
+    </StackPanel>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="12">
+        <TextBlock Text="PDIC dictionary" Classes="dialog-title" />
+        <TextBlock Name="PdicCapabilityMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="dialog-description" />
+        <StackPanel IsEnabled="{Binding CanConfigure}" Spacing="12">
+          <TextBlock Text="PDIC executable path (pdic-pipe.exe)" />
+          <TextBox Name="PdicExecutablePath" Text="{Binding ExecutablePath}" IsEnabled="{Binding !Busy}" AutomationProperties.Name="PDIC executable path" />
+          <WrapPanel>
+            <Button Name="PdicBrowseButton" Content="Browse…" Classes="outline" Command="{Binding BrowseCommand}" />
+            <Button Name="PdicAutoSetButton" Content="Auto Set" Classes="outline" Command="{Binding AutoSetCommand}" Margin="8,0,0,0" />
+          </WrapPanel>
+          <TextBlock Text="Auto Set checks the standard PDIC-R Unicode for EIJIRO XI folder only when clicked. Opening or saving these settings never starts the bridge. Middle-click sentences and dragged phrases retain the normal word popup." TextWrapping="Wrap" Classes="dialog-description" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

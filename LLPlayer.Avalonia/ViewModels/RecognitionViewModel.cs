@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib;
 using LLPlayer.Core.Services;
@@ -11,6 +11,8 @@ public partial class RecognitionViewModel : ObservableObject
 {
     readonly RecognitionActions actions;
     readonly RecognitionSettingsStore store;
+    readonly Func<RecognitionSettings, Task>? save;
+    public bool CanEditFallbackLanguages { get; }
     public RecognitionSettings Draft { get; }
     public event Action? Saved;
     public string? Warning { get; }
@@ -24,11 +26,14 @@ public partial class RecognitionViewModel : ObservableObject
     [ObservableProperty] string maxSegmentLengthText;
     [ObservableProperty] string maxTokensPerSegmentText;
 
-    public RecognitionViewModel(RecognitionSettings settings, RecognitionActions actions, RecognitionSettingsStore store, string? warning = null)
+    public RecognitionViewModel(RecognitionSettings settings, RecognitionActions actions, RecognitionSettingsStore store,
+        string? warning = null, Func<RecognitionSettings, Task>? save = null, bool fallbackLanguagesEditable = true)
     {
         Draft = settings.Clone();
         this.actions = actions;
         this.store = store;
+        this.save = save;
+        CanEditFallbackLanguages = fallbackLanguagesEditable;
         modelDirectory = Draft.WhisperCpp.ModelDirectory ?? WhisperConfig.ModelsDirectory;
         selectedModel = Draft.WhisperCpp.Model;
         threadsText = DisplayInteger(Draft.WhisperCpp.Threads);
@@ -76,6 +81,7 @@ public partial class RecognitionViewModel : ObservableObject
     [RelayCommand]
     async Task SaveAsync()
     {
+        if (Busy) return;
         Busy = true;
         try
         {
@@ -88,7 +94,9 @@ public partial class RecognitionViewModel : ObservableObject
             Draft.WhisperCpp.MaxTokensPerSegment = tokens;
             Draft.WhisperCpp.ModelDirectory = ModelDirectory == WhisperConfig.ModelsDirectory ? null : ModelDirectory;
             Draft.WhisperCpp.Model = SelectedModel;
-            await actions.SaveAndApplyAsync(Draft, store);
+            RecognitionSettings candidate = Draft.Clone();
+            if (save != null) await save(candidate);
+            else await actions.SaveAndApplyAsync(candidate, store);
             Busy = false;
             Saved?.Invoke();
         }

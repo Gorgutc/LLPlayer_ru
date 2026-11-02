@@ -1,0 +1,192 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:s="using:LLPlayer.Avalonia.Services"
+        x:Class="LLPlayer.Avalonia.Views.PlaybackSettingsWindow" x:DataType="vm:PlaybackSettingsViewModel"
+        Classes="dialog" Title="Playback settings — LLPlayer" Width="800" Height="660" MinWidth="560" MinHeight="440"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Window.Resources>
+    <DataTemplate x:Key="NumberEditor" x:DataType="vm:PlaybackNumberEditor">
+      <Grid ColumnDefinitions="*,132,Auto" ColumnSpacing="8" Margin="0,0,0,10">
+        <TextBlock Text="{Binding Label}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        <TextBox Grid.Column="1" Name="PlaybackNumberText" Text="{Binding Text, Mode=TwoWay}"
+                 AutomationProperties.Name="{Binding Label}" />
+        <Button Grid.Column="2" Content="Reset" Classes="ghost sm" IsVisible="{Binding CanReset}" Command="{Binding ResetCommand}"
+                AutomationProperties.Name="{Binding Label, StringFormat='Reset {0}'}" />
+      </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="LanguageChoice" x:DataType="vm:PlaybackLanguageChoice">
+      <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+    </DataTemplate>
+    <DataTemplate x:Key="DeviceChoice" x:DataType="s:AudioDeviceInfo">
+      <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+    </DataTemplate>
+    <DataTemplate x:Key="LanguageEditor" x:DataType="vm:PlaybackLanguageEditor">
+      <StackPanel Spacing="8">
+        <TextBox Text="{Binding SearchText}" PlaceholderText="Search all languages…" AutomationProperties.Name="Search available languages" />
+        <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="8">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Available languages" Classes="small muted" />
+            <ListBox ItemsSource="{Binding AvailableLanguages}" SelectedItem="{Binding SelectedAvailable}" Height="150"
+                     ItemTemplate="{StaticResource LanguageChoice}" AutomationProperties.Name="Available languages" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+            <Button Content="Add →" Command="{Binding AddCommand}" Classes="outline sm" />
+            <Button Content="← Remove" Command="{Binding RemoveCommand}" Classes="outline sm" />
+            <Button Content="Move up" Command="{Binding MoveUpCommand}" Classes="outline sm" />
+            <Button Content="Move down" Command="{Binding MoveDownCommand}" Classes="outline sm" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Spacing="4">
+            <TextBlock Text="Priority (highest first)" Classes="small muted" />
+            <ListBox ItemsSource="{Binding SelectedLanguages}" SelectedItem="{Binding Selected}" Height="150"
+                     ItemTemplate="{StaticResource LanguageChoice}" AutomationProperties.Name="Languages in priority order" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </DataTemplate>
+  </Window.Resources>
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <StackPanel Margin="0,0,0,14" Spacing="4">
+      <TextBlock Text="Playback settings" Classes="dialog-title" />
+      <TextBlock Text="Save applies the edited policies. Device, delay and viewport values belong to the current session." Classes="dialog-description" TextWrapping="Wrap" />
+    </StackPanel>
+    <TabControl Grid.Row="1" Name="PlaybackTabs" IsEnabled="{Binding !Busy}">
+      <TabItem Header="Audio">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="12" Margin="4,14,8,8">
+            <CheckBox Name="AudioEnabledEditor" Content="Audio enabled" IsChecked="{Binding Draft.AudioEnabled}" />
+            <CheckBox Name="AudioFiltersEditor" Content="Use audio filters" IsChecked="{Binding Draft.AudioFiltersEnabled}" IsEnabled="{Binding FiltersAvailable}" />
+            <TextBlock Text="Changing the default volume applies it to playback and remembers it. An unchanged default preserves the latest volume and mute state." TextWrapping="Wrap" Classes="small muted" />
+            <ItemsControl ItemsSource="{Binding AudioNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+            <TextBlock Text="Audio languages" FontWeight="SemiBold" />
+            <TextBlock Text="Streams are suggested in this order, including extracted online audio." TextWrapping="Wrap" Classes="small muted" />
+            <ContentControl Content="{Binding AudioLanguages}" ContentTemplate="{StaticResource LanguageEditor}" />
+            <Separator />
+            <TextBlock Text="Audio device (current session)" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding DefaultAudioDeviceName, StringFormat='Default device: {0}'}" TextWrapping="Wrap" />
+            <ComboBox Name="AudioDeviceEditor" ItemsSource="{Binding AudioDeviceChoices}" SelectedItem="{Binding SelectedAudioDevice}"
+                      ItemTemplate="{StaticResource DeviceChoice}" HorizontalAlignment="Stretch" AutomationProperties.Name="Audio output device" />
+            <Button Name="RefreshAudioDevicesButton" Content="Refresh audio devices" Classes="outline" Command="{Binding RefreshDevicesCommand}" HorizontalAlignment="Left" />
+            <TextBlock Text="{Binding AudioRecoveryStatus}" TextWrapping="Wrap" Classes="small muted" />
+            <TextBlock Text="System default follows the current default device. An unavailable explicit device reconnects when available; its selection remains visible." TextWrapping="Wrap" Classes="small muted" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Video">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="12" Margin="4,14,8,8">
+            <TextBlock Text="Software video" FontWeight="SemiBold" />
+            <TextBlock Text="Aspect ratio" />
+            <ComboBox Name="AspectRatioEditor" ItemsSource="{Binding AspectRatios}" SelectedItem="{Binding Draft.AspectRatio}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Custom aspect ratio (positive width:height)" />
+            <TextBox Name="CustomAspectRatioEditor" Text="{Binding Draft.AspectRatioCustom}" AutomationProperties.Name="Custom aspect ratio" />
+            <TextBlock Text="{Binding FrameFiltersHelp}" TextWrapping="Wrap" Classes="small muted" />
+            <TextBlock Text="Deinterlace field order" />
+            <ComboBox Name="DeinterlaceEditor" ItemsSource="{Binding DeinterlaceOptions}" SelectedItem="{Binding Draft.DeInterlace}" IsEnabled="{Binding FiltersAvailable}" HorizontalAlignment="Stretch" />
+            <CheckBox Content="Double-rate deinterlacing" IsChecked="{Binding Draft.DoubleRate}" IsEnabled="{Binding FiltersAvailable}" />
+            <CheckBox Content="Zero latency (live video)" IsChecked="{Binding Draft.ZeroLatency}" />
+            <TextBlock Text="HDR to SDR method" />
+            <ComboBox Name="HdrMethodEditor" ItemsSource="{Binding HdrOptions}" SelectedItem="{Binding Draft.HDRtoSDRMethod}" IsEnabled="{Binding FiltersAvailable}" HorizontalAlignment="Stretch" />
+            <ItemsControl ItemsSource="{Binding VideoNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+            <Expander Header="Colour filters" IsExpanded="True">
+              <StackPanel Spacing="8">
+                <ItemsControl ItemsSource="{Binding ColorNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+                <Button Name="ResetVideoFiltersButton" Content="Reset all colour filters" Classes="outline" Command="{Binding ResetFiltersCommand}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Expander>
+            <Expander Header="Current viewport">
+              <StackPanel Spacing="8">
+                <TextBlock Text="These values reset for the next video. Crop values must leave a nonempty picture." Classes="small muted" TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding GeometryNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+                <CheckBox Content="Flip horizontally" IsChecked="{Binding HorizontalFlip}" />
+                <CheckBox Content="Flip vertically" IsChecked="{Binding VerticalFlip}" />
+                <Button Name="ResetViewportButton" Content="Reset viewport" Command="{Binding ResetViewportCommand}" Classes="outline" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Expander>
+            <Expander Header="Hardware capabilities">
+              <StackPanel Spacing="8">
+                <TextBlock Text="{Binding HardwareCapabilityReason}" TextWrapping="Wrap" Classes="small muted" />
+                <CheckBox Name="HardwareAccelerationEditor" Content="Hardware video acceleration" IsChecked="False" IsEnabled="False" />
+                <CheckBox Content="Allow hardware decoder profile mismatch" IsChecked="False" IsEnabled="False" />
+                <CheckBox Content="Super resolution" IsChecked="False" IsEnabled="False" />
+                <CheckBox Content="VSync control" IsChecked="False" IsEnabled="False" />
+                <ComboBox SelectedIndex="0" IsEnabled="False" HorizontalAlignment="Stretch" AutomationProperties.Name="Video processor, software only">
+                  <ComboBoxItem Content="Software (swscale)" />
+                </ComboBox>
+                <TextBlock Text="D3D noise reduction, edge enhancement, anamorphic scaling and stereo adjustment are unavailable." TextWrapping="Wrap" Classes="small muted" />
+              </StackPanel>
+            </Expander>
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Player">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="12" Margin="4,14,8,8">
+            <TextBlock Text="Buffering, decoding and live-stream timeouts" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="Frame limits and decoder threads affect future decoding. Timeouts use milliseconds and apply to protocols that support interrupts; zero sets no wait." Classes="small muted" TextWrapping="Wrap" />
+            <ItemsControl ItemsSource="{Binding PlayerNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+            <CheckBox Name="SeekAccurateEditor" Content="Always seek accurately" IsChecked="{Binding Draft.SeekAccurate}" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Subtitles">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="12" Margin="4,14,8,8">
+            <CheckBox Name="SubtitlesEnabledEditor" Content="Subtitles enabled" IsChecked="{Binding Draft.SubtitlesEnabled}" />
+            <CheckBox Content="Search for local subtitles" IsChecked="{Binding Draft.SearchLocal}" />
+            <TextBlock Text="Additional local paths (semicolon separated; relative or absolute)" TextWrapping="Wrap" />
+            <TextBox Name="SubtitleSearchPathsEditor" Text="{Binding Draft.SearchLocalPaths}" AutomationProperties.Name="Additional local subtitle search paths" />
+            <Button Name="ResetSubtitlePathsButton" Content="Reset search paths" Command="{Binding ResetSearchLocalPathsCommand}" Classes="outline" HorizontalAlignment="Left" />
+            <CheckBox Content="Cache internal bitmap subtitles (uses more memory)" IsChecked="{Binding Draft.EnabledCached}" />
+            <CheckBox Content="Open automatic online subtitles automatically" IsChecked="{Binding Draft.OpenAutomaticSubs}" />
+            <CheckBox Name="SubtitleExportBomEditor" Content="Export UTF-8 with BOM by default" IsChecked="{Binding Draft.SubtitleExportUtf8Bom}" />
+            <ItemsControl ItemsSource="{Binding SubtitleDelayNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+            <Separator />
+            <TextBlock Text="Language detection and priority" FontWeight="SemiBold" />
+            <CheckBox Content="Detect subtitle language automatically" IsChecked="{Binding Draft.LanguageAutoDetect}" />
+            <TextBlock Text="Primary fallback language" />
+            <ComboBox Name="PrimaryFallbackEditor" ItemsSource="{Binding FallbackLanguages}" SelectedItem="{Binding PrimaryFallbackLanguage}" ItemTemplate="{StaticResource LanguageChoice}" HorizontalAlignment="Stretch" />
+            <CheckBox Content="Use the primary fallback language for secondary subtitles" IsChecked="{Binding Draft.LanguageFallbackSecondarySame}" />
+            <TextBlock Text="Secondary fallback (when the setting above is off)" TextWrapping="Wrap" />
+            <ComboBox Name="SecondaryFallbackEditor" ItemsSource="{Binding FallbackLanguages}" SelectedItem="{Binding SecondaryFallbackLanguage}" ItemTemplate="{StaticResource LanguageChoice}" HorizontalAlignment="Stretch" />
+            <ContentControl Content="{Binding SubtitleLanguages}" ContentTemplate="{StaticResource LanguageEditor}" />
+            <Separator />
+            <TextBlock Text="Generated subtitle policy (ASR and translation)" FontWeight="SemiBold" />
+            <CheckBox Content="Re-segment generated subtitles" IsChecked="{Binding Draft.ResegmentSubtitles}" />
+            <CheckBox Content="Word-level cue timing (interactive faster-whisper)" IsChecked="{Binding Draft.WordTimestamps}" />
+            <CheckBox Content="Snap cue timing to speech (interactive ASR, CPU VAD)" IsChecked="{Binding Draft.VadCueSnapping}" />
+            <CheckBox Content="Fix all-uppercase subtitle text" IsChecked="{Binding Draft.FixAllCaps}" />
+            <CheckBox Content="Denoise audio before ASR" IsChecked="{Binding Draft.ASRDenoise}" />
+            <CheckBox Content="Detect language per ASR segment" IsChecked="{Binding Draft.ASRPerSegmentLanguage}" />
+            <ItemsControl ItemsSource="{Binding SubtitleNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+            <TextBlock Text="These are processing policies. Editing them does not start recognition, download models or contact a provider. Timing options retain the engine's existing supported-path and fallback behavior." TextWrapping="Wrap" Classes="small muted" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Startup">
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Spacing="12" Margin="4,14,8,8">
+            <TextBlock Text="Apply after restarting LLPlayer" FontWeight="SemiBold" />
+            <TextBlock Text="Logging and FFmpeg library loading are saved for the next startup. Saving does not restart the engine or probe devices and providers. LLPLAYER_LOG_LEVEL continues to override the saved log level when set." TextWrapping="Wrap" Classes="small muted" />
+            <TextBlock Text="Log file (blank uses the normal application log), :console, :debug or :custom" TextWrapping="Wrap" />
+            <TextBox Name="EngineLogPathEditor" Text="{Binding Draft.LogOutput}" AutomationProperties.Name="Engine log output file" />
+            <TextBlock Text="Engine log level" />
+            <ComboBox Name="EngineLogLevelEditor" ItemsSource="{Binding LogLevels}" SelectedItem="{Binding Draft.LogLevel}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="FFmpeg log level" />
+            <ComboBox Name="FFmpegLogLevelEditor" ItemsSource="{Binding FFmpegLogLevels}" SelectedItem="{Binding Draft.FFmpegLogLevel}" HorizontalAlignment="Stretch" />
+            <ItemsControl ItemsSource="{Binding StartupNumbers}" ItemTemplate="{StaticResource NumberEditor}" />
+            <TextBlock Text="FFmpeg load profile" />
+            <ComboBox Name="FFmpegLoadProfileEditor" ItemsSource="{Binding FFmpegLoadProfiles}" SelectedItem="{Binding Draft.FFmpegLoadProfile}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Main loads basic playback libraries. Filters also enables FFmpeg audio/frame filtering; All additionally loads device libraries." TextWrapping="Wrap" Classes="small muted" />
+          </StackPanel>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
+    <StackPanel Grid.Row="2" Margin="0,14,0,0" Spacing="8">
+      <TextBlock Name="PlaybackSettingsWarning" Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+      <TextBlock Name="PlaybackSettingsError" Text="{Binding Error}" TextWrapping="Wrap" Foreground="{DynamicResource Shadcn.DestructiveBrush}" AutomationProperties.LiveSetting="Polite" />
+      <StackPanel Classes="dialog-footer">
+        <Button Name="ClosePlaybackSettingsButton" Content="Close" Command="{Binding CloseCommand}" Classes="outline" />
+        <Button Name="SavePlaybackSettingsButton" Content="Save &amp; Close" Command="{Binding SaveCommand}" Classes="primary" />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

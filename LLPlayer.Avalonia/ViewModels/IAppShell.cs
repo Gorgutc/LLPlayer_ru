@@ -15,6 +15,12 @@ public interface IAppShell
     void ShowTranslation(TranslationViewModel model) { }
     void ShowOnlineVideo(OnlineVideoViewModel model) { }
     void ShowRecognition(RecognitionViewModel model) { }
+    void ShowPlaybackSettings(PlaybackSettingsViewModel model) { }
+    void ShowPluginOptions(PluginOptionsViewModel model) { }
+    void ShowPlaylist(PlaylistViewModel model) { }
+    void ShowSubtitleDownload(OpenSubtitlesDownloadViewModel model) { }
+    void ShowPdicSettings(PdicSettingsViewModel model) { }
+    Task<bool> RevealMediaAsync(string path) => Task.FromResult(false);
     Task<bool> OpenBrowserAsync(Uri uri) => Task.FromResult(false);
     void SetClipboardText(string text);
     void ApplyTheme(string theme);

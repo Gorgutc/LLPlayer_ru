@@ -1,4 +1,4 @@
-using FlyleafLib;
+﻿using FlyleafLib;
 using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer;
 
@@ -123,6 +123,17 @@ public sealed class RecognitionActions(IRecognitionBackend backend) : IDisposabl
     {
         if (mediaChange) Invalidate();
         return RunAsync(mutation);
+    }
+    /// <summary>Explicit modal settings actions fail promptly instead of waiting behind media/recognition work.</summary>
+    public Task MutateIfIdleAsync(Action<CancellationToken> mutation)
+    {
+        lock (admission)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (pending != 0 || backend.IsBusy)
+                throw new InvalidOperationException("Wait for media opening, recognition and subtitle loading to finish before changing playback settings.");
+            return RunAsync(mutation);
+        }
     }
     public Task SaveAndApplyAsync(RecognitionSettings settings, RecognitionSettingsStore store)
     {

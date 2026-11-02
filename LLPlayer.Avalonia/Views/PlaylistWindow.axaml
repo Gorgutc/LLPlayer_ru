@@ -1,0 +1,34 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:s="using:LLPlayer.Avalonia.Services"
+        x:Class="LLPlayer.Avalonia.Views.PlaylistWindow" x:DataType="vm:PlaylistViewModel"
+        Title="Playlist — LLPlayer" Width="640" Height="520" MinWidth="440" MinHeight="340"
+        Classes="dialog" WindowStartupLocation="CenterOwner">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,16">
+      <TextBlock Text="{Binding Title}" Classes="dialog-title" TextWrapping="Wrap" />
+      <TextBlock Name="PlaylistSummary" Text="{Binding Summary}" Classes="dialog-description" TextWrapping="Wrap" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,16,0,0">
+      <TextBlock Name="PlaylistMessage" Text="{Binding Message}" Classes="small muted" TextWrapping="Wrap" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Name="PreviousPlaylistButton" Content="Previous" Command="{Binding PreviousCommand}" />
+        <Button Name="ReopenPlaylistButton" Content="Reopen current" Command="{Binding ReopenCommand}" />
+        <Button Name="NextPlaylistButton" Content="Next" Command="{Binding NextCommand}" />
+      </StackPanel>
+      <StackPanel Classes="dialog-footer">
+        <Button Content="Close" Classes="outline" Click="OnClose" />
+        <Button Name="OpenPlaylistItemButton" Content="Open selected" Command="{Binding OpenSelectedCommand}" />
+      </StackPanel>
+    </StackPanel>
+    <ListBox Name="PlaylistItemsList" ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}" DoubleTapped="OnDoubleTapped" AutomationProperties.Name="Playlist items" IsEnabled="{Binding !Busy}">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="s:PlaybackPlaylistItem">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+            <TextBlock Text="▶" IsVisible="{Binding IsCurrent}" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding Title}" TextWrapping="Wrap" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</Window>

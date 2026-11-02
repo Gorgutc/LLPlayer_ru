@@ -53,6 +53,9 @@ public sealed partial class CueItemViewModel : ObservableObject
     public string SourceLanguage => Cue.SourceLanguage;
     public string TargetLanguage => Cue.TargetLanguage;
     public string StartText => TimeFormat.Cue(Cue.Start);
+    /// <summary>OCR text replaces its image. Spoiler masking never reveals the underlying bitmap.</summary>
+    public bool ShowBitmap => Cue.IsBitmap && string.IsNullOrEmpty(Cue.OriginalText) && !IsMasked;
+    public bool ShowText => !ShowBitmap;
 
     [ObservableProperty]
     public partial bool IsCurrent { get; set; }
@@ -79,6 +82,9 @@ public sealed partial class CueItemViewModel : ObservableObject
 
         CueInfo previous = Cue;
         Cue = cue;
+        OnPropertyChanged(nameof(Cue));
+        OnPropertyChanged(nameof(ShowBitmap));
+        OnPropertyChanged(nameof(ShowText));
         if (previous.Index != cue.Index) OnPropertyChanged(nameof(Index));
         if (previous.Start != cue.Start)
         {
@@ -106,7 +112,7 @@ public sealed partial class CueItemViewModel : ObservableObject
     {
         bool showSource = appearance.ShowOriginalText && Cue.IsTranslated && !string.IsNullOrEmpty(Cue.OriginalText);
         string source = showSource ? Cue.OriginalText : Cue.Text;
-        bool masked = appearance.TextMask && Cue.Index > currentIndex && source.Length > 0;
+        bool masked = appearance.TextMask && Cue.Index > currentIndex && (source.Length > 0 || Cue.IsBitmap);
         string display = masked ? new string('_', source.Length) : source;
         bool displayTranslated = !masked && Cue.IsTranslated && !showSource;
         if (DisplayText != display)
@@ -115,6 +121,12 @@ public sealed partial class CueItemViewModel : ObservableObject
             IsMasked = masked;
         if (IsDisplayTranslated != displayTranslated)
             IsDisplayTranslated = displayTranslated;
+    }
+
+    partial void OnIsMaskedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowBitmap));
+        OnPropertyChanged(nameof(ShowText));
     }
 }
 
