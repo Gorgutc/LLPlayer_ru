@@ -563,7 +563,7 @@ unsafe partial class Player
 
                 isAudioSwitch = false;
 
-                if (status == Status.Playing && !requiresBuffering && shouldStartAudioScreamerForVideo)
+                if (status == Status.Playing && !requiresBuffering && !isBufferingVASD && shouldStartAudioScreamerForVideo)
                     StartScreamerVASDAudio();
             }
             else if (extStream is ExternalVideoStream)
@@ -841,7 +841,7 @@ unsafe partial class Player
                 decoder.SeekAudio();
                 isAudioSwitch = false;
 
-                if (status == Status.Playing && !requiresBuffering && shouldStartAudioScreamerForVideo)
+                if (status == Status.Playing && !requiresBuffering && !isBufferingVASD && shouldStartAudioScreamerForVideo)
                     StartScreamerVASDAudio();
 
             }

@@ -17,6 +17,12 @@ namespace LLPlayer.Avalonia.Tests;
 [Collection(FlyleafGlobalsCollection.Name)]
 public sealed class AvStreamPlaybackRegressionTests
 {
+    static readonly (string Name, System.Reflection.FieldInfo? Field)[] playbackFlagFields = new[]
+    {
+        "requiresBuffering", "isBufferingVASD", "isVideoSwitch", "isScreamerVASDAudio", "stopScreamerVASDAudio", "taskPlayRuns", "taskSeekRuns"
+    }.Select(name => (Name: name, Field: typeof(Player).GetField(name,
+        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic))).ToArray();
+
     [AvaloniaTheory]
     [InlineData(0, false, false)]
     [InlineData(1, false, false)]
@@ -133,9 +139,11 @@ public sealed class AvStreamPlaybackRegressionTests
             _ => controller.GetVideoTracks().Single(track => track.Label.Contains("480x270", StringComparison.Ordinal))
         };
 
+        string beforeSwitch = PcmState(player, pcm);
         if (kind.EndsWith("audio", StringComparison.Ordinal)) await controller.SelectAudioTrackAsync(choice);
         else await controller.SelectVideoTrackAsync(choice);
         Dispatcher.UIThread.RunJobs();
+        string afterSwitch = PcmState(player, pcm);
 
         Assert.Equal(playing, player.IsPlaying);
         Assert.Equal(generation, player.MediaGeneration);
@@ -156,7 +164,11 @@ public sealed class AvStreamPlaybackRegressionTests
         }
         // A paused switch must stay paused; briefly playing afterward proves the selected decoder submits real PCM.
         if (!playing) player.Play();
-        await WaitUntil(() => pcm.HasNonzeroSamplesAt(rate));
+        string beforePcmWait = PcmState(player, pcm);
+        await WaitUntil(() => pcm.HasNonzeroSamplesAt(rate), () =>
+            $"kind={kind}, playing={playing}, embeddedSubtitles={embeddedSubtitles}, expectedRate={rate}" +
+            $"\nBefore switch: {beforeSwitch}\nAfter switch: {afterSwitch}" +
+            $"\nBefore PCM wait: {beforePcmWait}\nAt timeout: {PcmState(player, pcm)}");
         player.Pause();
         await subtitles.WaitForTranslation(controller);
         subtitles.AssertUnchanged(player, controller);
@@ -755,21 +767,67 @@ public sealed class AvStreamPlaybackRegressionTests
     {
         readonly Player player;
         readonly System.Collections.Concurrent.ConcurrentDictionary<int, bool> rates = new();
+        readonly System.Collections.Concurrent.ConcurrentDictionary<int, RateStatistics> observations = new();
+        readonly long createdAt = System.Diagnostics.Stopwatch.GetTimestamp();
+        long firstCallbackAt = -1, lastCallbackAt = -1;
         long lastTimestamp = -1, firstTimestamp = -1;
         public long FirstTimestamp => Interlocked.Read(ref firstTimestamp);
         public PcmProbe(Player player) { this.player = player; player.Audio.SamplesAdded += Added; }
         void Added(object? sender, AudioFrame frame)
         {
-            if (frame.dataLen <= 0) return;
+            long arrivedAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            Interlocked.CompareExchange(ref firstCallbackAt, arrivedAt, -1);
+            Interlocked.Exchange(ref lastCallbackAt, arrivedAt);
+            RateStatistics observation = observations.GetOrAdd(player.Audio.SampleRate, static _ => new());
+            Interlocked.Increment(ref observation.Callbacks);
+            Interlocked.CompareExchange(ref observation.FirstTimestamp, frame.Timestamp, -1);
+            Interlocked.Exchange(ref observation.LastTimestamp, frame.Timestamp);
+            if (frame.dataLen <= 0) { Interlocked.Increment(ref observation.EmptyFrames); return; }
             byte[] bytes = new byte[Math.Min(frame.dataLen, 4096)]; Marshal.Copy(frame.dataPtr, bytes, 0, bytes.Length);
             if (bytes.Any(value => value != 0))
             {
+                Interlocked.Increment(ref observation.NonzeroFrames);
                 rates[player.Audio.SampleRate] = true; Interlocked.CompareExchange(ref firstTimestamp, frame.Timestamp, -1); Interlocked.Exchange(ref lastTimestamp, frame.Timestamp);
             }
+            else Interlocked.Increment(ref observation.ZeroFrames);
         }
         public bool HasNonzeroSamplesAt(int rate) => rates.ContainsKey(rate);
         public bool HasTimestampInRange(long first, long last) { long timestamp = Interlocked.Read(ref lastTimestamp); return timestamp >= first && timestamp < last; }
+        public string Describe() =>
+            $"elapsedMs={System.Diagnostics.Stopwatch.GetElapsedTime(createdAt).TotalMilliseconds:F1}, " +
+            $"firstCallbackMs={CallbackMilliseconds(Interlocked.Read(ref firstCallbackAt))}, " +
+            $"lastCallbackMs={CallbackMilliseconds(Interlocked.Read(ref lastCallbackAt))}, " +
+            $"nonzeroRates=[{string.Join(",", rates.Keys.OrderBy(rate => rate))}], " +
+            $"firstNonzeroPts={FirstTimestamp}, lastNonzeroPts={Interlocked.Read(ref lastTimestamp)}, " +
+            $"callbacksByEntryRate=[{string.Join("; ", observations.OrderBy(pair => pair.Key).Select(pair => $"{pair.Key}: {pair.Value.Describe()}"))}]";
+        string CallbackMilliseconds(long timestamp) => timestamp < 0 ? "none" :
+            System.Diagnostics.Stopwatch.GetElapsedTime(createdAt, timestamp).TotalMilliseconds.ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
         public void Dispose() => player.Audio.SamplesAdded -= Added;
+
+        sealed class RateStatistics
+        {
+            public long Callbacks, EmptyFrames, ZeroFrames, NonzeroFrames;
+            public long FirstTimestamp = -1, LastTimestamp = -1;
+            public string Describe() =>
+                $"callbacks={Interlocked.Read(ref Callbacks)}, empty={Interlocked.Read(ref EmptyFrames)}, " +
+                $"zero={Interlocked.Read(ref ZeroFrames)}, nonzero={Interlocked.Read(ref NonzeroFrames)}, " +
+                $"firstPts={Interlocked.Read(ref FirstTimestamp)}, lastPts={Interlocked.Read(ref LastTimestamp)}";
+        }
+    }
+
+    static string PcmState(Player player, PcmProbe pcm)
+    {
+        var decoder = player.decoder.AudioDecoder;
+        var stream = player.decoder.AudioStream;
+        return $"status={player.Status}, playing={player.IsPlaying}, time={player.CurTime}/{player.Duration}, lastError={player.LastError}, " +
+            $"audioEnabled={player.Config.Audio.Enabled}, audioOpened={player.Audio.IsOpened}, " +
+            $"audioRate={player.Audio.SampleRate}, audioChannels={player.Audio.Channels}, " +
+            $"displayed={player.Audio.FramesDisplayed}, dropped={player.Audio.FramesDropped}, recovery={player.Audio.OutputRecoveryRequired}, " +
+            $"streamIndex={stream?.StreamIndex}, streamRate={stream?.SampleRate}, streamChannels={stream?.Channels}, " +
+            $"decoderStatus={decoder.Status}, running={decoder.IsRunning}, disposed={decoder.Disposed}, frames={decoder.Frames.Count}, " +
+            $"videoDecoderStatus={player.decoder.VideoDecoder.Status}, videoDemuxerStatus={player.VideoDemuxer.Status}, " +
+            $"playbackFlags=[{string.Join(", ", playbackFlagFields.Select(flag => flag.Field == null ?
+                $"{flag.Name}=unavailable" : $"{flag.Name}={flag.Field.GetValue(player)}"))}]; {pcm.Describe()}";
     }
 
     static async Task SeekAndWait(Player player, int milliseconds)
@@ -786,13 +844,15 @@ public sealed class AvStreamPlaybackRegressionTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    static async Task WaitUntil(Func<bool> predicate)
+    static async Task WaitUntil(Func<bool> predicate, Func<string>? failureContext = null)
     {
         DateTime deadline = DateTime.UtcNow.AddSeconds(15);
         while (!predicate())
         {
             Dispatcher.UIThread.RunJobs();
-            if (DateTime.UtcNow >= deadline) throw new TimeoutException("Native A/V regression condition did not become true.");
+            if (DateTime.UtcNow >= deadline)
+                throw new TimeoutException("Native A/V regression condition did not become true." +
+                    (failureContext == null ? "" : "\n" + failureContext()));
             await Task.Delay(10, TestContext.Current.CancellationToken);
         }
         Dispatcher.UIThread.RunJobs();
