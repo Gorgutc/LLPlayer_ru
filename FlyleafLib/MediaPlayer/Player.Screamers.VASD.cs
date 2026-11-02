@@ -13,6 +13,7 @@ unsafe partial class Player
     const int MAX_DEQUEUE_RETRIES = 20; // (Ms) Tries to avoid re-buffering by waiting the decoder to catch up
     volatile bool isScreamerVASDAudio;
     volatile bool stopScreamerVASDAudio;
+    volatile bool isBufferingVASD;
     long startTicks, lastSpeedChangeTicks;
 
     bool BufferVASD()
@@ -214,6 +215,17 @@ unsafe partial class Player
     }
     void ScreamerVASD()
     {
+        try { ScreamerVASDCore(); }
+        finally
+        {
+            if (isBufferingVASD)
+                requiresBuffering = true;
+            isBufferingVASD = false;
+        }
+    }
+
+    void ScreamerVASDCore()
+    {
         /* [TODO]
          * SecondField goes to Renderer
          * isVideoSwitch should be removed as we use requiresBuffering all time for that?*
@@ -295,6 +307,7 @@ unsafe partial class Player
             // Ensures we have rendered vFrame ready for present (startTicks/sw)
             if (requiresBuffering)
             {
+                isBufferingVASD = true;
                 Renderer.RenderIdleStart();
 
                 if (Config.Player.Stats && framesDisplayedDwmEnd > 0)
@@ -306,13 +319,16 @@ unsafe partial class Player
                 if (VideoDemuxer.Interrupter.Timedout)
                     break;
 
+                // Consume this pass's request before buffering: a concurrent stream switch must retain
+                // its newer request rather than have it cleared by this pass's completion.
+                requiresBuffering = false;
                 secondField = false;
 
                 OnBufferingStarted();
                 StopScreamerVASDAudio();
                 BufferVASD();
 
-                if (!seeks.IsEmpty)
+                if (!seeks.IsEmpty || requiresBuffering)
                     continue;
 
                 if (vFrame == null)
@@ -325,7 +341,6 @@ unsafe partial class Player
                     break;
                 }
 
-                requiresBuffering = false;
                 Renderer.RenderIdleStop();
 
                 // Prepare 2nd Frame (after ShowOneFrame)
@@ -344,6 +359,7 @@ unsafe partial class Player
                 OnBufferingCompleted();
                 if (CanInfo) Log.Info($"[V] Started at {TicksToTimeMini(vFrame.Timestamp)}]" + (aFrame == null ? "" : $" [A: {TicksToTimeMini(aFrame.Timestamp)}]"));
                 sw.Restart();
+                isBufferingVASD = false;
                 StartScreamerVASDAudio();
             }
 
@@ -900,7 +916,7 @@ unsafe partial class Player
     }
     void StartScreamerVASDAudio()
     {
-        if (!Audio.isOpened)
+        if (!Audio.isOpened || requiresBuffering || isBufferingVASD)
             return;
 
         StopScreamerVASDAudio();
