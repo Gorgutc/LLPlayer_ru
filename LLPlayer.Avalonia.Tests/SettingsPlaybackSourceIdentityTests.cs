@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using FlyleafLib;
@@ -70,6 +69,7 @@ public sealed class SettingsPlaybackSourceIdentityTests
             Assert.True(release.Wait(TimeSpan.FromSeconds(15)), "Native default subtitle-cache gate was not released.");
         }
         player.SubtitlesManager[0].PropertyChanged += HoldDefaultCache;
+        Task? cacheReady = null;
         try
         {
             Assert.Null(player.Open(media.Media).Error);
@@ -80,6 +80,18 @@ public sealed class SettingsPlaybackSourceIdentityTests
             Assert.False(player.IsASRRunning);
             Assert.All(Enumerable.Range(0, 2), slot => Assert.False(player.Subtitles[slot].EnabledASR));
             Assert.True(player.SubtitlesManager[0].IsLoading);
+            // A selected secondary cache can be ready while the independent default-primary worker is still loading.
+            ExternalSubtitlesStream secondary = new() { Url = media.Secondary, Title = "Secondary", Language = Language.English, Downloaded = true };
+            PlaylistItem.AddExternalStream(secondary, player.Playlist.Selected, "PlaybackSettingsSourceIdentity");
+            controller.SelectSubtitleTrack(1, controller.GetSubtitleTracks().Single(track => ReferenceEquals(track.Source, secondary)));
+            await controller.Recognition.MutateAsync(() => { });
+            await WaitForSubtitleCacheState(player, () => !player.SubtitlesManager[1].IsLoading
+                && controller.GetCues(1).SingleOrDefault()?.Text == "Secondary original");
+            Assert.False(player.SubtitlesManager[1].IsLoading);
+            Assert.Equal("Secondary original", Assert.Single(controller.GetCues(1)).Text);
+            Assert.True(player.SubtitlesManager[0].IsLoading);
+            cacheReady = WaitForDefaultSubtitleCache(player, controller);
+            Assert.False(cacheReady.IsCompleted);
             Assert.True(controller.Recognition.IsBusy);
             PlaybackSettings baseline = controller.GetPlaybackSettings(); session.ConfigureStore(state, baseline);
             PlaybackRuntimeSettings runtime = controller.GetPlaybackRuntimeSettings();
@@ -89,27 +101,29 @@ public sealed class SettingsPlaybackSourceIdentityTests
             Assert.False(session.Store!.HasSavedSettings); Assert.False(File.Exists(session.Store.Path));
         }
         finally { release.Set(); player.SubtitlesManager[0].PropertyChanged -= HoldDefaultCache; }
-        await WaitForDefaultSubtitleCache(player, controller);
+        await cacheReady!;
         ReadinessDiagnostic("completed-default-cache", player, controller);
         Assert.Equal("Primary original", Assert.Single(controller.GetCues(0)).Text);
         Assert.False(player.SubtitlesManager[0].IsLoading);
     }
 
-    static async Task WaitForDefaultSubtitleCache(Player player, FlyleafPlaybackController controller)
+    static Task WaitForDefaultSubtitleCache(Player player, FlyleafPlaybackController controller)
+        => WaitForSubtitleCacheState(player, () => !player.SubtitlesManager[0].IsLoading && !player.SubtitlesManager[1].IsLoading
+            && controller.GetCues(0).SingleOrDefault()?.Text == "Primary original");
+
+    static async Task WaitForSubtitleCacheState(Player player, Func<bool> ready)
     {
-        bool Ready() => !player.SubtitlesManager[0].IsLoading && !player.SubtitlesManager[1].IsLoading
-            && controller.GetCues(0).Any(cue => cue.Text == "Primary original");
         TaskCompletionSource completed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         void CacheChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
         {
-            if (args.PropertyName == nameof(SubManager.IsLoading) && Ready()) completed.TrySetResult();
+            if (args.PropertyName == nameof(SubManager.IsLoading) && ready()) completed.TrySetResult();
         }
         for (int slot = 0; slot < 2; slot++) player.SubtitlesManager[slot].PropertyChanged += CacheChanged;
         try
         {
-            if (Ready()) completed.TrySetResult();
+            if (ready()) completed.TrySetResult();
             await completed.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
-            Assert.True(Ready());
+            Assert.True(ready());
         }
         finally { for (int slot = 0; slot < 2; slot++) player.SubtitlesManager[slot].PropertyChanged -= CacheChanged; }
     }
@@ -124,14 +138,15 @@ public sealed class SettingsPlaybackSourceIdentityTests
         await using NativeSession session = new(state);
         Player player = session.Player; FlyleafPlaybackController controller = session.Controller;
         Assert.Null(player.Open(media.Media).Error);
-        await LoadSubtitle(player, controller, slot, media.Primary);
+        await WaitForDefaultSubtitleCache(player, controller);
+        await LoadSubtitle(player, controller, slot, media.Primary, "Primary original");
         PlaybackSettings baseline = controller.GetPlaybackSettings();
         session.ConfigureStore(state, baseline);
         PlaybackRuntimeSettings runtime = controller.GetPlaybackRuntimeSettings();
         SubtitlesStream previousStream = player.decoder.SubtitlesStreams[slot];
         long generation = player.MediaGeneration;
 
-        await LoadSubtitle(player, controller, slot, media.Secondary);
+        await LoadSubtitle(player, controller, slot, media.Secondary, "Secondary original");
         Assert.Equal(generation, player.MediaGeneration);
         Assert.NotSame(previousStream, player.decoder.SubtitlesStreams[slot]);
         SetSubtitleDelay(player, slot, TimeSpan.FromMilliseconds(250).Ticks);
@@ -165,6 +180,7 @@ public sealed class SettingsPlaybackSourceIdentityTests
         await using NativeSession session = new(state);
         Player player = session.Player; FlyleafPlaybackController controller = session.Controller;
         Assert.Null(player.Open(media.Media).Error);
+        await WaitForDefaultSubtitleCache(player, controller);
         await controller.SelectAudioTrackAsync(controller.GetAudioTracks().Single(track => track.Label.Contains("Mono 48000", StringComparison.Ordinal)));
         Assert.Equal(48000, player.decoder.AudioStream.SampleRate);
         PlaybackSettings baseline = controller.GetPlaybackSettings();
@@ -194,19 +210,15 @@ public sealed class SettingsPlaybackSourceIdentityTests
         Assert.Equal(TimeSpan.FromMilliseconds(650).Ticks, player.Config.Audio.Delay);
     }
 
-    static async Task LoadSubtitle(Player player, FlyleafPlaybackController controller, int slot, string path)
+    static async Task LoadSubtitle(Player player, FlyleafPlaybackController controller, int slot, string path, string expectedText)
     {
         ExternalSubtitlesStream stream = new() { Url = path, Title = Path.GetFileName(path), Language = Language.English, Downloaded = true };
         PlaylistItem.AddExternalStream(stream, player.Playlist.Selected, "PlaybackSettingsSourceIdentity");
         controller.SelectSubtitleTrack(slot, controller.GetSubtitleTracks().Single(track => ReferenceEquals(track.Source, stream)));
         await controller.Recognition.MutateAsync(() => { });
-        Stopwatch timer = Stopwatch.StartNew();
-        while (player.SubtitlesManager[slot].IsLoading || controller.GetCues(slot).Count != 1)
-        {
-            Assert.True(timer.Elapsed < TimeSpan.FromSeconds(15), "Expected the selected subtitle source to finish loading.");
-            Dispatcher.UIThread.RunJobs();
-            await Task.Delay(10, TestContext.Current.CancellationToken);
-        }
+        await WaitForSubtitleCacheState(player, () => !player.SubtitlesManager[0].IsLoading && !player.SubtitlesManager[1].IsLoading
+            && ReferenceEquals(player.decoder.SubtitlesStreams[slot]?.ExternalStream, stream)
+            && controller.GetCues(slot).SingleOrDefault()?.Text == expectedText);
         Dispatcher.UIThread.RunJobs();
     }
 
