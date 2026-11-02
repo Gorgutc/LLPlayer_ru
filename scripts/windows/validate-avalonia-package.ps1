@@ -32,6 +32,7 @@ $native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxru
     @($cpu | ForEach-Object { 'runtimes/win-x64/' + $_ }) + @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
 $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
     'FlyleafLib.dll','LLPlayer.Core.dll','Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
+    'LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
     'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
     'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native
 foreach ($relative in $required) {
@@ -75,8 +76,8 @@ foreach ($item in $items) {
     if ($name -match '^YoutubeDL\.(dll|pdb)$' -and $relative -notin @('Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb')) {
         throw "Windows Avalonia package contains misplaced plugin payload $relative."
     }
-    if ($name -match '^(yt-dlp(\.exe|_linux.*)?|deno(\.exe)?)$') { throw "Windows Avalonia package contains forbidden runtime helper $relative." }
-    if ($name -match '^(yt-dlp|deno)([._-].*)?\.(zip|tar|tar\.gz|tar\.xz|tgz|7z)$' -or
+    if ($name -match '^(yt-dlp(\.exe|_linux.*)?|deno(\.exe)?|pdic-pipe(\.exe)?)$') { throw "Windows Avalonia package contains forbidden runtime helper $relative." }
+    if ($name -match '^(yt-dlp|deno|pdic-pipe)([._-].*)?\.(zip|tar|tar\.gz|tar\.xz|tgz|7z)$' -or
         $name -match '^(\.deno|\.yt-dlp|deno-cache|yt-dlp-cache)$') {
         throw "Windows Avalonia package contains forbidden runtime helper archive or cache $relative."
     }
@@ -90,7 +91,7 @@ foreach ($item in $items) {
         if ($relative -like 'runtimes/*' -and $relative -ne 'runtimes/win-x64') { throw "Windows Avalonia package contains an unexpected runtime directory $relative." }
         continue
     }
-    if ($name -match '^\.?LLPlayer\.(OnlineVideo|Avalonia|Translation|Recognition|WordList|Config|Engine|PlayerConfig)\.json($|\.)' -or
+    if ($name -match '^\.?LLPlayer\.(OnlineVideo|Avalonia|Translation|Recognition|WordList|Playback|Pdic|Config|Engine|PlayerConfig)\.json($|\.)' -or
         $name -match '^\.env|\.log$|\.dmp$|\.dump$|\.ru\.dub\.|\.ru\.voices\.json$|^ggml-.*\.bin$|\.traineddata$|^yt-dlp\.exe$') {
         throw "Windows Avalonia package contains forbidden runtime file $relative."
     }

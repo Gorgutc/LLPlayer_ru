@@ -67,11 +67,12 @@
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
-**Текущий одобренный F-13 блок, 2026-11-02: Player UI + Mouse + Always On Top.**
-Реализованы ровно 11 согласованных контролов в общем Windows/Linux Settings → Player, одной поставкой внутри
-существующего F-13 Settings parity. [План и mapping](plans/2026-11-02-f13-player-ui.md),
-[актуальный source/status](f13-status-2026-10-18.md#player-ui-mouse-and-always-on-top--owner-approved-2026-11-02).
-Фактические проверки, независимые reviews и delivery receipts: `artifacts/f13-player-ui-2026-11-02/CLOSEOUT.md`.
+**Текущая одобренная поставка F-13, 2026-11-02: настройки, субтитры/слова и плейлисты/онлайн-видео.**
+Владелец объединил три существующих раздела паритета в одну поставку от PR № 195/main `280f5827`.
+Общий Windows/Linux исходник сохраняет WPF и текущие defaults; состав и адаптации перечислены в
+[едином плане](plans/2026-11-02-f13-settings-subtitles-online.md) и [актуальном статусе](f13-status-2026-10-18.md).
+Фактические gates, независимые reviews и доставка фиксируются отдельно:
+`artifacts/f13-settings-subtitles-online-2026-11-02/CLOSEOUT.md`.
 Native acceptance остаётся **NOT_RUN / DEFERRED BY OWNER**; полный F-13 parity не заявлен.
 
 **Исторический source/local checkpoint, 2026-11-01: Primary/Secondary Sidebar и sync выбранного cue.**
@@ -717,7 +718,20 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 
 ### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-11-02; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 
-**Текущий одобренный блок, 2026-11-02: Player UI + Mouse + Always On Top.**
+**Текущая одобренная поставка, 2026-11-02: Settings + Subtitles/words + Playlists/online video.**
+Владелец одобрил три существующих раздела вместе, одной поставкой от доставленного PR № 195/main
+`280f58278752a7375e1068563740a71355f624f6` на `codex/f13-av-settings-subtitles-online`.
+[Единый план и полное соответствие WPF](plans/2026-11-02-f13-settings-subtitles-online.md) не добавляет F-карточек.
+Общий исходник реализует оставшиеся настройки Audio/software Video/Player/subtitle policies/startup logging,
+устройства и восстановление звука, bitmap Sidebar, middle-click/CJK, ручной OpenSubtitles REST, Windows PDIC,
+полные плейлисты и существующие параметры yt-dlp. PDIC явно недоступен на Linux; внешние yt-dlp/Deno/PDIC
+не устанавливаются и не запускаются автоматически. WPF и прежние Avalonia defaults сохраняются.
+Source implementation, реальные проверки и доставка остаются разными состояниями:
+`artifacts/f13-settings-subtitles-online-2026-11-02/CLOSEOUT.md` фиксирует фактические результаты.
+Native acceptance — **NOT_RUN / DEFERRED BY OWNER**. ASR/model management, batch/dubbing,
+executable palette/help/About и GPU/capture backends остаются прежними отдельными остатками F-13.
+
+**Предыдущий доставленный блок, 2026-11-02: Player UI + Mouse + Always On Top (PR № 195/main `280f5827`).**
 Одна поставка в рамках существующего Settings parity: восемь контролов WPF Player UI и три Mouse,
 без новых F-карточек и отдельных продуктовых этапов. База — доставленный PR № 194/main `78557c7d`,
 ветка `codex/f13-av-player-ui`. [Единый план и точное соответствие 11 контролов](plans/2026-11-02-f13-player-ui.md).

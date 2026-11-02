@@ -2,6 +2,67 @@
 
 This document freezes the current user-facing behavior from `main`. Future work should change only the requested surface and preserve unrelated behavior.
 
+## Additive Avalonia Settings, Subtitles/words and Playlists/online video — owner-approved 2026-11-02
+
+This is one coordinated extension of the existing F-13 areas, mapped in the
+[approved plan](plans/2026-11-02-f13-settings-subtitles-online.md). It extends the dated exclusions in earlier
+bounded blocks below. WPF remains supported; source implementation does not establish delivery or native acceptance.
+
+Settings → Player → Playback settings exposes Audio enable/filters/delay/max/default volume/ordered languages and
+session output devices; software Video aspect/custom ratio, deinterlace/double rate, decoder threads, zoom unit,
+latency, HDR-to-SDR/nits, colour filters/reset and session viewport geometry; Player buffers/frames/resolution,
+timeouts and accurate seek; next-start logging/FFmpeg profile; and general subtitle/cache/local-search/language,
+generation-policy/length-limit, BOM and both session delay editors. Existing Avalonia startup defaults survive.
+Changing Default Volume and saving updates remembered and current volume; an untouched draft preserves the latest
+volume, subject to an explicitly lowered maximum. Close/Escape discards; invalid or failed persistence does not apply
+the draft. Profile/logging changes take effect after restart. GPU acceleration, D3D filters/profile mismatch,
+super resolution and VSync are explicitly unavailable or ineffective on this software backend.
+
+Audio output loss retires the failed sink, drops its queued PCM and keeps a temporary silent clock so media can
+continue. A two-second, single-flight refresh/recovery loop uses the existing serialized mutation queue; recovery
+restarts future PCM without replaying the lost queue. Default-device changes are followed; a missing explicit
+target temporarily falls back to default and is remembered for return. Audio Off and a forced Null backend remain
+Off/Null. The editor distinguishes requested/default/actual output and recovery. This replaces the old
+reopen-required gap in source; physical hot-plug and audible continuity remain owner-deferred.
+
+The selected subtitle sidebar can show cached bitmap previews without OCR, with current-row/seek behavior and
+spoiler masking. Middle-click selects the entire rendered cue for sentence lookup with the correct slot/language/
+translation provenance. Japanese overlay words use the existing pinned managed MeCab/IPAdic packages; Chinese
+selection preserves Han-character boundaries, mixed-script words and exact UTF-16 offsets. Existing left/drag/right
+actions, translation lifetimes, primary/secondary sync/search/export and accepted DIP layout remain intact.
+
+Manual OpenSubtitles uses OpenSubtitles.com HTTPS REST with dialog-only application API key, username and password.
+Opening the dialog or changing media refreshes the title query and retires stale results without searching. Explicit
+Search/page actions show language, filename, format, year, downloads/rating and release; Duration is explicitly
+`Unavailable` because this adaptation receives no duration metadata. Preferred languages sort first, then language,
+descending downloads and filename. Load in Primary downloads to a unique owned temp child, keeps source-language/
+`ManualDownloaded` metadata and rejects changed media. Save selected subtitle uses an explicit picker/overwrite and
+the committed BOM default. This provider adaptation accepts UTF-8 text only; bitmap/archive downloads from the old
+WPF provider are not supported. Cancellation/close drains requests and clears credentials; adopted temp files remain
+owned until the native player is fully disposed.
+
+The owner selected a Windows PDIC adapter and an explicit Linux-unavailable state. PDIC settings persist only the
+external `pdic-pipe.exe` path; Browse/Auto Set are explicit, and no startup path probe/process occurs. A single-word
+PDIC action lazily uses one app-owned process, the unchanged sentence and its one-based UTF-16 word offset; invalid/
+inexact selections fail visibly. Sentence/phrase actions retain their existing behavior. Shutdown drains admitted
+writes, attempts the framed Close message and releases the owned process; Linux never substitutes another dictionary.
+
+Playlists expose title, selected item, available/expected count, choose/reopen and previous/next without wrapping.
+Portable yt-dlp now accepts single video, playlist and multi-video metadata with bounded entries/metadata and honest
+omission counts, preserving selection, formats/languages, HTTP headers, chapters and automatic VTT captions. Plugin
+options expose `MaxVideoHeight`, `PreferVideoWithAudio` and validated `ExtraArguments` through the existing online
+settings owner. Extraction/network/authentication/range options are allowlisted; output/config/plugin/runtime/process
+ownership switches are rejected. Title actions navigate same-extension local files in natural order without wrap,
+copy the current selected media path/page, reveal an existing local location or open its safe credential-free
+HTTP(S) page in the browser, matching WPF Open path. They do no eager folder scan.
+External yt-dlp/Deno paths still start unset; direct media/Ctrl+V remain usable without tools. No helper is installed,
+downloaded, updated or probed on startup. This adds no DRM guarantee or authored-caption/backend expansion.
+
+New ASR backends/model management, batch/dubbing, executable command palette/help, About and new GPU/capture
+backends remain separate existing remainders. Native Windows/Linux UI, providers, PDIC and physical A/V are
+`NOT_RUN / DEFERRED BY OWNER`; full F-13 remains in progress. Current evidence/delivery belongs to the
+[status](f13-status-2026-10-18.md#settings-subtitleswords-and-playlistsonline-video--owner-approved-2026-11-02).
+
 ## Additive Avalonia Player UI and Mouse — owner-approved 2026-11-02
 
 One shared Windows/Linux Settings → Player page maps the eight WPF Player UI controls and three Mouse controls
@@ -28,7 +89,7 @@ LLPlayer is a specialized Windows media player for language learning. It is not 
 ## Core Functions To Preserve
 
 - Play local media files and online video URLs.
-- Additive configured Avalonia online video (owner-approved 2026-11-01): one shared Windows/Linux **Open online URL** action explicitly invokes the portable YoutubeDL plugin with user-provisioned standalone yt-dlp and Deno. Tool paths start unset; setup is explicit and no tools are installed, downloaded, updated or probed on startup. Preserve ordinary local/direct HTTP media and safe Ctrl+V without valid tools, including extensionless media URLs. Preserve existing automatic A/V selection, VTT automatic-caption/language policy, chapters and headers. Cancel, replacement and close own bounded extraction cleanup and reject stale results. Format editors, arbitrary portable helper arguments, cookies/authentication, authored-caption expansion, playlist/DRM guarantees and turnkey dependency bundling are outside this block. Native/live URL acceptance is separately deferred by the owner.
+- Configured Avalonia online video began with the owner-approved single-video block of 2026-11-01. Its explicit external yt-dlp/Deno admission, direct-media/Ctrl+V compatibility, stream/caption/chapter policy and cancellation ownership remain. The coordinated 2026-11-02 section above extends that initial source scope with playlists and allowlisted helper arguments, including supported network/authentication options. Startup helper installation/download/update/probes, authored-caption expansion and DRM guarantees remain outside this delivery; native/live URL acceptance stays separately deferred.
 - Accept one command-line path/URL and open it at startup.
 - Drag/drop and context-menu based media/subtitle workflows through the Flyleaf host.
 - Dual subtitles: primary and secondary subtitle tracks, both text and bitmap.
@@ -98,8 +159,9 @@ Word Tools edits ordered Search/Clipboard/ClipboardAll actions with add/independ
 capture their own word/cue/provenance independently of newer popup lookups. Copy-on-select, exact-modifier last
 search and Primary/Secondary/All subtitle auto-copy default off, including older preferences. Search accepts only
 escaped absolute HTTP(S) destinations through the host seam. Masked/sidebar/control/popup ownership remains intact;
-no middle-click expansion or PDIC is added. Existing Word Manager default-deck/session ownership and explicit
-TSV/APKG/AnkiConnect behavior remain unchanged. Untouched Word/Anki fields preserve concurrent latest values on
+that dated block added no middle-click expansion or PDIC; the coordinated 2026-11-02 section above extends them.
+Existing Word Manager default-deck/session ownership and explicit TSV/APKG/AnkiConnect behavior remain unchanged.
+Untouched Word/Anki fields preserve concurrent latest values on
 Save; explicit Reset Word actions replaces the menu only after successful Save. Endpoint/key/APKG-options editors
 are new product decisions,
 not missing WPF parity.

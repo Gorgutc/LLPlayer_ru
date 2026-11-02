@@ -46,11 +46,38 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `LLPlayer` | `Whisper.net.Runtime.Vulkan` | `1.9.0` |
 | `LLPlayer.Core` | `Microsoft.Data.Sqlite` | `9.0.17` |
 | `LLPlayer.Core` | `SQLitePCLRaw.bundle_e_sqlite3` | `3.0.3` |
+| `LLPlayer.Avalonia` (shared Windows/Linux) | `LibNMeCab` | `0.10.2` |
+| `LLPlayer.Avalonia` (shared Windows/Linux) | `LibNMeCab.IpaDicBin` | `0.10.0` |
 | `LLPlayer.Avalonia` (Windows native payload only) | `Silk.NET.OpenAL.Soft.Native` | `1.23.1` |
 | `FlyleafLibTests` | `AwesomeAssertions` | `9.4.0` |
 | `FlyleafLibTests` | `Microsoft.NET.Test.Sdk` | `18.4.0` |
 | `FlyleafLibTests` | `xunit.v3` | `3.2.2` |
 | `FlyleafLibTests` | `xunit.runner.visualstudio` | `3.1.5` |
+
+## Shared Japanese segmentation and external helpers — owner-approved 2026-11-02
+
+The coordinated [Settings/Subtitles/Playlists delivery](plans/2026-11-02-f13-settings-subtitles-online.md) adds the
+same pinned `LibNMeCab` `0.10.2` and `LibNMeCab.IpaDicBin` `0.10.0` packages already used by WPF to the common
+Avalonia app. Both Windows and Linux packages require the two managed assemblies `LibNMeCab.dll` and
+`LibNMeCab.IpaDicBin.dll` plus these six dictionary/legal assets together:
+
+- `IpaDic/sys.dic`, `IpaDic/unk.dic`, `IpaDic/matrix.bin`, `IpaDic/char.bin`.
+- `IpaDic/COPYING`, `IpaDic/AUTHORS`.
+
+These are managed code and compiled dictionary data; no native MeCab library or downloaded recognition model is
+introduced. The packages declare `GPL-2.0-or-later OR LGPL-2.1-or-later`; this GPL-3.0 application distributes them
+under the GPL alternative with package-root `LICENSE`. The dictionary additionally carries NAIST/ICOT terms:
+preserve its verbatim `COPYING` and author list, as described in
+[`LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md`](../../LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md). Platform validators
+require the assemblies/data/legal files and notices; a source declaration is not proof of a published payload.
+
+OpenSubtitles REST uses platform .NET HTTP/JSON support and adds no native library or persisted credential store.
+The Windows PDIC adapter uses an explicitly supplied external `pdic-pipe.exe`; Linux reports unavailable. yt-dlp and
+Deno remain external absolute executable paths with no installer/updater/startup probe. Package validators reject
+these helpers, their archives/caches, and `LLPlayer.Playback.json` / `LLPlayer.Pdic.json` / other user settings and
+temporary variants. Required app `.deps.json`/`.runtimeconfig.json` remain deployment metadata, not user preferences.
+Do not ship helper executables, generated settings/secrets or claim native dictionary/provider acceptance from a
+managed build. Existing FFmpeg/OpenAL/ASR/OCR and separate WPF plugin-publish boundaries remain unchanged.
 
 ## Flyleaf.FFmpeg.Bindings alignment
 

@@ -2,6 +2,68 @@
 
 This document freezes runtime boundaries and high-risk invariants from `main`.
 
+## Additive shared Settings, subtitles and playlists runtime — owner-approved 2026-11-02
+
+The [coordinated plan](plans/2026-11-02-f13-settings-subtitles-online.md) uses existing controller/recognition/
+translation mutation serialization rather than parallel UI access to native objects. Playback Save validates a
+detached fresh-merged candidate and persists before applying engine settings. Session delay/viewport changes retain
+media-generation/item identity; a stale editor cannot change replacement media. General Playback owns the editable
+shared OCR/subtitle fallback; Recognition retains its existing inference/model/CPU policy scope. Startup logging and
+FFmpeg profile apply only before `Engine.Start`; saved settings do not hot-reload FFmpeg. Software deinterlace,
+double-rate, HDR tone mapping and Flyleaf colour filters remain existing portable capabilities; D3D filters,
+acceleration/profile-mismatch and super resolution are not implemented by this software surface, and VSync remains
+informational. No GPU or capture backend is added.
+
+`PortableAudioOutput` owns the accepted-PCM clock and current sink. OpenAL operational health includes disconnect
+and AL-error checks; output loss retires/disposes the bad sink, drops queued PCM, resets the submitted clock and
+uses a temporary Null sink. Full-queue backpressure is distinct from device loss. `FlyleafPlaybackController` runs a
+two-second cadence with a single in-flight device refresh/recovery, admitted through the existing mutation queue.
+Requested explicit devices survive removal; effective output falls back to current default and returns to the
+requested device when it reappears. A default-device change can force replacement. The successful replacement
+inherits volume/master gain and accepts future PCM only; lost samples are not replayed. Audio Off skips recovery,
+and a forced Null backend is never promoted. Shutdown cancels/drains the loop before disposing the player/sinks.
+These runtime policies replace the old reopen-only source gap without claiming physical device acceptance.
+
+Bitmap sidebar requests carry existing slot/media/track/cue identity. The controller copies a bounded bitmap only
+while that row is still current under the native mutation gate; no pointer escapes, no OCR is triggered and stale
+copies are discarded. Future bitmap rows remain hidden by spoiler masking. Overlay Japanese segmentation reuses a
+serialized lazy managed MeCab/IPAdic tagger and bounded cache; Chinese ranges preserve Unicode/Han and exact UTF-16
+offsets. Middle-click emits the full rendered cue with sentence provenance, retaining routed input and popup owners.
+
+The manual OpenSubtitles client uses separate HTTPS API and file transports, explicit session credentials,
+allowlisted service hosts/redirects, bounded JSON/text responses and cancellation. Credentials/tokens never follow
+temporary file-download URLs. Title/media changes retire result/download work without searching. Load in Primary
+captures media before network/temp waits and adds a text external subtitle with source language and
+`ManualDownloaded` metadata through the current player gate. Each temporary load owns one unique file/child; native
+adoption occurs before entering the decoder so even partial native opens retain required files. Adopted files stay
+registered until full `Player.Dispose` drains cache readers/handles; exact-path cleanup never recursively deletes a
+shared temp root. Unadopted/cancelled children are removed, and cleanup failures remain visible. Duration is not
+invented; this REST adaptation rejects binary/bitmap/archive data and accepts UTF-8 text only. Explicit Save captures
+the chosen path/BOM and uses a sibling atomic replacement; cancelling the picker does not make a download request.
+
+The app-owned PDIC client is lazy, Windows-only and single-process/single-writer. It admits exact unchanged sentence
+text and a valid zero-based UTF-16 code-unit word offset, sends the one-based offset to `PopupSearch3`, and rejects
+low-surrogate/inexact positions. Wire frames are a four-byte little-endian UTF-8 JSON byte length followed by that
+JSON string; they are not raw UTF-16. Writes serialize under one gate with bounded cancellation; path changes
+replace the bridge only at an explicit lookup. Shutdown drains/cancels admitted writes, sends framed Close when
+possible and disposes the owned process. Linux reports unavailable; popup disposal never owns this app singleton.
+
+Portable playlist snapshots use collection synchronization and opaque media-generation/item tokens. Choose/reopen/
+previous/next revalidate current ownership inside the serialized player mutation and reject removed, foreign or
+retired same-URL items. yt-dlp single-video/playlist/multi-video metadata is bounded to `32 MiB`, `1000` encountered
+entries and nesting depth `8`, validates playable credential-free URLs and reports unavailable/omitted entries via
+expected counts. Structured argument parsing accepts only supported extraction/network/authentication/range flags;
+invariant no-config/plugin/cache/remote-component and explicit-runtime flags retain process/file ownership. Cancel,
+replacement and close keep existing bounded process-tree/stream cleanup and stale-publication guards. Current-media
+path uses the selected public webpage/local path, avoiding signed extracted CDN URLs. Local title navigation scans
+only on action, filters same-extension case-insensitively, naturally sorts and does not wrap. Open path snapshots
+the selected source: existing local paths use the reveal adapter; safe credential-free HTTP(S) pages use the browser
+adapter. Relative, malformed, credential-bearing and other-scheme destinations fail visibly. Existing direct media,
+formats, headers, chapters, languages and automatic VTT captions remain.
+
+WPF runtime behavior stays supported. Native UI, live providers/PDIC and physical audio/input/GPU/DPI acceptance
+remain `NOT_RUN / DEFERRED BY OWNER`; source, automated checks, package publication and owner acceptance are separate.
+
 ## Engine
 
 - `FlyleafLoader.StartEngine()` loads `LLPlayer.Engine.json` or defaults, then calls `Engine.Start`.
@@ -183,11 +245,11 @@ dependency or WPF input policy change is introduced by these UI additions.
 - Prefer new plugin/provider interfaces over adding special cases to `Player`.
 - `YoutubeDL` manages an external process, watcher, temp folder, and stream suggestions. It needs process cleanup and race-aware file reads.
 
-### Configured portable online extraction (2026-11-01)
+### Configured portable online extraction (initial 2026-11-01 boundary, extended 2026-11-02 above)
 
 - Preserve the WPF plugin's helper location, options, flags and separate publish flow. The portable plugin only admits explicit online requests; it must not claim ordinary HTTP(S) media or change direct playback when tools are absent or invalid.
-- Standalone yt-dlp and Deno are external, explicitly configured absolute executables. Portable invocation uses structured arguments, isolated helper configuration/plugins/cache, an explicit Deno path and normal TLS verification. No arbitrary portable `ExtraArguments`, shell invocation, startup probes, download, update or PATH fallback.
+- Standalone yt-dlp and Deno are external, explicitly configured absolute executables. Portable invocation uses structured arguments, isolated helper configuration/plugins/cache and an explicit Deno path. TLS verification is the default; the later bounded argument allowlist permits an explicitly saved `--no-check-certificates` choice. The 2026-11-02 extension adds validated `ExtraArguments`; unrestricted output/config/plugin/runtime flags, shell invocation, startup probes, installation/update and PATH fallback remain excluded.
 - Each extraction owns immutable request identity, process, redirected streams and temporary state. Cancellation, a newer media request and shutdown interrupt stalled extraction and terminate its owned process tree with bounded waits. Cleanup never waits on callbacks while holding a UI-sensitive lock; late completion cannot publish to another request, including a repeat of the same URL.
 - Descendant ownership outlives root exit: Windows starts the helper suspended, assigns a kill-on-close Job Object, then resumes it; Linux explicitly uses system `/usr/bin/setsid` (util-linux, no `--fork`) and terminates the owned process group. Missing containment prerequisites fail explicit extraction clearly, without installation or changing direct media playback.
-- Reuse current format selection and metadata mapping, including HTTP headers, chapters and the existing VTT `automatic_captions` subset. Authored captions and broader playlist support are not added. Failures remain actionable and recoverable by opening other media.
+- Reuse current format selection and metadata mapping, including HTTP headers, chapters and the existing VTT `automatic_captions` subset. Authored captions remain outside the adaptation; playlist/multi-video support is additive in the coordinated 2026-11-02 runtime section above. Failures remain actionable and recoverable by opening other media.
 - Deterministic/headless/package evidence is distinct from separately authorized native/live video-and-audio acceptance on Windows and Linux.

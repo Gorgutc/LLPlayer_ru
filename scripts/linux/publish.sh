@@ -52,6 +52,14 @@ validate_package() {
         "LLPlayer.Avalonia.runtimeconfig.json"
         "FlyleafLib.dll"
         "LLPlayer.Core.dll"
+        "LibNMeCab.dll"
+        "LibNMeCab.IpaDicBin.dll"
+        "IpaDic/sys.dic"
+        "IpaDic/unk.dic"
+        "IpaDic/matrix.bin"
+        "IpaDic/char.bin"
+        "IpaDic/COPYING"
+        "IpaDic/AUTHORS"
         "Plugins/YoutubeDL/YoutubeDL.dll"
         "Plugins/YoutubeDL/YoutubeDL.pdb"
         "libSkiaSharp.so"
@@ -111,12 +119,14 @@ validate_package() {
     # ---- Negative validation (mirrors the Windows ship rules in docs/agent/dependency-baseline.md) ----
     hits="$(find "$pkg" \( -name '.LLPlayer.OnlineVideo.json' -o -name '.LLPlayer.OnlineVideo.json.*' -o -name 'LLPlayer.OnlineVideo.json' -o -name 'LLPlayer.OnlineVideo.json.*' -o -name '.LLPlayer.Avalonia.json.*' -o -name 'LLPlayer.Avalonia.json' -o -name 'LLPlayer.Avalonia.json.*' -o -name '.LLPlayer.Translation.json.*.tmp' -o -name 'LLPlayer.Translation.json' -o -name 'LLPlayer.Translation.json.*' -o -name '.LLPlayer.Recognition.json.*.tmp' -o -name 'LLPlayer.Recognition.json' -o -name 'LLPlayer.Recognition.json.*' -o -name 'LLPlayer.Config.json' -o -name 'LLPlayer.Engine.json' -o -name 'LLPlayer.PlayerConfig.json' \
         -o -name 'LLPlayer.WordList.json' -o -name 'LLPlayer.WordList.json.*' -o -name '.LLPlayer.WordList.json.*.tmp' -o -name 'crash.log' -o -name '*.log' -o -name '*.dmp' -o -name '*.dump' \
+        -o -iname 'LLPlayer.Playback.json' -o -iname 'LLPlayer.Playback.json.*' -o -iname '.LLPlayer.Playback.json' -o -iname '.LLPlayer.Playback.json.*' \
+        -o -iname 'LLPlayer.Pdic.json' -o -iname 'LLPlayer.Pdic.json.*' -o -iname '.LLPlayer.Pdic.json' -o -iname '.LLPlayer.Pdic.json.*' \
         -o -name '.env*' \) -print)"
     [[ -z "$hits" ]] || reject "runtime config / logs / dumps / secrets" "$hits"
-    hits="$(find "$pkg" \( -iname 'yt-dlp' -o -iname 'yt-dlp.exe' -o -iname 'yt-dlp_linux*' -o -iname deno -o -iname deno.exe \) -print)"
-    [[ -z "$hits" ]] || reject "external extractor helpers" "$hits"
+    hits="$(find "$pkg" \( -iname 'yt-dlp' -o -iname 'yt-dlp.exe' -o -iname 'yt-dlp_linux*' -o -iname deno -o -iname deno.exe -o -iname pdic-pipe -o -iname pdic-pipe.exe \) -print)"
+    [[ -z "$hits" ]] || reject "external extractor helpers or PDIC bridge" "$hits"
     hits="$(find "$pkg" -regextype posix-extended \( \
-        -iregex '.*/(yt-dlp|deno)([._-][^/]*)?\.(zip|tar|tar\.gz|tar\.xz|tgz|7z)' \
+        -iregex '.*/(yt-dlp|deno|pdic-pipe)([._-][^/]*)?\.(zip|tar|tar\.gz|tar\.xz|tgz|7z)' \
         -o -iname .deno -o -iname .yt-dlp -o -iname deno-cache -o -iname yt-dlp-cache \) -print)"
     [[ -z "$hits" ]] || reject "external extractor helpers (archives or caches)" "$hits"
     while IFS= read -r path; do
