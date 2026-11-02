@@ -17,7 +17,7 @@ namespace LLPlayer.Avalonia;
 /// Start-up and shutdown of the Linux app: preferences, theme, FFmpeg lookup, FlyleafLib seams + engine, player,
 /// main window, command-line media, and the developer screenshot automation.
 /// </summary>
-public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationLifetime desktop)
+public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleApplicationLifetime desktop)
 {
     readonly AppPaths paths = AppPaths.FromEnvironment();
     PrefsStore? prefsStore;
@@ -147,6 +147,7 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
         wordLibrary.Load();
         viewModel.WordLibrary = wordLibrary;
         viewModel.WordPopup.Library = wordLibrary;
+        ConfigureLanguageWorkflows(window, wordLibrary, recognitionStore, dispatcher);
         viewModel.TranslationDialog = () => new TranslationViewModel(translator.Settings,
             draft => controller.SaveTranslationAsync(() => translator.SaveAndApplyAsync(draft, translationStore,
                 () => dispatcher.Post(viewModel.WordPopup.Invalidate), controller.ApplyTranslationSettings)), translationStore.LoadWarning);
@@ -233,6 +234,7 @@ public sealed class AppHost(AppOptions options, IClassicDesktopStyleApplicationL
 
     async Task ShutdownAsync()
     {
+        await DrainLanguageWorkflowsAsync();
         viewModel?.SavePrefs();
         viewModel?.Dispose();
         Task exportDrain = viewModel?.DrainSubtitlesExportAsync() ?? Task.CompletedTask;

@@ -1,11 +1,11 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.RecognitionWindow"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:flyleaf="using:FlyleafLib" xmlns:models="using:LLPlayer.Core.Services.Models" x:Class="LLPlayer.Avalonia.Views.RecognitionWindow"
         x:DataType="vm:RecognitionViewModel" Classes="dialog" Title="Recognition — LLPlayer"
         SizeToContent="Manual" CanResize="True" Width="620" Height="600" MinWidth="400" MinHeight="360">
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
       <TextBlock Classes="dialog-title" Text="Recognition settings" />
-      <TextBlock Classes="dialog-description" Text="whisper.cpp CPU · existing models · system Tesseract OCR" />
+      <TextBlock Classes="dialog-description" Text="Speech recognition, existing models and bitmap subtitle OCR" />
     </StackPanel>
     <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
       <TextBlock Name="RecognitionMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted"
@@ -19,16 +19,26 @@
       <StackPanel Spacing="12">
         <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
         <StackPanel Spacing="12" IsEnabled="{Binding !Busy}">
+        <TextBlock Text="Speech recognition engine" />
+        <ComboBox Name="AsrEngineBox" ItemsSource="{Binding AsrEngines}" SelectedItem="{Binding SelectedAsrEngine}" HorizontalAlignment="Stretch" />
+        <StackPanel IsVisible="{Binding IsWhisperCppSelected}" Spacing="12">
+        <Button Name="ManageModelsButton" Content="Manage whisper.cpp models" Classes="outline" Command="{Binding ManageModelsCommand}" CommandParameter="{x:Static models:ModelKind.Whisper}" IsEnabled="{Binding CanManageModels}" HorizontalAlignment="Left" />
         <TextBlock Text="Model directory (absolute path)" />
         <TextBox Name="ModelDirectoryBox" Text="{Binding ModelDirectory}" />
         <Button Content="Refresh existing models" Classes="outline" Command="{Binding RefreshModelsCommand}" HorizontalAlignment="Left" />
         <TextBlock Text="Existing whisper.cpp model" />
         <ComboBox Name="ModelBox" ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel}" HorizontalAlignment="Stretch" />
+        </StackPanel>
         <CheckBox Content="Auto language" IsChecked="{Binding Draft.Whisper.LanguageDetection}" />
         <TextBlock Text="Recognition language code (en, ru, …)" />
+        <ComboBox Name="RecognitionLanguageBox" ItemsSource="{Binding Languages}" SelectedItem="{Binding SelectedLanguage}" HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate><DataTemplate x:DataType="flyleaf:WhisperLanguage"><TextBlock Text="{Binding EnglishName}" /></DataTemplate></ComboBox.ItemTemplate>
+        </ComboBox>
         <TextBox Text="{Binding Draft.Whisper.Language}" />
         <CheckBox Content="Translate recognized speech to English" IsChecked="{Binding Draft.Whisper.Translate}" />
+        <TextBlock Text="{Binding EnglishOnlyWarning}" IsVisible="{Binding Draft.WhisperCpp.IsEnglishModel}" TextWrapping="Wrap" Classes="small muted" />
         <Expander Name="AdvancedWhisperCppExpander" Header="Advanced whisper.cpp CPU" IsExpanded="False"
+                  IsVisible="{Binding IsWhisperCppSelected}"
                   HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                   AutomationProperties.Name="Advanced whisper.cpp CPU settings">
           <StackPanel Spacing="8" Margin="0,8,0,0">
@@ -50,10 +60,80 @@
               <TextBlock Text="NoContext — disable previous-text context" TextWrapping="Wrap" />
             </CheckBox>
             <TextBlock Text="Prompt" />
+            <ComboBox Name="WhisperPromptPresetBox" ItemsSource="{Binding PromptPresetNames}" SelectedItem="{Binding SelectedPromptPreset}" HorizontalAlignment="Stretch" />
             <TextBox Name="PromptBox" Text="{Binding Draft.WhisperCpp.Prompt}" AcceptsReturn="True"
                      TextWrapping="Wrap" MinHeight="80" MaxHeight="160" AutomationProperties.Name="Whisper prompt" />
             <Button Name="ResetAdvancedButton" Content="Reset advanced" Classes="outline"
                     HorizontalAlignment="Left" Command="{Binding ResetAdvancedCommand}" />
+          </StackPanel>
+        </Expander>
+        <Expander Name="DecodingExpander" Header="whisper.cpp decoding and runtime" IsVisible="{Binding IsWhisperCppSelected}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Text="Blank decoding values use library defaults. Decimal separator: period." TextWrapping="Wrap" Classes="small muted" />
+            <TextBlock Text="No-speech threshold (0 to 1)" /><TextBox Name="NoSpeechThresholdBox" Text="{Binding NoSpeechThresholdText}" />
+            <TextBlock Text="Audio context size" /><TextBox Name="AudioContextSizeBox" Text="{Binding AudioContextSizeText}" />
+            <TextBlock Text="Temperature (nonnegative)" /><TextBox Name="TemperatureBox" Text="{Binding TemperatureText}" />
+            <TextBlock Text="Temperature increment (nonnegative)" /><TextBox Name="TemperatureIncBox" Text="{Binding TemperatureIncText}" />
+            <TextBlock Text="Entropy threshold (nonnegative)" /><TextBox Name="EntropyThresholdBox" Text="{Binding EntropyThresholdText}" />
+            <TextBlock Text="Log-probability threshold (zero or negative)" /><TextBox Name="LogProbThresholdBox" Text="{Binding LogProbThresholdText}" />
+            <TextBlock Text="{Binding RuntimeAvailability}" TextWrapping="Wrap" Classes="small muted" />
+            <TextBlock Text="Saved GPU device preference (zero-based; ineffective with CPU runtime)" TextWrapping="Wrap" />
+            <TextBox Name="GpuDeviceBox" Text="{Binding GpuDeviceText}" PlaceholderText="Runtime default" />
+            <TextBlock Text="Available runtime preferences" />
+            <ComboBox Name="AvailableRuntimeBox" ItemsSource="{Binding AvailableRuntimes}" SelectedItem="{Binding AvailableRuntime}" HorizontalAlignment="Stretch" />
+            <Button Content="Add runtime" Command="{Binding AddRuntimeCommand}" Classes="outline" HorizontalAlignment="Left" />
+            <TextBlock Text="Selected runtimes, highest priority first (empty uses engine defaults)" TextWrapping="Wrap" />
+            <ListBox Name="SelectedRuntimesBox" ItemsSource="{Binding RuntimeLibraries}" SelectedItem="{Binding SelectedRuntime}" MaxHeight="140" />
+            <WrapPanel>
+              <Button Content="Remove" Command="{Binding RemoveRuntimeCommand}" Classes="outline" Margin="0,0,8,4" />
+              <Button Content="Move up" Command="{Binding MoveRuntimeUpCommand}" Classes="outline" Margin="0,0,8,4" />
+              <Button Content="Move down" Command="{Binding MoveRuntimeDownCommand}" Classes="outline" Margin="0,0,8,4" />
+            </WrapPanel>
+            <TextBlock Text="Actual loaded whisper.cpp library" /><TextBlock Name="LoadedRuntimeText" Text="{Binding LoadedRuntime}" />
+          </StackPanel>
+        </Expander>
+        <Expander Name="FasterWhisperExpander" Header="faster-whisper settings" IsVisible="{Binding IsFasterWhisperSelected}" IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Text="{Binding FasterInstalledStatus}" TextWrapping="Wrap" Classes="small muted" />
+            <Button Name="ManageFasterEngineButton" Content="Manage faster-whisper engine" Classes="outline" Command="{Binding ManageModelsCommand}" CommandParameter="{x:Static models:ModelKind.FasterWhisperEngine}" IsEnabled="{Binding CanManageModels}" HorizontalAlignment="Left" />
+            <TextBlock Text="Model" /><ComboBox Name="FasterModelBox" ItemsSource="{Binding FasterModels}" SelectedItem="{Binding Draft.FasterWhisper.Model}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="{Binding EnglishOnlyWarning}" IsVisible="{Binding Draft.FasterWhisper.IsEnglishModel}" TextWrapping="Wrap" Classes="small muted" />
+            <CheckBox Name="FasterManualEngineBox" Content="Use manual executable" IsChecked="{Binding Draft.FasterWhisper.UseManualEngine}" />
+            <TextBlock Text="Executable absolute path" /><TextBox Name="FasterEnginePathBox" Text="{Binding Draft.FasterWhisper.ManualEnginePath}" />
+            <CheckBox Name="FasterManualModelBox" Content="Use manual model directory" IsChecked="{Binding Draft.FasterWhisper.UseManualModel}" />
+            <TextBlock Text="Model directory absolute path" /><TextBox Name="FasterModelDirectoryBox" Text="{Binding Draft.FasterWhisper.ManualModelDir}" />
+            <Button Name="OpenModelFolderButton" Content="Open model folder" Command="{Binding OpenModelFolderCommand}" Classes="outline" HorizontalAlignment="Left" />
+            <TextBlock Text="Initial prompt" /><TextBox Name="FasterPromptBox" Text="{Binding Draft.FasterWhisper.Prompt}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" MaxHeight="150" />
+            <TextBlock Text="Extra-argument preset (replaces arguments)" /><ComboBox Name="FasterPresetBox" ItemsSource="{Binding PresetNames}" SelectedItem="{Binding SelectedPreset}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Extra arguments" /><TextBox Name="FasterExtraArgumentsBox" Text="{Binding Draft.FasterWhisper.ExtraArguments}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" MaxHeight="150" />
+            <TextBlock Text="External executable support determines available devices and arguments. This application does not install a GPU backend." TextWrapping="Wrap" Classes="small muted" />
+            <CheckBox Name="FasterAntiHallucinationBox" Content="Anti-hallucination decoding defaults" IsChecked="{Binding Draft.FasterWhisper.AntiHallucination}" />
+            <TextBlock Text="Process priority" /><ComboBox Name="FasterPriorityBox" ItemsSource="{Binding ProcessPriorities}" SelectedItem="{Binding Draft.FasterWhisper.ProcessPriority}" HorizontalAlignment="Stretch" />
+            <WrapPanel>
+              <Button Name="CopyFasterHelpButton" Content="Copy help command" Command="{Binding CopyHelpCommand}" Classes="outline" Margin="0,0,8,4" />
+              <Button Name="CopyFasterDebugButton" Content="Copy debug command" Command="{Binding CopyDebugCommand}" Classes="outline" Margin="0,0,8,4" />
+            </WrapPanel>
+            <TextBlock Text="Preview only; no process is launched. Replace audio.wav with your input." TextWrapping="Wrap" Classes="small muted" />
+            <TextBox Name="FasterCommandPreviewBox" Text="{Binding CommandPreview}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" MaxHeight="150" />
+          </StackPanel>
+        </Expander>
+        <TextBlock Text="Audio chunk size (MB, positive whole number)" /><TextBox Name="AsrChunkSizeBox" Text="{Binding AsrChunkSizeText}" />
+        <TextBlock Text="Audio chunk wait limit (seconds, positive whole number)" /><TextBox Name="AsrChunkSecondsBox" Text="{Binding AsrChunkSecondsText}" />
+        <Expander Name="OcrSettingsExpander" Header="Bitmap subtitle OCR engines and language regions" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Text="Primary OCR engine" /><ComboBox Name="OcrPrimaryEngineBox" ItemsSource="{Binding OcrEngines}" SelectedItem="{Binding Draft.OcrPrimaryEngine}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Secondary OCR engine" /><ComboBox Name="OcrSecondaryEngineBox" ItemsSource="{Binding OcrEngines}" SelectedItem="{Binding Draft.OcrSecondaryEngine}" HorizontalAlignment="Stretch" />
+            <TextBlock Name="OcrAvailabilityText" Text="{Binding OcrStatus}" TextWrapping="Wrap" Classes="small muted" />
+            <Button Content="Refresh installed OCR languages" Classes="outline" Command="{Binding RefreshOcrLanguagesCommand}" HorizontalAlignment="Left" />
+            <TextBlock Text="Installed Tesseract language data" />
+            <Button Name="ManageTesseractModelsButton" Content="Manage Tesseract languages" Classes="outline" Command="{Binding ManageModelsCommand}" CommandParameter="{x:Static models:ModelKind.Tesseract}" IsEnabled="{Binding CanManageModels}" HorizontalAlignment="Left" />
+            <ItemsControl ItemsSource="{Binding TesseractLanguages}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:OcrInstalledLanguage"><TextBlock Text="{Binding Display}" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            <TextBlock Text="Tesseract regional preferences" />
+            <ItemsControl Name="TesseractRegionsList" ItemsSource="{Binding TesseractRegions}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:OcrRegionPreference"><StackPanel Spacing="4" Margin="0,0,0,8"><TextBlock Text="{Binding LanguageCode}" /><ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            <TextBlock Text="Installed Microsoft OCR language tags (Windows only)" />
+            <ItemsControl ItemsSource="{Binding MicrosoftLanguageTags}" />
+            <TextBlock Text="Microsoft OCR regional preferences" />
+            <ItemsControl Name="MicrosoftRegionsList" ItemsSource="{Binding MicrosoftRegions}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:OcrRegionPreference"><StackPanel Spacing="4" Margin="0,0,0,8"><TextBlock Text="{Binding LanguageCode}" /><ComboBox ItemsSource="{Binding Choices}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
           </StackPanel>
         </Expander>
         <TextBlock Name="RecognitionFallbackManagedNote" IsVisible="{Binding !CanEditFallbackLanguages}"

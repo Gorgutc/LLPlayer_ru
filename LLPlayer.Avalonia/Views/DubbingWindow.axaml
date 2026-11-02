@@ -1,0 +1,58 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:dub="using:FlyleafLib.MediaPlayer.Dubbing"
+        x:Class="LLPlayer.Avalonia.Views.DubbingWindow" x:DataType="vm:DubbingViewModel"
+        Classes="dialog" Title="Dubbing — LLPlayer" Width="620" Height="660" MinWidth="400" MinHeight="380">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
+      <TextBlock Classes="dialog-title" Text="Russian dubbing" />
+      <TextBlock Classes="dialog-description" Text="Local CosyVoice · selectable external audio · opt-in batch render" TextWrapping="Wrap" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <TextBlock Name="DubbingMessage" Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+      <StackPanel Classes="dialog-footer">
+        <Button Content="Close" Classes="outline" IsEnabled="{Binding !Busy}" Click="OnClose" />
+        <Button Name="SaveButton" Content="Save &amp; Close" Command="{Binding SaveCommand}" IsEnabled="{Binding !Busy}" />
+      </StackPanel>
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="12" IsEnabled="{Binding !Busy}">
+        <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+        <TextBlock Text="Default voice" />
+        <ComboBox Name="DubbingVoicePicker" ItemsSource="{Binding Voices}" SelectedItem="{Binding SelectedVoice}" HorizontalAlignment="Stretch">
+          <ComboBox.ItemTemplate><DataTemplate x:DataType="dub:TtsVoice"><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+        </ComboBox>
+        <TextBlock Text="Custom voice IDs" />
+        <ListBox Name="CustomVoicesList" ItemsSource="{Binding CustomVoiceIds}" SelectedItem="{Binding SelectedCustomVoiceId}" MaxHeight="110" />
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBox Name="NewVoiceBox" Text="{Binding NewVoiceId}" PlaceholderText="Existing engine voice ID" />
+          <Button Grid.Column="1" Content="Add" Classes="outline" Command="{Binding AddVoiceCommand}" Margin="6,0,0,0" />
+          <Button Grid.Column="2" Content="Remove" Classes="outline" Command="{Binding RemoveVoiceCommand}" Margin="6,0,0,0" />
+        </Grid>
+        <TextBlock Text="IDs are sent to the local engine as declared. Voice selection does not start the engine." TextWrapping="Wrap" Classes="small muted" />
+        <TextBlock Text="Original audio during dubbed lines (%)" />
+        <TextBox Name="DuckingBox" Text="{Binding DuckingText}" />
+        <TextBlock Text="Time-stretch minimum / maximum (0.5–2.0)" />
+        <Grid ColumnDefinitions="*,*">
+          <TextBox Name="AtempoMinBox" Text="{Binding AtempoMinText}" Margin="0,0,6,0" />
+          <TextBox Name="AtempoMaxBox" Grid.Column="1" Text="{Binding AtempoMaxText}" />
+        </Grid>
+        <TextBlock Text="FLAC output · video.ru.dub.flac beside the source video" TextWrapping="Wrap" />
+        <CheckBox Name="PersistVoicesBox" Content="Persist per-line voices beside the media" IsChecked="{Binding Draft.PersistPerLineVoices}" />
+        <TextBlock Text="Opt-in video.ru.voices.json stores timing-matched sidebar overrides. Clearing every override removes the companion file." TextWrapping="Wrap" Classes="small muted" />
+        <Expander Header="Existing local engine" HorizontalContentAlignment="Stretch">
+          <StackPanel Spacing="8" Margin="0,8,0,0">
+            <TextBlock Text="Only LocalCosyVoice is available. Provision its Python environment and model separately; real synthesis requires first-run validation." TextWrapping="Wrap" Classes="small muted" />
+            <TextBlock Text="{Binding Draft.Engine.TtsServiceType}" />
+            <Button Content="Use local CosyVoice" Classes="outline" Command="{Binding UseLocalEngineCommand}" HorizontalAlignment="Left" />
+            <TextBlock Text="Model folder name" />
+            <TextBox Text="{Binding Draft.Engine.Model}" />
+            <CheckBox Content="Use a manually provisioned Python executable" IsChecked="{Binding Draft.Engine.UseManualEngine}" />
+            <TextBox Text="{Binding Draft.Engine.ManualVenvPython}" IsEnabled="{Binding Draft.Engine.UseManualEngine}" />
+            <TextBlock Text="Default Python path" />
+            <TextBlock Text="{Binding DefaultPythonPath}" TextWrapping="Wrap" Classes="small muted" />
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

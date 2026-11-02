@@ -7,6 +7,7 @@ public interface IAppShell
 
     Task<string?> PickMediaFileAsync(string? initialFolder);
     Task<string?> PickSubtitlesFileAsync(string? initialFolder);
+    Task<string?> PickFolderAsync(string? initialFolder) => Task.FromResult<string?>(null);
 
     void ShowCheatSheet();
     void ShowSettings(SettingsViewModel model) { }
@@ -20,6 +21,11 @@ public interface IAppShell
     void ShowPlaylist(PlaylistViewModel model) { }
     void ShowSubtitleDownload(OpenSubtitlesDownloadViewModel model) { }
     void ShowPdicSettings(PdicSettingsViewModel model) { }
+    void ShowAiInsights(AiInsightsViewModel model) { }
+    void ShowDubbing(DubbingViewModel model) { }
+    void ShowBatch(BatchSubtitlesViewModel model) { }
+    void ShowVoicePicker(VoicePickerViewModel model) { }
+    Task ShowModelManagerAsync(ModelManagerViewModel model) => Task.CompletedTask;
     Task<bool> RevealMediaAsync(string path) => Task.FromResult(false);
     Task<bool> OpenBrowserAsync(Uri uri) => Task.FromResult(false);
     void SetClipboardText(string text);

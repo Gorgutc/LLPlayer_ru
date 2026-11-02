@@ -45,6 +45,13 @@ public sealed class WordLibrary
     public bool TryAdd(SavedWord word) => Mutate(candidate => candidate.TryAdd(word));
     public bool Update(SavedWord oldWord, SavedWord newWord) => Mutate(candidate => candidate.Update(oldWord, newWord));
     public bool Remove(SavedWord word) => Mutate(candidate => candidate.Remove(word));
+    /// <summary>Persist an entire AI vocabulary merge before publishing any added words.</summary>
+    public int MergeVocabulary(IReadOnlyList<VocabularyEntry> entries, string sourceLanguage, string targetLanguage, string savedAtUtc)
+    {
+        int added = 0;
+        Mutate(candidate => (added = candidate.MergeVocabulary(entries, sourceLanguage, targetLanguage, savedAtUtc)) > 0);
+        return added;
+    }
     public void Clear() => Mutate(candidate => { candidate.Clear(); return true; });
     bool Mutate(Func<WordListStore, bool> action)
     {

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.IO;
 using System.Text;
 
 namespace FlyleafLib.MediaPlayer;
@@ -27,6 +28,7 @@ internal sealed unsafe class TesseractNative : ITesseractNative
         get { lock (loadGate) return shared ??= new TesseractNative(); }
     }
     nint library;
+    nint dependency;
     readonly delegate* unmanaged[Cdecl]<nint> create;
     readonly delegate* unmanaged[Cdecl]<nint, void> delete;
     readonly delegate* unmanaged[Cdecl]<nint, byte*, byte*, int, int> initialize;
@@ -44,8 +46,10 @@ internal sealed unsafe class TesseractNative : ITesseractNative
     TesseractNative()
     {
         if (OperatingSystem.IsWindows())
-            throw new NotSupportedException("OCR is not supported in the Windows Avalonia playback baseline.");
-        if (!NativeLibrary.TryLoad("libtesseract.so.5", out library))
+        {
+            (dependency, library) = LoadWindowsLibraries(AppContext.BaseDirectory, NativeLibrary.Load, NativeLibrary.Free);
+        }
+        else if (!NativeLibrary.TryLoad("libtesseract.so.5", out library))
             throw new DllNotFoundException("libtesseract.so.5 is unavailable; install Tesseract 5 (Ubuntu: tesseract-ocr).");
         try
         {
@@ -71,8 +75,19 @@ internal sealed unsafe class TesseractNative : ITesseractNative
         {
             NativeLibrary.Free(library);
             library = 0;
+            if (dependency != 0) { NativeLibrary.Free(dependency); dependency = 0; }
             throw;
         }
+    }
+
+    internal static (nint Dependency, nint Library) LoadWindowsLibraries(string baseDirectory,
+        Func<string, nint> load, Action<nint> free)
+    {
+        // Resolve only approved app-local DLLs, loading Leptonica first. Never search PATH/CWD.
+        string directory = Path.Combine(Path.GetFullPath(baseDirectory), "runtimes", "win-x64");
+        nint leptonica = load(Path.Combine(directory, "leptonica-1.85.0.dll"));
+        try { return (leptonica, load(Path.Combine(directory, "tesseract55.dll"))); }
+        catch { free(leptonica); throw; }
     }
 
     static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value + '\0');

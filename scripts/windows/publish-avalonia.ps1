@@ -54,7 +54,9 @@ function Resolve-RestoredPackage([string]$Id, [string]$Version) {
     throw "Restored package $Id $Version cannot be located."
 }
 [xml]$project = Get-Content -LiteralPath (Join-Path $repoRoot 'LLPlayer.Avalonia/LLPlayer.Avalonia.csproj') -Raw
-$version = [string](@($project.Project.PropertyGroup.Version | Where-Object { $_ })[0])
+$versionElement = $project.SelectSingleNode('/Project/PropertyGroup/Version')
+if ($null -eq $versionElement) { throw 'Avalonia project version is missing.' }
+$version = $versionElement.InnerText
 if ($version -notmatch '^[0-9A-Za-z][0-9A-Za-z._+-]{0,63}$' -or $version.Contains('..')) { throw 'Avalonia project version is not path-safe.' }
 $name = "LLPlayer-Avalonia-$version-win-x64"
 if (-not $OutDir) { $OutDir = Join-Path $repoRoot 'artifacts/windows-avalonia' }
@@ -92,8 +94,8 @@ try {
         Copy-RegularFile (Join-Path $pluginStaging $file) (Join-Path $package ('Plugins/YoutubeDL/' + $file))
     }
     Assert-NormalPath $package
-    # TesseractOCR's transitive targets copy both Windows native folders. Portable OCR remains Linux-only.
-    # Reject drift before removing just the known unused Tesseract payload.
+    # Remove the transitive wrapper's unscoped native folders; the explicitly pinned x64 pair lives
+    # under runtimes/win-x64. Reject unknown files before removing only these redundant copies.
     foreach ($folder in @('x64','x86')) {
         $path = Join-Path $package $folder
         if (Test-Path -LiteralPath $path) {
@@ -113,6 +115,39 @@ try {
     Copy-RegularFile (Join-Path $repoRoot 'LICENSE') (Join-Path $package 'FFmpeg/LICENSE.GPLv3.txt')
     Copy-RegularFile (Join-Path $repoRoot 'LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md') (Join-Path $package 'THIRD-PARTY-NOTICES.md')
     $assets = Get-Content -LiteralPath (Join-Path $repoRoot 'LLPlayer.Avalonia/obj/project.assets.json') -Raw | ConvertFrom-Json
+    $tesseract = Resolve-RestoredPackage 'TesseractOCR' '5.5.2'
+    foreach ($nativeFile in @(
+        @{Name='leptonica-1.85.0.dll'; Hash='64bb1d584bce83db5e5c3625f1857e4bc12993625699cabd0a9b8b76e393bd01'},
+        @{Name='tesseract55.dll'; Hash='e9903623e901f2d754eb49eea4dbff229f599a8817055a3e3f1c292216670ca9'}
+    )) {
+        foreach ($path in @((Join-Path $tesseract ('x64/' + $nativeFile.Name)), (Join-Path $package ('runtimes/win-x64/' + $nativeFile.Name)))) {
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $nativeFile.Hash) { throw "Pinned Tesseract native hash mismatch: $path" }
+        }
+    }
+    foreach ($legal in @(
+        @{Name='Tesseract.LICENSE'; Hash='50e6751797c50dedd75ef1b8a0d9e42f5f8472e9fbce91f34718e9f97b0c780a'},
+        @{Name='Leptonica.LICENSE'; Hash='4d3065116f182e29760af0c901d5dbb2e1e16c42765dfc24e69b26805e2acb1e'}
+    )) {
+        $source = Join-Path $repoRoot ('LLPlayer.Avalonia/Licenses/Tesseract/' + $legal.Name)
+        if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant() -cne $legal.Hash) { throw "Pinned OCR legal text changed: $($legal.Name)" }
+        Copy-RegularFile $source (Join-Path $package ('licenses/' + $legal.Name))
+    }
+    Copy-RegularFile (Join-Path $repoRoot 'LLPlayer/lib/license.7z.txt') (Join-Path $package 'licenses/SevenZip.LICENSE')
+    $sevenZipSharp = Resolve-RestoredPackage 'Squid-Box.SevenZipSharp.Lite' '1.6.2.24'
+    Copy-RegularFile (Join-Path $sevenZipSharp 'license') (Join-Path $package 'licenses/SevenZipSharp.LICENSE')
+    # PackageDownload references are not runtime assets in project.assets.json. Resolve their
+    # pinned package directory from the restore roots and verify the copy-local implementations.
+    foreach ($assembly in @('Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll')) {
+        $sdkCopies = @($assets.packageFolders.PSObject.Properties | ForEach-Object {
+            $candidate = Join-Path $_.Name ('microsoft.windows.sdk.net.ref/10.0.18362.57/lib/net8.0/' + $assembly)
+            if (Test-Path -LiteralPath $candidate -PathType Leaf) { $candidate }
+        })
+        if ($sdkCopies.Count -eq 0) { throw "Pinned Windows SDK projection missing: $assembly" }
+        Assert-NormalPath $sdkCopies[0]
+        if ((Get-FileHash -LiteralPath $sdkCopies[0]).Hash -cne (Get-FileHash -LiteralPath (Join-Path $package $assembly)).Hash) { throw "Published Windows SDK projection differs from its pinned package: $assembly" }
+    }
+    if ((Get-FileHash -LiteralPath (Join-Path $repoRoot 'LLPlayer/lib/7z.dll')).Hash -cne
+        (Get-FileHash -LiteralPath (Join-Path $package 'lib/7z.dll')).Hash) { throw 'Published 7-Zip DLL differs from the tracked native asset.' }
     $angleRecord = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'Avalonia.Angle.Windows.Natives/*' })
     if ($angleRecord.Count -ne 1) { throw 'Expected one restored Avalonia ANGLE native package.' }
     $angleVersion = $angleRecord[0].Name.Split('/')[1]
@@ -164,7 +199,8 @@ The original binary build archive, complete build recipe/dependency source prove
 This receipt does not establish public release or source-offer acceptance.
 "@
     $cpu = @('ggml-base-whisper.dll','ggml-cpu-whisper.dll','ggml-whisper.dll','whisper.dll')
-    $native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll') +
+    $native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll',
+        'lib/7z.dll','runtimes/win-x64/leptonica-1.85.0.dll','runtimes/win-x64/tesseract55.dll') +
         @($cpu | ForEach-Object { 'runtimes/win-x64/' + $_ }) + @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
     $files = @($native | ForEach-Object {
         $path = Join-Path $package $_
@@ -175,7 +211,10 @@ This receipt does not establish public release or source-offer acceptance.
         [ordered]@{ name='FFmpeg'; version=$ffmpegVersion; license='GPL'; source='https://git.ffmpeg.org/ffmpeg.git'; provenance='Tracked Windows DLLs; original build/dependency source provenance and formal source offer remain unverified.' },
         [ordered]@{ name='Avalonia ANGLE'; version=$angleVersion; license='See licenses/Avalonia.ANGLE.LICENSE'; source=$angleSource; provenance=($angleCommit + '; restored Avalonia.Angle.Windows.Natives package') },
         [ordered]@{ name='OpenAL Soft'; version='1.23.1'; license='LGPL-2.0-or-later; BSD-3-Clause portions'; source='https://github.com/kcat/openal-soft/tree/d3875f333fb6abe2f39d82caca329414871ae53b'; provenance='Silk.NET.OpenAL.Soft.Native NuGet 1.23.1; LGPL COPYING and BSD-3Clause from the immutable upstream 1.23.1 commit, hashes verified.' },
-        [ordered]@{ name='Whisper.net CPU'; version='1.9.0'; license='MIT'; source='https://github.com/sandrohanea/whisper.net/tree/1.9.0'; provenance='Four explicit Windows x64 CPU DLLs from the pinned runtime package; model/runtime acceptance separate.' }
+        [ordered]@{ name='Whisper.net CPU'; version='1.9.0'; license='MIT'; source='https://github.com/sandrohanea/whisper.net/tree/1.9.0'; provenance='Four explicit Windows x64 CPU DLLs from the pinned runtime package; model/runtime acceptance separate.' },
+        [ordered]@{ name='Tesseract'; version='5.5.1'; license='Apache-2.0'; source='https://github.com/Sicos1977/TesseractOCR/tree/787ebdb488184f47df3dcad7fe687b0b95d0d98c'; provenance='TesseractOCR NuGet 5.5.2 x64/tesseract55.dll, pinned binary hash. Models and actual OCR acceptance separate.' },
+        [ordered]@{ name='Leptonica'; version='1.85.0'; license='BSD-2-Clause'; source='https://github.com/DanBloomberg/leptonica/tree/1.85.0'; provenance='TesseractOCR NuGet 5.5.2 x64/leptonica-1.85.0.dll, pinned binary hash.' },
+        [ordered]@{ name='7-Zip'; version=([System.Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $package 'lib/7z.dll')).FileVersion); license='LGPL with unRAR restriction'; source='https://www.7-zip.org'; provenance='Existing tracked LLPlayer/lib/7z.dll; original build/source-offer provenance remains unverified.' }
     ); files=$files }
     Write-PackageText 'native-dependencies.json' ($manifest | ConvertTo-Json -Depth 6)
     & $validator -PackageDir $package

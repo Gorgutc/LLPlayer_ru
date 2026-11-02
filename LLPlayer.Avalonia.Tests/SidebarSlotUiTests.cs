@@ -88,7 +88,8 @@ public class SidebarSlotUiTests
         foreach (SubtitleText text in fixture.RowTexts())
         {
             Assert.True(text.Bounds.Width > 40, "The sync action must leave usable subtitle text space.");
-            Button sync = text.GetVisualAncestors().OfType<Grid>().First().Children.OfType<Button>().Single();
+            Button sync = text.GetVisualAncestors().OfType<Grid>().First().Children.OfType<Button>()
+                .Single(button => button.Name == "CueSyncButton");
             Point syncOrigin = sync.TranslatePoint(default, sidebar)!.Value;
             Assert.True(sync.IsEffectivelyVisible && sync.Bounds.Width > 0 && sync.Bounds.Height > 0);
             Assert.True(syncOrigin.X >= 0 && syncOrigin.X + sync.Bounds.Width <= sidebar.Bounds.Width);

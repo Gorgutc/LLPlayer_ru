@@ -121,6 +121,8 @@ validate_package() {
         -o -name 'LLPlayer.WordList.json' -o -name 'LLPlayer.WordList.json.*' -o -name '.LLPlayer.WordList.json.*.tmp' -o -name 'crash.log' -o -name '*.log' -o -name '*.dmp' -o -name '*.dump' \
         -o -iname 'LLPlayer.Playback.json' -o -iname 'LLPlayer.Playback.json.*' -o -iname '.LLPlayer.Playback.json' -o -iname '.LLPlayer.Playback.json.*' \
         -o -iname 'LLPlayer.Pdic.json' -o -iname 'LLPlayer.Pdic.json.*' -o -iname '.LLPlayer.Pdic.json' -o -iname '.LLPlayer.Pdic.json.*' \
+        -o -iname 'LLPlayer.Batch.json' -o -iname 'LLPlayer.Batch.json.*' -o -iname '.LLPlayer.Batch.json' -o -iname '.LLPlayer.Batch.json.*' \
+        -o -iname 'LLPlayer.Dubbing.json' -o -iname 'LLPlayer.Dubbing.json.*' -o -iname '.LLPlayer.Dubbing.json' -o -iname '.LLPlayer.Dubbing.json.*' \
         -o -name '.env*' \) -print)"
     [[ -z "$hits" ]] || reject "runtime config / logs / dumps / secrets" "$hits"
     hits="$(find "$pkg" \( -iname 'yt-dlp' -o -iname 'yt-dlp.exe' -o -iname 'yt-dlp_linux*' -o -iname deno -o -iname deno.exe -o -iname pdic-pipe -o -iname pdic-pipe.exe \) -print)"
@@ -171,6 +173,9 @@ runtimes/linux-x64/libggml-base-whisper.so runtimes/linux-x64/libggml-cpu-whispe
     hits="$(find "$pkg" -maxdepth 1 -type d \( -name x86 -o -name x64 \) -print
         find "$pkg" -path '*/runtimes/win*' -prune -print)"
     [[ -z "$hits" ]] || reject "Windows native payload folders" "$hits"
+    hits="$(find "$pkg" \( -iname 'Microsoft.Windows.SDK.NET.dll' -o -iname 'WinRT.Runtime.dll' \
+        -o -iname 'SevenZipSharp.dll' -o -iname '7z.dll' -o -iname 'leptonica-*.dll' -o -iname 'tesseract[0-9]*.dll' \) -print)"
+    [[ -z "$hits" ]] || reject "Windows-only recognition or archive dependencies" "$hits"
     # A portable NuGet TFM can otherwise copy foreign/GPU runtimes regardless of the publish RID.
     # Reject the entire unexpected tree, including non-.so files or empty directories.
     while IFS= read -r path; do

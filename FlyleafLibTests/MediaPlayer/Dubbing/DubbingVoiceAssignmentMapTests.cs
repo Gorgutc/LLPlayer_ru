@@ -5,6 +5,20 @@ namespace FlyleafLib.MediaPlayer.Dubbing;
 public class DubbingVoiceAssignmentMapTests
 {
     [Fact]
+    public void Linux_case_distinct_media_do_not_share_voice_assignments()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows paths intentionally preserve case-insensitive matching.");
+        string media = Path.Combine(Path.GetTempPath(), "Film.mkv");
+        string other = Path.Combine(Path.GetTempPath(), "film.mkv");
+        var map = DubbingVoiceAssignmentMap.FromCurrentSubtitles(media, [Cue("line", 1, 2, "film-voice")]);
+        SubtitleData target = Cue("line", 1, 2, null);
+        map.Apply(other, [target]);
+        target.AssignedVoiceId.Should().BeNull();
+        map.Apply(media, [target]);
+        target.AssignedVoiceId.Should().Be("film-voice");
+    }
+
+    [Fact]
     public void Apply_MatchingMediaAndTiming_CopiesVoiceOverride()
     {
         string mediaPath = Path.Combine(Path.GetTempPath(), "movie.mkv");

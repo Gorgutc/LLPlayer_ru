@@ -1,0 +1,90 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:batch="using:FlyleafLib.MediaPlayer.Batch"
+        x:Class="LLPlayer.Avalonia.Views.BatchSubtitlesWindow" x:DataType="vm:BatchSubtitlesViewModel"
+        Classes="dialog" Title="Batch Subtitles — LLPlayer" Width="1420" Height="860" MinWidth="820" MinHeight="600"
+        Icon="avares://LLPlayer.Avalonia/Assets/llplayer.png">
+  <DockPanel Margin="20">
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Text="Batch Subtitles" Classes="dialog-title" />
+      <TextBlock Text="Transcribe video folders, translate to Russian and optionally generate local dubbing. Each run snapshots the saved ASR, translation and dubbing settings." TextWrapping="Wrap" Classes="dialog-description" />
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <TextBox Name="BatchFolderBox" Text="{Binding Draft.LastFolder}" PlaceholderText="Video folder" AutomationProperties.Name="Video folder" />
+        <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseCommand}" Classes="outline" />
+      </Grid>
+      <WrapPanel>
+        <CheckBox Content="Include subfolders" IsChecked="{Binding Draft.Recursive}" Margin="0,0,14,0" />
+        <CheckBox Content="Overwrite existing output" IsChecked="{Binding Draft.OverwriteExisting}" Margin="0,0,14,0" />
+        <CheckBox Content="Smooth: do not overlap ASR and translation" IsChecked="{Binding Draft.SerializeAsrAndTranslate}" Margin="0,0,14,0" />
+        <CheckBox Content="Prefer Russian audio" IsChecked="{Binding Draft.PreferRussianAudio}" Margin="0,0,14,0" />
+      </WrapPanel>
+      <WrapPanel>
+        <CheckBox Content="CPU while active (faster-whisper)" IsChecked="{Binding Draft.RunOnCpuWhenActive}" Margin="0,0,14,0" />
+        <TextBlock Text="Idle seconds" VerticalAlignment="Center" Margin="0,0,6,0" />
+        <NumericUpDown Name="BatchIdleThreshold" Value="{Binding Draft.ActiveIdleThresholdSeconds}" Minimum="5" Maximum="600" Increment="5" Width="110" Margin="0,0,14,0" />
+        <CheckBox Name="BatchWatchToggle" Content="Watch folder (saved option)" IsChecked="{Binding Draft.WatchFolder}" Margin="0,0,14,0" />
+        <Button Name="BatchWatchStartStop" Content="{Binding WatchButtonText}" Command="{Binding ToggleWatchCommand}" Classes="outline" Margin="0,0,14,0" />
+      </WrapPanel>
+      <WrapPanel>
+        <CheckBox Content="Generate Russian dub" IsChecked="{Binding Draft.GenerateDubbing}" Margin="0,0,14,0" />
+        <ComboBox ItemsSource="{Binding Voices}" SelectedItem="{Binding SelectedVoice}" IsVisible="{Binding HasVoicePicker}" Width="240" Margin="0,0,8,0" AutomationProperties.Name="Default dubbing voice">
+          <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{ReflectionBinding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+        </ComboBox>
+        <Button Content="Dubbing settings…" Command="{Binding DubbingSettingsCommand}" Classes="outline" Margin="0,0,8,0" />
+        <Button Name="BatchSaveOptions" Content="Save options" Command="{Binding SaveOptionsCommand}" Classes="outline" />
+      </WrapPanel>
+      <TextBlock Text="Options take effect on Save options, Scan or Start. Active runs keep their original snapshot. Output uses the global subtitle export BOM preference at run start. Per-file audio selection is session-only." TextWrapping="Wrap" Classes="small muted" />
+      <TextBlock Text="{Binding ActivityStatus}" TextWrapping="Wrap" Classes="small muted" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <ProgressBar Name="BatchOverallProgress" Minimum="0" Maximum="1" Value="{Binding Workflow.OverallProgress}" IsVisible="{Binding Workflow.IsRunning}" />
+      <TextBlock Name="BatchSummary" Text="{Binding Workflow.Summary}" TextWrapping="Wrap" Classes="small muted" />
+      <TextBlock Name="BatchMessage" Text="{Binding Workflow.Message}" TextWrapping="Wrap" Classes="small muted" AutomationProperties.LiveSetting="Polite" />
+      <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+      <WrapPanel>
+        <Button Name="BatchScan" Content="Scan" Command="{Binding ScanCommand}" IsEnabled="{Binding Workflow.IsIdle}" Classes="outline" Margin="0,0,8,6" />
+        <Button Name="BatchStart" Content="Start selected" Command="{Binding StartCommand}" IsEnabled="{Binding Workflow.CanStart}" Margin="0,0,8,6" />
+        <Button Name="BatchCancel" Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding Workflow.CanCancel}" Classes="outline" Margin="0,0,8,6" />
+        <Button Content="Retry failed" Command="{Binding RetryFailedCommand}" IsEnabled="{Binding Workflow.CanRetryFailed}" Classes="outline" Margin="0,0,8,6" />
+        <Button Content="Retry selected" Command="{Binding RetrySelectedCommand}" IsEnabled="{Binding Workflow.IsIdle}" Classes="outline" Margin="0,0,8,6" />
+        <Button Content="Open in player" Command="{Binding OpenInPlayerCommand}" IsEnabled="{Binding CanOpenSelection}" Classes="outline" Margin="0,0,8,6" />
+        <Button Content="Open output folder" Command="{Binding OpenOutputFolderCommand}" Classes="outline" Margin="0,0,8,6" />
+        <Button Content="Minimize to background" Click="OnBackground" Classes="outline" Margin="0,0,8,6" />
+        <Button Content="Close" Click="OnClose" Classes="outline" Margin="0,0,8,6" />
+      </WrapPanel>
+    </StackPanel>
+    <Grid ColumnDefinitions="3*,2*" ColumnSpacing="12">
+      <DockPanel>
+        <CheckBox DockPanel.Dock="Top" Content="Select all / none" IsChecked="{Binding AllIncluded}" Margin="0,0,0,8" />
+        <ListBox Name="BatchJobs" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}" DoubleTapped="OnJobDoubleTapped">
+          <ListBox.ItemTemplate><DataTemplate x:DataType="vm:BatchJobRow">
+            <StackPanel>
+              <TextBlock Text="{Binding FolderHeader}" IsVisible="{Binding HasFolderHeader}" FontWeight="SemiBold" Margin="8,12,8,8" />
+            <Border DataContext="{Binding Job}" x:DataType="batch:BatchSubtitleJob" Padding="8" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource BorderBrush}">
+              <StackPanel Spacing="4">
+                <CheckBox Content="{Binding FileName}" IsChecked="{Binding Include}" ToolTip.Tip="{Binding MediaPath}" />
+                <WrapPanel>
+                  <TextBlock Text="{Binding Status}" FontWeight="SemiBold" Margin="0,0,10,0" />
+                  <TextBlock Text="{Binding SubtitleCount, StringFormat='Cues: {0}'}" Margin="0,0,10,0" />
+                  <TextBlock Text="{Binding Throughput}" />
+                </WrapPanel>
+                <ComboBox ItemsSource="{Binding AudioTracks}" SelectedValueBinding="{Binding StreamIndex}" SelectedValue="{Binding SelectedAudioStreamIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Audio track override">
+                  <ComboBox.ItemTemplate><DataTemplate x:DataType="batch:MediaAudioTrack"><TextBlock Text="{Binding Display}" /></DataTemplate></ComboBox.ItemTemplate>
+                </ComboBox>
+                <ProgressBar Minimum="0" Maximum="1" Value="{Binding Progress}" IsIndeterminate="{Binding IsIndeterminateProgress}" />
+                <WrapPanel><TextBlock Text="{Binding ProcessedTime, StringFormat='Media: {0}'}" Margin="0,0,6,0" /><TextBlock Text="{Binding TotalDuration, StringFormat='/ {0}'}" Margin="0,0,10,0" /><TextBlock Text="{Binding Elapsed, StringFormat='Elapsed: {0}'}" Margin="0,0,10,0" /><TextBlock Text="{Binding Eta, StringFormat='ETA: {0}'}" /></WrapPanel>
+                <TextBlock Text="{Binding Error}" TextWrapping="Wrap" Classes="small muted" />
+                <TextBlock Text="{Binding OutputFileName}" Classes="small muted" ToolTip.Tip="{Binding OutputPath}" />
+                <Button Content="Retry this file" Click="OnRetryJob" Classes="outline" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+            </StackPanel>
+          </DataTemplate></ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+      <DockPanel Grid.Column="1">
+        <TextBlock DockPanel.Dock="Top" Text="Live transcript / dubbing progress" FontWeight="SemiBold" Margin="0,0,0,8" />
+        <ListBox ItemsSource="{Binding Workflow.ActiveJob.Transcript}" />
+      </DockPanel>
+    </Grid>
+  </DockPanel>
+</Window>

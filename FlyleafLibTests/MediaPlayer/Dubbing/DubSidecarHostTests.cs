@@ -5,6 +5,13 @@ namespace FlyleafLib.MediaPlayer;
 
 public class DubSidecarHostTests
 {
+    [Fact]
+    public void Linux_parent_start_time_ignores_spaces_and_closing_parentheses_in_command()
+    {
+        string stat = "123 (player ) with spaces) " + string.Join(' ', new[] { "S" }.Concat(Enumerable.Repeat("0", 18)).Append("887766"));
+        DubSidecarHost.ParseLinuxStartTime(stat).Should().Be("887766");
+        DubSidecarHost.ParseLinuxStartTime("malformed").Should().BeNull();
+    }
     // HC-30: WaitForExitAsync completing does NOT prove the sidecar died — a caller-cancel or the 120s timeout
     // cancels the linked token and completes the exit-wait while the process is alive. The pure classifier maps
     // (caller-cancel?, process-exited?) to the fault so a cancel becomes Canceled and a timeout gets its own

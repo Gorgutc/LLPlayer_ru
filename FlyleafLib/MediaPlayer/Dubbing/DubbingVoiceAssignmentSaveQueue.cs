@@ -8,6 +8,8 @@ namespace FlyleafLib.MediaPlayer.Dubbing;
 /// </summary>
 public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
 {
+    private static readonly StringComparer MediaPathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
     private sealed record SaveRequest(
         DubbingVoiceAssignmentMediaTarget Target,
         string MediaKey,
@@ -20,11 +22,11 @@ public sealed class DubbingVoiceAssignmentSaveQueue : IDisposable
     private readonly TimeSpan _delay;
     private readonly object _lock = new();
     private readonly object _saveLock = new();
-    private readonly Dictionary<string, SaveRequest> _pendingByMediaKey = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, long> _latestRevisionByMediaKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, SaveRequest> _pendingByMediaKey = new(MediaPathComparer);
+    private readonly Dictionary<string, long> _latestRevisionByMediaKey = new(MediaPathComparer);
     // Kept for the queue lifetime: a late alias request must never outlive and overwrite a newer save to the same
     // resolved file, even after that newer request completed and removed its capture-key marker.
-    private readonly Dictionary<string, long> _latestRevisionByResolvedPath = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, long> _latestRevisionByResolvedPath = new(MediaPathComparer);
     private long _nextRevision;
     private int _activeSaves;
     private bool _isDisposed;

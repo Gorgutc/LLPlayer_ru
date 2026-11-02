@@ -18,6 +18,8 @@ public interface IDubbingVoiceAssignmentProvider
 
 public sealed class DubbingVoiceAssignmentMap : IDubbingVoiceAssignmentProvider
 {
+    private static readonly StringComparer MediaPathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
     public static DubbingVoiceAssignmentMap Empty { get; } = new([]);
 
     private readonly Dictionary<string, Dictionary<(long StartMs, long EndMs), string>> _byMediaPath;
@@ -49,7 +51,7 @@ public sealed class DubbingVoiceAssignmentMap : IDubbingVoiceAssignmentProvider
             return Empty;
 
         return new DubbingVoiceAssignmentMap(
-            new Dictionary<string, Dictionary<(long StartMs, long EndMs), string>>(StringComparer.OrdinalIgnoreCase)
+            new Dictionary<string, Dictionary<(long StartMs, long EndMs), string>>(MediaPathComparer)
             {
                 [normalizedPath] = byTiming
             });
@@ -81,7 +83,7 @@ public sealed class DubbingVoiceAssignmentMap : IDubbingVoiceAssignmentProvider
             return Empty;
 
         return new DubbingVoiceAssignmentMap(
-            new Dictionary<string, Dictionary<(long StartMs, long EndMs), string>>(StringComparer.OrdinalIgnoreCase)
+            new Dictionary<string, Dictionary<(long StartMs, long EndMs), string>>(MediaPathComparer)
             {
                 [normalizedPath] = byTiming
             });

@@ -201,6 +201,66 @@ public class PortableOcrTests
         service.PostProcess("  | I1t's ’'\n").Should().Be("| I1t's ’'");
     }
 
+    [Fact]
+    public void ManagedLanguage_DoesNotHideSystemLanguage_AndPreferredRegionUsesOwnDirectory()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "llp-managed-ocr-" + Guid.NewGuid());
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "chi_tra.traineddata"), "model");
+            using FakeTesseract native = new() { Languages = ["eng", "chi_sim"] };
+            Config config = new(true);
+            config.Subtitles.TesseractOcrRegions["zh"] = "chi_tra";
+            using TesseractOCRService service = new(config.Subtitles, () => native, () => null, () => directory, () => null);
+            service.TryInitialize(Language.Get("zh"), out string error).Should().BeTrue(error);
+            native.Initializations.Last().Should().Be("chi_tra");
+            native.InitializationPaths.Last().Should().Be(directory);
+            service.TryInitialize(Language.English, out error).Should().BeTrue(error);
+            native.InitializationPaths.Last().Should().Be("/system/tessdata");
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public void ExplicitTessdata_DoesNotMergeManagedLanguages()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "llp-explicit-ocr-" + Guid.NewGuid());
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "rus.traineddata"), "model");
+            using FakeTesseract native = new() { Languages = ["eng"] };
+            using TesseractOCRService service = new(new Config(true).Subtitles, () => native,
+                () => directory, () => directory, () => directory);
+            service.TryInitialize(Language.Get("ru"), out _).Should().BeFalse();
+            native.Initializations.Should().Equal("");
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public void LegacyLanguage_RemainsUsable_AndManagedCopyWinsWhenPresent()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "llp-legacy-ocr-" + Guid.NewGuid());
+        string legacy = Path.Combine(directory, "legacy"), managed = Path.Combine(directory, "managed");
+        Directory.CreateDirectory(legacy);
+        Directory.CreateDirectory(managed);
+        try
+        {
+            File.WriteAllText(Path.Combine(legacy, "rus.traineddata"), "legacy model");
+            using FakeTesseract native = new() { Languages = ["eng"] };
+            using TesseractOCRService service = new(new Config(true).Subtitles, () => native,
+                () => null, () => managed, () => legacy);
+            service.TryInitialize(Language.Get("ru"), out string error).Should().BeTrue(error);
+            native.InitializationPaths.Last().Should().Be(legacy);
+            File.WriteAllText(Path.Combine(managed, "rus.traineddata"), "managed model");
+            service.TryInitialize(Language.Get("ru"), out error).Should().BeTrue(error);
+            native.InitializationPaths.Last().Should().Be(managed);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     static BgraBitmap Pixel() => new([0, 0, 0, 255], 1, 1);
     static TesseractOCRService Create(FakeTesseract native) => new(new Config(true).Subtitles, () => native, () => null);
 

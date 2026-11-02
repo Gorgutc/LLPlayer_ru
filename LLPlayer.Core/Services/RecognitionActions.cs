@@ -88,7 +88,7 @@ public sealed class PlayerRecognitionBackend(Player player) : IRecognitionBacken
 }
 
 /// <summary>One gate for recognition and ordinary media/track mutations; queued work belongs to its media generation.</summary>
-public sealed class RecognitionActions(IRecognitionBackend backend) : IDisposable, IAsyncDisposable
+public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDisposable>? acquireResourceUse = null) : IDisposable, IAsyncDisposable
 {
     readonly object admission = new();
     Task tail = Task.CompletedTask;
@@ -112,11 +112,17 @@ public sealed class RecognitionActions(IRecognitionBackend backend) : IDisposabl
         ValidateSlot(slot);
         if (!backend.HasAudio) throw new InvalidOperationException("Open media with an audio track before starting recognition.");
         if (backend.IsLive) throw new InvalidOperationException("Recognition is unavailable for live streams.");
+        using IDisposable? resourceUse = acquireResourceUse?.Invoke();
         backend.Start(slot);
     });
     public Task TogglePauseAsync() => RunAsync(() => { if (backend.IsPaused) backend.Resume(); else backend.Pause(); });
     public Task CancelAsync(int slot) => RunAsync(() => { ValidateSlot(slot); backend.Cancel(slot); });
-    public Task OcrAsync(int slot) => RunAsync(token => { ValidateSlot(slot); backend.Ocr(slot, token); });
+    public Task OcrAsync(int slot) => RunAsync(token =>
+    {
+        ValidateSlot(slot);
+        using IDisposable? resourceUse = acquireResourceUse?.Invoke();
+        backend.Ocr(slot, token);
+    });
     public Task MutateAsync(Action mutation, bool mediaChange = false)
         => MutateAsync(_ => mutation(), mediaChange);
     public Task MutateAsync(Action<CancellationToken> mutation, bool mediaChange = false)

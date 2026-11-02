@@ -4,6 +4,39 @@ LLPlayer.Avalonia is part of LLPlayer (GPL-3.0, see `../LICENSE`). This file rec
 and bundled dependencies requiring attribution or license text; other NuGet package dependencies keep their own
 licenses.
 
+## Windows recognition and archive dependencies
+
+Windows Avalonia alone carries the existing WPF-pinned Windows SDK .NET projection
+`Microsoft.Windows.SDK.NET.Ref` 10.0.18362.57: `Microsoft.Windows.SDK.NET.dll` and
+`WinRT.Runtime.dll`. Copyright Microsoft Corporation. Windows SDK terms:
+<https://aka.ms/WinSDKLicenseURL>. The projection is compiled/copied only for win-x64;
+it is not a Windows language pack and does not install an OS component.
+
+Windows native OCR uses only the x64 `leptonica-1.85.0.dll` and `tesseract55.dll`
+from pinned `TesseractOCR` 5.5.2. The package reports Tesseract 5.5.1; its package
+version is not the native engine version. Tesseract is Apache-2.0, Copyright
+Google Inc. and contributors; the wrapper is Copyright Charles Weld and Kees van Spelde.
+The Apache-2.0 license text is shipped as `licenses/Tesseract.LICENSE`.
+Leptonica is Copyright 2001-2020 Leptonica, BSD-2-Clause; its complete terms are
+shipped as `licenses/Leptonica.LICENSE`.
+Sources: <https://github.com/Sicos1977/TesseractOCR/tree/787ebdb488184f47df3dcad7fe687b0b95d0d98c>,
+<https://github.com/tesseract-ocr/tesseract/tree/5.5.1>,
+<https://github.com/DanBloomberg/leptonica/tree/1.85.0>.
+The Windows publisher verifies the two fixed binary hashes and records the shipped
+hashes in `native-dependencies.json`. Linux continues to use system Tesseract and
+does not carry these DLLs. Language data is downloaded explicitly to user storage
+and is excluded from both packages.
+
+The Windows faster-whisper archive adapter reuses `Squid-Box.SevenZipSharp.Lite`
+1.6.2.24 (LGPL-3.0-only; Joel Ahlgren and SevenZipSharp contributors) and the
+existing tracked `LLPlayer/lib/7z.dll` (Igor Pavlov; LGPL with the unRAR restriction).
+The Windows package ships SevenZipSharp's license as `licenses/SevenZipSharp.LICENSE`
+and the original 7-Zip license summary and terms link as `licenses/SevenZip.LICENSE`;
+`7z.dll` stays a separate replaceable file under
+`lib/`. Sources: <https://github.com/squid-box/SevenZipSharp> and
+<https://www.7-zip.org>. The original tracked 7-Zip build recipe and formal source
+offer remain unverified. These dependencies are excluded from the Linux package.
+
 ## NMeCab and the IPAdic Japanese dictionary
 
 The shared Windows/Linux application references the same packages as the supported WPF application:

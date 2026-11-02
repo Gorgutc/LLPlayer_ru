@@ -27,7 +27,7 @@ public class SubtitleOutputPathBuilderTests
             File.WriteAllText(Path.Combine(tempDir, "lesson 1.avi"), "");
             File.WriteAllText(Path.Combine(tempDir, "notes.txt"), "");
 
-            var result = BatchVideoScanner.Scan(tempDir, recursive: false);
+            var result = BatchVideoScanner.Scan(tempDir, recursive: false, TestContext.Current.CancellationToken);
 
             result.Select(Path.GetFileName).Should().Equal(
                 "lesson 1.avi",

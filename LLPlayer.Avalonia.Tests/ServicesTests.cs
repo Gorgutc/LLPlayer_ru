@@ -516,7 +516,7 @@ public class EngineConfigTests
 {
 
     [Fact]
-    public void InstallSeams_ProvidesSeparateTesseractServices_AndLeavesMicrosoftUnsupported()
+    public void InstallSeams_ProvidesSeparateTesseractServices_AndPlatformMicrosoftAvailability()
     {
         var previousFactory = SubtitlesOCR.ServiceFactory;
         var previousDispatcher = Utils.UIDispatcher;
@@ -528,14 +528,20 @@ public class EngineConfigTests
         {
             SubtitlesOCR.ServiceFactory = null;
             EngineBootstrap.InstallSeams(null!, null!, new CollectionSyncBridge(null), new KeyMapper());
-            SubtitlesOCR.ServiceFactory.Should().NotBeNull("the Linux host must register its OCR service");
+            SubtitlesOCR.ServiceFactory.Should().NotBeNull("the shared host must register its OCR service");
             Config config = new(true);
             using IOCRService? primary = SubtitlesOCR.ServiceFactory!(config.Subtitles, SubOCREngineType.Tesseract);
             using IOCRService? secondary = SubtitlesOCR.ServiceFactory!(config.Subtitles, SubOCREngineType.Tesseract);
             primary.Should().NotBeNull();
             secondary.Should().NotBeNull();
             secondary.Should().NotBeSameAs(primary);
-            SubtitlesOCR.ServiceFactory!(config.Subtitles, SubOCREngineType.MicrosoftOCR).Should().BeNull();
+            using IOCRService? microsoft = SubtitlesOCR.ServiceFactory!(config.Subtitles, SubOCREngineType.MicrosoftOCR);
+            if (OperatingSystem.IsWindows())
+            {
+                microsoft.Should().NotBeNull("Windows registers a lazy host adapter without activating OCR here");
+                microsoft!.GetType().Name.Should().Be("MicrosoftOcrService");
+            }
+            else microsoft.Should().BeNull("Microsoft OCR is explicitly unavailable on Linux");
         }
         finally
         {

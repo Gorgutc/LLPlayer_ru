@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:dub="using:FlyleafLib.MediaPlayer.Dubbing"
+        x:Class="LLPlayer.Avalonia.Views.VoicePickerWindow" x:DataType="vm:VoicePickerViewModel"
+        Classes="dialog" Title="Subtitle voice — LLPlayer" Width="440" Height="300" MinWidth="340" MinHeight="260">
+  <DockPanel>
+    <TextBlock DockPanel.Dock="Top" Classes="dialog-title" Text="Voice for this subtitle" Margin="0,0,0,16" />
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Classes="small muted" />
+      <Button Name="UseDefaultVoiceButton" Content="Use default voice" Classes="outline" Command="{Binding UseDefaultCommand}" IsEnabled="{Binding !Busy}" />
+      <StackPanel Classes="dialog-footer">
+        <Button Content="Close" Classes="outline" Click="OnClose" IsEnabled="{Binding !Busy}" />
+        <Button Name="SaveVoiceButton" Content="Apply voice" Command="{Binding SaveCommand}" IsEnabled="{Binding !Busy}" />
+      </StackPanel>
+    </StackPanel>
+    <ComboBox Name="CueVoicePicker" ItemsSource="{Binding Voices}" SelectedItem="{Binding SelectedVoice}" HorizontalAlignment="Stretch" VerticalAlignment="Top" IsEnabled="{Binding !Busy}">
+      <ComboBox.ItemTemplate><DataTemplate x:DataType="dub:TtsVoice"><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+    </ComboBox>
+  </DockPanel>
+</Window>

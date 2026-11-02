@@ -1,0 +1,87 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+        xmlns:ai="using:FlyleafLib.MediaPlayer.AI"
+        x:Class="LLPlayer.Avalonia.Views.AiInsightsWindow"
+        x:DataType="vm:AiInsightsViewModel"
+        Title="AI Insights — LLPlayer" Width="820" Height="720" MinWidth="480" MinHeight="420"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="20" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+    <StackPanel Spacing="8">
+      <TextBlock Text="AI Insights" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Text="Summarize your transcript or extract vocabulary with the LLM configured in Translation settings."
+                 TextWrapping="Wrap" />
+      <WrapPanel Orientation="Horizontal">
+        <StackPanel Margin="0,0,12,0" MinWidth="150" Spacing="4">
+          <TextBlock Text="Output" />
+          <ComboBox x:Name="ModePicker" ItemsSource="{Binding ModeList}" SelectedItem="{Binding SelectedMode}"
+                    IsEnabled="{Binding CanEditInputs}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+        <StackPanel Margin="0,0,12,0" MinWidth="130" Spacing="4">
+          <TextBlock Text="Subtitle slot" />
+          <ComboBox x:Name="SlotPicker" ItemsSource="{Binding SlotNames}" SelectedIndex="{Binding SelectedSubIndex}"
+                    IsEnabled="{Binding CanEditInputs}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+        <CheckBox Content="Use translated text" IsChecked="{Binding UseTranslated}" IsEnabled="{Binding CanEditInputs}" VerticalAlignment="Bottom" />
+      </WrapPanel>
+      <TextBlock x:Name="LlmStatus" Text="{Binding LlmIndicator}" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding InputSourceText}" TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
+      <TextBlock Text="{Binding BudgetText}" TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
+      <TextBlock Text="ASR/OCR is still running. Generation uses only the transcript available when you click Generate."
+                 IsVisible="{Binding IncompleteTranscriptWarning}" TextWrapping="Wrap" Foreground="Orange" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button x:Name="GenerateButton" Content="Generate" Command="{Binding GenerateCommand}" />
+        <Button Content="Cancel" Command="{Binding CancelCommand}" IsEnabled="{Binding Busy}" />
+        <TextBlock Text="{Binding ProgressText}" VerticalAlignment="Center" TextWrapping="Wrap" />
+      </StackPanel>
+    </StackPanel>
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="10">
+        <TextBlock Text="{Binding ResultSourceText}" TextWrapping="Wrap" FontSize="12" Opacity="0.7" />
+        <TextBlock Text="Only evenly sampled parts of this long transcript were analyzed."
+                   IsVisible="{Binding PartialCoverageWarning}" TextWrapping="Wrap" Foreground="Orange" />
+        <TextBlock Text="Summary" FontSize="17" FontWeight="SemiBold" IsVisible="{Binding HasSummary}" />
+        <SelectableTextBlock x:Name="SummaryResult" Text="{Binding SummaryText}" TextWrapping="Wrap" IsVisible="{Binding HasSummary}" />
+        <TextBlock Text="Vocabulary" FontSize="17" FontWeight="SemiBold" IsVisible="{Binding HasVocabulary}" />
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" IsVisible="{Binding HasVocabulary}">
+          <StackPanel>
+            <Grid ColumnDefinitions="150,130,170,240,260" Margin="4">
+              <TextBlock Text="Term" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="1" Text="Reading" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="2" Text="Translation" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="3" Text="Definition" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="4" Text="Example" FontWeight="SemiBold" />
+            </Grid>
+            <ItemsControl x:Name="VocabularyResults" ItemsSource="{Binding Vocabulary}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="ai:VocabularyEntry">
+                  <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="4,8">
+                    <Grid ColumnDefinitions="150,130,170,240,260">
+                      <SelectableTextBlock Text="{Binding Term}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                      <SelectableTextBlock Grid.Column="1" Text="{Binding Reading}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                      <SelectableTextBlock Grid.Column="2" Text="{Binding Translation}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                      <SelectableTextBlock Grid.Column="3" Text="{Binding Definition}" TextWrapping="Wrap" Margin="0,0,8,0" />
+                      <SelectableTextBlock Grid.Column="4" Text="{Binding Example}" TextWrapping="Wrap" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+        <TextBlock Text="The model returned unstructured vocabulary. Its original reply is shown below."
+                   IsVisible="{Binding ShowRawVocabulary}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding RawVocabularyReply}" IsVisible="{Binding ShowRawVocabulary}" TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+    <StackPanel Grid.Row="2" Spacing="10">
+      <TextBlock x:Name="OperationStatus" Text="{Binding Message}" TextWrapping="Wrap" />
+      <WrapPanel>
+        <Button Content="Copy" Command="{Binding CopyCommand}" Margin="0,0,8,8" />
+        <Button Content="Save…" Command="{Binding SaveCommand}" Margin="0,0,8,8" />
+        <Button Content="Add vocabulary to word list" Command="{Binding AddToWordListCommand}" Margin="0,0,8,8" />
+        <Button Content="Close" Click="OnClose" Margin="0,0,0,8" />
+      </WrapPanel>
+    </StackPanel>
+  </Grid>
+</Window>

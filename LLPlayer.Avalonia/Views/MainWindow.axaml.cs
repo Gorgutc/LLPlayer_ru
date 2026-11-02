@@ -323,6 +323,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OwnKeyboardSurface(Window window)
     {
+        window.Opened += (_, _) => RefreshLanguageClosingBehavior();
+        window.Closed += (_, _) => RefreshLanguageClosingBehavior(window);
         // A dialog may receive the release of the key which opened it. Finish the parent's ownership there,
         // and retain child-origin presses when Escape closes the child before its paired release arrives.
         window.AddHandler(KeyDownEvent, (_, e) => vm?.SuppressInputKeyDown(KeyMapper.ToWpf(e.Key)),
@@ -345,7 +347,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     public void ApplyTheme(string theme) => ThemeService.Apply(theme);
 
-    public void Exit() => Close();
+    public void Exit() => RequestApplicationExit();
 
     // ---- IHostPlayer (engine key bindings: F / Esc / ToggleFullScreen) ---------------------------------------------
 
@@ -385,12 +387,18 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     {
         base.OnClosing(e);
         if (e.Cancel || shutdownComplete) return;
+        if (!explicitQuit && KeepAliveOnClose?.Invoke() == true)
+        {
+            e.Cancel = true;
+            BackgroundRequested?.Invoke(this);
+            return;
+        }
         ClearCommandButtonKeys();
         vm?.BeginWordActionsShutdown();
         vm?.CancelAppShortcuts();
         if (ShutdownRequested == null) { vm?.SavePrefs(); return; }
         e.Cancel = true;
-        if (!shutdownStarted) { shutdownStarted = true; IsEnabled = false; _ = DrainBeforeClosingAsync(); }
+        BeginApplicationShutdown();
     }
 
     async Task DrainBeforeClosingAsync()
@@ -401,9 +409,17 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
                 await translation.DrainDiagnosticsAsync();
             if (vm != null) await vm.DrainBrowserOperationsAsync();
             await DrainParityWindowsAsync();
+            await DrainLanguageWindowsAsync();
             await ShutdownRequested!();
         }
-        finally { shutdownComplete = true; Close(); }
+        finally
+        {
+            shutdownComplete = true;
+            // Cancellation/draining starts immediately, but let an owned-window Closing traversal unwind
+            // before the final Close, including when every shutdown operation completed synchronously.
+            await Task.Yield();
+            Close();
+        }
     }
 
     protected override void OnClosed(EventArgs e)
@@ -420,6 +436,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         recognitionWindow?.Close();
         subtitlesExportWindow?.Close();
         CloseParityWindows();
+        CloseLanguageWindows();
         ReleaseSleepInhibition();
         Video.Renderer = null;
         base.OnClosed(e);

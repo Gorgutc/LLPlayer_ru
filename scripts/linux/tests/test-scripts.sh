@@ -106,7 +106,7 @@ for helper in yt-dlp yt-dlp.exe yt-dlp_linux yt-dlp_linux_aarch64 deno deno.exe 
     expect_fail "nested external helper $helper" "external extractor helpers" \
         check_pkg "$(mutate "helper-${helper//./-}" "mkdir nested; echo x > nested/$helper")"
 done
-for family in Playback Pdic; do
+for family in Playback Pdic Batch Dubbing; do
     for config in "LLPlayer.$family.json" "LLPlayer.$family.json.bak" "LLPlayer.$family.json.bad" \
         ".LLPlayer.$family.json.guid.tmp" ".LLPlayer.$family.json.bak" \
         "nested/LLPlayer.$family.json" "nested/LLPlayer.$family.json.bak" \
@@ -114,6 +114,10 @@ for family in Playback Pdic; do
         expect_fail "playback/PDIC configuration $config" "runtime config" \
             check_pkg "$(mutate "owned-config-${config//\//-}" "mkdir -p nested; echo x > $config")"
     done
+done
+for asset in Microsoft.Windows.SDK.NET.dll WinRT.Runtime.dll SevenZipSharp.dll 7z.dll leptonica-1.85.0.dll tesseract55.dll; do
+    expect_fail "Windows-only dependency $asset" "Windows-only recognition or archive dependencies" \
+        check_pkg "$(mutate "windows-only-$asset" "echo x > $asset")"
 done
 expect_fail "missing Core assembly" "missing required file LLPlayer.Core.dll" \
     check_pkg "$(mutate missing-core 'rm LLPlayer.Core.dll')"

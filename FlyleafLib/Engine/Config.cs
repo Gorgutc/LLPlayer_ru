@@ -1440,7 +1440,7 @@ public class Config : NotifyPropertyChanged
         } = 20;
 
         [JsonIgnore]
-        public long ASRChunkSize => ASRChunkSizeMB * 1024 * 1024;
+        public long ASRChunkSize => (long)ASRChunkSizeMB * 1024 * 1024;
 
         /// <summary>
         /// Chunk seconds when processing ASR with audio stream

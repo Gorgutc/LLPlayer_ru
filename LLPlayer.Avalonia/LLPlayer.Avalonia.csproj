@@ -64,6 +64,23 @@
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' == 'win-x64'">
+    <!-- Same SDK projection pin as WPF; keep this host portable and compile the WinRT adapter only for Windows. -->
+    <PackageDownload Include="Microsoft.Windows.SDK.NET.Ref" Version="[10.0.18362.57]" />
+    <Reference Include="Microsoft.Windows.SDK.NET">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.18362.57/lib/net8.0/Microsoft.Windows.SDK.NET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="WinRT.Runtime">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.18362.57/lib/net8.0/WinRT.Runtime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <PackageReference Include="Squid-Box.SevenZipSharp.Lite" Version="1.6.2.24" />
+    <PackageReference Include="TesseractOCR" Version="5.5.2" ExcludeAssets="build" GeneratePathProperty="true" />
+    <None Include="$(PkgTesseractOCR)/x64/leptonica-1.85.0.dll;$(PkgTesseractOCR)/x64/tesseract55.dll"
+          TargetPath="runtimes/win-x64/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../LLPlayer/lib/7z.dll" Link="lib/7z.dll"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="$(PkgWhisper_net_Runtime)/build/win-x64/whisper.dll;
                    $(PkgWhisper_net_Runtime)/build/win-x64/ggml-whisper.dll;
                    $(PkgWhisper_net_Runtime)/build/win-x64/ggml-base-whisper.dll;
@@ -75,6 +92,13 @@
     <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.23.1" ExcludeAssets="all" GeneratePathProperty="true" />
     <None Include="$(PkgSilk_NET_OpenAL_Soft_Native)/runtimes/win-x64/native/soft_oal.dll"
           TargetPath="soft_oal.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' == 'win-x64'">
+    <DefineConstants>$(DefineConstants);LLPLAYER_WINDOWS_OCR</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' != 'win-x64'">
+    <Compile Remove="Services/MicrosoftOcrService.Windows.cs;Services/WindowsEngineArchiveExtractor.cs" />
   </ItemGroup>
 
   <ItemGroup>

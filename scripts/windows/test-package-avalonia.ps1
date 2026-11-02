@@ -29,26 +29,32 @@ function Write-FixtureFile([string]$Root, [string]$Relative, [string]$Content = 
     [System.IO.File]::WriteAllText($path, $Content, $utf8)
 }
 $ffmpeg = @('avcodec-62.dll','avdevice-62.dll','avfilter-11.dll','avformat-62.dll','avutil-60.dll','swresample-6.dll','swscale-9.dll')
-$natives = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll') +
+$natives = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll',
+    'lib/7z.dll','runtimes/win-x64/leptonica-1.85.0.dll','runtimes/win-x64/tesseract55.dll') +
     @('ggml-base-whisper.dll','ggml-cpu-whisper.dll','ggml-whisper.dll','whisper.dll' | ForEach-Object { 'runtimes/win-x64/' + $_ }) +
     @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
 function New-Fixture([string]$Name) {
     $dir = Join-Path $work $Name
     $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
-        'LLPlayer.Core.dll','FlyleafLib.dll','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md',
+        'LLPlayer.Core.dll','FlyleafLib.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll',
+        'licenses/Tesseract.LICENSE','licenses/Leptonica.LICENSE','licenses/SevenZip.LICENSE','licenses/SevenZipSharp.LICENSE',
+        'Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md',
         'IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
         'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
         'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md')
     foreach ($path in @($required) + @($natives)) { Write-FixtureFile $dir $path }
     Write-FixtureFile $dir 'Plugins/YoutubeDL/YoutubeDL.pdb'
     Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
-    foreach ($assembly in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll')) {
+    foreach ($assembly in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll')) {
         Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir $assembly)
     }
     $files = @($natives | ForEach-Object { [ordered]@{ path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $dir $_) -Algorithm SHA256).Hash.ToLowerInvariant() } })
     $manifest = [ordered]@{ schema=1; runtime='win-x64'; components=@(
         [ordered]@{ name='FFmpeg'; version='n8.0-16-gd8605a6b55-20250925'; license='GPL'; source='https://git.ffmpeg.org/ffmpeg.git'; provenance='Tracked binaries; original build recipe and corresponding source offer remain unverified.' },
-        [ordered]@{ name='OpenAL Soft'; version='1.23.1'; license='LGPL-2.0-or-later'; source='https://github.com/kcat/openal-soft/tree/1.23.1'; provenance='Pinned OpenALSoft NuGet 1.23.1' }
+        [ordered]@{ name='OpenAL Soft'; version='1.23.1'; license='LGPL-2.0-or-later'; source='https://github.com/kcat/openal-soft/tree/1.23.1'; provenance='Pinned OpenALSoft NuGet 1.23.1' },
+        [ordered]@{ name='Tesseract'; version='5.5.1'; license='Apache-2.0'; source='https://github.com/tesseract-ocr/tesseract'; provenance='Pinned TesseractOCR 5.5.2' },
+        [ordered]@{ name='Leptonica'; version='1.85.0'; license='BSD-2-Clause'; source='https://github.com/DanBloomberg/leptonica'; provenance='Pinned TesseractOCR 5.5.2' },
+        [ordered]@{ name='7-Zip'; version='tracked'; license='LGPL with unRAR restriction'; source='https://www.7-zip.org'; provenance='Tracked DLL' }
     ); files=$files }
     Write-FixtureFile $dir 'native-dependencies.json' ($manifest | ConvertTo-Json -Depth 6)
     return $dir
@@ -76,6 +82,13 @@ try {
     $validPackage = New-Fixture 'valid'
     Write-FixtureFile $validPackage 'project-notes.zip'
     Assert-Accepted 'valid synthetic package including unrelated archive' $validPackage
+    foreach ($relative in @('Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll',
+        'lib/7z.dll','runtimes/win-x64/leptonica-1.85.0.dll','runtimes/win-x64/tesseract55.dll',
+        'licenses/Tesseract.LICENSE','licenses/Leptonica.LICENSE','licenses/SevenZip.LICENSE','licenses/SevenZipSharp.LICENSE')) {
+        $fixtureRelative = $relative
+        Assert-Rejected ("missing recognition dependency " + $relative) { param($d) Remove-Item -LiteralPath (Join-Path $d $fixtureRelative) } 'missing required file'
+        Assert-Rejected ("empty recognition dependency " + $relative) { param($d) Write-FixtureFile $d $fixtureRelative '' } 'non-empty regular file'
+    }
     foreach ($relative in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic',
         'IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS')) {
         $fixtureRelative = $relative
@@ -120,6 +133,8 @@ try {
         'nested/LLPlayer.Playback.json','nested/LLPlayer.Playback.json.bak','nested/.LLPlayer.Playback.json.token.tmp',
         'LLPlayer.Pdic.json','LLPlayer.Pdic.json.bak','LLPlayer.Pdic.json.bad','.LLPlayer.Pdic.json.token.tmp',
         'nested/LLPlayer.Pdic.json','nested/LLPlayer.Pdic.json.bak','nested/.LLPlayer.Pdic.json.token.tmp',
+        'LLPlayer.Batch.json','LLPlayer.Batch.json.bak','.LLPlayer.Batch.json.token.tmp','nested/LLPlayer.Batch.json',
+        'LLPlayer.Dubbing.json','LLPlayer.Dubbing.json.bad','.LLPlayer.Dubbing.json.token.tmp','nested/LLPlayer.Dubbing.json',
         'LLPlayer.WordList.json','LLPlayer.Config.json','crash.log','nested/session.LOG','.env.local','.envtoken',
         'movie.ru.dub.flac','movie.ru.voices.json','ggml-base.bin','eng.traineddata','yt-dlp.exe','yt-dlp','deno','deno.exe',
         'pdic-pipe.exe','pdic-pipe','nested/pdic-pipe.exe','nested/pdic-pipe','nested/pdic-pipe.exe.zip','pdic-pipe.7z',
@@ -138,6 +153,8 @@ try {
     Assert-Rejected 'foreign root native' { param($d) Write-FixtureFile $d 'libfoo.so' } 'foreign native'
     Assert-Rejected 'unexpected FFmpeg' { param($d) Write-FixtureFile $d 'FFmpeg/avcodec-61.dll' } 'unexpected FFmpeg'
     Assert-Rejected 'unexpected runtime payload' { param($d) Write-FixtureFile $d 'runtimes/win-x64/surprise.dll' } 'unexpected runtime'
+    Assert-Rejected 'unpinned Tesseract payload' { param($d) Write-FixtureFile $d 'runtimes/win-x64/tesseract54.dll' } 'unexpected runtime'
+    Assert-Rejected 'misplaced Tesseract payload' { param($d) Write-FixtureFile $d 'tesseract55.dll' } 'unexpected native'
     Assert-Rejected 'manifest mismatch' { param($d) Write-FixtureFile $d 'soft_oal.dll' 'tampered' } 'native manifest hash mismatch'
     Assert-Rejected 'missing manifest entry' {
         param($d)

@@ -394,6 +394,14 @@ LLPlayer.Avalonia.json.*
 
 # Detached Linux recognition settings and atomic-save staging
 LLPlayer.Recognition.json
+LLPlayer.Batch.json
+LLPlayer.Batch.json.*
+.LLPlayer.Batch.json
+.LLPlayer.Batch.json.*
+LLPlayer.Dubbing.json
+LLPlayer.Dubbing.json.*
+.LLPlayer.Dubbing.json
+.LLPlayer.Dubbing.json.*
 LLPlayer.Recognition.json.*
 .LLPlayer.Recognition.json.*.tmp
 
