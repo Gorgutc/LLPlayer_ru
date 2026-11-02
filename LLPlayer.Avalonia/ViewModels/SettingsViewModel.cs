@@ -40,6 +40,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         foreach (EngineKeyBindingInfo binding in engineBindings)
             EngineKeyRows.Add(new EngineKeyEditRow(binding, DeleteEngineKeyRow, CloneEngineKeyRow));
         Theme = current.Theme;
+        InitializePlayerUi(current);
         SubtitleFontFamily = current.SubtitleFontFamily;
         SubtitleFontWeight = current.SubtitleFontWeight;
         SubtitleFontStyle = current.SubtitleFontStyle;
@@ -202,6 +203,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool AppearanceSelected => SelectedSection == 0;
     public bool SubtitlesSelected => SelectedSection == 1;
     public bool ToolsSelected => SelectedSection == 2;
+    public bool PlayerSelected => SelectedSection == 3;
     public ImmutableSolidColorBrush SubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleTextColor, out string color) ? color : AppPrefs.DefaultSubtitleTextColor));
     public ImmutableSolidColorBrush SecondarySubtitleTextBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SecondarySubtitleTextColor, out string color) ? color : AppPrefs.DefaultSecondarySubtitleTextColor));
     public ImmutableSolidColorBrush SubtitleOutlineBrush => new(Color.Parse(AppPrefs.TryNormalizeSubtitleTextColor(SubtitleOutlineColor, out string color) ? color : AppPrefs.DefaultSubtitleOutlineColor));
@@ -319,11 +321,13 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(AppearanceSelected));
         OnPropertyChanged(nameof(SubtitlesSelected));
         OnPropertyChanged(nameof(ToolsSelected));
+        OnPropertyChanged(nameof(PlayerSelected));
     }
 
     [RelayCommand] void Save()
     {
         Error = null;
+        if (!ValidatePlayerUi()) return;
         if (!TryRead(SubtitleFontSizeText, 12, 96, out double fontSize)
             || !TryRead(SecondaryFontScaleText, 0.4, 1.5, out double scale)
             || !TryRead(SubtitleBottomOffsetText, AppPrefs.MinSubtitleBottomOffset, AppPrefs.MaxSubtitleBottomOffset, out double offset)

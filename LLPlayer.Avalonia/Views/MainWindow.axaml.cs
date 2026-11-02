@@ -1,6 +1,8 @@
 ﻿using System.ComponentModel;
 using Avalonia;
+using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -27,6 +29,13 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     readonly HashSet<Key> searchKeysAwaitingRelease = [];
     readonly AvaloniaHostServices? hostServices;
     readonly DispatcherTimer idleTimer;
+    readonly DoubleTransition transportOpacity = new() { Property = OpacityProperty };
+    readonly List<FlyoutBase> transportFlyouts = [];
+    sealed record TransportRevealPress(IPointer Pointer);
+    TransportRevealPress? transportRevealPress;
+    bool transportRevealSequence;
+    Point? lastPointerPosition;
+    bool transportPointerOver;
     MainWindowViewModel? vm;
     SubtitleText? sidebarSelectionControl;
     CueItemViewModel? sidebarSelectionRow;
@@ -130,12 +139,20 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         this.keys = keys;
         this.hostServices = hostServices;
         InitializeComponent();
+        TransportBar.Transitions = [transportOpacity];
+        TransportBar.PropertyChanged += OnTransportPropertyChanged;
+        LayoutUpdated += OnTransportLayoutUpdated;
+        TrackTransportFlyout(SpeedButton.Flyout);
+        TrackTransportFlyout(AbLoopButton.ContextFlyout);
 
         AddHandler(KeyDownEvent, OnKeyDownTunnel, RoutingStrategies.Tunnel);
         AddHandler(KeyUpEvent, OnKeyUpTunnel, RoutingStrategies.Tunnel);
         Deactivated += (_, _) =>
         {
             cueSyncPointerPress = cueSyncKeyboardPress = null;
+            transportRevealPress = null;
+            transportRevealSequence = false;
+            ClearTransportPointer();
             vm?.LoseKeyboardContext();
         };
         Activated += (_, _) =>
@@ -145,6 +162,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         AddHandler(PointerMovedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerReleasedEvent, OnAnyPointerMoved, RoutingStrategies.Tunnel, handledEventsToo: true);
+        PointerExited += (_, _) => ClearTransportPointer();
 
         AddHandler(DragDrop.DragEnterEvent, OnDragOver);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
@@ -168,7 +186,11 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.SizeChanged += (_, _) => PositionWordPopup();
         VideoHost.SizeChanged += (_, _) => UpdateSubtitleLayout();
         SubtitleOverlay.SizeChanged += (_, _) => UpdateSubtitleLayout();
-        TransportBar.SizeChanged += (_, _) => UpdateSubtitleLayout();
+        TransportBar.SizeChanged += (_, _) =>
+        {
+            TransportRevealRegion.Height = TransportBar.Bounds.Height;
+            UpdateSubtitleLayout();
+        };
         ContentGrid.SizeChanged += (_, _) => UpdateSidebarColumn();
         SidebarSplitter.SizeChanged += (_, _) => UpdateSidebarColumn();
         CueList.Tapped += OnCueTapped;
@@ -212,6 +234,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         viewModel.Sidebar.FocusFilterRequested += () => Dispatcher.UIThread.Post(() => FilterBox.Focus(NavigationMethod.Tab));
 
         Video.Renderer = renderer;
+        ApplySeekBarGeometry();
+        viewModel.SetTransportPointerOver(transportPointerOver);
+        UpdateTransportInteraction();
+        UpdateTransportVisibility();
         UpdateSubtitleLayout();
         ApplySidebarSide();
         idleTimer.Start();
@@ -376,6 +402,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     protected override void OnClosed(EventArgs e)
     {
         idleTimer.Stop();
+        LayoutUpdated -= OnTransportLayoutUpdated;
+        TransportBar.PropertyChanged -= OnTransportPropertyChanged;
+        foreach (FlyoutBase flyout in transportFlyouts)
+            flyout.PropertyChanged -= OnTransportFlyoutPropertyChanged;
         settingsWindow?.Close();
         cheatSheet?.Close();
         translationWindow?.Close();
@@ -391,6 +421,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     {
         Grid.SetRowSpan(VideoHost, fullScreen ? 2 : 1);
         Grid.SetRow(TransportBar, fullScreen ? 0 : 1);
+        Grid.SetRow(TransportRevealRegion, fullScreen ? 0 : 1);
         TransportBar.Classes.Set("overlay", fullScreen);
         UpdateSubtitleLayout();
     }
@@ -472,7 +503,6 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
                     cheatSheet.DataContext = new CheatSheetViewModel(cheatSheetRows()) { FilterText = current.FilterText };
                 break;
             case nameof(MainWindowViewModel.SubtitleBottomOffset):
-            case nameof(MainWindowViewModel.ControlsVisible):
             case nameof(MainWindowViewModel.SubtitleWidthPercent):
             case nameof(MainWindowViewModel.SubtitleMaxWidth):
             case nameof(MainWindowViewModel.SubtitlePrimarySecondaryDistance):
@@ -481,6 +511,24 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             case nameof(MainWindowViewModel.SecondaryVisible):
             case nameof(MainWindowViewModel.EffectiveSubtitleVerticalAlignment):
                 UpdateSubtitleLayout();
+                break;
+            case nameof(MainWindowViewModel.ControlsVisible):
+            case nameof(MainWindowViewModel.SeekBarFadeInTimeMs):
+            case nameof(MainWindowViewModel.SeekBarFadeOutTimeMs):
+                UpdateTransportVisibility();
+                UpdateSubtitleLayout();
+                break;
+            case nameof(MainWindowViewModel.SeekBarHeight):
+            case nameof(MainWindowViewModel.SeekBarThumbHeight):
+            case nameof(MainWindowViewModel.SeekBarTrackHeight):
+                ApplySeekBarGeometry();
+                break;
+            case nameof(MainWindowViewModel.SeekBarShowOnlyMouseOver):
+                if (vm?.SeekBarShowOnlyMouseOver != true)
+                {
+                    transportRevealPress = null;
+                    transportRevealSequence = false;
+                }
                 break;
             case nameof(MainWindowViewModel.CursorHidden):
                 VideoHost.Cursor = vm!.CursorHidden ? new Cursor(StandardCursorType.None) : Cursor.Default;
@@ -496,6 +544,83 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
                 ApplySidebarSide();
                 break;
         }
+    }
+
+    void UpdateTransportVisibility()
+    {
+        if (vm == null)
+            return;
+        // Change the direction's duration before its target. Avalonia cancels/reverses the current transition;
+        // there is no delayed completion callback that can overwrite a newer visibility decision.
+        transportOpacity.Duration = TimeSpan.FromMilliseconds(vm.ControlsVisible
+            ? vm.SeekBarFadeInTimeMs : vm.SeekBarFadeOutTimeMs);
+        TransportBar.IsHitTestVisible = vm.ControlsVisible;
+        TransportBar.Opacity = vm.ControlsVisible ? 1 : 0;
+    }
+
+    void ApplySeekBarGeometry()
+    {
+        if (vm == null)
+            return;
+        SeekSlider.Height = SeekSlider.MinHeight = vm.SeekBarHeight;
+        SeekSlider.Resources["SliderHorizontalHeight"] = vm.SeekBarHeight;
+        SeekSlider.Resources["SliderHorizontalThumbWidth"] = vm.SeekBarThumbHeight;
+        SeekSlider.Resources["SliderHorizontalThumbHeight"] = vm.SeekBarThumbHeight;
+        SeekSlider.Resources["SliderThumbCornerRadius"] = new CornerRadius(vm.SeekBarThumbHeight / 2);
+        SeekSlider.Resources["SliderTrackThemeHeight"] = vm.SeekBarTrackHeight;
+        // Both display-only overlays share the slider thumb's travel interval.
+        WaveformEnvelope.Margin = new Thickness(vm.SeekBarThumbHeight / 2, 0);
+        AbLoopMarkers.Inset = vm.SeekBarThumbHeight / 2;
+    }
+
+    void TrackTransportFlyout(FlyoutBase? flyout)
+    {
+        if (flyout == null)
+            return;
+        transportFlyouts.Add(flyout);
+        flyout.PropertyChanged += OnTransportFlyoutPropertyChanged;
+    }
+
+    void OnTransportFlyoutPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == FlyoutBase.IsOpenProperty)
+            UpdateTransportInteraction();
+    }
+
+    void OnTransportPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property == IsKeyboardFocusWithinProperty)
+            UpdateTransportInteraction();
+    }
+
+    void UpdateTransportInteraction()
+    {
+        vm?.SetTransportFocusWithin(TransportBar.IsKeyboardFocusWithin);
+        vm?.SetTransportPopupOpen(transportFlyouts.Any(flyout => flyout.IsOpen));
+    }
+
+    bool IsInTransportRevealRegion(Point point)
+        => TransportRevealRegion.TranslatePoint(default, this) is { } origin
+            && new Rect(origin, TransportRevealRegion.Bounds.Size).Contains(point);
+
+    void OnTransportLayoutUpdated(object? sender, EventArgs e) => UpdateTransportPointer();
+
+    void UpdateTransportPointer()
+    {
+        // A resize, fullscreen transition or live geometry edit can move the strip under a stationary pointer.
+        // Publish only a changed result, so visibility/subtitle layout updates cannot feed back into layout.
+        bool pointerOver = lastPointerPosition is { } point && IsInTransportRevealRegion(point);
+        if (pointerOver == transportPointerOver)
+            return;
+        transportPointerOver = pointerOver;
+        vm?.SetTransportPointerOver(pointerOver);
+    }
+
+    void ClearTransportPointer()
+    {
+        lastPointerPosition = null;
+        transportPointerOver = false;
+        vm?.SetTransportPointerOver(false);
     }
 
     void OnWordPopupPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -606,9 +731,14 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         // Subtitle selection, popup contents and controls retain their own pointer actions.
         if (vm == null || keys.Modifiers != KeyModifiers.None || !IsVideoBackground(e.Source))
             return;
+        if (transportRevealPress != null)
+        {
+            e.Handled = true;
+            return;
+        }
         if (vm.WordPopup.IsOpen)
             vm.WordPopup.Close();
-        else
+        else if (vm.MouseSingleClickToPlay)
             vm.TogglePlayPause();
         e.Handled = true;
     }
@@ -626,15 +756,17 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnVideoDoubleTapped(object? sender, TappedEventArgs e)
     {
+        if (vm == null || !vm.MouseDoubleClickToFullScreen || transportRevealPress != null)
+            return;
         if (e.Source is Visual src && (src.FindAncestorOfType<Button>(true) != null || src.FindAncestorOfType<SubtitleText>(true) != null
                                        || WordPopupCard.IsPointerOver))
             return;
-        vm?.ToggleFullScreen();
+        vm.ToggleFullScreen();
     }
 
     void OnVideoWheel(object? sender, PointerWheelEventArgs e)
     {
-        if (vm == null || e.Delta.Y == 0)
+        if (vm == null || !vm.MouseWheelToVolumeUpDown || e.Delta.Y == 0)
             return;
         vm.Volume += e.Delta.Y > 0 ? 5 : -5;
         e.Handled = true;
@@ -686,7 +818,23 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     void OnAnyPointerMoved(object? sender, PointerEventArgs e)
     {
         keys.Update(e.KeyModifiers);
+        lastPointerPosition = e.GetPosition(this);
+        bool inRevealRegion = IsInTransportRevealRegion(lastPointerPosition.Value);
+        if (e is PointerPressedEventArgs revealPress
+            && revealPress.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            // The original hit target may be the video while the transparent bar is hidden. That press
+            // reveals controls only; keep its owner until Tapped/DoubleTapped have completed on release.
+            if (revealPress.ClickCount == 1)
+                transportRevealSequence = false;
+            bool reveal = vm is { SeekBarShowOnlyMouseOver: true, ControlsVisible: false }
+                && inRevealRegion && IsVideoBackground(e.Source);
+            transportRevealSequence |= reveal;
+            transportRevealPress = IsVideoBackground(e.Source) && transportRevealSequence
+                ? new TransportRevealPress(e.Pointer) : null;
+        }
         vm?.NotifyActivity();
+        UpdateTransportPointer();
         if (e is PointerPressedEventArgs press)
         {
             cueSyncPointerPress = null;
@@ -696,6 +844,12 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         }
         else if (e is PointerReleasedEventArgs { InitialPressMouseButton: MouseButton.Left })
         {
+            TransportRevealPress? reveal = transportRevealPress;
+            if (reveal != null && ReferenceEquals(reveal.Pointer, e.Pointer))
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(transportRevealPress, reveal)) transportRevealPress = null;
+                });
             // Retain ownership through the native Click, then release canceled/outside presses too. A newer
             // pointer press must survive an older release's queued cleanup.
             CueSyncPress? released = cueSyncPointerPress;
@@ -718,6 +872,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         keys.Update(e.KeyModifiers);
         if (vm == null)
             return;
+        vm.NotifyKeyboardActivity();
 
         if (e.Key is Key.Space or Key.Enter && FocusManager?.GetFocusedElement() is Button { Name: "CueSyncButton" } sync)
         {
