@@ -12,16 +12,56 @@
   <Grid RowDefinitions="Auto,*,Auto" Margin="20">
     <StackPanel Margin="0,0,0,18" Spacing="4">
       <TextBlock Text="Settings" Classes="dialog-title" />
-      <TextBlock Text="Appearance and subtitle preferences for this player." Classes="dialog-description" />
+      <TextBlock Text="Appearance, subtitle and player preferences." Classes="dialog-description" />
     </StackPanel>
     <Grid Grid.Row="1" ColumnDefinitions="132,*" ColumnSpacing="20">
       <ListBox Name="SettingsNavigation" SelectedIndex="{Binding SelectedSection}" VerticalAlignment="Top">
         <ListBoxItem Content="Appearance" />
         <ListBoxItem Content="Subtitles" />
         <ListBoxItem Content="Tools" />
+        <ListBoxItem Content="Player" />
       </ListBox>
       <ScrollViewer Name="SettingsScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="18">
+          <StackPanel Name="PlayerPage" IsVisible="{Binding PlayerSelected}" Spacing="14">
+            <TextBlock Text="Player UI" Classes="dialog-title" />
+            <TextBlock Text="Idle timeout (0–600000 ms; 0 applies no idle wait)" TextWrapping="Wrap" />
+            <TextBox Name="ActivityTimeoutMsEditor" Text="{Binding ActivityTimeoutMsText, Mode=TwoWay}"
+                     AutomationProperties.Name="Player idle timeout in milliseconds"
+                     AutomationProperties.HelpText="Whole milliseconds from 0 to 600000. Zero applies no idle wait." />
+            <CheckBox Name="SeekBarShowOnlyMouseOverEditor" Content="Show seek bar only while the pointer is over it"
+                      IsChecked="{Binding SeekBarShowOnlyMouseOver}" AutomationProperties.Name="Show seek bar only on pointer hover" />
+            <TextBlock Text="Seek bar fade-in time (0–10000 ms)" />
+            <TextBox Name="SeekBarFadeInTimeMsEditor" Text="{Binding SeekBarFadeInTimeMsText, Mode=TwoWay}"
+                     AutomationProperties.Name="Seek bar fade-in time in milliseconds"
+                     AutomationProperties.HelpText="Whole milliseconds from 0 to 10000. Zero makes the fade immediate." />
+            <TextBlock Text="Seek bar fade-out time (0–10000 ms)" />
+            <TextBox Name="SeekBarFadeOutTimeMsEditor" Text="{Binding SeekBarFadeOutTimeMsText, Mode=TwoWay}"
+                     AutomationProperties.Name="Seek bar fade-out time in milliseconds"
+                     AutomationProperties.HelpText="Whole milliseconds from 0 to 10000. Zero makes the fade immediate." />
+            <TextBlock Text="Seek bar height (8–80 DIP)" />
+            <TextBox Name="SeekBarHeightEditor" Text="{Binding SeekBarHeightText, Mode=TwoWay}"
+                     AutomationProperties.Name="Seek bar height in DIP"
+                     AutomationProperties.HelpText="8 to 80 DIP, no smaller than the thumb height. Use your local decimal separator." />
+            <TextBlock Text="Seek bar thumb height (4–80 DIP)" />
+            <TextBox Name="SeekBarThumbHeightEditor" Text="{Binding SeekBarThumbHeightText, Mode=TwoWay}"
+                     AutomationProperties.Name="Seek bar thumb height in DIP"
+                     AutomationProperties.HelpText="4 to 80 DIP, between the track and bar heights. Use your local decimal separator." />
+            <TextBlock Text="Seek bar track height (1–40 DIP)" />
+            <TextBox Name="SeekBarTrackHeightEditor" Text="{Binding SeekBarTrackHeightText, Mode=TwoWay}"
+                     AutomationProperties.Name="Seek bar track height in DIP"
+                     AutomationProperties.HelpText="1 to 40 DIP, no taller than the thumb height. Use your local decimal separator." />
+            <TextBlock Text="Keep the track no taller than the thumb, and the thumb no taller than the bar." Classes="dialog-description" TextWrapping="Wrap" />
+            <CheckBox Name="AlwaysOnTopEditor" Content="Keep the player window always on top" IsChecked="{Binding AlwaysOnTop}"
+                      AutomationProperties.Name="Keep player window always on top" />
+            <TextBlock Text="Mouse" Classes="dialog-title" />
+            <CheckBox Name="MouseSingleClickToPlayEditor" Content="Single-click video to play or pause" IsChecked="{Binding MouseSingleClickToPlay}"
+                      AutomationProperties.Name="Single-click video to play or pause" />
+            <CheckBox Name="MouseDoubleClickToFullScreenEditor" Content="Double-click video to toggle fullscreen" IsChecked="{Binding MouseDoubleClickToFullScreen}"
+                      AutomationProperties.Name="Double-click video to toggle fullscreen" />
+            <CheckBox Name="MouseWheelToVolumeUpDownEditor" Content="Use the mouse wheel over video to change volume" IsChecked="{Binding MouseWheelToVolumeUpDown}"
+                      AutomationProperties.Name="Mouse wheel over video changes volume" />
+          </StackPanel>
           <StackPanel Name="AppearancePage" IsVisible="{Binding AppearanceSelected}" Spacing="14">
             <TextBlock Text="Appearance" Classes="dialog-title" />
             <TextBlock Text="Theme" />

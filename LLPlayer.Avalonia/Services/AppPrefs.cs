@@ -45,6 +45,24 @@ public sealed class AppPrefs
     public const int DefaultSubtitleSeparatorOpacityPercent = 30;
     public const string DefaultSubtitlePositionAlignment = "Bottom";
 
+    // F-13 Player UI preserves the existing Avalonia behavior when these preferences are absent.
+    public const int MinActivityTimeoutMs = 0;
+    public const int MaxActivityTimeoutMs = 600000;
+    public const int DefaultActivityTimeoutMs = 2500;
+    public const int MinSeekBarFadeTimeMs = 0;
+    public const int MaxSeekBarFadeTimeMs = 10000;
+    public const int DefaultSeekBarFadeInTimeMs = 200;
+    public const int DefaultSeekBarFadeOutTimeMs = 200;
+    public const double MinSeekBarHeight = 8;
+    public const double MaxSeekBarHeight = 80;
+    public const double DefaultSeekBarHeight = 20;
+    public const double MinSeekBarThumbHeight = 4;
+    public const double MaxSeekBarThumbHeight = 80;
+    public const double DefaultSeekBarThumbHeight = 12;
+    public const double MinSeekBarTrackHeight = 1;
+    public const double MaxSeekBarTrackHeight = 40;
+    public const double DefaultSeekBarTrackHeight = 4;
+
     // F-13 Subtitles Sidebar (WPF parity; defaults from LLPlayer/Services/AppConfig.cs:182-228). The sidebar has its
     // own typography and padding so it never changes the video overlay font. Numeric bounds are the approved safe
     // limits: width 220-900, padding 0-48 DIP, font 8-72 DIP.
@@ -71,6 +89,20 @@ public sealed class AppPrefs
     /// <summary>Player volume in percent (0 .. Config.Player.VolumeMax, 150 by default).</summary>
     public int Volume { get; set; } = 100;
     public bool Mute { get; set; }
+
+    /// <summary>Idle time before transport auto-hide, in milliseconds; zero applies no idle wait.</summary>
+    public int ActivityTimeoutMs { get; set; } = DefaultActivityTimeoutMs;
+    public bool SeekBarShowOnlyMouseOver { get; set; }
+    public int SeekBarFadeInTimeMs { get; set; } = DefaultSeekBarFadeInTimeMs;
+    public int SeekBarFadeOutTimeMs { get; set; } = DefaultSeekBarFadeOutTimeMs;
+    /// <summary>Transport seek-slider height in DIP, including its thumb and track.</summary>
+    public double SeekBarHeight { get; set; } = DefaultSeekBarHeight;
+    public double SeekBarThumbHeight { get; set; } = DefaultSeekBarThumbHeight;
+    public double SeekBarTrackHeight { get; set; } = DefaultSeekBarTrackHeight;
+    public bool AlwaysOnTop { get; set; }
+    public bool MouseSingleClickToPlay { get; set; } = true;
+    public bool MouseDoubleClickToFullScreen { get; set; } = true;
+    public bool MouseWheelToVolumeUpDown { get; set; } = true;
 
     /// <summary>Primary overlay font size in DIPs; the secondary line uses <see cref="SecondaryFontScale"/> of it.</summary>
     public double SubtitleFontSize { get; set; } = DefaultSubtitleFontSize;
@@ -228,6 +260,15 @@ public sealed class AppPrefs
     public AppPrefs Normalize()
     {
         Volume = Math.Clamp(Volume, 0, 1000);
+        ActivityTimeoutMs = Math.Clamp(ActivityTimeoutMs, MinActivityTimeoutMs, MaxActivityTimeoutMs);
+        SeekBarFadeInTimeMs = Math.Clamp(SeekBarFadeInTimeMs, MinSeekBarFadeTimeMs, MaxSeekBarFadeTimeMs);
+        SeekBarFadeOutTimeMs = Math.Clamp(SeekBarFadeOutTimeMs, MinSeekBarFadeTimeMs, MaxSeekBarFadeTimeMs);
+        SeekBarHeight = double.IsFinite(SeekBarHeight)
+            ? Math.Clamp(SeekBarHeight, MinSeekBarHeight, MaxSeekBarHeight) : DefaultSeekBarHeight;
+        SeekBarThumbHeight = Math.Clamp(double.IsFinite(SeekBarThumbHeight) ? SeekBarThumbHeight : DefaultSeekBarThumbHeight,
+            MinSeekBarThumbHeight, Math.Min(MaxSeekBarThumbHeight, SeekBarHeight));
+        SeekBarTrackHeight = Math.Clamp(double.IsFinite(SeekBarTrackHeight) ? SeekBarTrackHeight : DefaultSeekBarTrackHeight,
+            MinSeekBarTrackHeight, Math.Min(MaxSeekBarTrackHeight, SeekBarThumbHeight));
         SubtitleFontFamily = TryNormalizeSubtitleFontFamily(SubtitleFontFamily, out string family) ? family : DefaultSubtitleFontFamily;
         SubtitleFontWeight = TryNormalizeSubtitleFontWeight(SubtitleFontWeight, out string weight) ? weight : DefaultSubtitleFontWeight;
         SubtitleFontStyle = TryNormalizeSubtitleFontStyle(SubtitleFontStyle, out string style) ? style : DefaultSubtitleFontStyle;

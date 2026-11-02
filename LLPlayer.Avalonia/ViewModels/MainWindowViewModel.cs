@@ -46,7 +46,7 @@ public sealed class SpeedMenuItem(double speed, bool isSelected, IRelayCommand c
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     public static readonly double[] Speeds = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-    public static readonly TimeSpan IdleTimeout = TimeSpan.FromSeconds(2.5);
+    public static readonly TimeSpan IdleTimeout = TimeSpan.FromMilliseconds(AppPrefs.DefaultActivityTimeoutMs);
     static readonly TimeSpan SeekHold = TimeSpan.FromSeconds(1.5);
     const double SubtitleSizeStep = 2;
     const double SubtitlePositionStep = 8;
@@ -88,6 +88,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Sidebar.PropertyChanged += OnSidebarPropertyChanged;
         Sidebar.SynchronizationFailed += OnSidebarSynchronizationFailed;
         WordPopup = new WordPopupViewModel(translator, text => shell.SetClipboardText(text));
+        WordPopup.PropertyChanged += OnPlayerUiWordPopupChanged;
         WordPopup.OpenSettings = ShowTranslation;
         InvalidateTranslation = () => { WordPopup.Invalidate(); (translator as FlyleafWordTranslator)?.Invalidate(); };
 
@@ -161,6 +162,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (player is IRecognitionController recognition) recognition.RecognitionError += OnRecognitionError;
 
         SyncAllFromPlayer();
+        ApplyPlayerUiPreferences(prefs);
         RebuildSpeedItems();
     }
 
@@ -214,6 +216,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Clone the fresh current record, including unrelated values changed while the modal draft was open.
         AppPrefs candidate = JsonSerializer.Deserialize<AppPrefs>(JsonSerializer.Serialize(prefs, PrefsStore.JsonOptions), PrefsStore.JsonOptions)!;
         candidate.Theme = draft.Theme;
+        MergePlayerUiSettings(candidate, draft);
         candidate.SubtitleFontFamily = draft.SubtitleFontFamily;
         candidate.SubtitleFontWeight = draft.SubtitleFontWeight;
         candidate.SubtitleFontStyle = draft.SubtitleFontStyle;
@@ -273,6 +276,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ImmutableSolidColorBrush secondaryBackgroundBrush = new(backgroundColor, candidate.SecondarySubtitleBackgroundOpacityPercent / 100d);
         savePrefs(candidate); // may throw; nothing live has changed yet
 
+        ApplyPlayerUiPreferences(candidate);
         prefs.Theme = candidate.Theme;
         prefs.SubtitleFontFamily = candidate.SubtitleFontFamily;
         prefs.SubtitleFontWeight = candidate.SubtitleFontWeight;
@@ -1094,7 +1098,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void BeginSeekDrag() => IsSeeking = IsOpened;
+    public void BeginSeekDrag()
+    {
+        IsSeeking = IsOpened;
+        UpdateIdle();
+    }
 
     public void EndSeekDrag()
     {
@@ -1102,6 +1110,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         IsSeeking = false;
         SeekToSeconds(SeekValue);
+        UpdateIdle();
     }
 
     /// <summary>Key down from the window. Returns true when handled.</summary>
@@ -1109,7 +1118,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (disposed || wordActionsStopping) return false;
         orphanedInputReleases.Remove(key);
-        NotifyActivity();
+        NotifyKeyboardActivity();
 
         if (key == WpfKey.Escape && WordPopup.IsOpen)
         {
@@ -1158,20 +1167,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         NotifyActivity();
     }
 
-    /// <summary>Mouse move / key press: shows the bar and cursor again.</summary>
+    /// <summary>Pointer activity restarts the classic fullscreen idle timer.</summary>
     public void NotifyActivity()
     {
         lastActivity = time.GetUtcNow();
         UpdateIdle();
     }
 
-    /// <summary>Periodic idle check (fullscreen + playing + no input for <see cref="IdleTimeout"/> hides bar and cursor).</summary>
+    /// <summary>Periodic idle check. The default policy hides the bar and cursor only during fullscreen playback.</summary>
     public void UpdateIdle()
     {
+        DateTimeOffset now = time.GetUtcNow();
+        TimeSpan timeout = TimeSpan.FromMilliseconds(ActivityTimeoutMs);
         bool idle = IsFullScreen && IsPlaying && !IsSeeking && !WordPopup.IsOpen
-                    && time.GetUtcNow() - lastActivity >= IdleTimeout;
-        ControlsVisible = !idle;
-        CursorHidden = idle;
+                    && now - lastActivity >= timeout;
+        bool transportInteraction = transportPointerOver || transportFocusWithin || transportPopupOpen;
+        bool keyboardReveal = lastKeyboardActivity is { } keyboardActivity && now - keyboardActivity < timeout;
+        ControlsVisible = SeekBarShowOnlyMouseOver
+            ? transportInteraction || IsSeeking || WordPopup.IsOpen || keyboardReveal
+            : !idle;
+        CursorHidden = idle && !(SeekBarShowOnlyMouseOver && transportInteraction);
     }
 
     public void ShowToast(string title, string? message = null, ToastVariant variant = ToastVariant.Default)
@@ -1207,6 +1222,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Sidebar.PropertyChanged -= OnSidebarPropertyChanged;
         Sidebar.SynchronizationFailed -= OnSidebarSynchronizationFailed;
         Sidebar.Dispose();
+        WordPopup.PropertyChanged -= OnPlayerUiWordPopupChanged;
         player.PropertyChanged -= OnPlayerPropertyChanged;
         player.CuesChanged -= OnCuesChanged;
         player.OpenCompleted -= OnOpenCompleted;

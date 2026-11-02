@@ -6,6 +6,7 @@
         x:Class="LLPlayer.Avalonia.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding WindowTitle}"
+        Topmost="{Binding AlwaysOnTop}"
         Icon="avares://LLPlayer.Avalonia/Assets/llplayer.png"
         Width="1280" Height="760" MinWidth="640" MinHeight="420"
         WindowStartupLocation="CenterScreen"
@@ -23,11 +24,6 @@
       <Setter Property="BorderBrush" Value="{DynamicResource Shadcn.BorderBrush}" />
       <Setter Property="BorderThickness" Value="0,1,0,0" />
       <Setter Property="Padding" Value="12,2,12,6" />
-      <Setter Property="Transitions">
-        <Transitions>
-          <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
-        </Transitions>
-      </Setter>
     </Style>
     <Style Selector="Border#TransportBar.overlay">
       <Setter Property="Background" Value="#CC0A0A0A" />
@@ -417,8 +413,10 @@
         </Panel>
 
         <!-- ============ transport bar ============ -->
-        <Border Name="TransportBar" Grid.Row="1" Opacity="{Binding ControlsVisible, Converter={x:Static c:ViewConverters.BoolToOpacity}}"
-                IsHitTestVisible="{Binding ControlsVisible}">
+        <!-- Stable reveal geometry stays present while the bar fades. It never intercepts subtitle/video input. -->
+        <Border Name="TransportRevealRegion" Grid.Row="1" Background="Transparent" IsHitTestVisible="False"
+                VerticalAlignment="Bottom" />
+        <Border Name="TransportBar" Grid.Row="1">
           <StackPanel Spacing="0">
             <Panel Margin="0,0,0,-4">
               <!-- F-12 audio waveform: display-only envelope under the seek slider; paints nothing while off/unbuilt. -->
@@ -459,7 +457,7 @@
                 <TextBlock Name="DurationTime" Classes="time muted" Text="{Binding DurationText}" />
               </StackPanel>
 
-              <Button Classes="ghost sm" Content="{Binding SpeedText}" ToolTip.Tip="Playback speed (+ / -)"
+              <Button Name="SpeedButton" Classes="ghost sm" Content="{Binding SpeedText}" ToolTip.Tip="Playback speed (+ / -)"
                       MinWidth="52" FontSize="12">
                 <Button.Flyout>
                   <MenuFlyout ItemsSource="{Binding SpeedItems}" Placement="Top">
