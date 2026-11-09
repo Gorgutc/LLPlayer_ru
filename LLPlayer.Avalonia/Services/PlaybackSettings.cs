@@ -19,6 +19,10 @@ public sealed class PlaybackSettings
     public DeInterlace DeInterlace { get; set; } = DeInterlace.Auto;
     public bool DoubleRate { get; set; } = true;
     public bool AllowProfileMismatch { get; set; } = false;
+    public bool VideoHardwareAccelerationEnabled { get; set; } = false;
+    public PortableVideoDecodeMode VideoHardwareDecodeMode { get; set; } = PortableVideoDecodeMode.Automatic;
+    public string VideoHardwareDevice { get; set; } = "";
+    public PortableVideoPresentationMode VideoPresentationMode { get; set; } = PortableVideoPresentationMode.Software;
     public int VideoThreads { get; set; } = Environment.ProcessorCount;
     public int ZoomOffset { get; set; } = 10;
     public long MaxLatencyMs { get; set; } = 0;
@@ -86,6 +90,10 @@ public sealed class PlaybackSettings
         if (DeInterlace != baseline.DeInterlace) result.DeInterlace = DeInterlace;
         if (DoubleRate != baseline.DoubleRate) result.DoubleRate = DoubleRate;
         if (AllowProfileMismatch != baseline.AllowProfileMismatch) result.AllowProfileMismatch = AllowProfileMismatch;
+        if (VideoHardwareAccelerationEnabled != baseline.VideoHardwareAccelerationEnabled) result.VideoHardwareAccelerationEnabled = VideoHardwareAccelerationEnabled;
+        if (VideoHardwareDecodeMode != baseline.VideoHardwareDecodeMode) result.VideoHardwareDecodeMode = VideoHardwareDecodeMode;
+        if (VideoHardwareDevice != baseline.VideoHardwareDevice) result.VideoHardwareDevice = VideoHardwareDevice;
+        if (VideoPresentationMode != baseline.VideoPresentationMode) result.VideoPresentationMode = VideoPresentationMode;
         if (VideoThreads != baseline.VideoThreads) result.VideoThreads = VideoThreads;
         if (ZoomOffset != baseline.ZoomOffset) result.ZoomOffset = ZoomOffset;
         if (MaxLatencyMs != baseline.MaxLatencyMs) result.MaxLatencyMs = MaxLatencyMs;
@@ -152,6 +160,11 @@ public sealed class PlaybackSettings
             Require(BufferDurationMs >= MaxLatencyMs * 2 && MinBufferDurationMs <= MaxLatencyMs / 10,
                 $"With maximum latency enabled, maximum buffer duration must be at least {MaxLatencyMs * 2} ms and minimum buffer duration at most {MaxLatencyMs / 10} ms.");
         Require(Enum.IsDefined(DeInterlace) && Enum.IsDefined(HDRtoSDRMethod), "Choose a supported software video option.");
+        Require(Enum.IsDefined(VideoHardwareDecodeMode) && VideoHardwareDecodeMode != PortableVideoDecodeMode.Software,
+            "Choose Automatic, D3D11VA or VAAPI as the remembered hardware decoder.");
+        Require(Enum.IsDefined(VideoPresentationMode), "Choose a supported video presentation mode.");
+        Require(VideoHardwareDevice != null && !VideoHardwareDevice.Any(char.IsControl),
+            "The video device selector must not contain control characters.");
         Require(Enum.IsDefined(LogLevel) && Enum.IsDefined(FFmpegLogLevel) && Enum.IsDefined(FFmpegLoadProfile), "Choose a valid logging level and FFmpeg profile.");
         Require(LogCachedLines >= 0, "Cached log lines must be a nonnegative whole number (0 flushes each line).");
         ValidateLogOutput(LogOutput);
@@ -256,6 +269,10 @@ public sealed class PlaybackSettings
         config.Video.DeInterlace = DeInterlace;
         config.Video.DoubleRate = DoubleRate;
         config.Decoder.AllowProfileMismatch = AllowProfileMismatch;
+        config.Video.PortableDecodeMode = VideoHardwareAccelerationEnabled ? VideoHardwareDecodeMode : PortableVideoDecodeMode.Software;
+        config.Video.PortableHardwareDevice = VideoHardwareDevice;
+        // Software is the portable off switch. Preserve the legacy allowance until a real hardware request enables it.
+        if (VideoHardwareAccelerationEnabled) config.Video.VideoAcceleration = true;
         config.Decoder.VideoThreads = VideoThreads;
         config.Video.ZoomOffset = ZoomOffset;
         config.Video.HDRtoSDRMethod = HDRtoSDRMethod;
@@ -314,7 +331,8 @@ public sealed class PlaybackSettings
         filter.Value = value;
     }
 
-    public static PlaybackSettings FromConfig(Config config, EngineConfig engine, bool subtitleExportUtf8Bom = true) => new()
+    public static PlaybackSettings FromConfig(Config config, EngineConfig engine, bool subtitleExportUtf8Bom = true,
+        PlaybackSettings? rememberedPreferences = null) => new()
     {
         AudioEnabled = config.Audio.Enabled, AudioFiltersEnabled = config.Audio.FiltersEnabled,
         AudioVolumeMax = config.Audio.VolumeMax, AudioVolumeDefault = config.Audio.VolumeDefault,
@@ -322,6 +340,12 @@ public sealed class PlaybackSettings
         AspectRatio = config.Video.AspectRatio.ToString(), AspectRatioCustom = config.Video.AspectRatioCustom.ToString(),
         DeInterlace = config.Video.DeInterlace, DoubleRate = config.Video.DoubleRate,
         AllowProfileMismatch = config.Decoder.AllowProfileMismatch, VideoThreads = config.Decoder.VideoThreads,
+        VideoHardwareAccelerationEnabled = config.Video.PortableDecodeMode != PortableVideoDecodeMode.Software,
+        VideoHardwareDecodeMode = config.Video.PortableDecodeMode == PortableVideoDecodeMode.Software
+            ? rememberedPreferences?.VideoHardwareDecodeMode ?? PortableVideoDecodeMode.Automatic : config.Video.PortableDecodeMode,
+        VideoHardwareDevice = config.Video.PortableDecodeMode == PortableVideoDecodeMode.Software
+            ? rememberedPreferences?.VideoHardwareDevice ?? config.Video.PortableHardwareDevice : config.Video.PortableHardwareDevice,
+        VideoPresentationMode = rememberedPreferences?.VideoPresentationMode ?? PortableVideoPresentationMode.Software,
         ZoomOffset = config.Video.ZoomOffset, MaxLatencyMs = config.Player.MaxLatency / TimeSpan.TicksPerMillisecond,
         ZeroLatency = config.Player.ZeroLatency, HDRtoSDRMethod = config.Video.HDRtoSDRMethod,
         SDRDisplayNits = config.Video.SDRDisplayNitsCustom,

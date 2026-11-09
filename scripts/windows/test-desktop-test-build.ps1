@@ -166,22 +166,33 @@ function Get-Link([string]$Path) {
 function Get-NativeLink([string]$Path) { return [DesktopTestProbe.ShellLinkProbe]::Read($Path) }
 function New-Package([string]$Name, [switch]$OmitCore) {
     $dir = Join-Path $work $Name
-    $native = @('av_libglesv2.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'onnxruntime.dll', 'onnxruntime_providers_shared.dll', 'e_sqlite3.dll', 'soft_oal.dll') +
+    $native = @('av_libglesv2.dll', 'libSkiaSharp.dll', 'libHarfBuzzSharp.dll', 'onnxruntime.dll', 'onnxruntime_providers_shared.dll', 'e_sqlite3.dll', 'soft_oal.dll',
+        'lib/7z.dll', 'runtimes/win-x64/leptonica-1.85.0.dll', 'runtimes/win-x64/tesseract55.dll') +
         @('ggml-base-whisper.dll', 'ggml-cpu-whisper.dll', 'ggml-whisper.dll', 'whisper.dll' | ForEach-Object { 'runtimes/win-x64/' + $_ }) +
         @('avcodec-62.dll', 'avdevice-62.dll', 'avfilter-11.dll', 'avformat-62.dll', 'avutil-60.dll', 'swresample-6.dll', 'swscale-9.dll' | ForEach-Object { 'FFmpeg/' + $_ })
     $required = @('LLPlayer.Avalonia.exe', 'LLPlayer.Avalonia.dll', 'FlyleafLib.dll', 'Assets/silero_vad.onnx', 'LICENSE', 'THIRD-PARTY-NOTICES.md',
+        'licenses/Tesseract.LICENSE', 'licenses/Leptonica.LICENSE', 'licenses/SevenZip.LICENSE', 'licenses/SevenZipSharp.LICENSE',
+        'licenses/Vortice.Windows.LICENSE', 'licenses/Vortice.Mathematics.LICENSE', 'licenses/SharpGen.Runtime.LICENSE',
+        'IpaDic/sys.dic', 'IpaDic/unk.dic', 'IpaDic/matrix.bin', 'IpaDic/char.bin', 'IpaDic/COPYING', 'IpaDic/AUTHORS',
         'FFmpeg/LICENSE.GPLv3.txt', 'FFmpeg/SOURCE.txt', 'licenses/OpenALSoft.LICENSE', 'licenses/OpenALSoft.SOURCE.txt',
         'licenses/Avalonia.ANGLE.LICENSE', 'licenses/OpenALSoft.BSD-3Clause.txt', 'dub_sidecar/server.py', 'dub_sidecar/pyproject.toml', 'dub_sidecar/uv.lock', 'dub_sidecar/README.md')
     if (-not $OmitCore) { $required += 'LLPlayer.Core.dll' }
     foreach ($file in @($required) + @($native)) { Write-File $dir $file ($Name + ':' + $file) }
     Write-File $dir 'Plugins/YoutubeDL/YoutubeDL.pdb' 'synthetic symbols'
     Copy-Item -LiteralPath $fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
+    foreach ($assembly in @('LibNMeCab.dll', 'LibNMeCab.IpaDicBin.dll', 'Microsoft.Windows.SDK.NET.dll', 'WinRT.Runtime.dll', 'SevenZipSharp.dll',
+        'Vortice.DXGI.dll', 'Vortice.MediaFoundation.dll', 'Vortice.DirectX.dll', 'Vortice.Mathematics.dll', 'SharpGen.Runtime.dll', 'SharpGen.Runtime.COM.dll')) {
+        Copy-Item -LiteralPath $fixturePlugin -Destination (Join-Path $dir $assembly)
+    }
     Write-File $dir 'LLPlayer.Avalonia.deps.json' '{}'
     Write-File $dir 'LLPlayer.Avalonia.runtimeconfig.json' '{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}'
     $manifest = [ordered]@{
         schema = 1; runtime = 'win-x64'; components = @(
             @{ name = 'FFmpeg'; version = 'fixture'; license = 'GPL'; source = 'fixture'; provenance = 'Synthetic offline contract fixture' },
-            @{ name = 'OpenAL Soft'; version = '1.23.1'; license = 'LGPL'; source = 'fixture'; provenance = 'Synthetic offline contract fixture' }
+            @{ name = 'OpenAL Soft'; version = '1.23.1'; license = 'LGPL'; source = 'fixture'; provenance = 'Synthetic offline contract fixture' },
+            @{ name = 'Tesseract'; version = '5.5.1'; license = 'Apache-2.0'; source = 'fixture'; provenance = 'Synthetic offline contract fixture' },
+            @{ name = 'Leptonica'; version = '1.85.0'; license = 'BSD-2-Clause'; source = 'fixture'; provenance = 'Synthetic offline contract fixture' },
+            @{ name = '7-Zip'; version = 'tracked'; license = 'LGPL with unRAR restriction'; source = 'fixture'; provenance = 'Synthetic offline contract fixture' }
         )
         files = @($native | ForEach-Object { @{ path = $_; sha256 = (Hash (Join-Path $dir $_)) } })
     }

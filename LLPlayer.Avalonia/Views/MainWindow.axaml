@@ -13,6 +13,9 @@
         DragDrop.AllowDrop="True">
 
   <Window.Styles>
+    <Style Selector="MenuItem">
+      <Setter Property="v:MainWindow.KeepOpenGestures" Value="True" />
+    </Style>
     <!-- Compact header padding keeps all eight menus and Settings reachable at the 640 DIP minimum. -->
     <Style Selector="Menu#MainMenu > MenuItem">
       <Setter Property="Padding" Value="4,5" />
@@ -155,6 +158,15 @@
                 </Style>
               </MenuItem.Styles>
             </MenuItem>
+            <Separator />
+            <MenuItem Name="AudioCaptureMenu" Header="Audio capture devices…" Command="{Binding ShowAudioCaptureDevicesCommand}" />
+            <MenuItem Name="VideoCaptureMenu" Header="Video capture devices…" Command="{Binding ShowVideoCaptureDevicesCommand}" />
+            <MenuItem Name="HardwareAccelerationMenu" Header="Hardware decoding requested"
+                      ToggleType="CheckBox" IsChecked="{Binding VideoHardwareAccelerationRequested, Mode=OneWay}"
+                      Command="{Binding ToggleVideoAccelerationCommand}" />
+            <MenuItem Name="RecordMenu" Header="Record media" ToggleType="CheckBox"
+                      IsChecked="{Binding IsRecording, Mode=OneWay}" Command="{Binding ToggleRecordingCommand}" IsEnabled="{Binding IsOpened}" />
+            <MenuItem Name="SnapshotMenu" Header="Take snapshot" Command="{Binding TakeSnapshotCommand}" IsEnabled="{Binding IsOpened}" />
           </MenuItem>
 
           <MenuItem Name="SubtitlesMenu" Header="_Subtitles">
@@ -201,6 +213,8 @@
                       ToggleType="CheckBox" IsChecked="{Binding SidebarVisible, Mode=OneWay}" />
             <MenuItem Header="Search subtitles" InputGesture="Ctrl+F" Command="{Binding ActivateSubsSearchCommand}" />
             <MenuItem Header="Fullscreen" InputGesture="F" Command="{Binding ToggleFullScreenCommand}" />
+            <MenuItem Header="Always on top" ToggleType="CheckBox" IsChecked="{Binding AlwaysOnTop, Mode=OneWay}" Command="{Binding ToggleAlwaysOnTopCommand}" />
+            <MenuItem Name="DebugMenu" Header="Player diagnostics" InputGesture="Ctrl+Shift+D" Command="{Binding TogglePlayerDebugCommand}" />
             <Separator />
             <MenuItem Header="Dark theme" ToggleType="Radio" IsChecked="{Binding IsDarkTheme, Mode=OneWay}"
                       Command="{Binding SetThemeCommand}" CommandParameter="Dark" />
@@ -209,9 +223,18 @@
           </MenuItem>
 
           <MenuItem Header="_Help">
+            <MenuItem Name="CommandPaletteMenu" Header="Command palette…" InputGesture="Ctrl+K" Command="{Binding ShowCommandPaletteCommand}" />
             <MenuItem Header="Keyboard shortcuts" InputGesture="F1" Command="{Binding ShowCheatSheetCommand}">
               <MenuItem.Icon><c:LucideIcon Data="{StaticResource Icon.Keyboard}" /></MenuItem.Icon>
             </MenuItem>
+            <MenuItem Name="AboutMenu" Header="About LLPlayer…" Command="{Binding ShowAboutCommand}" />
+          </MenuItem>
+          <MenuItem Header="App">
+            <MenuItem Name="NewApplicationMenu" Header="Launch new instance" Command="{Binding NewApplicationCommand}" />
+            <MenuItem Name="CloneApplicationMenu" Header="Clone current media" Command="{Binding CloneApplicationCommand}" />
+            <MenuItem Name="RestartApplicationMenu" Header="Restart LLPlayer" Command="{Binding RestartApplicationCommand}" />
+            <Separator />
+            <MenuItem Header="Exit" Command="{Binding ExitCommand}" />
           </MenuItem>
         </Menu>
 
@@ -313,6 +336,15 @@
               </MenuItem>
               <MenuItem Name="VideoSettingsMenu" Header="Settings…" Command="{Binding ShowSettingsCommand}" />
               <MenuItem Header="Fullscreen" Command="{Binding ToggleFullScreenCommand}" />
+              <Separator />
+              <MenuItem Header="Audio capture devices…" Command="{Binding ShowAudioCaptureDevicesCommand}" />
+              <MenuItem Header="Video capture devices…" Command="{Binding ShowVideoCaptureDevicesCommand}" />
+              <MenuItem Header="Hardware decoding requested" ToggleType="CheckBox"
+                        IsChecked="{Binding VideoHardwareAccelerationRequested, Mode=OneWay}" Command="{Binding ToggleVideoAccelerationCommand}" />
+              <MenuItem Header="Record media" ToggleType="CheckBox" IsChecked="{Binding IsRecording, Mode=OneWay}"
+                        Command="{Binding ToggleRecordingCommand}" IsEnabled="{Binding IsOpened}" />
+              <MenuItem Header="Take snapshot" Command="{Binding TakeSnapshotCommand}" IsEnabled="{Binding IsOpened}" />
+              <MenuItem Header="Command palette…" Command="{Binding ShowCommandPaletteCommand}" />
             </ContextMenu>
           </Panel.ContextMenu>
           <c:VideoView Name="Video" Focusable="True" RenderOptions.BitmapInterpolationMode="MediumQuality" />

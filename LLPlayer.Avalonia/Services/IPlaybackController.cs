@@ -1,5 +1,7 @@
 ﻿using System.ComponentModel;
 using FlyleafLib.MediaPlayer;
+using FlyleafLib.MediaFramework.MediaDevice;
+using FlyleafLib.MediaFramework.MediaRenderer;
 using WpfKey = System.Windows.Input.Key;
 
 namespace LLPlayer.Avalonia.Services;
@@ -50,6 +52,7 @@ public interface IPlaybackController : INotifyPropertyChanged
     /// <summary>A media is open and can play (Flyleaf <c>CanPlay</c>).</summary>
     bool IsOpened { get; }
     bool IsPlaying { get; }
+    bool IsRecording => false;
     bool IsOpening { get; }
     bool CanCancelOpen { get; }
     string? Title { get; }
@@ -146,6 +149,24 @@ public interface IPlaybackController : INotifyPropertyChanged
     /// <summary>Routes a key to the engine's key bindings (Player.KeyDown / KeyUp). Returns true when handled.</summary>
     bool KeyDown(WpfKey key);
     bool KeyUp(WpfKey key);
+
+    Action? ResolveEngineAction(KeyBindingAction action) => null;
+    Task ToggleVideoAccelerationAsync() => Task.CompletedTask;
+    PortableVideoDecodeStatus GetVideoDecodeStatus() => new(PortableVideoDecodeMode.Software, "", PortableVideoDecodeMode.Software, null, false, false, null);
+    PortableVideoPresentationStatus GetVideoPresentationStatus() => new(PortableVideoPresentationMode.Software, PortableVideoPresentationMode.Software, false, false, null);
+    IReadOnlyList<PortableVideoAdapterInfo> GetVideoAdapters() => [];
+    Task<IReadOnlyList<PortableVideoAdapterInfo>> RefreshVideoAdaptersAsync() => Task.FromResult<IReadOnlyList<PortableVideoAdapterInfo>>([]);
+    CaptureDeviceSnapshot GetCaptureDevices(CaptureDeviceKind kind) => CaptureDeviceSnapshot.Initial;
+    Task<CaptureDeviceSnapshot> RefreshCaptureDevicesAsync(CaptureDeviceKind kind, CancellationToken cancellationToken = default)
+        => Task.FromResult(CaptureDeviceSnapshot.Initial);
+    Task<CaptureVideoFormatSnapshot> GetCaptureFormatsAsync(CaptureDeviceInfo device, long catalogEpoch, CancellationToken cancellationToken = default)
+        => Task.FromResult(new CaptureVideoFormatSnapshot(catalogEpoch, device.Id, CaptureAvailability.Unavailable, [], "Capture is unavailable."));
+    Task OpenCaptureDeviceAsync(CaptureDeviceInfo device, long catalogEpoch, CaptureVideoFormatInfo? format = null, CancellationToken cancellationToken = default)
+        => Task.CompletedTask;
+    PlayerDebugSnapshot GetDebugSnapshot() => new("Unavailable", "", "", "", "", false, "", "", "", "", "");
+    void ZoomVideoAt(bool zoomIn, double deviceX, double deviceY) { }
+    (double X, double Y) GetVideoPan() => (0, 0);
+    void SetVideoPan(double x, double y) { }
 
     /// <summary>ISO 639-1 language of a subtitle slot (null when unknown).</summary>
     string? GetSubtitleLanguage(int slot);

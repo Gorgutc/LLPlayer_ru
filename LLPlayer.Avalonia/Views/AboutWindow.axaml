@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+        xmlns:s="using:LLPlayer.Avalonia.Services"
+        x:Class="LLPlayer.Avalonia.Views.AboutWindow" x:DataType="vm:AboutViewModel"
+        Classes="dialog" Title="About LLPlayer" Width="680" Height="720" MinWidth="420" MinHeight="360"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
+      <TextBlock Text="LLPlayer" Classes="dialog-title" />
+      <TextBlock Text="A media player for language learning. Shared Avalonia desktop for Windows and Linux." Classes="dialog-description" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" Spacing="8">
+      <TextBlock Text="{Binding Message}" Classes="small muted" TextWrapping="Wrap" />
+      <StackPanel Classes="dialog-footer">
+        <Button Content="Copy version" Classes="outline" Command="{Binding CopyVersionCommand}" />
+        <Button Content="Close" Click="OnCloseClick" />
+      </StackPanel>
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="16">
+        <Border Classes="card card-sm" Padding="12">
+          <StackPanel Spacing="6">
+            <TextBlock Text="{Binding Information.Version, StringFormat='Version: {0}'}" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <SelectableTextBlock Text="{Binding Information.SourceRevision, StringFormat='Source: {0}'}" Classes="mono xs" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Information.Runtime}" Classes="small" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Information.OperatingSystem}" Classes="small" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Information.ProcessArchitecture, StringFormat='Process architecture: {0}'}" Classes="small" />
+            <TextBlock Text="{Binding Information.OSArchitecture, StringFormat='OS architecture: {0}'}" Classes="small" />
+          </StackPanel>
+        </Border>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Project" Classes="outline" Tag="{Binding ProjectUrl}" Click="OnLinkClick" />
+          <Button Content="Upstream LLPlayer" Classes="outline" Tag="{Binding UpstreamUrl}" Click="OnLinkClick" />
+        </StackPanel>
+        <TextBlock Text="Credits" Classes="small muted" />
+        <ItemsControl ItemsSource="{Binding Information.Credits}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="s:AboutCredit">
+              <Grid ColumnDefinitions="180,*" Margin="0,0,0,8">
+                <Button Content="{Binding Name}" Tag="{Binding Url}" Click="OnLinkClick" Classes="ghost" HorizontalAlignment="Left" />
+                <TextBlock Grid.Column="1" Text="{Binding Role}" Classes="small muted" TextWrapping="Wrap" VerticalAlignment="Center" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Text="This screen credits the shared desktop runtime. The supported WPF front-end has its own UI dependencies." Classes="small muted" TextWrapping="Wrap" />
+        <Expander Header="Third-party notices">
+          <StackPanel Spacing="8">
+            <Button Content="Read bundled notices" Command="{Binding LoadNoticesCommand}" Classes="outline" HorizontalAlignment="Left" />
+            <ScrollViewer MaxHeight="300">
+              <SelectableTextBlock Text="{Binding NoticesText}" Classes="mono xs" TextWrapping="Wrap" />
+            </ScrollViewer>
+          </StackPanel>
+        </Expander>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

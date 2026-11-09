@@ -4,6 +4,22 @@ LLPlayer.Avalonia is part of LLPlayer (GPL-3.0, see `../LICENSE`). This file rec
 and bundled dependencies requiring attribution or license text; other NuGet package dependencies keep their own
 licenses.
 
+## Windows media adapter dependencies (MIT)
+
+Only the portable Windows build includes Vortice.DXGI, Vortice.MediaFoundation and Vortice.DirectX
+3.7.6-beta, Vortice.Mathematics 1.9.3, and SharpGen.Runtime / SharpGen.Runtime.COM 2.4.2-beta.
+These managed adapters enumerate Windows display/capture resources; they do not replace the WPF renderer
+or install a native driver. Linux excludes this closure and its Windows-only license copies.
+
+Complete upstream MIT texts are shipped as `licenses/Vortice.Windows.LICENSE`,
+`licenses/Vortice.Mathematics.LICENSE` and `licenses/SharpGen.Runtime.LICENSE`.
+Vortice copyright: Amer Koleci and contributors. SharpGen license copyright:
+2010–2017 Alexandre Mutel, 2017 Jeremy Koritzinsky. Immutable source/license revisions:
+
+- [Vortice.Windows](https://github.com/amerkoleci/Vortice.Windows/blob/99064c7952126b9aa05cbda898788654e803dba2/LICENSE)
+- [Vortice.Mathematics](https://github.com/amerkoleci/Vortice.Mathematics/blob/b6e13cb19cd11532ad81234d5d820fffb5b3e53c/LICENSE)
+- [SharpGenTools](https://github.com/SharpGenTools/SharpGenTools/blob/6990bcafe124a4c22515ad19cee5a081da8db67b/LICENSE.txt)
+
 ## Windows recognition and archive dependencies
 
 Windows Avalonia alone carries the existing WPF-pinned Windows SDK .NET projection

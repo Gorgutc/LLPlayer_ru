@@ -884,6 +884,12 @@ public class Config : NotifyPropertyChanged
         public bool             VideoAcceleration           { get; set => Set(ref field, value); } = true;
         public void ToggleVideoAcceleration() => VideoAcceleration = !VideoAcceleration;
 
+#if !WINDOWS
+        // Portable hardware decoding is opt-in. Preserve the legacy allowance's true default.
+        public PortableVideoDecodeMode PortableDecodeMode { get; set => Set(ref field, value); } = PortableVideoDecodeMode.Software;
+        public string PortableHardwareDevice { get; set => Set(ref field, value ?? ""); } = "";
+#endif
+
         /// <summary>
         /// Whether to use embedded video processor with custom pixel shaders or D3D11<br/>
         /// * FLVP supports HDR to SDR, hardware/software frames and more formats<br/>

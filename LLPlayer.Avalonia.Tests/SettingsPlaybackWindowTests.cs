@@ -47,7 +47,10 @@ public class SettingsPlaybackWindowTests
             tabs.SelectedIndex = 1; Dispatcher.UIThread.RunJobs();
             Assert.NotNull(window.FindControl<ComboBox>("AspectRatioEditor"));
             CheckBox hardware = window.FindControl<CheckBox>("HardwareAccelerationEditor")!;
-            Assert.False(hardware.IsEnabled); Assert.False(hardware.IsChecked);
+            Assert.True(hardware.IsEnabled); Assert.False(hardware.IsChecked);
+            Assert.NotNull(window.FindControl<ComboBox>("HardwareDecodeModeEditor"));
+            Assert.NotNull(window.FindControl<ComboBox>("VideoAdapterEditor"));
+            Assert.NotNull(window.FindControl<ComboBox>("VideoPresentationModeEditor"));
             tabs.SelectedIndex = 3; Dispatcher.UIThread.RunJobs();
             Assert.NotNull(window.FindControl<CheckBox>("SubtitleExportBomEditor"));
             Assert.NotNull(window.FindControl<ComboBox>("PrimaryFallbackEditor"));

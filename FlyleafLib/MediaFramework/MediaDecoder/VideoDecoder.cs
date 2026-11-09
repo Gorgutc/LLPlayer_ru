@@ -21,7 +21,7 @@ namespace FlyleafLib.MediaFramework.MediaDecoder;
  * Open/Open2: Merge and review quick Setup/Full Dispose
  */
 
-public unsafe class VideoDecoder : DecoderBase
+public unsafe partial class VideoDecoder : DecoderBase
 {
     public Action           OpeningCodec;
     public Renderer         Renderer            { get; private set; }
@@ -77,8 +77,10 @@ public unsafe class VideoDecoder : DecoderBase
     public CodecSpec CurCodecSpec;
     AVCodecContext_get_format getHWformat;
 
+#if WINDOWS
     internal const AVPixelFormat    HW_PIX_FMT  = AVPixelFormat.D3d11;
     internal const AVHWDeviceType   HW_DEVICE   = AVHWDeviceType.D3d11va;
+#endif
 
     public class CodecSpec
     {
@@ -89,8 +91,9 @@ public unsafe class VideoDecoder : DecoderBase
 
         internal static CodecSpec Empty = new();
     }
-    static ConcurrentDictionary<AVCodecID,  CodecSpec> hwSpecs  = [];
     static ConcurrentDictionary<AVCodecID,  CodecSpec> swSpecs  = [];
+#if WINDOWS
+    static ConcurrentDictionary<AVCodecID,  CodecSpec> hwSpecs  = [];
     static ConcurrentDictionary<string,     CodecSpec> specs    = [];
     static CodecSpec FindHWDecoder(AVCodecID id)
     {
@@ -118,6 +121,7 @@ public unsafe class VideoDecoder : DecoderBase
         hwSpecs[id] = CodecSpec.Empty;
         return CodecSpec.Empty;
     }
+#endif
     static CodecSpec FindSWDecoder(AVCodecID id)
     {
         if (swSpecs.TryGetValue(id, out CodecSpec spec))
@@ -128,6 +132,7 @@ public unsafe class VideoDecoder : DecoderBase
         swSpecs[id] = spec;
         return spec;
     }
+#if WINDOWS
     static CodecSpec FindDecoder(string name)
     {
         if (specs.TryGetValue(name, out CodecSpec spec))
@@ -201,6 +206,7 @@ public unsafe class VideoDecoder : DecoderBase
 
         return HW_PIX_FMT;
     }
+#endif
     #endregion
 
     protected override bool Setup()
@@ -208,15 +214,30 @@ public unsafe class VideoDecoder : DecoderBase
         if (Renderer.Disposed)
             Renderer.Setup();
 
+#if !WINDOWS
+        if (swFallback)
+            Renderer.UseSoftwareFallback();
+        else
+            Renderer.PrepareHardwareDecoding();
+#endif
         VideoAccelerated = !swFallback && Renderer.ffDevice != null && Config.Video.VideoAcceleration;
 
         OpeningCodec?.Invoke();
 
+#if WINDOWS
         if (!string.IsNullOrEmpty(Config.Decoder._VideoCodec))
             CurCodecSpec = FindDecoder(Config.Decoder._VideoCodec);
+#else
+        if (!string.IsNullOrEmpty(Config.Decoder._VideoCodec) && !swFallback)
+            CurCodecSpec = FindPortableDecoder(Config.Decoder._VideoCodec, Renderer.HardwareDeviceType, Renderer.HardwarePixelFormat);
+#endif
         else if (VideoAccelerated)
         {
+#if WINDOWS
             CurCodecSpec = FindHWDecoder(Stream.CodecID);
+#else
+            CurCodecSpec = FindPortableHWDecoder(Stream.CodecID, Renderer.HardwareDeviceType, Renderer.HardwarePixelFormat);
+#endif
             if (CurCodecSpec.IsEmpty)
             {
                 if (CanDebug) Log.Debug($"HW decoding not supported for {Stream.CodecID}");
@@ -226,6 +247,20 @@ public unsafe class VideoDecoder : DecoderBase
         else
             CurCodecSpec = FindSWDecoder(Stream.CodecID);
 
+#if !WINDOWS
+        if (!CurCodecSpec.IsEmpty)
+        {
+            if (VideoAccelerated && !CurCodecSpec.IsHW)
+                Renderer.MarkHardwareFallback("The selected codec has no compatible hardware configuration.");
+            // A named software/hybrid decoder remains the owner's choice even when its HW configuration is absent.
+            if (PortableHardwareDecodePolicy.RequiresSoftwareDecoderFallback(CurCodecSpec.Codec->capabilities,
+                VideoAccelerated && CurCodecSpec.IsHW))
+            {
+                Renderer.MarkHardwareFallback("The configured hardware-only codec is incompatible with the selected portable backend.");
+                CurCodecSpec = FindSWDecoder(Stream.CodecID);
+            }
+        }
+#endif
         if (CurCodecSpec.IsEmpty)
         {
             Log.Error($"Decoder not found ({(!string.IsNullOrEmpty(Config.Decoder._VideoCodec) ? Config.Decoder._VideoCodec : Stream.CodecID)})");
@@ -287,6 +322,13 @@ public unsafe class VideoDecoder : DecoderBase
             codecCtx->get_format        = getHWformat;
             codecCtx->hw_device_ctx     = av_buffer_ref(Renderer.ffDevice);
             codecCtx->extra_hw_frames   = Config.Decoder.MaxVideoFrames + 1; // 1 extra for Renderer's LastFrame
+#if !WINDOWS
+            if (codecCtx->hw_device_ctx == null)
+            {
+                if (avopt != null) av_dict_free(&avopt);
+                return SetupPortableSoftwareFallback("The hardware device reference could not be retained.");
+            }
+#endif
         }
         else
             codecCtx->thread_count      = Math.Min(Config.Decoder.VideoThreads, codecCtx->codec_id == AVCodecID.Hevc ? 32 : 16);
@@ -296,6 +338,10 @@ public unsafe class VideoDecoder : DecoderBase
         {
             if (avopt != null) av_dict_free(&avopt);
             Log.Error($"Failed to open codec - {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+#if !WINDOWS
+            if (VideoAccelerated)
+                return SetupPortableSoftwareFallback($"Hardware codec initialization failed ({ret}).");
+#endif
             return false;
         }
 
@@ -326,6 +372,9 @@ public unsafe class VideoDecoder : DecoderBase
 
         if (CanDebug) Log.Debug($"Using {CurCodecSpec.Name} {(VideoAccelerated ? "(HW)" : "(SW)")}");
 
+#if !WINDOWS
+        Renderer.HardwareCodecOpened(VideoAccelerated);
+#endif
         return true;
     }
 
@@ -341,6 +390,9 @@ public unsafe class VideoDecoder : DecoderBase
                     Status = Status.Stopped;
 
                 DisposeFrames();
+#if !WINDOWS
+                ResetPortableRecovery();
+#endif
                 avcodec_flush_buffers(codecCtx);
 
                 isDraining          = false;
@@ -546,16 +598,23 @@ public unsafe class VideoDecoder : DecoderBase
         }
 
         // TBR: AVERROR(EAGAIN) ideally we keep the packet and resend it after recv (it shouldn't happen at all as we keep track)
+#if WINDOWS
         int ret = avcodec_send_packet(codecCtx, packet);
-
         if (swFallback)
         {   // Could happen during (VA) GetFormat (called by avcodec_send_packet)
             SWFallback();
             ret = avcodec_send_packet(codecCtx, packet);
         }
+#else
+        int ret = SendPortableAVPacket(packet);
+#endif
 
         av_packet_free(&packet);
 
+#if !WINDOWS
+        if (ret == -1234)
+            return ret;
+#endif
         if (ret == 0 || ret == AVERROR_EAGAIN)
             return 0;
 
@@ -563,7 +622,14 @@ public unsafe class VideoDecoder : DecoderBase
 
         if (ret == AVERROR_EOF)
         {
-            if (!vPackets.IsEmpty) { avcodec_flush_buffers(codecCtx); return AVERROR_EAGAIN; } // TBR: Happens on HLS while switching video streams
+            if (!vPackets.IsEmpty)
+            {
+#if !WINDOWS
+                ResetPortableRecovery();
+#endif
+                avcodec_flush_buffers(codecCtx);
+                return AVERROR_EAGAIN;
+            } // TBR: Happens on HLS while switching video streams
             Status = Status.Ended;
             return AVERROR_EOF;
         }
@@ -592,15 +658,30 @@ public unsafe class VideoDecoder : DecoderBase
          *  EOF     : Quit Loop         (Ended)             * Drained
          *  -1234   : Quit Loop         (Critical)          * E.g. Status = Stopping
          */
+#if WINDOWS
         int ret = avcodec_receive_frame(codecCtx, frame);
+#else
+        int ret = ReceivePortableAVFrame();
+#endif
         if (ret != 0)
         {
+#if !WINDOWS
+            if (ret == -1234)
+                return ret;
+#endif
             if (ret == AVERROR_EAGAIN)
                 return AVERROR_EAGAIN;
 
             if (ret == AVERROR_EOF)
             {
-                if (!vPackets.IsEmpty) { avcodec_flush_buffers(codecCtx); return AVERROR_EAGAIN; } // TBR: Happens on HLS while switching video streams
+                if (!vPackets.IsEmpty)
+                {
+#if !WINDOWS
+                    ResetPortableRecovery();
+#endif
+                    avcodec_flush_buffers(codecCtx);
+                    return AVERROR_EAGAIN;
+                } // TBR: Happens on HLS while switching video streams
                 Status = Status.Ended;
                 return AVERROR_EOF;
             }
@@ -771,6 +852,30 @@ public unsafe class VideoDecoder : DecoderBase
 
     internal bool SWFallback()
     {
+#if !WINDOWS
+        bool keyRequired = keyPacketRequired;
+        bool draining = isDraining;
+        long fixedPts = lastFixedPts;
+        int errors = allowedErrors;
+        // Recovery reconstructs the codec from owned compressed references. Keep output/reverse caches,
+        // snapshot source, demux queues, playback position and timestamp/PCM owners unchanged.
+        av_frame_unref(frame);
+        if (codecCtx != null)
+            fixed (AVCodecContext** context = &codecCtx) avcodec_free_context(context);
+        VideoAccelerated = false;
+        Renderer.HardwareDecoderClosing();
+        swFallback = true;
+        bool opened;
+        try { opened = Setup(); }
+        finally { swFallback = false; }
+        keyPacketRequired = keyRequired;
+        keyFrameRequired = false;
+        filledFromCodec = false;
+        isDraining = draining;
+        lastFixedPts = fixedPts;
+        allowedErrors = errors;
+        return opened;
+#else
         bool ret;
 
         DisposeInternal();
@@ -788,6 +893,7 @@ public unsafe class VideoDecoder : DecoderBase
         filledFromCodec     = false;
 
         return ret;
+#endif
     }
 
     private void RunInternalReverse()
@@ -888,7 +994,12 @@ public unsafe class VideoDecoder : DecoderBase
                     }
 
                     packet = (AVPacket*)curReverseVideoPackets[curReversePacketPos++];
+#if WINDOWS
                     ret = avcodec_send_packet(codecCtx, packet);
+#else
+                    ret = SendPortableAVPacket(packet);
+                    if (ret == -1234) { Status = Status.Stopping; break; }
+#endif
 
                     if (ret != 0 && ret != AVERROR(EAGAIN))
                     {
@@ -907,6 +1018,9 @@ public unsafe class VideoDecoder : DecoderBase
                             curReverseVideoPackets.RemoveAt(i);
                         }
 
+#if !WINDOWS
+                        ResetPortableRecovery();
+#endif
                         avcodec_flush_buffers(codecCtx);
                         curReversePacketPos = 0;
 
@@ -920,7 +1034,12 @@ public unsafe class VideoDecoder : DecoderBase
 
                     while (true)
                     {
+#if WINDOWS
                         ret = avcodec_receive_frame(codecCtx, frame);
+#else
+                        ret = ReceivePortableAVFrame();
+                        if (ret == -1234) { Status = Status.Stopping; break; }
+#endif
                         if (ret != 0) { av_frame_unref(frame); break; }
 
                         if (frame->best_effort_timestamp != AV_NOPTS_VALUE)
@@ -950,6 +1069,9 @@ public unsafe class VideoDecoder : DecoderBase
                     if (curReversePacketPos == curReverseVideoPackets.Count)
                     {
                         curReverseVideoPackets.RemoveRange(Math.Max(0, Config.Decoder.MaxVideoFramesPrev + curReverseVideoPackets.Count - Config.Decoder.MaxVideoFrames), Math.Min(curReverseVideoPackets.Count, Config.Decoder.MaxVideoFrames - Config.Decoder.MaxVideoFramesPrev) );
+#if !WINDOWS
+                        ResetPortableRecovery();
+#endif
                         avcodec_flush_buffers(codecCtx);
                         curReversePacketPos = 0;
 
@@ -1122,8 +1244,13 @@ public unsafe class VideoDecoder : DecoderBase
             if (Status == Status.Ended)
                 return AVERROR_EOF;
 
-            if (DecodeFrameNextInternal() == 0)
+            ret = DecodeFrameNextInternal();
+            if (ret == 0)
                 return 0;
+#if !WINDOWS
+            if (ret == -1234)
+                return ret;
+#endif
 
             if (demuxer.Status == Status.Ended && vPackets.IsEmpty && Frames.IsEmpty)
             {
@@ -1144,9 +1271,17 @@ public unsafe class VideoDecoder : DecoderBase
                     return ret;
 
                 // Drain (TBR: probably only first drained working here)
+#if WINDOWS
                 ret = avcodec_send_packet(codecCtx, demuxer.packet);
+#else
+                ret = SendPortableAVPacket(demuxer.packet);
+#endif
                 av_packet_unref(demuxer.packet);
 
+#if !WINDOWS
+                if (ret == -1234)
+                    return ret;
+#endif
                 if (ret != 0)
                     return AVERROR_EOF;
 
@@ -1167,16 +1302,23 @@ public unsafe class VideoDecoder : DecoderBase
                 keyPacketRequired = false;
             }
 
+#if WINDOWS
             ret = avcodec_send_packet(codecCtx, demuxer.packet);
-
             if (swFallback) // Should use 'global' packet to reset it in get_format (same packet should use also from DecoderContext)
             {
                 SWFallback();
                 ret = avcodec_send_packet(codecCtx, demuxer.packet);
             }
+#else
+            ret = SendPortableAVPacket(demuxer.packet);
+#endif
 
             av_packet_unref(demuxer.packet);
 
+#if !WINDOWS
+            if (ret == -1234)
+                return ret;
+#endif
             if (ret != 0 && ret != AVERROR(EAGAIN))
             {
                 if (CanWarn) Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
@@ -1187,17 +1329,26 @@ public unsafe class VideoDecoder : DecoderBase
                 continue;
             }
 
-            if (DecodeFrameNextInternal() == 0)
+            ret = DecodeFrameNextInternal();
+            if (ret == 0)
             {
                 checkExtraFrames = true;
                 return 0;
             }
+#if !WINDOWS
+            if (ret == -1234)
+                return ret;
+#endif
         }
 
     }
     private int DecodeFrameNextInternal()
     {
+#if WINDOWS
         int ret = avcodec_receive_frame(codecCtx, frame);
+#else
+        int ret = ReceivePortableAVFrame();
+#endif
         if (ret != 0) { av_frame_unref(frame); return ret; }
 
         if (keyFrameRequired)
@@ -1272,6 +1423,11 @@ public unsafe class VideoDecoder : DecoderBase
     protected override void DisposeInternal()
     {   // Called by Dispose (lockActions) | TBR: lock (lockCodecCtx)?
         DisposeFrames();
+#if !WINDOWS
+        ResetPortableRecovery();
+        VideoAccelerated = false;
+        Renderer?.HardwareDecoderClosing();
+#endif
         StartTime       = AV_NOPTS_VALUE;
         swFallback      = false;
         curSpeedFrame   = 9999;

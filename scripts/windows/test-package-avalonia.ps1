@@ -33,6 +33,9 @@ $natives = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxr
     'lib/7z.dll','runtimes/win-x64/leptonica-1.85.0.dll','runtimes/win-x64/tesseract55.dll') +
     @('ggml-base-whisper.dll','ggml-cpu-whisper.dll','ggml-whisper.dll','whisper.dll' | ForEach-Object { 'runtimes/win-x64/' + $_ }) +
     @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
+$windowsMediaAssemblies = @('Vortice.DXGI.dll','Vortice.MediaFoundation.dll','Vortice.DirectX.dll',
+    'Vortice.Mathematics.dll','SharpGen.Runtime.dll','SharpGen.Runtime.COM.dll')
+$windowsMediaLicenses = @('licenses/Vortice.Windows.LICENSE','licenses/Vortice.Mathematics.LICENSE','licenses/SharpGen.Runtime.LICENSE')
 function New-Fixture([string]$Name) {
     $dir = Join-Path $work $Name
     $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
@@ -42,10 +45,10 @@ function New-Fixture([string]$Name) {
         'IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
         'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
         'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md')
-    foreach ($path in @($required) + @($natives)) { Write-FixtureFile $dir $path }
+    foreach ($path in @($required) + @($natives) + @($windowsMediaLicenses)) { Write-FixtureFile $dir $path }
     Write-FixtureFile $dir 'Plugins/YoutubeDL/YoutubeDL.pdb'
     Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
-    foreach ($assembly in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll')) {
+    foreach ($assembly in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll') + $windowsMediaAssemblies) {
         Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir $assembly)
     }
     $files = @($natives | ForEach-Object { [ordered]@{ path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $dir $_) -Algorithm SHA256).Hash.ToLowerInvariant() } })
@@ -82,6 +85,19 @@ try {
     $validPackage = New-Fixture 'valid'
     Write-FixtureFile $validPackage 'project-notes.zip'
     Assert-Accepted 'valid synthetic package including unrelated archive' $validPackage
+    foreach ($relative in @($windowsMediaAssemblies) + @($windowsMediaLicenses)) {
+        $fixtureRelative = $relative
+        Assert-Rejected ("missing Windows media dependency " + $relative) { param($d) Remove-Item -LiteralPath (Join-Path $d $fixtureRelative) } 'missing required file'
+        Assert-Rejected ("empty Windows media dependency " + $relative) { param($d) Write-FixtureFile $d $fixtureRelative '' } 'non-empty regular file'
+    }
+    foreach ($relative in @('Vortice.Direct3D11.dll','Vortice.XAudio2.dll','SharpGen.Unexpected.dll','nested/Vortice.DXGI.dll')) {
+        $fixtureRelative = $relative
+        Assert-Rejected ("unexpected Windows media dependency " + $relative) {
+            param($d)
+            Write-FixtureFile $d $fixtureRelative
+            Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $d $fixtureRelative) -Force
+        } 'unexpected Windows media dependency'
+    }
     foreach ($relative in @('Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll',
         'lib/7z.dll','runtimes/win-x64/leptonica-1.85.0.dll','runtimes/win-x64/tesseract55.dll',
         'licenses/Tesseract.LICENSE','licenses/Leptonica.LICENSE','licenses/SevenZip.LICENSE','licenses/SevenZipSharp.LICENSE')) {

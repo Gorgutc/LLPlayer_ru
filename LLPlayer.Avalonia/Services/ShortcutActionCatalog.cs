@@ -27,7 +27,42 @@ public static class ShortcutActionCatalog
                 new(ShortcutActionTarget.Application, AppShortcutMap.OpenWindowSettings, "Open Settings Window", "Window"),
                 new(ShortcutActionTarget.Application, AppShortcutMap.OpenWindowWordManager, "Open Word Manager Window", "Window"),
                 new(ShortcutActionTarget.Application, AppShortcutMap.OpenWindowSubsExporter, "Open Subtitles Export Window", "Window"),
-            ]).ToArray());
+                App(AppShortcutMap.OpenNextFile, "Open Next File", "Playback"),
+                App(AppShortcutMap.OpenPrevFile, "Open Previous File", "Playback"),
+                App(AppShortcutMap.OpenCurrentPath, "Open Current Media Location", "Playback"),
+                App(AppShortcutMap.CopyMediaPath, "Copy Current Media Path", "Playback"),
+                App(AppShortcutMap.SubsPrimarySizeIncrease, "Primary Subtitles Size Increase", "Subtitles"),
+                App(AppShortcutMap.SubsPrimarySizeDecrease, "Primary Subtitles Size Decrease", "Subtitles"),
+                App(AppShortcutMap.SubsSecondarySizeIncrease, "Secondary Subtitles Size Increase", "Subtitles"),
+                App(AppShortcutMap.SubsSecondarySizeDecrease, "Secondary Subtitles Size Decrease", "Subtitles"),
+                App(AppShortcutMap.SubsDistanceIncrease, "Primary/Secondary Subtitles Distance Increase", "Subtitles"),
+                App(AppShortcutMap.SubsDistanceDecrease, "Primary/Secondary Subtitles Distance Decrease", "Subtitles"),
+                App(AppShortcutMap.SubsTextCopy, "Copy All Subtitles Text", "Subtitles"),
+                App(AppShortcutMap.SubsSecondaryTextCopy, "Copy Secondary Subtitles Text", "Subtitles"),
+                App(AppShortcutMap.ToggleSubsAutoTextCopy, "Toggle Auto Subtitles Text Copy", "Subtitles"),
+                App(AppShortcutMap.ToggleSidebarShowSecondary, "Toggle Primary / Secondary in Subtitles Sidebar", "Subtitles"),
+                App(AppShortcutMap.ToggleSidebarShowOriginalText, "Toggle Original Text in Subtitles Sidebar", "Subtitles"),
+                App(AppShortcutMap.ToggleAlwaysOnTop, "Toggle Always On Top", "Window"),
+                App(AppShortcutMap.OpenWindowSubsDownloader, "Open Subtitles Downloader Window", "Window"),
+                App(AppShortcutMap.OpenWindowAiInsights, "Open AI Insights Window", "Window"),
+                App(AppShortcutMap.OpenWindowBatchSubtitles, "Open Batch Subtitles Window", "Window"),
+                App(AppShortcutMap.OpenWindowAbout, "About LLPlayer", "Window"),
+                App(AppShortcutMap.OpenWindowPlaybackSettings, "Open Playback Settings", "Window"),
+                App(AppShortcutMap.OpenWindowPluginOptions, "Open Plugin Options", "Window"),
+                App(AppShortcutMap.OpenWindowPlaylist, "Open Playlist", "Window"),
+                App(AppShortcutMap.OpenWindowPdicSettings, "Open PDIC Settings", "Window"),
+                App(AppShortcutMap.OpenWindowOnlineVideo, "Open Online Video", "Window"),
+                App(AppShortcutMap.OpenWindowTranslation, "Open Translation Settings", "Window"),
+                App(AppShortcutMap.OpenWindowRecognition, "Open Recognition and Model Management", "Window"),
+                App(AppShortcutMap.OpenWindowDubbing, "Open Dubbing Settings", "Window"),
+                App(AppShortcutMap.AppNew, "Launch New Application", "Application"),
+                App(AppShortcutMap.AppClone, "Launch Clone Application", "Application"),
+                App(AppShortcutMap.AppRestart, "Restart Application", "Application"),
+                App(AppShortcutMap.AppExit, "Exit Application", "Application"),
+            ]).DistinctBy(row => row.Name, StringComparer.Ordinal).ToArray());
+
+    static ShortcutActionDescriptor App(string name, string description, string group)
+        => new(ShortcutActionTarget.Application, name, description, group);
 
     public static bool TryGetEngine(string? name, out ShortcutActionDescriptor descriptor)
     {
@@ -41,13 +76,17 @@ public static class ShortcutActionCatalog
         return descriptor != null;
     }
 
-    public static string AppGroup(string action) => action switch
+    public static string AppGroup(string action)
     {
-        AppShortcutMap.ToggleSidebar or AppShortcutMap.OpenWindowCheatSheet or AppShortcutMap.ToggleTheme
-            or AppShortcutMap.OpenWindowSettings or AppShortcutMap.OpenWindowWordManager
-            or AppShortcutMap.OpenWindowSubsExporter => "Window",
-        _ => "Subtitles",
-    };
+        if (action is AppShortcutMap.AppNew or AppShortcutMap.AppClone or AppShortcutMap.AppRestart or AppShortcutMap.AppExit)
+            return "Application";
+        if (action.StartsWith("OpenWindow", StringComparison.Ordinal) || action is AppShortcutMap.OpenCommandPalette
+            or AppShortcutMap.ToggleDebugOverlay or AppShortcutMap.ToggleSidebar or AppShortcutMap.ToggleTheme or AppShortcutMap.ToggleAlwaysOnTop)
+            return "Window";
+        if (action is AppShortcutMap.OpenNextFile or AppShortcutMap.OpenPrevFile or AppShortcutMap.OpenCurrentPath or AppShortcutMap.CopyMediaPath)
+            return "Playback";
+        return "Subtitles";
+    }
 
     public static string EngineGroup(KeyBindingAction action)
     {

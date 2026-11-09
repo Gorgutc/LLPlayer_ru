@@ -21,7 +21,7 @@ namespace LLPlayer.Avalonia.Controls;
 /// change.
 /// </para>
 /// </summary>
-public sealed class VideoView : Control, IVideoSurface
+public sealed partial class VideoView : Decorator, IVideoSurface
 {
     public static readonly StyledProperty<IBrush> BackgroundProperty =
         AvaloniaProperty.Register<VideoView, IBrush>(nameof(Background), Brushes.Black);
@@ -67,6 +67,8 @@ public sealed class VideoView : Control, IVideoSurface
             if (ReferenceEquals(renderer, value))
                 return;
 
+            ClearFrame();
+
             if (renderer != null && ReferenceEquals(renderer.Surface, this))
             {
                 renderer.ViewportChanged -= OnViewportChanged;
@@ -92,6 +94,7 @@ public sealed class VideoView : Control, IVideoSurface
 
         lock (writeLock)
         {
+            SoftwareFrameAccepted();
             WriteableBitmap target;
             lock (swapLock)
             {
@@ -138,8 +141,12 @@ public sealed class VideoView : Control, IVideoSurface
 
     public void ClearFrame()
     {
-        lock (swapLock)
-            hasFrame = false;
+        lock (writeLock)
+        {
+            ClearPlanarFrame();
+            lock (swapLock)
+                hasFrame = false;
+        }
         RequestInvalidate();
     }
 
@@ -218,10 +225,12 @@ public sealed class VideoView : Control, IVideoSurface
             topLevel.ScalingChanged += OnScalingChanged;
         UpdateDpi();
         ReportSize();
+        PresentationAttached();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        PresentationDetached();
         if (topLevel != null)
             topLevel.ScalingChanged -= OnScalingChanged;
         topLevel = null;
@@ -273,6 +282,7 @@ public sealed class VideoView : Control, IVideoSurface
         {
             Volatile.Write(ref invalidatePending, 0);
             InvalidateVisual();
+            RequestPlanarRender();
         }, DispatcherPriority.Render);
     }
 }

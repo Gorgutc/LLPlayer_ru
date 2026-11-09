@@ -10,6 +10,10 @@ public interface IAppShell
     Task<string?> PickFolderAsync(string? initialFolder) => Task.FromResult<string?>(null);
 
     void ShowCheatSheet();
+    void ShowCommandPalette() { }
+    void ShowAbout() { }
+    void TogglePlayerDebug() { }
+    void ShowCaptureDevices(CaptureDevicesViewModel model) { }
     void ShowSettings(SettingsViewModel model) { }
     void ShowWordManager(WordManagerViewModel model) { }
     void ShowSubtitlesExport(SubtitlesExportViewModel model) { }

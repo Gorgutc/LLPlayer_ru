@@ -2,3 +2,7 @@
 
 # Keep the pinned upstream LGPL license text byte-for-byte, including its original trailing spaces.
 LLPlayer.Avalonia/Licenses/OpenALSoft/COPYING whitespace=-blank-at-eol
+# Preserve the pinned MIT texts' upstream final blank line byte-for-byte.
+LLPlayer.Avalonia/Licenses/Vortice/SharpGen.Runtime.LICENSE whitespace=-blank-at-eof
+LLPlayer.Avalonia/Licenses/Vortice/Vortice.Mathematics.LICENSE whitespace=-blank-at-eof
+LLPlayer.Avalonia/Licenses/Vortice/Vortice.Windows.LICENSE whitespace=-blank-at-eof

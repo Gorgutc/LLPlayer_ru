@@ -6,8 +6,8 @@ namespace FlyleafLib;
 
 /// <summary>
 /// F-13 portable (Linux) video engine. Same public surface as the Windows (DXGI/MediaFoundation) VideoEngine in
-/// Engine/Engine.Video.cs. The portable renderer works in software (FFmpeg swscale -> BGRA -> host surface), so there
-/// is a single <c>Software</c> adapter and no capture-device enumeration yet.
+/// Engine/Engine.Video.cs. Keeps its compatibility <c>Software</c> adapter alongside the separate native backend catalog.
+/// Capture discovery is explicit and requires the All startup profile.
 /// </summary>
 public class VideoEngine
 {
@@ -15,7 +15,7 @@ public class VideoEngine
     public const long SoftwareAdapterLuid = 0;
 
     /// <summary>
-    /// List of Video Capture Devices (not enumerated on the portable build yet)
+    /// Compatibility list of video capture devices; formats are queried only on explicit selection.
     /// </summary>
     public ObservableCollection<VideoDevice>
                             CapDevices          { get; set; } = [];
@@ -27,6 +27,11 @@ public class VideoEngine
                             GPUAdapters         { get; private set; }
 
     private readonly object lockCapDevices = new();
+    private readonly object lockCaptureRefresh = new();
+    private readonly CaptureDeviceCatalog captureCatalog = new(new FFmpegCaptureDeviceBackend());
+    private CaptureDeviceSnapshot captureSnapshot = CaptureDeviceSnapshot.Initial;
+
+    public CaptureDeviceSnapshot CaptureSnapshot => Volatile.Read(ref captureSnapshot);
 
     internal VideoEngine() // We consider from UI here
     {
@@ -45,11 +50,44 @@ public class VideoEngine
     }
 
     /// <summary>
-    /// Enumerates Video Capture Devices which can be retrieved from <see cref="CapDevices"/> (none on the portable build yet)
+    /// Explicitly enumerates real video inputs. Does not change the loaded FFmpeg profile or query formats.
     /// </summary>
-    public void RefreshCapDevices()
+    public void RefreshCapDevices() => RefreshCapDevices(CancellationToken.None);
+
+    /// <summary>Cancellation is observed before/after native calls; a running driver call must finish.</summary>
+    public void RefreshCapDevices(CancellationToken cancellationToken)
     {
-        lock (lockCapDevices)
-            CapDevices.Clear();
+        lock (lockCaptureRefresh)
+        {
+            var result = captureCatalog.Refresh(CaptureDeviceKind.Video,
+                Engine.IsLoaded && Engine.FFmpeg?.LoadedProfile == LoadProfile.All,
+                OperatingSystem.IsWindows() ? ["dshow"] : OperatingSystem.IsLinux() ? ["video4linux2"] : [], cancellationToken);
+            lock (lockCapDevices)
+            {
+                CapDevices.Clear();
+                foreach (var device in result.Devices)
+                    CapDevices.Add(new(device.Label, device.Id, device.Url, Array.AsReadOnly(Array.Empty<VideoDeviceStream>())));
+                Volatile.Write(ref captureSnapshot, result);
+            }
+        }
+    }
+
+    /// <summary>Queries formats only for a real device in the current immutable catalog.</summary>
+    public CaptureVideoFormatSnapshot GetCaptureFormats(CaptureDeviceInfo device, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(device);
+        lock (lockCaptureRefresh)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var snapshot = CaptureSnapshot;
+            bool found = false;
+            foreach (var current in snapshot.Devices)
+                if (current == device) { found = true; break; }
+            if (!found || device.Kind != CaptureDeviceKind.Video)
+                return CaptureFormats.Empty(device, snapshot.Epoch, CaptureAvailability.Unavailable, "This capture device is stale. Refresh and select the current device.");
+            if (!Engine.IsLoaded || Engine.FFmpeg?.LoadedProfile != LoadProfile.All)
+                return CaptureFormats.Empty(device, snapshot.Epoch, CaptureAvailability.Unavailable, "Capture requires the All FFmpeg startup profile and an application restart.");
+            return CaptureFormats.Query(device, snapshot.Epoch, cancellationToken);
+        }
     }
 }

@@ -38,7 +38,7 @@ public class AudioEngine : INotifyPropertyChanged
     public bool         Failed              { get; private set; }
 
     /// <summary>
-    /// List of Audio Capture Devices (not enumerated on the portable build yet)
+    /// Compatibility list of audio capture inputs (separate from playback endpoints).
     /// </summary>
     public ObservableCollection<AudioDevice>
                         CapDevices          { get; set; } = [];
@@ -51,6 +51,11 @@ public class AudioEngine : INotifyPropertyChanged
 
     private readonly object lockDevices = new();
     private readonly object lockCapDevices = new();
+    private readonly object lockCaptureRefresh = new();
+    private readonly CaptureDeviceCatalog captureCatalog = new(new FFmpegCaptureDeviceBackend());
+    private CaptureDeviceSnapshot captureSnapshot = CaptureDeviceSnapshot.Initial;
+
+    public CaptureDeviceSnapshot CaptureSnapshot => Volatile.Read(ref captureSnapshot);
     #endregion
 
     public event PropertyChangedEventHandler PropertyChanged;
@@ -69,12 +74,26 @@ public class AudioEngine : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Enumerates Audio Capture Devices which can be retrieved from <see cref="CapDevices"/> (none on the portable build yet)
+    /// Explicitly enumerates real audio inputs without changing startup profile or playback endpoints.
     /// </summary>
-    public void RefreshCapDevices()
+    public void RefreshCapDevices() => RefreshCapDevices(CancellationToken.None);
+
+    /// <summary>Cancellation is observed before/after native calls; a running driver call must finish.</summary>
+    public void RefreshCapDevices(CancellationToken cancellationToken)
     {
-        lock (lockCapDevices)
-            CapDevices.Clear();
+        lock (lockCaptureRefresh)
+        {
+            var result = captureCatalog.Refresh(CaptureDeviceKind.Audio,
+                Engine.IsLoaded && Engine.FFmpeg?.LoadedProfile == LoadProfile.All,
+                OperatingSystem.IsWindows() ? ["dshow"] : OperatingSystem.IsLinux() ? ["pulse", "alsa"] : [], cancellationToken);
+            lock (lockCapDevices)
+            {
+                CapDevices.Clear();
+                foreach (var device in result.Devices)
+                    CapDevices.Add(new(device.Label, device.Id, device.Url));
+                Volatile.Write(ref captureSnapshot, result);
+            }
+        }
     }
 
     /// <summary>

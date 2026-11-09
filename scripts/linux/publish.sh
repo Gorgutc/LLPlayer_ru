@@ -176,6 +176,9 @@ runtimes/linux-x64/libggml-base-whisper.so runtimes/linux-x64/libggml-cpu-whispe
     hits="$(find "$pkg" \( -iname 'Microsoft.Windows.SDK.NET.dll' -o -iname 'WinRT.Runtime.dll' \
         -o -iname 'SevenZipSharp.dll' -o -iname '7z.dll' -o -iname 'leptonica-*.dll' -o -iname 'tesseract[0-9]*.dll' \) -print)"
     [[ -z "$hits" ]] || reject "Windows-only recognition or archive dependencies" "$hits"
+    hits="$(find "$pkg" \( -iname 'Vortice.*.dll' -o -iname 'SharpGen.*.dll' \
+        -o -iname 'Vortice.*.LICENSE' -o -iname 'SharpGen.*.LICENSE' \) -print)"
+    [[ -z "$hits" ]] || reject "Windows-only media adapter dependencies" "$hits"
     # A portable NuGet TFM can otherwise copy foreign/GPU runtimes regardless of the publish RID.
     # Reject the entire unexpected tree, including non-.so files or empty directories.
     while IFS= read -r path; do

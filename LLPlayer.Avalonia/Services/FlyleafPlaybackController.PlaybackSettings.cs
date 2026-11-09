@@ -19,12 +19,13 @@ public sealed partial class FlyleafPlaybackController : IPlaybackSettingsControl
     {
         PlaybackStore = store;
         savedPlaybackSettings = settings.Clone();
+        player.Renderer.UpdateDecodeRequest();
     }
 
     public PlaybackSettings GetPlaybackSettings()
     {
         PlaybackSettings current = PlaybackSettings.FromConfig(player.Config, Engine.Config,
-            savedPlaybackSettings?.SubtitleExportUtf8Bom ?? true);
+            savedPlaybackSettings?.SubtitleExportUtf8Bom ?? true, savedPlaybackSettings);
         // These values describe the next start, which may differ from the running engine.
         if (savedPlaybackSettings is { } saved)
         {
@@ -98,9 +99,9 @@ public sealed partial class FlyleafPlaybackController : IPlaybackSettingsControl
             bool desiredMute = defaultVolumeEdited ? desiredVolume == 0 : player.Audio.Mute;
             Action? persistVolume = rememberVolume != null && (defaultVolumeEdited || desiredVolume != currentVolume)
                 ? () => rememberVolume(desiredVolume, desiredMute) : null;
-            (PlaybackStore ?? throw new InvalidOperationException("Playback settings storage is unavailable.")).Save(merged, persistVolume);
-            savedPlaybackSettings = merged.Clone();
+            PersistPlaybackSettings(merged, persistVolume);
             PublishLanguageConfiguration(() => merged.ApplyTo(player.Config, includeAudio: false));
+            PublishVideoBackendPreferences(merged);
             if (previous != null && (runtime.AudioDevice ?? "") != (previous.AudioDevice ?? ""))
                 selectedAudioDeviceId = runtime.AudioDevice ?? "";
             ApplyAudioSettingsCore(new(merged.AudioEnabled, merged.AudioFiltersEnabled,
@@ -133,6 +134,12 @@ public sealed partial class FlyleafPlaybackController : IPlaybackSettingsControl
             }
             PublishAudioSettings();
         }, requireIdle: true);
+    }
+
+    void PersistPlaybackSettings(PlaybackSettings candidate, Action? persistVolume = null)
+    {
+        (PlaybackStore ?? throw new InvalidOperationException("Playback settings storage is unavailable.")).Save(candidate, persistVolume);
+        savedPlaybackSettings = candidate.Clone();
     }
 
     PlaybackAudioDelaySource? CapturePlaybackAudioDelaySource()

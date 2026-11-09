@@ -16,6 +16,13 @@ public partial class MainWindow
     public Action<Window>? BackgroundRequested { get; set; }
     public Action? ShutdownStarting { get; set; }
     bool explicitQuit;
+    Task? applicationShutdown;
+
+    public Task RequestApplicationExitAsync()
+    {
+        RequestApplicationExit();
+        return applicationShutdown ?? Task.CompletedTask;
+    }
 
     public void RequestApplicationExit()
     {
@@ -34,7 +41,7 @@ public partial class MainWindow
         ShutdownStarting?.Invoke();
         DisableLanguageWindows();
         IsEnabled = false;
-        _ = DrainBeforeClosingAsync();
+        applicationShutdown = DrainBeforeClosingAsync();
     }
 
     void RefreshLanguageClosingBehavior(Window? closingWindow = null)
@@ -43,7 +50,8 @@ public partial class MainWindow
         // Only these root-owned windows are covered by the language drain. Legacy dialogs retain their
         // existing close veto; a nested manager belongs to Recognition and keeps that owner's semantics.
         ClosingBehavior = owned.Length > 0 && owned.All(child => child is RecognitionWindow or ModelManagerWindow
-            or AiInsightsWindow or DubbingWindow or VoicePickerWindow)
+            or AiInsightsWindow or DubbingWindow or VoicePickerWindow or CaptureDevicesWindow
+            or CommandPaletteWindow or AboutWindow or PlayerDebugWindow or CheatSheetWindow)
             ? WindowClosingBehavior.OwnerWindowOnly : WindowClosingBehavior.OwnerAndChildWindows;
     }
 

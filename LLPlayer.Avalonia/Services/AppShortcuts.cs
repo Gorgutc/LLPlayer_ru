@@ -44,6 +44,40 @@ public sealed class AppShortcutMap
     public const string OpenWindowSettings = "OpenWindowSettings";
     public const string OpenWindowWordManager = "OpenWindowWordManager";
     public const string OpenWindowSubsExporter = "OpenWindowSubsExporter";
+    public const string OpenCommandPalette = "OpenCommandPalette";
+    public const string ToggleDebugOverlay = "ToggleDebugOverlay";
+    public const string OpenWindowAbout = "OpenWindowAbout";
+    public const string OpenNextFile = "OpenNextFile";
+    public const string OpenPrevFile = "OpenPrevFile";
+    public const string OpenCurrentPath = "OpenCurrentPath";
+    public const string SubsPrimarySizeIncrease = "SubsPrimarySizeIncrease";
+    public const string SubsPrimarySizeDecrease = "SubsPrimarySizeDecrease";
+    public const string SubsSecondarySizeIncrease = "SubsSecondarySizeIncrease";
+    public const string SubsSecondarySizeDecrease = "SubsSecondarySizeDecrease";
+    public const string SubsDistanceIncrease = "SubsDistanceIncrease";
+    public const string SubsDistanceDecrease = "SubsDistanceDecrease";
+    public const string SubsTextCopy = "SubsTextCopy";
+    public const string SubsSecondaryTextCopy = "SubsSecondaryTextCopy";
+    public const string ToggleSubsAutoTextCopy = "ToggleSubsAutoTextCopy";
+    public const string ToggleSidebarShowSecondary = "ToggleSidebarShowSecondary";
+    public const string ToggleSidebarShowOriginalText = "ToggleSidebarShowOriginalText";
+    public const string ToggleAlwaysOnTop = "ToggleAlwaysOnTop";
+    public const string OpenWindowSubsDownloader = "OpenWindowSubsDownloader";
+    public const string OpenWindowAiInsights = "OpenWindowAiInsights";
+    public const string OpenWindowBatchSubtitles = "OpenWindowBatchSubtitles";
+    public const string AppNew = "AppNew";
+    public const string AppClone = "AppClone";
+    public const string AppRestart = "AppRestart";
+    public const string AppExit = "AppExit";
+    public const string OpenWindowPlaybackSettings = "OpenWindowPlaybackSettings";
+    public const string OpenWindowPluginOptions = "OpenWindowPluginOptions";
+    public const string OpenWindowPlaylist = "OpenWindowPlaylist";
+    public const string OpenWindowPdicSettings = "OpenWindowPdicSettings";
+    public const string OpenWindowOnlineVideo = "OpenWindowOnlineVideo";
+    public const string OpenWindowTranslation = "OpenWindowTranslation";
+    public const string OpenWindowRecognition = "OpenWindowRecognition";
+    public const string OpenWindowDubbing = "OpenWindowDubbing";
+    public const string CopyMediaPath = "CopyMediaPath";
 
     public static readonly IReadOnlyList<AppShortcut> Defaults =
     [
@@ -59,6 +93,8 @@ public sealed class AppShortcutMap
         new(OpenWindowCheatSheet, WpfKey.OemQuestion, false, false, true, "Open Cheat Sheet Window"),
         new(OpenSubtitles,        WpfKey.O,     true,  false, true,  "Open Subtitles File"),
         new(ToggleTheme,          WpfKey.T,     true,  false, true,  "Toggle Dark / Light Theme"),
+        new(OpenCommandPalette,   WpfKey.K,     true,  false, false, "Open Command Palette", IsKeyUp: true),
+        new(ToggleDebugOverlay,   WpfKey.D,     true,  false, true,  "Toggle Debug Overlay", IsKeyUp: true),
     ];
 
     static readonly HashSet<string> KeyNames = new(Enum.GetNames<WpfKey>(), StringComparer.OrdinalIgnoreCase);
@@ -82,10 +118,19 @@ public sealed class AppShortcutMap
     readonly IReadOnlyList<AppShortcut> effective;
 
     public AppShortcutMap(IReadOnlyDictionary<string, Action> actions, IReadOnlyDictionary<string, string>? overrides = null,
-        IReadOnlyList<AppKeyBindingPref>? explicitRows = null)
+        IReadOnlyList<AppKeyBindingPref>? explicitRows = null, IEnumerable<KeyBinding>? legacyEngineBindings = null)
     {
         this.actions = new Dictionary<string, Action>(actions, StringComparer.Ordinal);
         effective = AppKeyBindings.BuildEffective(overrides, explicitRows);
+        if (explicitRows == null && legacyEngineBindings != null)
+        {
+            // Additive defaults cannot steal chords from a previously saved full engine replacement map.
+            KeyBinding[] legacy = legacyEngineBindings.Where(binding => binding.IsEnabled).ToArray();
+            effective = effective.Where(row => row.ActionName is not (OpenCommandPalette or ToggleDebugOverlay)
+                || overrides != null && overrides.TryGetValue(row.ActionName, out string? chord)
+                    && TryParseChord(chord, out _, out _, out _, out _)
+                || !legacy.Any(binding => row.Matches(binding.Key, binding.Ctrl, binding.Alt, binding.Shift))).ToArray();
+        }
     }
 
     /// <summary>Distinct app action names in the stable default order.</summary>

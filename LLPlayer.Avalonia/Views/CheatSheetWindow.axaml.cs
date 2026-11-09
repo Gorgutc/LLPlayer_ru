@@ -38,4 +38,10 @@ public partial class CheatSheetWindow : Window
     }
 
     void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    void OnRunClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: ShortcutRowViewModel row } && DataContext is CheatSheetViewModel model)
+            model.TryActivate(row, Close);
+    }
 }

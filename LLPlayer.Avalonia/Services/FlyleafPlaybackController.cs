@@ -129,6 +129,12 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         InitializePlaylistChoices();
         InitializeAudioSettings();
 
+        // Preserve loaded/default binding objects, chords and timing while routing the legacy toggle
+        // through the persisted owner shared by menu/palette execution.
+        foreach (KeyBinding binding in player.Config.Player.KeyBindings.Keys)
+            if (binding.Action == KeyBindingAction.ToggleVideoAcceleration)
+                binding.SetAction(ResolveEngineAction(binding.Action)!, binding.IsKeyUp);
+
         for (int i = 0; i < cueWatchers.Length; i++)
         {
             int slot = i;
@@ -529,7 +535,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
                 IsKeyUp = info.IsKeyUp,
                 IsEnabled = info.IsEnabled,
             };
-            binding.SetAction(keys.GetKeyBindingAction(info.Action), info.IsKeyUp);
+            binding.SetAction(ResolveEngineAction(info.Action)!, info.IsKeyUp);
             keys.Keys.Add(binding);
         }
     }
@@ -625,6 +631,9 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         if (name is nameof(Player.IsASRRunning) or nameof(Player.IsASRPaused)) Raise(nameof(RecognitionStatus));
         switch (name)
         {
+            case nameof(Player.IsRecording):
+                Raise(nameof(IsRecording));
+                break;
             case nameof(Player.CanPlay):
                 Raise(nameof(IsOpened));
                 break;

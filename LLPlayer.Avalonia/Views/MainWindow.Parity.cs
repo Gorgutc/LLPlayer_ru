@@ -31,7 +31,8 @@ public partial class MainWindow
         {
             playbackSettingsWindow.IsEnabled = false;
             await Task.WhenAll(playback.SaveCommand.ExecutionTask ?? Task.CompletedTask,
-                playback.RefreshDevicesCommand.ExecutionTask ?? Task.CompletedTask);
+                playback.RefreshDevicesCommand.ExecutionTask ?? Task.CompletedTask,
+                playback.RefreshVideoAdaptersCommand.ExecutionTask ?? Task.CompletedTask);
         }
         if (pluginOptionsWindow?.DataContext is PluginOptionsViewModel plugin)
             await (plugin.SaveCommand.ExecutionTask ?? Task.CompletedTask);

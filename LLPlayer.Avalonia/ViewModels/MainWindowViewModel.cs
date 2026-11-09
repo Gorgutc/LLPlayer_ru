@@ -448,22 +448,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(Shortcuts));
     }
 
-    AppShortcutMap CreateShortcutMap() => new(new Dictionary<string, Action>
-    {
-        [AppShortcutMap.ToggleSidebar] = ToggleSidebar,
-        [AppShortcutMap.ActivateSubsSearch] = ActivateSubsSearch,
-        [AppShortcutMap.OpenWindowCheatSheet] = ShowCheatSheet,
-        [AppShortcutMap.SubsSizeIncrease] = IncreaseSubtitleSize,
-        [AppShortcutMap.SubsSizeDecrease] = DecreaseSubtitleSize,
-        [AppShortcutMap.SubsPositionUp] = SubtitlesUp,
-        [AppShortcutMap.SubsPositionDown] = SubtitlesDown,
-        [AppShortcutMap.SubsPrimaryTextCopy] = CopyPrimaryText,
-        [AppShortcutMap.OpenSubtitles] = () => _ = OpenSubtitlesAsync(),
-        [AppShortcutMap.ToggleTheme] = ToggleTheme,
-        [AppShortcutMap.OpenWindowSettings] = ShowSettings,
-        [AppShortcutMap.OpenWindowWordManager] = ShowWordManager,
-        [AppShortcutMap.OpenWindowSubsExporter] = ShowSubtitlesExport,
-    }, prefs.AppShortcutOverrides, prefs.AppKeyBindings);
+    AppShortcutMap CreateShortcutMap() => new(CreateAppActions(), prefs.AppShortcutOverrides, prefs.AppKeyBindings,
+        prefs.EngineKeysCustomized ? EngineRows(EngineKeyBindings.FromPrefs(prefs.EngineKeyBindings)) : null);
     public IPlaybackController Player => player;
     public AppPrefs Prefs => prefs;
 
@@ -1393,6 +1379,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (e.PropertyName == "RecognitionStatus") OnPropertyChanged(nameof(RecognitionStatus));
         switch (e.PropertyName)
         {
+            case "VideoBackendPreferences":
+            case nameof(IPlaybackController.IsRecording):
+                RefreshServiceCommandState();
+                break;
             case nameof(IPlaybackController.CurTime):
                 SyncTime();
                 break;

@@ -31,13 +31,16 @@ $cpu = @('ggml-base-whisper.dll','ggml-cpu-whisper.dll','ggml-whisper.dll','whis
 $native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxruntime.dll','onnxruntime_providers_shared.dll','e_sqlite3.dll','soft_oal.dll',
     'lib/7z.dll','runtimes/win-x64/leptonica-1.85.0.dll','runtimes/win-x64/tesseract55.dll') +
     @($cpu | ForEach-Object { 'runtimes/win-x64/' + $_ }) + @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
+$windowsMediaAssemblies = @('Vortice.DXGI.dll','Vortice.MediaFoundation.dll','Vortice.DirectX.dll',
+    'Vortice.Mathematics.dll','SharpGen.Runtime.dll','SharpGen.Runtime.COM.dll')
 $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
     'FlyleafLib.dll','LLPlayer.Core.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll',
     'licenses/Tesseract.LICENSE','licenses/Leptonica.LICENSE','licenses/SevenZip.LICENSE','licenses/SevenZipSharp.LICENSE',
+    'licenses/Vortice.Windows.LICENSE','licenses/Vortice.Mathematics.LICENSE','licenses/SharpGen.Runtime.LICENSE',
     'Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
     'LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
     'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
-    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native
+    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native + $windowsMediaAssemblies
 foreach ($relative in $required) {
     $path = Join-Path $root $relative
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Windows Avalonia package is missing required file $relative." }
@@ -78,6 +81,9 @@ foreach ($item in $items) {
     $name = $item.Name
     if ($name -match '^YoutubeDL\.(dll|pdb)$' -and $relative -notin @('Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb')) {
         throw "Windows Avalonia package contains misplaced plugin payload $relative."
+    }
+    if ($name -match '^(Vortice|SharpGen)\..*\.dll$' -and $windowsMediaAssemblies -notcontains $relative) {
+        throw "Windows Avalonia package contains an unexpected Windows media dependency $relative."
     }
     if ($name -match '^(yt-dlp(\.exe|_linux.*)?|deno(\.exe)?|pdic-pipe(\.exe)?)$') { throw "Windows Avalonia package contains forbidden runtime helper $relative." }
     if ($name -match '^(yt-dlp|deno|pdic-pipe)([._-].*)?\.(zip|tar|tar\.gz|tar\.xz|tgz|7z)$' -or

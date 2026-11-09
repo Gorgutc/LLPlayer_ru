@@ -19,6 +19,9 @@
     <DataTemplate x:Key="DeviceChoice" x:DataType="s:AudioDeviceInfo">
       <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
     </DataTemplate>
+    <DataTemplate x:Key="VideoAdapterChoice" x:DataType="vm:PlaybackVideoAdapterChoice">
+      <TextBlock Text="{Binding Name}" TextWrapping="Wrap" />
+    </DataTemplate>
     <DataTemplate x:Key="LanguageEditor" x:DataType="vm:PlaybackLanguageEditor">
       <StackPanel Spacing="8">
         <TextBox Text="{Binding SearchText}" PlaceholderText="Search all languages…" AutomationProperties.Name="Search available languages" />
@@ -73,7 +76,7 @@
       <TabItem Header="Video">
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
           <StackPanel Spacing="12" Margin="4,14,8,8">
-            <TextBlock Text="Software video" FontWeight="SemiBold" />
+            <TextBlock Text="Video processing" FontWeight="SemiBold" />
             <TextBlock Text="Aspect ratio" />
             <ComboBox Name="AspectRatioEditor" ItemsSource="{Binding AspectRatios}" SelectedItem="{Binding Draft.AspectRatio}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Custom aspect ratio (positive width:height)" />
@@ -101,17 +104,31 @@
                 <Button Name="ResetViewportButton" Content="Reset viewport" Command="{Binding ResetViewportCommand}" Classes="outline" HorizontalAlignment="Left" />
               </StackPanel>
             </Expander>
-            <Expander Header="Hardware capabilities">
+            <Expander Header="Video backends" IsExpanded="True">
               <StackPanel Spacing="8">
+                <TextBlock Text="Hardware decoding" FontWeight="SemiBold" />
+                <CheckBox Name="HardwareAccelerationEditor" Content="Request hardware video decoding" IsChecked="{Binding VideoHardwareAccelerationEnabled}" />
+                <TextBlock Text="Hardware decoder" />
+                <ComboBox Name="HardwareDecodeModeEditor" ItemsSource="{Binding HardwareDecodeModes}" SelectedItem="{Binding VideoHardwareDecodeMode}" HorizontalAlignment="Stretch" AutomationProperties.Name="Hardware video decoder" />
+                <TextBlock Text="Native video device" />
+                <ComboBox Name="VideoAdapterEditor" ItemsSource="{Binding VideoAdapterChoices}" SelectedItem="{Binding SelectedVideoAdapter}"
+                          ItemTemplate="{StaticResource VideoAdapterChoice}" HorizontalAlignment="Stretch" AutomationProperties.Name="Native video decode device" />
+                <TextBlock Text="{Binding VideoAdapterAvailability}" TextWrapping="Wrap" Classes="small muted" />
+                <Button Name="RefreshVideoAdaptersButton" Content="Refresh video adapters" Classes="outline" Command="{Binding RefreshVideoAdaptersCommand}" HorizontalAlignment="Left" />
+                <CheckBox Name="AllowProfileMismatchEditor" Content="Allow hardware decoder profile mismatch" IsChecked="{Binding Draft.AllowProfileMismatch}" />
+                <TextBlock Text="Save applies decode preferences on the next decoder open. It keeps the current media, position and playback state. Turning decoding off retains your backend and device choices." TextWrapping="Wrap" Classes="small muted" />
+                <TextBlock Text="{Binding VideoDecodeRequest}" TextWrapping="Wrap" Classes="small muted" />
+                <TextBlock Name="VideoDecodeRuntimeStatus" Text="{Binding VideoDecodeStatus}" TextWrapping="Wrap" />
+                <TextBlock Name="VideoDecodePendingStatus" Text="{Binding VideoDecodePendingStatus}" TextWrapping="Wrap" Classes="small muted" />
+                <Separator />
+                <TextBlock Text="Video presentation" FontWeight="SemiBold" />
+                <ComboBox Name="VideoPresentationModeEditor" ItemsSource="{Binding PresentationModes}" SelectedItem="{Binding VideoPresentationMode}" HorizontalAlignment="Stretch" AutomationProperties.Name="Video presentation mode" />
+                <TextBlock Text="OpenGL is an explicit request and may fall back to Software. Presentation changes apply after a successful Save." TextWrapping="Wrap" Classes="small muted" />
+                <TextBlock Text="{Binding VideoPresentationRequest}" TextWrapping="Wrap" Classes="small muted" />
+                <TextBlock Name="VideoPresentationRuntimeStatus" Text="{Binding VideoPresentationStatus}" TextWrapping="Wrap" />
+                <Button Name="UpdateVideoBackendStatusButton" Content="Update runtime status" Classes="outline" Command="{Binding UpdateVideoBackendStatusCommand}" HorizontalAlignment="Left" />
+                <Separator />
                 <TextBlock Text="{Binding HardwareCapabilityReason}" TextWrapping="Wrap" Classes="small muted" />
-                <CheckBox Name="HardwareAccelerationEditor" Content="Hardware video acceleration" IsChecked="False" IsEnabled="False" />
-                <CheckBox Content="Allow hardware decoder profile mismatch" IsChecked="False" IsEnabled="False" />
-                <CheckBox Content="Super resolution" IsChecked="False" IsEnabled="False" />
-                <CheckBox Content="VSync control" IsChecked="False" IsEnabled="False" />
-                <ComboBox SelectedIndex="0" IsEnabled="False" HorizontalAlignment="Stretch" AutomationProperties.Name="Video processor, software only">
-                  <ComboBoxItem Content="Software (swscale)" />
-                </ComboBox>
-                <TextBlock Text="D3D noise reduction, edge enhancement, anamorphic scaling and stereo adjustment are unavailable." TextWrapping="Wrap" Classes="small muted" />
               </StackPanel>
             </Expander>
           </StackPanel>
