@@ -2,6 +2,30 @@
 
 This document freezes current config, persistence, and local data decisions from `main`.
 
+## Portable media requests and service commands — owner-approved SECOND, resumed 2026-11-03
+
+The existing `LLPlayer.Playback.json` owner adds `VideoHardwareAccelerationEnabled=false`,
+`VideoHardwareDecodeMode=Automatic`, `VideoHardwareDevice=""` and `VideoPresentationMode=Software`.
+Portable engine defaults are `PortableDecodeMode=Software` and `PortableHardwareDevice=""`.
+The legacy `VideoAcceleration` bit retains its original/default value on disabled/startup/unrelated saves;
+only an explicit enabled request may ensure it is true. Disable selects Software and retains backend/device.
+Cross-OS or unavailable selections remain visible; failure never rewrites the saved request.
+`VideoHardwareDevice` stores the stable catalog adapter ID. Native selectors (a Windows adapter index or Linux
+render node) are resolved from that identity at actual decoder open and are not persisted as adapter identity.
+Fresh per-field merge and persistence precede config/live publication. All hardware toggle entry points
+share one admitted owner computing the inverse inside the queue. Decode changes apply at the next real codec
+open without reopening media or disturbing audio/subtitle/session state. Presentation selection may apply live
+through a posted UI callback. Runtime effective/pending/fallback state is separate and is not serialized.
+
+Ctrl+K palette and Ctrl+Shift+D debug are appended app defaults. Existing explicit bindings retain precedence;
+implicit new defaults must not take an existing customized engine chord, including in the settings editor and
+an unrelated Save. Explicit Reset/rebind retains normal collision validation. No hardware-toggle chord is added.
+Palette/help engine rows come from enabled current bindings; keyboard help does not fabricate keys for unbound
+operations. New/Clone/Restart use ArgumentList and an explicit `--` positional terminator. Debug/capture snapshots,
+catalog epochs, format selections, process state and GL/native objects remain runtime-only. Ordinary settings
+load/save and snapshot getters do not probe hardware/cameras/providers or install resources. WPF files/defaults
+and existing FFmpeg Filters startup profile are unchanged; capture requires an explicit All-profile restart.
+
 ## Shared recognition, batch and dubbing state — owner-approved 2026-11-02
 
 The [first coordinated language delivery](plans/2026-11-02-f13-language-workflows.md) keeps the existing

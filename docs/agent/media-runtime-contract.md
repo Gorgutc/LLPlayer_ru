@@ -1,5 +1,28 @@
 # Media Runtime Contract
 
+## Portable backends and commands — owner-approved SECOND, resumed 2026-11-03
+
+Shared Avalonia uses one Windows/Linux host. Software decode/presentation remain defaults. Opt-in D3D11VA/VAAPI
+uses actual FFmpeg hardware config/device/frame negotiation; hardware frames are downloaded to owned CPU
+frames with copied properties before existing cache/snapshot/filter admission. Requested, initialized and
+effective state remain distinct. Failure falls back through the existing decoder owner outside FFmpeg callbacks;
+bounded recovery must retain usable picture/timestamp state rather than discard a final GOP. WPF paths stay supported.
+
+OpenGL presentation accepts owned/copied 8-bit YUV420/NV12 planes only at the existing timed Present boundary.
+Early conversion retains an AVFrame reference; no borrowed preprocessor pointer survives to presentation.
+The bounded mailbox invalidates old generations on clear/detach/context loss. GL calls occur only in Avalonia GL
+callbacks to its supplied FBO. Unsupported colour/HDR/high-depth/context paths retain truthful software fallback;
+snapshots keep the existing native-resolution CPU source. This is shader presentation, without a zero-copy,
+native HDR, D3D video-processor, vendor enhancement or VSync equivalence claim.
+
+Capture refresh is explicit and gated by actual loaded All-profile avdevice support. Native IDs and exact rational
+format DTOs carry catalog epochs; stale/forged full tokens are rejected inside serialized admission before media
+epoch/translation/open mutation. Windows MF and Linux x64 V4L2 adapters query only the selected device. Native
+work without cancellation APIs drains before teardown. Additive escaped `capturefmt://` preserves Unicode/options
+and all legacy `fmt://` inputs. Audio/video capture replaces the selected media using the existing open owner;
+recording/snapshot remain existing remux/image commands. New service windows and process commands reuse the
+existing explicit shutdown/drain owner. Full-F13 native/CU acceptance awaits separate owner agreement.
+
 This document freezes runtime boundaries and high-risk invariants from `main`.
 
 ## Shared recognition and language workflows — owner-approved 2026-11-02

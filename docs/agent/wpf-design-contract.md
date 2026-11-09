@@ -1,5 +1,21 @@
 # WPF Design Contract
 
+## Additive shared Avalonia service UI — owner-approved SECOND, resumed 2026-11-03
+
+WPF layout/theme/commands stay supported. The shared Windows/Linux host adds owned palette/About/debug/capture
+windows and complete Keyboard/Mouse help using its existing theme. Palette selection/filter/Enter/double-click/
+Escape are lifecycle-safe; activation closes the palette before another singleton opens. Keyboard rows reflect
+enabled effective bindings and execute actual owners. Capture/settings native refresh tasks are drained before
+explicit quit/restart, including a pending adapter refresh. Requested hardware selection is visibly separate from
+actual initialized/effective mode and unavailable reasons; no driver probe runs when a snapshot/dialog opens.
+
+Shared video input preserves existing click/double-click/wheel preferences and adds WPF-owner auxiliary buttons,
+primary-enabled middle cue seek, Ctrl+middle reset, physical-cursor Ctrl+wheel zoom, relative Ctrl+drag pan,
+Shift+wheel subtitle position and Ctrl+Shift+wheel subtitle size. Right/Ctrl+left menu actions keep the menu open
+and execute once. Existing word selection/modifier preferences, overlay/sidebar/source boundaries and modal key
+suppression remain. This is an implementation contract, not new visual/native acceptance; full-F13 Computer Use
+requires separate owner agreement.
+
 This document freezes the current WPF/UI design decisions from `main`.
 
 ## Visual Style

@@ -1,5 +1,23 @@
 # Product Behavior Contract
 
+## Shared Commands/service screens + Media backends — owner-approved SECOND, resumed 2026-11-03
+
+One coordinated F-13 block adds an executable command palette, executable Keyboard/Mouse help, About,
+managed live player diagnostics, New/Clone/Restart, actual existing Record/Snapshot/hardware menu commands,
+and explicit audio/video capture selection. They reuse existing application/engine owners and lifecycle drain;
+the palette closes before activation and does not simulate keys. Enabled effective engine bindings own engine
+rows. Explicit unbound Record/Snapshot/hardware operations are discoverable only when no engine binding row
+exists for that action; disabled-only rows are not bypassed by aliases. F1 Keyboard lists actual enabled chords.
+Mouse guidance reflects live preferences and actual handlers. URL-shaped diagnostics must redact credentials,
+query and fragment in both source and title. Process spawn failure leaves the current instance running.
+
+Portable hardware decode and planar GL presentation are opt-in with separate requested/effective/pending/fallback
+status and unchanged software defaults. Capture discovery is explicit, requires actual All-profile support, and
+uses canonical device/format epochs with safe escaped input. Existing remux recording and native-resolution
+snapshot owners remain. WPF, current user defaults and prior F-13 workflows remain supported. This source scope
+does not establish physical input/audio/GPU/camera/model/provider acceptance. The owner separately deferred
+full-F13 Computer Use/native acceptance on 2026-11-03; no new F cards or platform packaging are introduced.
+
 This document freezes the current user-facing behavior from `main`. Future work should change only the requested surface and preserve unrelated behavior.
 
 ## Additive Avalonia Settings, Subtitles/words and Playlists/online video — owner-approved 2026-11-02

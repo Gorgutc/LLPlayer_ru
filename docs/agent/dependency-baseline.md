@@ -5,7 +5,7 @@ This document freezes current dependency decisions from `main`.
 ## Project Targets
 
 - `LLPlayer`: `net10.0-windows10.0.18362.0`, `WinExe`, WPF, `win-x64`.
-- `FlyleafLib`: `net10.0-windows10.0.18362.0`, WPF and Windows Forms enabled; plus portable `net10.0` for Linux (F-13) without WPF, Windows Forms, or Vortice.
+- `FlyleafLib`: `net10.0-windows10.0.18362.0`, WPF and Windows Forms enabled; plus portable `net10.0` for Windows/Linux (F-13) without WPF or Windows Forms. Only the Windows portable adapter closure below uses Vortice.
 - `WpfColorFontDialog`: `net10.0-windows10.0.18362.0`, WPF.
 - `Plugins/YoutubeDL`: `net10.0-windows10.0.18362.0;net10.0`; the original WPF `win-x64` profile remains separate from the portable Windows/Linux plugin.
 - `FlyleafLibTests`: xUnit test project targeting `net10.0-windows10.0.18362.0` (on Linux build hosts it also builds and runs `net10.0`).
@@ -57,7 +57,22 @@ Runtime-sensitive package versions are part of the frozen baseline:
 | `FlyleafLibTests` | `xunit.v3` | `3.2.2` |
 | `FlyleafLibTests` | `xunit.runner.visualstudio` | `3.1.5` |
 
-## Shared recognition and language-workflow adapters — owner-approved 2026-11-02
+## Portable media adapters — owner-approved SECOND block, resumed 2026-11-03
+
+Portable Windows adds only `Vortice.DXGI` and `Vortice.MediaFoundation` at the existing `3.7.6-beta` pin.
+Their managed closure is `Vortice.DirectX` 3.7.6-beta, `Vortice.Mathematics` 1.9.3 and
+`SharpGen.Runtime`/`SharpGen.Runtime.COM` 2.4.2-beta. References and `PORTABLE_WINDOWS` compile sources apply to
+explicit win-x64, or an empty RID on a Windows host; explicit linux-x64 wins over the build host. WPF references
+and release packaging remain unchanged. The portable Windows package requires exactly those six root DLLs and
+three complete upstream MIT license files; its publisher verifies selected restore versions/source hashes.
+Linux rejects Vortice/SharpGen assemblies and Windows adapter licenses recursively. Native FFmpeg/ANGLE versions
+are unchanged; no new GPU library, driver, capture tool, model or helper executable is bundled.
+
+The opt-in D3D11VA/VAAPI path uses existing FFmpeg APIs. OpenGL uses existing Avalonia.OpenGL/ANGLE.
+Windows capture formats use a small lazy MF adapter; Linux uses x64 V4L2. A package/catalog success does not
+establish driver/device/shader acceptance. Full F-13 Computer Use is deferred to separate owner agreement.
+
+## Shared recognition and language-workflow adapters — owner-approved 2026-11-02 (prior block)
 
 The [language-workflows plan](plans/2026-11-02-f13-language-workflows.md) retains one `net10.0` Avalonia host
 and portable Flyleaf/Core on Windows and Linux. Windows-only RID conditions add the same pinned SDK projection,
