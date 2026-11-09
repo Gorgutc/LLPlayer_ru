@@ -1,0 +1,33 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+        x:Class="LLPlayer.Avalonia.Views.PlayerDebugWindow" x:DataType="vm:PlayerDebugViewModel"
+        Classes="dialog" Title="Player diagnostics — LLPlayer" Width="720" Height="620"
+        MinWidth="420" MinHeight="300" WindowStartupLocation="CenterOwner">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,12">
+      <TextBlock Text="Player diagnostics" Classes="dialog-title" />
+      <TextBlock Text="Current playback state. Network credentials and query strings are omitted." Classes="dialog-description" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,12,0,0">
+      <Button Content="Copy diagnostics" Classes="outline" Click="OnCopyClick" />
+      <Button Content="Close" Click="OnCloseClick" />
+    </StackPanel>
+    <ScrollViewer>
+      <StackPanel Spacing="12">
+        <SelectableTextBlock Text="{Binding Snapshot.Status, StringFormat='Playback: {0}'}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Snapshot.MediaTitle, StringFormat='Title: {0}'}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Snapshot.MediaSource, StringFormat='Source: {0}'}" Classes="mono xs" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Snapshot.Position, StringFormat='Position: {0}'}" />
+        <TextBlock Text="{Binding Snapshot.Duration, StringFormat='Duration: {0}'}" />
+        <TextBlock Text="{Binding Snapshot.IsRecording, StringFormat='Recording: {0}'}" />
+        <SelectableTextBlock Text="{Binding Snapshot.Video, StringFormat='Video: {0}'}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Snapshot.Audio, StringFormat='Audio: {0}'}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Snapshot.Subtitles, StringFormat='Subtitles: {0}'}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Snapshot.Renderer, StringFormat='Renderer: {0}'}" TextWrapping="Wrap" />
+        <SelectableTextBlock Text="{Binding Snapshot.Hardware, StringFormat='Decode: {0}'}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Direct3DStatus}" Classes="small muted" TextWrapping="Wrap" />
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

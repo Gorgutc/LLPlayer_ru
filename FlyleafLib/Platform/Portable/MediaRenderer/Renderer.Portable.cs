@@ -48,6 +48,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
         SwapChain   = new(this);
         FillPlanes  = SwFillPlanes;
 
+        UpdateDecodeRequest();
         SetupLocal();
     }
 
@@ -114,17 +115,6 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
     /// frames (negative line size) are read upright by swscale and need no extra flip.
     /// </summary>
     public bool                 VFlip           => ucfg.vflip;
-    #endregion
-
-    #region Hardware decoding hooks (never active: the portable build decodes in software)
-    internal AVBufferRef*       ffDevice        => null;
-    internal AVBufferRef*       ffFrames        => null;
-    internal HWFramesInfo       ffFramesInfo    = new();
-    internal HWTextureDesc      ffTextureDesc   = new();
-    internal bool ConfigHWFrames() => false;
-
-    internal struct HWFramesInfo    { public AVCodecID CodecId; }
-    internal struct HWTextureDesc   { public uint Width, Height; }
     #endregion
 
     #region Setup / Reset / Dispose
@@ -220,6 +210,8 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
                 try { surface?.ClearFrame(); } catch (Exception e) { Log.Warn($"[Dispose] Surface clear failed ({e.Message})"); }
             }
 
+            ReleasePortableHardwareResources();
+
             if (CanInfo) Log.Info("Disposed");
         }
     }
@@ -233,6 +225,9 @@ public unsafe partial class Renderer : NotifyPropertyChanged, IVP
 
     VideoFrame SwFillPlanes(ref AVFrame* frame)
     {
+        if (!TransferHardwareFrame(frame))
+            return null;
+
         var stream = scfg ?? VideoDecoder.VideoStream;
 
         VideoFrame mFrame = new()

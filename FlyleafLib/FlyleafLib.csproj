@@ -74,6 +74,15 @@
   </ItemGroup>
 
   <!-- Portable replacements live under Platform/Portable and are compiled only for the portable TFM. -->
+  <PropertyGroup Condition="'$(TargetFramework)'=='net10.0' and ('$(RuntimeIdentifier)'=='win-x64' or ('$(RuntimeIdentifier)'=='' and $([MSBuild]::IsOSPlatform('Windows'))))">
+    <DefineConstants>$(DefineConstants);PORTABLE_WINDOWS</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)'=='net10.0' and ('$(RuntimeIdentifier)'=='win-x64' or ('$(RuntimeIdentifier)'=='' and $([MSBuild]::IsOSPlatform('Windows'))))">
+    <!-- Narrow native adapter bindings; no WPF renderer or XAudio host is imported. -->
+    <PackageReference Include="Vortice.DXGI" Version="3.7.6-beta" />
+    <PackageReference Include="Vortice.MediaFoundation" Version="3.7.6-beta" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0'">
     <Compile Remove="Platform\Portable\**" />
   </ItemGroup>

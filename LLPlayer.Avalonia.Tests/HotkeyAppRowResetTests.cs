@@ -8,7 +8,7 @@ namespace LLPlayer.Avalonia.Tests;
 public class HotkeyAppRowResetTests
 {
     [AvaloniaFact]
-    public void Resetting_the_last_cloned_action_is_draft_only_and_can_be_discarded_or_saved()
+    public void Resetting_a_cloned_theme_preserves_later_defaults_and_is_draft_only_until_saved()
     {
         using TempDir temp = new();
         PrefsStore store = new(Path.Combine(temp.Path, "prefs.json"));
@@ -24,12 +24,18 @@ public class HotkeyAppRowResetTests
         string originalDisk = File.ReadAllText(store.Path);
 
         SettingsViewModel discarded = main.CreateSettings();
-        ShortcutEditRow clone = CloneLastTheme(discarded);
+        int themeIndex = discarded.ShortcutRows.IndexOf(discarded.ShortcutRows.Single(row => row.ActionName == "ToggleTheme"));
+        var untouched = discarded.ShortcutRows.Where(row => row.ActionName != "ToggleTheme")
+            .Select(row => (Row: row, row.Chord, row.IsEnabled, row.IsKeyUp)).ToArray();
+        ShortcutEditRow clone = CloneTheme(discarded);
         Exception? failure = Record.Exception(() => clone.ResetCommand.Execute(null));
         Assert.Null(failure);
-        Assert.Equal(11, discarded.ShortcutRows.Count);
-        Assert.Equal("ToggleTheme", discarded.ShortcutRows[^1].ActionName);
-        Assert.Equal("Ctrl+Shift+T", discarded.ShortcutRows[^1].Chord);
+        Assert.Equal(13, discarded.ShortcutRows.Count);
+        Assert.Equal("ToggleTheme", discarded.ShortcutRows[themeIndex].ActionName);
+        Assert.Equal("Ctrl+Shift+T", discarded.ShortcutRows[themeIndex].Chord);
+        Assert.Single(discarded.ShortcutRows, row => row.ActionName == "ToggleTheme");
+        Assert.Equal(untouched, discarded.ShortcutRows.Where(row => row.ActionName != "ToggleTheme")
+            .Select(row => (Row: row, row.Chord, row.IsEnabled, row.IsKeyUp)));
         Assert.Equal(0, saves);
         Assert.Equal(originalDisk, File.ReadAllText(store.Path));
         Assert.Same(originalMap, main.Shortcuts);
@@ -38,7 +44,7 @@ public class HotkeyAppRowResetTests
         Assert.Null(prefs.AppKeyBindings);
 
         SettingsViewModel committed = main.CreateSettings();
-        CloneLastTheme(committed).ResetCommand.Execute(null);
+        CloneTheme(committed).ResetCommand.Execute(null);
         committed.SaveCommand.Execute(null);
         Assert.Null(committed.Error);
         Assert.Equal(1, saves);
@@ -49,6 +55,7 @@ public class HotkeyAppRowResetTests
         {
             "SubsPositionUp", "SubsPositionDown", "SubsSizeIncrease", "SubsSizeDecrease", "SubsPrimaryTextCopy",
             "ActivateSubsSearch", "ToggleSidebar", "OpenWindowCheatSheet", "OpenWindowCheatSheet", "OpenSubtitles", "ToggleTheme",
+            "OpenCommandPalette", "ToggleDebugOverlay",
         }, afterReload.ShortcutRows.Select(row => row.ActionName));
         AssertDualCheatSheetDefaults(afterReload);
         Assert.NotNull(main.Shortcuts.Find(WpfKey.T, true, false, true));
@@ -107,13 +114,17 @@ public class HotkeyAppRowResetTests
             Assert.Null(main.Shortcuts.Find(retired, false, false, false));
     }
 
-    static ShortcutEditRow CloneLastTheme(SettingsViewModel draft)
+    static ShortcutEditRow CloneTheme(SettingsViewModel draft)
     {
-        ShortcutEditRow theme = draft.ShortcutRows[^1];
-        Assert.Equal("ToggleTheme", theme.ActionName);
+        ShortcutEditRow[] original = [.. draft.ShortcutRows];
+        ShortcutEditRow theme = Assert.Single(original, row => row.ActionName == "ToggleTheme");
+        int index = draft.ShortcutRows.IndexOf(theme);
         theme.CloneCommand.Execute(null);
-        ShortcutEditRow clone = draft.ShortcutRows[^1];
+        ShortcutEditRow clone = draft.ShortcutRows[index + 1];
+        Assert.Equal("ToggleTheme", clone.ActionName);
         Assert.NotSame(theme, clone);
+        Assert.Equal(original.Take(index + 1), draft.ShortcutRows.Take(index + 1));
+        Assert.Equal(original.Skip(index + 1), draft.ShortcutRows.Skip(index + 2));
         clone.Chord = "F6";
         return clone;
     }

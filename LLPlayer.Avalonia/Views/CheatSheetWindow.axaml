@@ -2,20 +2,21 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
         xmlns:c="using:LLPlayer.Avalonia.Controls"
+        xmlns:s="using:LLPlayer.Avalonia.Services"
         x:Class="LLPlayer.Avalonia.Views.CheatSheetWindow"
         x:DataType="vm:CheatSheetViewModel"
         Classes="dialog"
-        Title="Keyboard shortcuts — LLPlayer"
+        Title="Keyboard and mouse — LLPlayer"
         SizeToContent="Manual" CanResize="True"
         Width="640" Height="720" MinWidth="420" MinHeight="360">
 
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
-      <TextBlock Classes="dialog-title" Text="Keyboard shortcuts" />
+      <TextBlock Classes="dialog-title" Text="Keyboard and mouse" />
       <TextBlock Classes="dialog-description"
-                 Text="Default LLPlayer bindings. Player actions come from the engine's key map; subtitle / window actions are app shortcuts." />
+                 Text="Current keyboard bindings and mouse gestures. Run an available keyboard action directly." />
       <Grid ColumnDefinitions="*,Auto" Margin="0,8,0,0">
-        <TextBox Name="SearchBox" PlaceholderText="Search shortcuts…" Text="{Binding FilterText}">
+        <TextBox Name="SearchBox" PlaceholderText="Search keyboard actions…" Text="{Binding FilterText}">
           <TextBox.InnerLeftContent>
             <c:LucideIcon Data="{StaticResource Icon.Search}" Size="14" Margin="10,0,0,0"
                           Foreground="{DynamicResource Shadcn.MutedForegroundBrush}" />
@@ -29,6 +30,8 @@
       <Button Content="Close" Classes="outline" Click="OnCloseClick" />
     </StackPanel>
 
+    <TabControl>
+      <TabItem Header="Keyboard">
     <ScrollViewer>
       <ItemsControl ItemsSource="{Binding Groups}">
         <ItemsControl.ItemTemplate>
@@ -39,7 +42,7 @@
                 <ItemsControl ItemsSource="{Binding Rows}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ShortcutRowViewModel">
-                      <Grid ColumnDefinitions="*,Auto" Margin="10,6">
+                      <Grid ColumnDefinitions="*,Auto,Auto" Margin="10,6">
                         <TextBlock Text="{Binding Description}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0" />
                         <ItemsControl Grid.Column="1" ItemsSource="{Binding Chords}">
                           <ItemsControl.ItemsPanel>
@@ -60,6 +63,8 @@
                             </DataTemplate>
                           </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        <Button Grid.Column="2" Content="Run" Classes="ghost" IsEnabled="{Binding CanExecute}"
+                                Click="OnRunClick" Margin="10,0,0,0" VerticalAlignment="Center" />
                       </Grid>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
@@ -70,5 +75,24 @@
         </ItemsControl.ItemTemplate>
       </ItemsControl>
     </ScrollViewer>
+      </TabItem>
+      <TabItem Header="Mouse">
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding MouseRows}" Margin="0,8,0,0">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="s:MouseHelpRow">
+                <Border Classes="card card-sm" Padding="12" Margin="0,0,0,8">
+                  <Grid ColumnDefinitions="190,*" RowDefinitions="Auto,Auto">
+                    <TextBlock Grid.ColumnSpan="2" Text="{Binding Group}" Classes="small muted" Margin="0,0,0,5" />
+                    <TextBlock Grid.Row="1" Text="{Binding Gesture}" TextWrapping="Wrap" Margin="0,0,12,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Description}" TextWrapping="Wrap" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </TabItem>
+    </TabControl>
   </DockPanel>
 </Window>

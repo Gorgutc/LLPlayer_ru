@@ -54,9 +54,10 @@ updates project references; shared source is not unchanged. F-13 also adds condi
 portable implementations, and bounded shared-code fixes. Keeping WPF shippable requires fresh verification.
 Windows and Linux Avalonia use:
 
-- **Portable FlyleafLib target (`net10.0`).** The D3D11 renderer, SwapChain, WPF controls/themes, MediaFoundation,
-  XAudio2, native Windows methods and the Windows OCR are excluded from this target; replacements live in
-  `FlyleafLib/Platform/Portable/` (compiled only there).
+- **Portable FlyleafLib target (`net10.0`).** The WPF D3D11 renderer/SwapChain, controls/themes and XAudio2 are
+  excluded; replacements live in `FlyleafLib/Platform/Portable/` (compiled only there). Conditional Windows
+  adapters use pinned DXGI/MediaFoundation managed interop for adapter/capture catalogs; Linux excludes that
+  closure. Windows OCR similarly has its own conditional adapter rather than the WPF implementation.
 - **Seams the host implements** (all in the portable target):
   - `IUIDispatcher` (`Utils.UIDispatcher`) — UI-thread marshalling for `Utils.UI*`; `IHostServices`
     (`Utils.HostServices`) — clipboard, file dialog, completion sound.
@@ -64,6 +65,9 @@ Windows and Linux Avalonia use:
     (deinterlaced, HDR tone-mapped, cropped, rotated/mirrored and colour-filtered by the renderer) at
     min(native, viewport) size per axis; the host only scales it into `Renderer.Viewport`. `Rotation`/`HFlip`/`VFlip`
     are informational and must not be applied again.
+  - `IVideoPlanarSurface` extends that same surface for opt-in, timed YUV420/NV12 presentation. The renderer
+    retains an owned pending AVFrame until Present; the Avalonia GL child copies bounded mailbox planes and
+    renders only in GL callbacks. Unsupported content/context retains software fallback and CPU snapshots.
   - `IAudioBackend` / `IAudioSink` (`AudioEngine.Backend`, set before `Engine.Start`) — OpenAL Soft on a desktop,
     `NullAudioSink` (real-time clock, silent) for headless runs and CI; `AudioBackendFactory.CreateDefault()` picks
     one and `LLPLAYER_AUDIO_BACKEND=null|openal|auto` forces the choice (the app calls it through
@@ -80,7 +84,9 @@ Windows and Linux Avalonia use:
   ViewModels and Themes. OS-specific differences belong in native loading, filesystem and host adapters.
   The Windows package uses the existing tracked FFmpeg DLLs and app-local OpenAL Soft 1.23.1, selected explicitly
   from `Silk.NET.OpenAL.Soft.Native`. Linux keeps its existing system OpenAL and separately fetched FFmpeg libraries.
-  Software (CPU BGRA) video is the current shared path; GPU and Windows ASR/OCR acceptance remain separate.
+  Software (CPU BGRA) remains the shared default. Optional FFmpeg D3D11VA/VAAPI decoding transfers owned CPU
+  frames before cache admission; planar OpenGL presentation is a separate opt-in. Next-open requests and
+  effective/pending/fallback state remain distinct. Native GPU/capture/ASR/OCR acceptance is separate.
 - **Tooling** — `scripts/linux/` and `.github/workflows/build-linux.yml`; additive
   `scripts/windows/verify-avalonia.ps1`, package-contract checks and `publish-avalonia.ps1`, run by the separate
   Windows Avalonia job in `.github/workflows/build.yml`. WPF verification and release packaging remain required.
@@ -127,8 +133,9 @@ the 2026-10-03 Linux-first deferral for future work; dated plans and receipts re
    migration, fuller settings, faster-whisper/batch, broader plugins and dubbing remain open. The owner-approved
    configured online-video block adds only explicit portable YoutubeDL admission and managed plugin delivery;
    turnkey helper bundling, broader plugin settings and native/live acceptance remain separate.
-5. Add GPU decode/render paths as separately measured and reviewed work. Linux software playback and the
-   Windows software baseline do not establish VAAPI, OpenGL, or Windows GPU behavior.
+5. Verify the optional GPU decode/render paths with actual devices after separate owner agreement. Their source
+   implementation, Linux software playback and Windows software baseline do not establish native VAAPI,
+   OpenGL or Windows GPU behavior. Software remains the default.
 6. Obtain native desktop acceptance on both operating systems for the relevant feature set, including playback,
    audio, subtitles, settings/data preservation, and shutdown. WSL/Linux verification is useful additional evidence;
    it does not substitute for native Windows Avalonia runtime acceptance.

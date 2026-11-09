@@ -153,6 +153,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             cueSyncPointerPress = cueSyncKeyboardPress = null;
             transportRevealPress = null;
             transportRevealSequence = false;
+            ClearVideoPointerGesture();
             ClearTransportPointer();
             vm?.LoseKeyboardContext();
         };
@@ -181,6 +182,10 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         VideoHost.DoubleTapped += OnVideoDoubleTapped;
         VideoHost.Tapped += OnVideoTapped;
         VideoHost.PointerWheelChanged += OnVideoWheel;
+        VideoHost.AddHandler(PointerPressedEvent, OnVideoPointerPressed, RoutingStrategies.Tunnel);
+        VideoHost.AddHandler(PointerReleasedEvent, OnVideoPointerReleased, RoutingStrategies.Tunnel);
+        VideoHost.AddHandler(PointerMovedEvent, OnVideoPointerMoved, RoutingStrategies.Tunnel);
+        VideoHost.PointerCaptureLost += (_, _) => ClearVideoPointerGesture();
         VideoContextMenu.Opening += (_, _) => { vm?.CancelAppShortcuts(); vm?.RefreshTracks(); vm?.RefreshPlaybackChoices(); };
         VideoHost.AddHandler(ContextRequestedEvent, OnVideoContextRequested, RoutingStrategies.Tunnel);
         WordPopupCard.SizeChanged += (_, _) => PositionWordPopup();
@@ -215,7 +220,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         };
 
         idleTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(500) };
-        idleTimer.Tick += (_, _) => vm?.UpdateIdle();
+        idleTimer.Tick += (_, _) => { vm?.UpdateIdle(); RefreshServiceWindows(); };
     }
 
     public MainWindowViewModel? ViewModel => vm;
@@ -281,7 +286,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             return;
         }
 
-        cheatSheet = new CheatSheetWindow(new CheatSheetViewModel(cheatSheetRows()));
+        cheatSheet = new CheatSheetWindow(vm == null ? new CheatSheetViewModel(cheatSheetRows())
+            : new CheatSheetViewModel(vm.BuildExecutableCommands(), vm.Prefs));
         OwnKeyboardSurface(cheatSheet);
         cheatSheet.Closed += (_, _) => cheatSheet = null;
         if (IsVisible)
@@ -306,6 +312,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         foreach (WordMenuInvocation invocation in invocations)
         {
             MenuItem item = new() { Header = invocation.Action.Title };
+            SetKeepOpenGestures(item, true);
             item.Click += (_, _) => owner.TrackBrowserOperation(owner.InvokeWordMenuAsync(invocation));
             menu.Items.Add(item);
         }
@@ -408,6 +415,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             if (translationWindow?.DataContext is TranslationViewModel translation)
                 await translation.DrainDiagnosticsAsync();
             if (vm != null) await vm.DrainBrowserOperationsAsync();
+            await DrainServiceWindowsAsync();
             await DrainParityWindowsAsync();
             await DrainLanguageWindowsAsync();
             await ShutdownRequested!();
@@ -434,6 +442,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         translationWindow?.Close();
         onlineVideoWindow?.Close();
         recognitionWindow?.Close();
+        CloseServiceWindows();
         subtitlesExportWindow?.Close();
         CloseParityWindows();
         CloseLanguageWindows();
@@ -524,8 +533,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         switch (e.PropertyName)
         {
             case nameof(MainWindowViewModel.Shortcuts):
-                if (cheatSheet?.DataContext is CheatSheetViewModel current)
-                    cheatSheet.DataContext = new CheatSheetViewModel(cheatSheetRows()) { FilterText = current.FilterText };
+                RefreshExecutableViewers();
                 break;
             case nameof(MainWindowViewModel.SubtitleBottomOffset):
             case nameof(MainWindowViewModel.SubtitleWidthPercent):
@@ -754,7 +762,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     void OnVideoTapped(object? sender, TappedEventArgs e)
     {
         // Subtitle selection, popup contents and controls retain their own pointer actions.
-        if (vm == null || keys.Modifiers != KeyModifiers.None || !IsVideoBackground(e.Source))
+        if (vm == null || suppressVideoTap || keys.Modifiers != KeyModifiers.None || !IsVideoBackground(e.Source))
             return;
         if (transportRevealPress != null)
         {
@@ -781,7 +789,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnVideoDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (vm == null || !vm.MouseDoubleClickToFullScreen || transportRevealPress != null)
+        if (vm == null || suppressVideoTap || keys.Modifiers != KeyModifiers.None || !vm.MouseDoubleClickToFullScreen || transportRevealPress != null)
             return;
         if (e.Source is Visual src && (src.FindAncestorOfType<Button>(true) != null || src.FindAncestorOfType<SubtitleText>(true) != null
                                        || WordPopupCard.IsPointerOver))
@@ -791,9 +799,29 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     void OnVideoWheel(object? sender, PointerWheelEventArgs e)
     {
-        if (vm == null || !vm.MouseWheelToVolumeUpDown || e.Delta.Y == 0)
+        if (vm == null || e.Delta.Y == 0)
             return;
-        vm.Volume += e.Delta.Y > 0 ? 5 : -5;
+        bool up = e.Delta.Y > 0;
+        bool control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        if (control && shift)
+        {
+            if (up) vm.IncreaseSubtitleSizeCommand.Execute(null);
+            else vm.DecreaseSubtitleSizeCommand.Execute(null);
+        }
+        else if (control)
+        {
+            Point cursor = e.GetPosition(Video);
+            vm.Player.ZoomVideoAt(up, cursor.X * RenderScaling, cursor.Y * RenderScaling);
+        }
+        else if (shift)
+        {
+            if (up) vm.SubtitlesUpCommand.Execute(null);
+            else vm.SubtitlesDownCommand.Execute(null);
+        }
+        else if (vm.MouseWheelToVolumeUpDown)
+            vm.Volume += up ? 5 : -5;
+        else return;
         e.Handled = true;
     }
 

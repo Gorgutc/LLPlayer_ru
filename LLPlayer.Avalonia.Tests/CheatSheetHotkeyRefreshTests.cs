@@ -25,10 +25,11 @@ public class CheatSheetHotkeyRefreshTests
             model.ShowCheatSheet();
             Dispatcher.UIThread.RunJobs();
             CheatSheetWindow sheet = GetSheet(main);
+            AssertCurrentKeyboardRows(GetModel(sheet));
             TextBox search = sheet.FindControl<TextBox>("SearchBox")!;
             search.Text = "Ctrl+B";
             Dispatcher.UIThread.RunJobs();
-            GetModel(sheet).HitText.Should().Be("1 of 11");
+            GetModel(sheet).HitText.Should().Be("1 of 13");
             VisibleKeyCaps(sheet).Should().Equal("Ctrl", "B");
 
             SettingsViewModel draft = model.CreateSettings();
@@ -41,14 +42,14 @@ public class CheatSheetHotkeyRefreshTests
             sheet.IsVisible.Should().BeTrue();
             search.Text.Should().Be("Ctrl+B");
             GetModel(sheet).FilterText.Should().Be("Ctrl+B");
-            GetModel(sheet).HitText.Should().Be("0 of 11", "the old chord no longer matches after Save");
+            GetModel(sheet).HitText.Should().Be("0 of 13", "the old chord no longer matches after Save");
             GetModel(sheet).Groups.Should().BeEmpty();
             VisibleKeyCaps(sheet).Should().BeEmpty();
 
             search.Text = "Ctrl+Shift+B";
             Dispatcher.UIThread.RunJobs();
-            GetModel(sheet).HitText.Should().Be("1 of 11");
-            GetModel(sheet).TotalCount.Should().Be(11);
+            GetModel(sheet).HitText.Should().Be("1 of 13");
+            GetModel(sheet).TotalCount.Should().Be(13);
             GetModel(sheet).Groups.SelectMany(g => g.Rows).Single().ActionName.Should().Be(AppShortcutMap.ToggleSidebar);
             VisibleKeyCaps(sheet).Should().Equal("Ctrl", "Shift", "B");
 
@@ -89,8 +90,8 @@ public class CheatSheetHotkeyRefreshTests
             search.Text.Should().Be("OpenWindowCheatSheet");
             CheatSheetViewModel current = GetModel(sheet);
             current.FilterText.Should().Be("OpenWindowCheatSheet");
-            current.TotalCount.Should().Be(11, "multiple chords still form one shortcut row");
-            current.HitText.Should().Be("1 of 11");
+            current.TotalCount.Should().Be(13, "multiple chords still form one shortcut row");
+            current.HitText.Should().Be("1 of 13");
             ShortcutRowViewModel row = current.Groups.SelectMany(g => g.Rows).Single();
             row.Chords.Select(c => string.Join("+", c.Keys)).Should().Equal("F1", "Shift+/");
             VisibleKeyCaps(sheet).Should().Equal("F1", "Shift", "/");
@@ -126,8 +127,9 @@ public class CheatSheetHotkeyRefreshTests
             reopened.Should().NotBeSameAs(original);
             CheatSheetViewModel current = GetModel(reopened);
             current.FilterText.Should().BeEmpty();
-            current.TotalCount.Should().Be(11);
-            current.HitText.Should().Be("11 shortcuts");
+            AssertCurrentKeyboardRows(current, sidebarChord: "Ctrl+Shift+B");
+            current.TotalCount.Should().Be(13);
+            current.HitText.Should().Be("13 shortcuts");
             ShortcutRowViewModel[] rows = [.. current.Groups.SelectMany(g => g.Rows)];
             rows.Single(r => r.ActionName == AppShortcutMap.ToggleSidebar).Chords.Select(c => string.Join("+", c.Keys))
                 .Should().Equal("Ctrl+Shift+B");
@@ -138,7 +140,7 @@ public class CheatSheetHotkeyRefreshTests
 
             reopened.FindControl<TextBox>("SearchBox")!.Text = "Space";
             Dispatcher.UIThread.RunJobs();
-            current.HitText.Should().Be("1 of 11");
+            current.HitText.Should().Be("1 of 13");
             VisibleKeyCaps(reopened).Should().Equal("Space");
         }
         finally
@@ -148,13 +150,21 @@ public class CheatSheetHotkeyRefreshTests
     }
 
     [AvaloniaFact]
-    public void Engine_key_save_refreshes_the_open_sheet_with_engine_rows()
+    public void Enabling_and_rebinding_a_disabled_engine_row_refreshes_the_open_sheet()
     {
         Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
-        FakePlaybackController player = new();
+        FakePlaybackController player = new()
+        {
+            CurrentEngineKeyBindings = [new(KeyBindingAction.TogglePlayPause, WpfKey.Space, IsEnabled: false)],
+        };
+        AppPrefs prefs = new()
+        {
+            EngineKeysCustomized = true,
+            EngineKeyBindings = [new() { Action = "TogglePlayPause", Key = "Space", IsEnabled = false }],
+        };
         MainWindow main = new() { Width = 1000, Height = 600 };
-        using MainWindowViewModel model = new(player, new AppPrefs().Normalize(), _ => { }, new FakeTranslator(), main);
-        main.Attach(model, null, () => model.Shortcuts.BuildCheatSheet(player.EngineBindingsForCheatSheet));
+        using MainWindowViewModel model = new(player, prefs.Normalize(), _ => { }, new FakeTranslator(), main);
+        main.Attach(model, null);
         main.Show();
         Dispatcher.UIThread.RunJobs();
         try
@@ -162,21 +172,27 @@ public class CheatSheetHotkeyRefreshTests
             model.ShowCheatSheet();
             Dispatcher.UIThread.RunJobs();
             CheatSheetWindow sheet = GetSheet(main);
+            AssertCurrentKeyboardRows(GetModel(sheet), engineChord: null);
             TextBox search = sheet.FindControl<TextBox>("SearchBox")!;
             search.Text = "TogglePlayPause";
             Dispatcher.UIThread.RunJobs();
-            GetModel(sheet).HitText.Should().Be("0 of 10", "the fake engine starts without editor rows");
+            GetModel(sheet).HitText.Should().Be("0 of 12", "the current engine row starts disabled");
 
             SettingsViewModel draft = model.CreateSettings();
-            draft.EngineKeyRows.First(r => r.ActionName == nameof(KeyBindingAction.TogglePlayPause)).Chord = "Enter";
+            EngineKeyEditRow edited = draft.EngineKeyRows.Single();
+            edited.Chord = "Enter";
+            edited.IsEnabled = true;
             draft.SaveCommand.Execute(null);
             Dispatcher.UIThread.RunJobs();
 
             draft.Error.Should().BeNull();
             GetSheet(main).Should().BeSameAs(sheet);
             GetModel(sheet).FilterText.Should().Be("TogglePlayPause");
-            GetModel(sheet).HitText.Should().StartWith("1 of ", "the open sheet must rebuild from the live engine keys");
-            VisibleKeyCaps(sheet).Should().Contain("Enter", "the edited engine chord is shown on the same action row");
+            GetModel(sheet).HitText.Should().Be("1 of 13", "the open sheet must rebuild from the live enabled engine keys");
+            ShortcutRowViewModel row = Assert.Single(Assert.Single(GetModel(sheet).Groups).Rows);
+            row.ActionName.Should().Be("TogglePlayPause");
+            VisibleKeyCaps(sheet).Should().Equal(["Enter"], "only the edited enabled chord is shown on the same action row");
+            Assert.Single(player.CurrentEngineKeyBindings).Should().Be(new EngineKeyBindingInfo(KeyBindingAction.TogglePlayPause, WpfKey.Return));
         }
         finally
         {
@@ -187,14 +203,46 @@ public class CheatSheetHotkeyRefreshTests
     static (MainWindow Window, MainWindowViewModel Model) Build(AppPrefs? prefs = null)
     {
         Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        prefs ??= new AppPrefs().Normalize();
+        prefs.EngineKeysCustomized = true;
+        prefs.EngineKeyBindings = [new() { Action = "TogglePlayPause", Key = "Space" }];
+        FakePlaybackController player = new()
+        {
+            CurrentEngineKeyBindings = [new(KeyBindingAction.TogglePlayPause, WpfKey.Space)],
+        };
         MainWindow main = new() { Width = 1000, Height = 600 };
-        MainWindowViewModel model = new(new FakePlaybackController(), prefs ?? new AppPrefs().Normalize(),
+        MainWindowViewModel model = new(player, prefs,
             _ => { }, new FakeTranslator(), main);
-        KeyBinding[] engineBindings = [new() { Key = WpfKey.Space, Action = KeyBindingAction.TogglePlayPause }];
-        main.Attach(model, null, () => model.Shortcuts.BuildCheatSheet(engineBindings));
+        main.Attach(model, null);
         main.Show();
         Dispatcher.UIThread.RunJobs();
         return (main, model);
+    }
+
+    static void AssertCurrentKeyboardRows(CheatSheetViewModel model, string sidebarChord = "Ctrl+B", string? engineChord = "Space")
+    {
+        model.FilterText.Should().BeEmpty();
+        Dictionary<string, string[]> expected = new(StringComparer.Ordinal)
+        {
+            ["SubsPositionUp"] = ["Shift+↑"],
+            ["SubsPositionDown"] = ["Shift+↓"],
+            ["SubsSizeIncrease"] = ["Shift+→"],
+            ["SubsSizeDecrease"] = ["Shift+←"],
+            ["SubsPrimaryTextCopy"] = ["Ctrl+C"],
+            ["ActivateSubsSearch"] = ["Ctrl+F"],
+            ["ToggleSidebar"] = [sidebarChord],
+            ["OpenWindowCheatSheet"] = ["F1", "Shift+/"],
+            ["OpenSubtitles"] = ["Ctrl+Shift+O"],
+            ["ToggleTheme"] = ["Ctrl+Shift+T"],
+            ["OpenCommandPalette"] = ["Ctrl+K"],
+            ["ToggleDebugOverlay"] = ["Ctrl+Shift+D"],
+        };
+        if (engineChord != null) expected.Add("TogglePlayPause", [engineChord]);
+        ShortcutRowViewModel[] rows = [.. model.Groups.SelectMany(group => group.Rows)];
+        rows.Select(row => row.ActionName).Should().BeEquivalentTo(expected.Keys);
+        model.TotalCount.Should().Be(expected.Count);
+        foreach (ShortcutRowViewModel row in rows)
+            row.Chords.Select(chord => string.Join("+", chord.Keys)).Should().Equal(expected[row.ActionName]);
     }
 
     static CheatSheetWindow GetSheet(MainWindow main) => Assert.IsType<CheatSheetWindow>(Assert.Single(main.OwnedWindows));

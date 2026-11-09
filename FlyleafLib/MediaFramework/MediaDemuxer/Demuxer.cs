@@ -452,35 +452,20 @@ public unsafe class Demuxer : RunThreadBase
                 * 4. fmt://rawvideo?C:\root\dev\Flyleaf\VideoSamples\rawfile.raw&pixel_format=uyvy422&video_size=1920x1080&framerate=60
                 *
                 */
-            else if (url.StartsWith("fmt://") || url.StartsWith("device://"))
+            else if (MediaDevice.FmtInputUrl.IsSupported(url))
             {
-                string  urlFromUrl  = null;
-                string  fmtStr      = "";
-                int     fmtStarts   = url.IndexOf('/') + 2;
-                int     queryStarts = url.IndexOf('?');
-
-                if (queryStarts == -1)
-                    fmtStr = url[fmtStarts..];
-                else
+                bool escapedCapture = url.StartsWith(MediaDevice.FmtInputUrl.CapturePrefix, StringComparison.Ordinal);
+                MediaDevice.FmtInputUrl.Parse(url, out string fmtStr, out string urlFromUrl, out fmtOptExtra);
+                url = urlFromUrl;
+                // DirectShow consumes AVFormatContext.video_codec_id, not a private "vcodec" dictionary option.
+                // Keep the legacy fmt/device option behavior unchanged.
+                if (escapedCapture && fmtStr == "dshow" && fmtOptExtra != null && fmtOptExtra.Remove("vcodec", out string videoCodec))
                 {
-                    fmtStr = url[fmtStarts..queryStarts];
-
-                    string  query       = url[(queryStarts + 1)..];
-                    int     inputEnds   = query.IndexOf('&');
-
-                    if (inputEnds == -1)
-                        urlFromUrl  = query;
-                    else
-                    {
-                        urlFromUrl  = query[..inputEnds];
-                        query       = query[(inputEnds + 1)..];
-
-                        fmtOptExtra = ParseQueryString(query);
-                    }
+                    AVCodec* codec = avcodec_find_decoder_by_name(videoCodec);
+                    if (codec == null)
+                        return error = $"Capture video codec {videoCodec} is unavailable";
+                    fmtCtx->video_codec_id = codec->id;
                 }
-
-                url     = urlFromUrl;
-                fmtStr  = fmtStr.Replace("/", "");
                 inFmt   = av_find_input_format(fmtStr);
                 if (inFmt == null)
                     return error = $"[av_find_input_format] {fmtStr} not found";

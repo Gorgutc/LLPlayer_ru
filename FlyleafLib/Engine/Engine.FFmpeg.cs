@@ -2,6 +2,8 @@
 
 public class FFmpegEngine
 {
+    /// <summary>The profile captured when the native libraries were actually loaded.</summary>
+    public LoadProfile LoadedProfile { get; }
     public string   Folder          { get; private set; }
     public string   Version         { get; private set; }
     public bool     Ver8OrGreater   { get; private set; }
@@ -15,7 +17,8 @@ public class FFmpegEngine
         {
             Engine.Log.Info($"Loading FFmpeg libraries from '{Engine.Config.FFmpegPath}'");
             Folder = GetFolderPath(Engine.Config.FFmpegPath);
-            LoadLibraries(Folder, Engine.Config.FFmpegLoadProfile);
+            LoadedProfile = Engine.Config.FFmpegLoadProfile;
+            LoadLibraries(Folder, LoadedProfile);
 
             uint ver        = avformat_version();
             Version         = $"{ver >> 16}.{(ver >> 8) & 255}.{ver & 255}";

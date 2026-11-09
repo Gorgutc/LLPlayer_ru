@@ -3,6 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FlyleafLib;
+using FlyleafLib.MediaFramework.MediaRenderer;
 using LLPlayer.Avalonia.Services;
 
 namespace LLPlayer.Avalonia.ViewModels;
@@ -41,7 +42,7 @@ public sealed partial class PlaybackSettingsViewModel : ObservableObject
     public bool CanRefreshDevices => refreshDevices != null && !Busy;
     public string FrameFiltersHelp => FiltersAvailable ? "Software deinterlacing and HDR tone mapping use the loaded FFmpeg filters."
         : "The current FFmpeg Main profile has no frame filters. Select Filters or All in Startup, then restart.";
-    public string HardwareCapabilityReason => "This portable build uses software decoding and rendering. GPU acceleration, Direct3D video processing, VSync control, super resolution and D3D-only filters are unavailable.";
+    public string HardwareCapabilityReason => "Direct3D video processing, super resolution, noise reduction, edge enhancement and stereo adjustment are unavailable. VSync is managed by the desktop compositor.";
     [ObservableProperty] AudioDeviceInfo? selectedAudioDevice;
     [ObservableProperty] PlaybackLanguageChoice? primaryFallbackLanguage;
     [ObservableProperty] PlaybackLanguageChoice? secondaryFallbackLanguage;
@@ -50,17 +51,23 @@ public sealed partial class PlaybackSettingsViewModel : ObservableObject
     [ObservableProperty] string? error;
     [ObservableProperty] string? warning;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(SaveCommand)), NotifyCanExecuteChangedFor(nameof(CloseCommand)),
-        NotifyCanExecuteChangedFor(nameof(RefreshDevicesCommand)), NotifyPropertyChangedFor(nameof(CanRefreshDevices))]
+        NotifyCanExecuteChangedFor(nameof(RefreshDevicesCommand)), NotifyCanExecuteChangedFor(nameof(RefreshVideoAdaptersCommand)),
+        NotifyCanExecuteChangedFor(nameof(UpdateVideoBackendStatusCommand)), NotifyPropertyChangedFor(nameof(CanRefreshDevices))]
     bool busy;
     public event Action? CloseRequested;
 
     public PlaybackSettingsViewModel(PlaybackSettings current, PlaybackRuntimeSettings runtime,
         Func<PlaybackSettings, PlaybackSettings, PlaybackRuntimeSettings, bool, Task> save,
-        string? warning = null, Func<Task<PlaybackRuntimeSettings>>? refreshDevices = null)
+        string? warning = null, Func<Task<PlaybackRuntimeSettings>>? refreshDevices = null,
+        Func<PortableVideoDecodeStatus>? decodeStatus = null,
+        Func<PortableVideoPresentationStatus>? presentationStatus = null,
+        Func<IReadOnlyList<PortableVideoAdapterInfo>>? videoAdapters = null,
+        Func<Task<IReadOnlyList<PortableVideoAdapterInfo>>>? refreshVideoAdapters = null)
     {
         baseline = current.Clone(); Draft = current.Clone();
         this.runtime = runtime with { Baseline = null, AudioDevices = runtime.AudioDevices.ToArray() };
         this.save = save; this.warning = warning; this.refreshDevices = refreshDevices;
+        InitializeVideoBackends(decodeStatus, presentationStatus, videoAdapters, refreshVideoAdapters);
         AudioLanguages = new(Draft.AudioLanguages); SubtitleLanguages = new(Draft.SubtitleLanguages);
         // An unchanged legacy locale/alias is the same draft identity as its neutral catalog row. Comparing this
         // normalized baseline prevents an unrelated Save from overwriting a fresher language priority list.

@@ -5,7 +5,7 @@ namespace LLPlayer.Avalonia;
 public sealed class AppOptionsException(string message) : Exception(message);
 
 /// <summary>
-/// Command line of the Linux app. User options mirror the WPF app (one media path / URL opened at start); the rest are
+/// Command line of the shared desktop app. User options mirror the WPF app (one media path / URL opened at start); the rest are
 /// developer options used for screenshots and visual review.
 /// </summary>
 public sealed class AppOptions
@@ -21,6 +21,7 @@ public sealed class AppOptions
           --theme <dark|light>      theme for this run (does not change the saved preference)
           -h, --help                show this help
           --version                 print the version
+          --                        treat the remaining argument as a media path or URL
 
         Developer options:
           --theme-gallery           open the theme gallery (every styled control, dark and light) instead of the player
@@ -47,11 +48,20 @@ public sealed class AppOptions
     public static AppOptions Parse(IReadOnlyList<string> args)
     {
         AppOptions o = new();
+        bool positionalOnly = false;
         for (int i = 0; i < args.Count; i++)
         {
             string a = args[i];
+            if (positionalOnly)
+            {
+                SetMediaPath(o, a);
+                continue;
+            }
             switch (a)
             {
+                case "--":
+                    positionalOnly = true;
+                    break;
                 case "-h":
                 case "--help":
                     o.ShowHelp = true;
@@ -92,14 +102,19 @@ public sealed class AppOptions
                 default:
                     if (a.StartsWith("--", StringComparison.Ordinal))
                         throw new AppOptionsException($"Unknown option '{a}'. Use --help.");
-                    if (o.MediaPath != null)
-                        throw new AppOptionsException($"Only one media path or URL is accepted (got '{o.MediaPath}' and '{a}').");
-                    o.MediaPath = a;
+                    SetMediaPath(o, a);
                     break;
             }
         }
 
         return o;
+    }
+
+    static void SetMediaPath(AppOptions options, string value)
+    {
+        if (options.MediaPath != null)
+            throw new AppOptionsException($"Only one media path or URL is accepted (got '{options.MediaPath}' and '{value}').");
+        options.MediaPath = value;
     }
 
     static string Value(IReadOnlyList<string> args, ref int i)

@@ -9,6 +9,7 @@ using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
+using LLPlayer.Avalonia.Controls;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
 
@@ -172,6 +173,212 @@ public sealed class AvStreamPlaybackRegressionTests
         player.Pause();
         await subtitles.WaitForTranslation(controller);
         subtitles.AssertUnchanged(player, controller);
+    }
+
+    [AvaloniaFact]
+    public async Task Debug_cue_counts_follow_ui_publications_and_suppress_disabled_slots()
+    {
+        using AvStreamTestMedia media = await AvStreamTestMedia.CreateAsync();
+        using TempDir state = new();
+        await using NativeSession session = new(state);
+        Player player = session.Player; FlyleafPlaybackController controller = session.Controller;
+        Assert.Null(player.Open(media.Media).Error);
+        await LoadSubtitles(player, controller, media, embedded: true);
+        Assert.True(player.CanPlay);
+        Assert.True(player.Subtitles[0].Enabled); Assert.True(player.Subtitles[1].Enabled);
+        var catalog = typeof(Renderer).GetField("HardwareAdapterCatalog", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(catalog);
+        catalog.SetValue(player.Renderer, (Func<IReadOnlyList<PortableVideoAdapterInfo>>)(
+            () => throw new InvalidOperationException("Debug must not enumerate native hardware.")));
+        PortableVideoDecodeStatus decode = player.Renderer.DecodeStatus;
+        var videoDevices = controller.GetCaptureDevices(FlyleafLib.MediaFramework.MediaDevice.CaptureDeviceKind.Video);
+        var audioDevices = controller.GetCaptureDevices(FlyleafLib.MediaFramework.MediaDevice.CaptureDeviceKind.Audio);
+
+        player.SubtitlesManager[0].Load(Cues(2)); player.SubtitlesManager[1].Load(Cues(3));
+        Dispatcher.UIThread.RunJobs();
+        AssertCounts(2, 3);
+        player.SubtitlesManager[0].Add(Cues(1).Single()); player.SubtitlesManager[1].Add(Cues(1).Single());
+        Dispatcher.UIThread.RunJobs();
+        AssertCounts(3, 4);
+        player.SubtitlesManager[0].Clear(); player.SubtitlesManager[1].Clear();
+        Dispatcher.UIThread.RunJobs();
+        AssertCounts(0, 0);
+
+        for (int slot = 0; slot < 2; slot++)
+        {
+            controller.SelectSubtitleTrack(slot, null);
+            await controller.Recognition.MutateAsync(() => { });
+        }
+        Assert.False(player.Subtitles[0].Enabled); Assert.False(player.Subtitles[1].Enabled);
+        // Retained/cached rows do not make a disabled slot active while real media remains open.
+        player.SubtitlesManager[0].Load(Cues(2)); player.SubtitlesManager[1].Load(Cues(3));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, player.SubtitlesManager[0].SnapshotSubs().Count);
+        Assert.Equal(3, player.SubtitlesManager[1].SnapshotSubs().Count);
+        AssertCounts(0, 0);
+        Assert.Same(decode, player.Renderer.DecodeStatus);
+        Assert.Same(videoDevices, controller.GetCaptureDevices(FlyleafLib.MediaFramework.MediaDevice.CaptureDeviceKind.Video));
+        Assert.Same(audioDevices, controller.GetCaptureDevices(FlyleafLib.MediaFramework.MediaDevice.CaptureDeviceKind.Audio));
+
+        void AssertCounts(int primary, int secondary) => Assert.Equal(
+            $"Primary: {controller.GetSubtitleLanguage(0) ?? "unknown"}, {primary} cues; Secondary: {controller.GetSubtitleLanguage(1) ?? "unknown"}, {secondary} cues",
+            controller.GetDebugSnapshot().Subtitles);
+        static IEnumerable<SubtitleData> Cues(int count) => Enumerable.Range(0, count).Select(index => new SubtitleData
+        { Text = $"Cue {index}", StartTime = TimeSpan.FromSeconds(index), EndTime = TimeSpan.FromSeconds(index + 1) });
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Backend_preferences_preserve_open_media_both_translated_slots_and_real_audio(bool playing)
+    {
+        using AvStreamTestMedia media = await AvStreamTestMedia.CreateAsync();
+        using TempDir state = new();
+        await using NativeSession session = new(state);
+        Player player = session.Player; FlyleafPlaybackController controller = session.Controller;
+        VideoView surface = new() { Renderer = player.Renderer };
+        player.Renderer.SetControlSize(640, 360);
+        try
+        {
+            Assert.Null(player.Open(media.Media).Error);
+            Assert.True(player.CanPlay);
+            Assert.True(player.Duration > TimeSpan.FromSeconds(10).Ticks);
+            await controller.SelectAudioTrackAsync(controller.GetAudioTracks().Single(track => track.Label.Contains("Mono 48000", StringComparison.Ordinal)));
+            await LoadSubtitles(player, controller, media, embedded: true);
+            var subtitles = await TranslateBoth(player, controller);
+            Assert.Equal("Primary translated", Assert.Single(controller.GetCues(0)).Text);
+            Assert.Equal("Secondary translated", Assert.Single(controller.GetCues(1)).Text);
+            long audioDelay = TimeSpan.FromMilliseconds(250).Ticks;
+            player.Config.Audio.Delay = audioDelay;
+            await SeekAndWait(player, 2500);
+            await WaitUntil(() => surface.FramesPresented > 0);
+            Assert.Equal(48000, player.decoder.AudioStream.SampleRate);
+            // Establish actual nonzero decoding before applying any preference. A merely open player is insufficient.
+            using (PcmProbe initialPcm = new(player))
+            {
+                player.Play();
+                await WaitUntil(() => initialPcm.HasNonzeroSamplesAt(48000), () => PcmState(player, initialPcm));
+                player.Pause();
+            }
+            await SeekAndWait(player, 2500);
+            await subtitles.WaitForTranslation(controller);
+
+            PlaybackSettingsStore store = new(Path.Combine(state.Path, "backend-playback.json"));
+            PlaybackSettings initial = controller.GetPlaybackSettings();
+            store.Save(initial);
+            controller.ConfigurePlaybackSettings(store, initial);
+            int presentationApplications = 0;
+            controller.ConfigureVideoPresentation(() => surface.PresentationStatus, mode =>
+            {
+                Assert.True(Dispatcher.UIThread.CheckAccess());
+                surface.PresentationMode = mode;
+                presentationApplications++;
+            });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, presentationApplications);
+            Assert.Equal(PortableVideoDecodeMode.Software, controller.GetVideoDecodeStatus().EffectiveMode);
+            Assert.True(controller.GetVideoDecodeStatus().IsInitialized);
+            Assert.False(controller.GetVideoDecodeStatus().HardwareActive);
+
+            CueInfo[] originalCues = [Assert.Single(controller.GetCues(0)), Assert.Single(controller.GetCues(1))];
+            Assert.All(originalCues, cue => Assert.NotNull(cue.Identity));
+            long generation = player.MediaGeneration;
+            PlaylistItem item = player.Playlist.Selected;
+            AudioStream originalAudio = player.decoder.AudioStream;
+            VideoStream originalVideo = player.decoder.VideoStream;
+            int opens = 0;
+            void Opening(object? sender, OpeningArgs args) => Interlocked.Increment(ref opens);
+            player.Opening += Opening;
+            PortableVideoDecodeMode hardwareMode = OperatingSystem.IsWindows() ? PortableVideoDecodeMode.D3D11VA : PortableVideoDecodeMode.VAAPI;
+            if (playing) { player.Play(); await WaitUntil(() => player.IsPlaying); }
+            try
+            {
+                await ApplyAndAssertPreserved(() => SavePreferences(true, PortableVideoPresentationMode.OpenGL), true, PortableVideoPresentationMode.OpenGL);
+                await ApplyAndAssertPreserved(controller.ToggleVideoAccelerationAsync, false, PortableVideoPresentationMode.OpenGL);
+                await ApplyAndAssertPreserved(controller.ToggleVideoAccelerationAsync, true, PortableVideoPresentationMode.OpenGL);
+                await ApplyAndAssertPreserved(() => SavePreferences(false, PortableVideoPresentationMode.Software), false, PortableVideoPresentationMode.Software);
+                Assert.Equal(5, presentationApplications);
+                Assert.Equal(0, Volatile.Read(ref opens));
+
+                // Paused transitions must stay paused; subsequent real PCM proves their retained decoder still works.
+                using PcmProbe finalPcm = new(player);
+                if (!playing) player.Play();
+                await WaitUntil(() => finalPcm.HasNonzeroSamplesAt(48000), () => PcmState(player, finalPcm));
+                player.Pause();
+                await subtitles.WaitForTranslation(controller);
+                AssertMediaOwnersAndSubtitles();
+            }
+            finally { player.Opening -= Opening; }
+
+            Task SavePreferences(bool enabled, PortableVideoPresentationMode presentation)
+            {
+                PlaybackSettings baseline = controller.GetPlaybackSettings(), edited = baseline.Clone();
+                edited.VideoHardwareAccelerationEnabled = enabled;
+                edited.VideoHardwareDecodeMode = hardwareMode;
+                edited.VideoHardwareDevice = ""; // Native default, with no GPU/device enumeration needed by this test.
+                edited.VideoPresentationMode = presentation;
+                return controller.SavePlaybackSettingsAsync(edited, baseline, controller.GetPlaybackRuntimeSettings(), false);
+            }
+
+            async Task ApplyAndAssertPreserved(Func<Task> change, bool hardware, PortableVideoPresentationMode presentation)
+            {
+                long position = player.CurTime;
+                Assert.InRange(position, TimeSpan.FromSeconds(2).Ticks, TimeSpan.FromSeconds(10).Ticks);
+                await change();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(playing, player.IsPlaying);
+                long tolerance = playing ? TimeSpan.FromSeconds(2).Ticks : TimeSpan.FromMilliseconds(250).Ticks;
+                Assert.InRange(player.CurTime, position - TimeSpan.FromMilliseconds(250).Ticks, position + tolerance);
+                await subtitles.WaitForTranslation(controller);
+                AssertMediaOwnersAndSubtitles();
+
+                PlaybackSettings persisted = store.Load();
+                Assert.Null(store.LoadWarning);
+                Assert.True(store.HasSavedSettings);
+                Assert.Equal(hardware, persisted.VideoHardwareAccelerationEnabled);
+                Assert.Equal(hardwareMode, persisted.VideoHardwareDecodeMode);
+                Assert.Equal("", persisted.VideoHardwareDevice);
+                Assert.Equal(presentation, persisted.VideoPresentationMode);
+                PortableVideoDecodeStatus decode = controller.GetVideoDecodeStatus();
+                Assert.Equal(hardware ? hardwareMode : PortableVideoDecodeMode.Software, decode.RequestedMode);
+                Assert.Equal(hardware, decode.IsPending);
+                Assert.Equal(PortableVideoDecodeMode.Software, decode.EffectiveMode);
+                Assert.True(decode.IsInitialized);
+                Assert.False(decode.HardwareActive);
+                Assert.Equal(presentation, surface.PresentationMode);
+                PortableVideoPresentationStatus display = controller.GetVideoPresentationStatus();
+                Assert.Equal(presentation, display.RequestedMode);
+                // This real wrapper has no attached native GL context; its fallback must remain truthful.
+                Assert.Equal(PortableVideoPresentationMode.Software, display.EffectiveMode);
+                Assert.False(display.UsesPlanarShader);
+                if (presentation == PortableVideoPresentationMode.OpenGL) Assert.False(string.IsNullOrWhiteSpace(display.FallbackReason));
+                if (playing)
+                {
+                    using PcmProbe freshPcm = new(player);
+                    await WaitUntil(() => freshPcm.HasNonzeroSamplesAt(48000), () => PcmState(player, freshPcm));
+                }
+            }
+
+            void AssertMediaOwnersAndSubtitles()
+            {
+                Assert.Equal(0, Volatile.Read(ref opens));
+                Assert.True(player.CanPlay);
+                Assert.Equal(generation, player.MediaGeneration);
+                Assert.Same(item, player.Playlist.Selected);
+                Assert.Same(originalAudio, player.decoder.AudioStream);
+                Assert.Same(originalVideo, player.decoder.VideoStream);
+                Assert.Same(surface, player.Renderer.Surface);
+                Assert.Equal(audioDelay, player.Config.Audio.Delay);
+                subtitles.AssertUnchanged(player, controller);
+                for (int slot = 0; slot < 2; slot++)
+                {
+                    CueInfo current = Assert.Single(controller.GetCues(slot));
+                    Assert.Equal(originalCues[slot].Identity, current.Identity);
+                    Assert.True(controller.IsCueCurrent(originalCues[slot], slot));
+                }
+            }
+        }
+        finally { player.Pause(); surface.Renderer = null; }
     }
 
     [AvaloniaTheory]

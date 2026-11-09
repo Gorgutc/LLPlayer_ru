@@ -4,10 +4,13 @@ using LLPlayer.Avalonia.Services;
 
 namespace LLPlayer.Avalonia.ViewModels;
 
-public sealed class ShortcutRowViewModel(ShortcutInfo info)
+public sealed class ShortcutRowViewModel(ShortcutInfo info, ExecutableCommand? owner = null) : ObservableObject
 {
     public string Description => info.Description;
     public string ActionName => info.ActionName;
+    public bool CanExecute => owner?.CanExecute ?? false;
+    internal ExecutableCommand? Owner => owner;
+    internal void RefreshAvailability() => OnPropertyChanged(nameof(CanExecute));
 
     /// <summary>Each chord split into key caps (rendered as Kbd badges), e.g. [["Ctrl","B"]].</summary>
     public IReadOnlyList<ChordViewModel> Chords { get; } =
@@ -54,12 +57,50 @@ public sealed partial class CheatSheetViewModel : ObservableObject
 {
     readonly List<ShortcutRowViewModel> all;
     readonly List<(string Group, ShortcutRowViewModel Row)> grouped;
+    bool completed;
 
     public CheatSheetViewModel(IReadOnlyList<ShortcutInfo> rows)
     {
-        grouped = rows.Select(r => (r.Group, new ShortcutRowViewModel(r))).ToList();
+        grouped = rows.Where(r => r.Keys.Count > 0).Select(r => (r.Group, new ShortcutRowViewModel(r))).ToList();
         all = grouped.Select(g => g.Row).ToList();
         ApplyFilter();
+    }
+
+    public CheatSheetViewModel(IReadOnlyList<ExecutableCommand> rows, AppPrefs prefs) : this(Array.Empty<ShortcutInfo>())
+        => Refresh(rows, prefs);
+
+    public IReadOnlyList<MouseHelpRow> MouseRows { get; private set; } = [];
+    public void Refresh(IReadOnlyList<ExecutableCommand> rows, AppPrefs prefs)
+    {
+        grouped.Clear();
+        all.Clear();
+        foreach (ExecutableCommand command in rows.Where(command => command.Keys.Count > 0))
+        {
+            ShortcutRowViewModel row = new(new(command.Group, command.ActionName, command.Description, command.Keys), command);
+            grouped.Add((command.Group, row));
+            all.Add(row);
+        }
+        MouseRows = MouseHelpCatalog.Build(prefs);
+        OnPropertyChanged(nameof(MouseRows));
+        OnPropertyChanged(nameof(TotalCount));
+        ApplyFilter();
+    }
+
+    public bool TryActivate(ShortcutRowViewModel row, Action close)
+    {
+        if (completed || !all.Contains(row) || row.Owner is not { } owner || !owner.CanExecute) return false;
+        completed = true;
+        close();
+        return owner.TryExecute();
+    }
+
+    public void RefreshAvailability()
+    {
+        foreach (ShortcutRowViewModel row in all)
+        {
+            row.Owner?.RefreshAvailability();
+            row.RefreshAvailability();
+        }
     }
 
     public ObservableCollection<ShortcutGroupViewModel> Groups { get; } = [];

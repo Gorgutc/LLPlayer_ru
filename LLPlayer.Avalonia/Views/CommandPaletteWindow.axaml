@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+        xmlns:s="using:LLPlayer.Avalonia.Services"
+        x:Class="LLPlayer.Avalonia.Views.CommandPaletteWindow"
+        x:DataType="vm:CommandPaletteViewModel"
+        Classes="dialog" Title="Command palette — LLPlayer"
+        Width="680" Height="580" MinWidth="420" MinHeight="300"
+        WindowStartupLocation="CenterOwner">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+      <TextBlock Classes="dialog-title" Text="Command palette" />
+      <TextBlock Classes="dialog-description" Text="Find an action by name or current shortcut. Enter runs the selected action; Escape closes." />
+      <TextBox Name="SearchBox" Text="{Binding FilterText}" PlaceholderText="Search commands…" />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Classes="dialog-footer" Margin="0,12,0,0">
+      <Button Content="Close" Classes="outline" Click="OnCloseClick" />
+      <Button Content="Run" IsEnabled="{Binding SelectedCommand.CanExecute, FallbackValue=False}" Click="OnRunClick" />
+    </StackPanel>
+    <ListBox Name="Results" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedCommand, Mode=TwoWay}"
+             DoubleTapped="OnResultDoubleTapped">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="s:ExecutableCommand">
+          <Grid ColumnDefinitions="*,Auto" Margin="4,6">
+            <StackPanel Spacing="3" Margin="0,0,12,0">
+              <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Group}" Classes="muted xs" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+              <TextBlock Text="{Binding KeysDisplay}" Classes="mono small" HorizontalAlignment="Right" />
+              <TextBlock Text="{Binding AvailabilityText}" Classes="muted xs" HorizontalAlignment="Right" />
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</Window>

@@ -34,7 +34,7 @@ public unsafe partial class Renderer
     internal SoftwareFramePreprocessor Preprocessor => preprocessor;
 
     /// <summary>Diagnostics (tests): whether conversion contexts, graphs or buffers are still allocated.</summary>
-    internal bool HasNativeVideoResources => converter.HasNativeResources || preprocessor.HasNativeResources;
+    internal bool HasNativeVideoResources => converter.HasNativeResources || preprocessor.HasNativeResources || pendingPlanarFrame != null;
 
     /// <summary>Size of the last frame handed to the surface (upright, after downscaling), 0 when none.</summary>
     public int      PresentedWidth  { get; private set; }
@@ -45,6 +45,7 @@ public unsafe partial class Renderer
     bool ConvertFrame(VideoFrame frame, bool secondField = false)
     {
         hasPending = false;
+        ReleasePendingPlanar();
 
         AVFrame* f = frame == null ? null : frame.AVFrame;
         if (f == null || f->width <= 0 || f->height <= 0 || f->data[0] == 0)
@@ -91,6 +92,10 @@ public unsafe partial class Renderer
         // 4. Crop + swscale (BGRA, scaled) + orientation + colour filters
         var colorSpace = stream != null ? stream.ColorSpace : ColorSpace.None;
         var colorRange = stream != null ? stream.ColorRange : ColorRange.Limited;
+        if (PreparePlanar(src, cropForConvert, t, outW, outH, colorSpace, colorRange))
+            return true;
+
+        SoftwareConversionCount++;
         if (!converter.Convert(src, cropForConvert, t, outW, outH, colorSpace, colorRange, colorFilter))
         {
             LogConvertError(converter.LastError);
@@ -146,6 +151,13 @@ public unsafe partial class Renderer
         if (!hasPending)
             return;
 
+        if (pendingIsPlanar)
+        {
+            if (PresentPendingPlanar(s))
+                SwapChain.presentCount++;
+            return;
+        }
+
         s.PresentFrame(new ReadOnlySpan<byte>(pendingPtr, (pendingHeight - 1) * pendingStride + pendingWidth * 4), pendingWidth, pendingHeight, pendingStride);
         PresentedWidth  = pendingWidth;
         PresentedHeight = pendingHeight;
@@ -156,12 +168,14 @@ public unsafe partial class Renderer
     void ReleaseFrameState()
     {
         hasPending = false;
+        ReleasePendingPlanar();
         preprocessor.Reset();
     }
 
     void SwsDispose()
     {
         hasPending      = false;
+        DisposePendingPlanar();
         PresentedWidth  = PresentedHeight = 0;
         converter.Dispose();
         preprocessor.Dispose();

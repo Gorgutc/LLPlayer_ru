@@ -18,6 +18,12 @@ No Node/web stack is part of the baseline.
 - Native Windows: existing tracked FFmpeg DLLs, software BGRA video, app-local OpenAL Soft 1.23.1 from pinned
   `Silk.NET.OpenAL.Soft.Native`. The framework-dependent package requires .NET 10 runtime and Microsoft Visual C++
   x64 Redistributable 2022 or newer. Windows ASR/OCR and GPU remain separately evidenced slices.
+- Optional media backends: existing FFmpeg D3D11VA (Windows) / VAAPI (Linux) with CPU-frame transfer before
+  cache/snapshot admission; shared timed YUV420/NV12 OpenGL presentation through existing Avalonia.OpenGL/ANGLE.
+  Software decode/presentation remain defaults. Explicit capture catalogs use avdevice and selected-device
+  Windows MF / Linux x64 V4L2 format adapters, with actual All-profile support required.
+  Windows-only DXGI/MF managed interop retains the existing Vortice/SharpGen pins and legal texts; Linux excludes
+  that closure. See [dependency baseline](dependency-baseline.md#portable-media-adapters--owner-approved-second-block-resumed-2026-11-03).
 - Windows gate: `scripts/windows/verify-avalonia.ps1`; package contract tests: `test-package-avalonia.ps1` in the
   same folder; publish: `scripts/windows/publish-avalonia.ps1` produces
   `LLPlayer-Avalonia-<version>-win-x64.zip` plus checksum. Extract and launch `LLPlayer.Avalonia.exe`.
@@ -33,6 +39,8 @@ No Node/web stack is part of the baseline.
   framework-dependent.
 - Media: FFmpeg 8.1 shared libraries (BtbN `gpl-shared` build, fetched and sha256-verified by
   `scripts/linux/fetch-ffmpeg.sh`), software `sws_scale` → BGRA video path, OpenAL Soft (`libopenal.so.1`) audio.
+  Opt-in VAAPI and planar OpenGL are implemented separately from this software default; real-device acceptance
+  remains NOT_RUN until separately agreed native execution.
 - Tests: `FlyleafLibTests` portable target and `LLPlayer.Avalonia.Tests` (Avalonia.Headless.XUnit 12.1.3);
   FFmpeg/media integration tests are gated on `LLPLAYER_FFMPEG_DIR` / `LLPLAYER_TEST_MEDIA` and skip without them.
 - CI: `.github/workflows/build-linux.yml` on `ubuntu-24.04`.

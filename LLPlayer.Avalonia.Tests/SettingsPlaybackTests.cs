@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Avalonia.Headless.XUnit;
 using FlyleafLib;
+using FlyleafLib.MediaFramework.MediaRenderer;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
 
@@ -36,12 +37,43 @@ public class SettingsPlaybackTests
             SearchLocalPaths = "subs;../captions", LanguageFallbackPrimary = "ru", LanguageFallbackSecondarySame = false,
             LanguageFallbackSecondary = "ja", SubtitleExportUtf8Bom = false, SubtitleMaxCueDurationSec = 8.5,
             ASRDenoise = true, ASRPerSegmentLanguage = true, WordTimestamps = false, VadCueSnapping = false,
-            FixAllCaps = false, LogOutput = "logs/player.log", LogCachedLines = 31 };
+            FixAllCaps = false, LogOutput = "logs/player.log", LogCachedLines = 31,
+            VideoHardwareAccelerationEnabled = true, VideoHardwareDecodeMode = PortableVideoDecodeMode.VAAPI,
+            VideoHardwareDevice = "/dev/dri/renderD128", VideoPresentationMode = PortableVideoPresentationMode.OpenGL };
         store.Save(settings);
         Assert.True(store.HasSavedSettings); PlaybackSettings loaded = store.Load();
         Assert.Equal(JsonSerializer.Serialize(settings, PlaybackSettingsStore.JsonOptions), JsonSerializer.Serialize(loaded, PlaybackSettingsStore.JsonOptions));
         string json = File.ReadAllText(store.Path);
-        Assert.DoesNotContain("Delay", json); Assert.DoesNotContain("Device", json); Assert.DoesNotContain("ZoomPercent", json);
+        using JsonDocument document = JsonDocument.Parse(json);
+        string[] names = [.. document.RootElement.EnumerateObject().Select(property => property.Name)];
+        string[] ownedNames =
+        [
+            "AudioEnabled", "AudioFiltersEnabled", "AudioVolumeMax", "AudioVolumeDefault", "AudioLanguages",
+            "AspectRatio", "AspectRatioCustom", "DeInterlace", "DoubleRate", "AllowProfileMismatch",
+            "VideoHardwareAccelerationEnabled", "VideoHardwareDecodeMode", "VideoHardwareDevice", "VideoPresentationMode",
+            "VideoThreads", "ZoomOffset", "MaxLatencyMs", "ZeroLatency", "HDRtoSDRMethod", "SDRDisplayNits",
+            "Brightness", "Contrast", "Hue", "Saturation", "MinBufferDurationMs", "BufferDurationMs",
+            "MaxAudioFrames", "MaxVideoFrames", "MaxVerticalResolution", "OpenTimeoutMs", "ReadTimeoutMs",
+            "ReadLiveTimeoutMs", "SeekTimeoutMs", "SeekAccurate", "SeekAccurateFixMarginMs", "SubtitlesEnabled",
+            "SearchLocal", "SearchLocalPaths", "EnabledCached", "OpenAutomaticSubs", "SubtitleLanguages",
+            "LanguageAutoDetect", "LanguageFallbackPrimary", "LanguageFallbackSecondary", "LanguageFallbackSecondarySame",
+            "SubtitleExportUtf8Bom", "ResegmentSubtitles", "WordTimestamps", "VadCueSnapping", "FixAllCaps", "ASRDenoise",
+            "ASRPerSegmentLanguage", "SubtitleMaxLinesPerCue", "SubtitleMaxCharsPerLine", "SubtitleMaxCjkCharsPerLine",
+            "SubtitleMaxCueDurationSec", "SubtitleMinCueDurationSec", "LogOutput", "LogLevel", "FFmpegLogLevel",
+            "LogCachedLines", "FFmpegLoadProfile",
+        ];
+        Assert.Equal(ownedNames.Order(StringComparer.Ordinal), names.Order(StringComparer.Ordinal));
+        foreach (string sessionOnly in new[]
+        {
+            "SessionIdentity", "Baseline", "AudioDevice", "DefaultAudioDevice", "AudioDevices", "AudioOutputDevice",
+            "AudioDelayTicks", "PrimarySubtitleDelayTicks", "SecondarySubtitleDelayTicks", "ZoomPercent", "PanX", "PanY",
+        }) Assert.DoesNotContain(sessionOnly, names);
+        Assert.Equal(new[] { "VideoHardwareDevice" }, names.Where(name => name.Contains("Device", StringComparison.Ordinal)));
+        Assert.Equal("/dev/dri/renderD128", document.RootElement.GetProperty("VideoHardwareDevice").GetString());
+        Assert.Equal("/dev/dri/renderD128", loaded.VideoHardwareDevice);
+        Assert.True(loaded.VideoHardwareAccelerationEnabled);
+        Assert.Equal(PortableVideoDecodeMode.VAAPI, loaded.VideoHardwareDecodeMode);
+        Assert.Equal(PortableVideoPresentationMode.OpenGL, loaded.VideoPresentationMode);
     }
 
     [Fact]

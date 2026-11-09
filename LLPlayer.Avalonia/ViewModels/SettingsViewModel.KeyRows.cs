@@ -10,6 +10,7 @@ public sealed partial class SettingsViewModel
     List<AppShortcut> initialAppRows = [];
     Dictionary<string, string> initialAppOverrides = [];
     List<AppKeyBindingPref>? initialExplicitAppRows;
+    IReadOnlyList<KeyBinding>? initialLegacyEngineBindings;
     bool resetAppRows;
     public IReadOnlyList<AppKeyBindingPref>? AppKeyBindingPrefs { get; private set; }
 
@@ -18,7 +19,15 @@ public sealed partial class SettingsViewModel
         CaptureToolsBaseline(current);
         initialAppOverrides = new(current.AppShortcutOverrides, StringComparer.Ordinal);
         initialExplicitAppRows = AppKeyBindings.NormalizePrefs(current.AppKeyBindings);
-        initialAppRows = [.. AppKeyBindings.BuildEffective(initialAppOverrides, initialExplicitAppRows)];
+        initialLegacyEngineBindings = current.EngineKeysCustomized
+            ? EngineKeyBindings.FromPrefs(current.EngineKeyBindings).Select(row => new KeyBinding
+            {
+                Action = row.Action, Key = row.Key, Ctrl = row.Ctrl, Alt = row.Alt, Shift = row.Shift,
+                IsEnabled = row.IsEnabled, IsKeyUp = row.IsKeyUp
+            }).ToArray() : null;
+        // Show the same chord-safe additive defaults as runtime without materializing a replacement app map.
+        initialAppRows = [.. new AppShortcutMap(new Dictionary<string, Action>(), initialAppOverrides,
+            initialExplicitAppRows, initialLegacyEngineBindings).Shortcuts];
         foreach (AppShortcut row in initialAppRows) ShortcutRows.Add(CreateAppRow(row));
     }
 
@@ -116,7 +125,9 @@ public sealed partial class SettingsViewModel
                 else overrides[group.Key] = chord;
             }
         }
-        map = new(new Dictionary<string, Action>(), overrides, AppKeyBindingPrefs?.ToList());
+        // Unrelated Saves retain legacy engine ownership. Explicit Reset/rebind still faces normal collision checks.
+        map = new(new Dictionary<string, Action>(), overrides, AppKeyBindingPrefs?.ToList(),
+            unchanged && !resetAppRows ? initialLegacyEngineBindings : null);
         return map.TryValidateEffective(out error);
     }
 }

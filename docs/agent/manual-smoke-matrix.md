@@ -2,7 +2,21 @@
 
 Automated tests do not cover every LLPlayer behavior. Use these manual checks when touching related areas.
 
-## ASR/OCR, resource management and language workflows — authorized sequence, 2026-11-02
+## Current execution boundary — owner steering, 2026-11-03
+
+The owner resumed the complete Commands/service screens + Media backends delivery. Full-F13 Computer Use
+and native desktop acceptance now await separate agreement; this supersedes the older execution authorization
+below. No native row is accepted by a build, headless/fake test, catalog, package or prior screenshot.
+
+After separate approval, check the existing F-13 matrix plus: command palette/F1 current enabled bindings and
+close-before-activation; About/copy/debug current identity; New/Clone/Restart argument fidelity and failed-spawn
+survival; explicit quit with pending capture/adapter work; all documented mouse/menu gestures and legacy key
+collisions; software defaults; next-open hardware request vs effective/pending/fallback; actual D3D11VA/VAAPI
+negotiation/download/recovery; actual GL shader/context-loss/paused repaint/native-resolution snapshots;
+explicit All-profile capture discovery, canonical per-device rational formats and source replacement.
+Record actual payload/platform/devices and exact NOT_RUN reasons for missing resources.
+
+## ASR/OCR, resource management and language workflows — historical authorized sequence, 2026-11-02
 
 The owner authorized the [complete first coordinated delivery](plans/2026-11-02-f13-language-workflows.md),
 then commands/service screens plus media backends with a second full delivery ritual, then Computer Use for

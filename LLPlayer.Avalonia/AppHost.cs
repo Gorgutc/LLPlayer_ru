@@ -101,6 +101,9 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         translator = new FlyleafWordTranslator(player, translationSettings);
 
         window = new MainWindow(keys, hostServices);
+        window.VideoSurface.PresentationMode = initialPlaybackSettings.VideoPresentationMode;
+        controller.ConfigureVideoPresentation(() => window.VideoSurface.PresentationStatus,
+            mode => window.VideoSurface.PresentationMode = mode);
         viewModel = new MainWindowViewModel(controller, prefs, SavePrefs, translator, window)
         { SubtitleExportSource = new FlyleafSubtitleExportSource(player) };
         viewModel.OnlineVideoDialog = () => new OnlineVideoViewModel(onlineSettings,
@@ -126,7 +129,8 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
             {
                 await controller.RefreshPlaybackDevicesAsync();
                 return controller.GetPlaybackRuntimeSettings();
-            });
+            }, controller.GetVideoDecodeStatus, controller.GetVideoPresentationStatus,
+            controller.GetVideoAdapters, controller.RefreshVideoAdaptersAsync);
         viewModel.SubtitleExportBom = () => controller.GetPlaybackSettings().SubtitleExportUtf8Bom;
         PdicSettingsStore pdicStore = new(paths.PdicFile);
         PdicSettings pdicSettings = pdicStore.Load();
@@ -152,6 +156,7 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
             draft => controller.SaveTranslationAsync(() => translator.SaveAndApplyAsync(draft, translationStore,
                 () => dispatcher.Post(viewModel.WordPopup.Invalidate), controller.ApplyTranslationSettings)), translationStore.LoadWarning);
         window.ShutdownRequested = ShutdownAsync;
+        ConfigureApplicationProcessCommands(window, ffmpeg.Directory);
         window.Attach(viewModel, player.Renderer, () => viewModel.Shortcuts.BuildCheatSheet(player.Config.Player.KeyBindings.Keys));
         player.Host = window;
         MainWindow = window;

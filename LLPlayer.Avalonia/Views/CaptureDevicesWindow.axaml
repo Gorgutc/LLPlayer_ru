@@ -1,0 +1,47 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:d="using:FlyleafLib.MediaFramework.MediaDevice"
+        x:Class="LLPlayer.Avalonia.Views.CaptureDevicesWindow" x:DataType="vm:CaptureDevicesViewModel"
+        Classes="dialog" Title="{Binding Title}" Width="740" Height="560" MinWidth="520" MinHeight="420"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+  <Window.Resources>
+    <DataTemplate x:Key="CaptureDevice" x:DataType="d:CaptureDeviceInfo">
+      <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+    </DataTemplate>
+    <DataTemplate x:Key="CaptureFormat" x:DataType="vm:CaptureFormatChoice">
+      <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
+    </DataTemplate>
+  </Window.Resources>
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20">
+    <StackPanel Spacing="6" Margin="0,0,0,14">
+      <TextBlock Text="{Binding Heading}" Classes="dialog-title" />
+      <TextBlock Text="Capture requires the FFmpeg All startup profile. If device support is unavailable, select All in Playback settings → Startup and restart LLPlayer." TextWrapping="Wrap" Classes="dialog-description" />
+    </StackPanel>
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="12" Margin="0,0,8,8">
+        <TextBlock Name="CaptureCatalogStatus" Text="{Binding Status}" TextWrapping="Wrap" />
+        <Button Name="RefreshCaptureDevicesButton" Content="Refresh devices" Command="{Binding RefreshCommand}" Classes="outline" HorizontalAlignment="Left" />
+        <TextBlock Text="Capture device" />
+        <ComboBox Name="CaptureDeviceEditor" ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice}" ItemTemplate="{StaticResource CaptureDevice}"
+                  IsEnabled="{Binding !Busy}" HorizontalAlignment="Stretch" AutomationProperties.Name="Capture device" />
+        <TextBlock Text="{Binding SelectedDeviceDetails}" TextWrapping="Wrap" Classes="small muted" />
+        <StackPanel Spacing="8" IsVisible="{Binding IsVideo}">
+          <TextBlock Text="Video format" />
+          <Button Name="QueryCaptureFormatsButton" Content="Load selected device formats" Command="{Binding QueryFormatsCommand}" Classes="outline" HorizontalAlignment="Left" />
+          <ComboBox Name="CaptureFormatEditor" ItemsSource="{Binding Formats}" SelectedItem="{Binding SelectedFormat}" ItemTemplate="{StaticResource CaptureFormat}"
+                    IsEnabled="{Binding !Busy}" HorizontalAlignment="Stretch" AutomationProperties.Name="Capture video format" />
+          <TextBlock Name="CaptureFormatStatus" Text="{Binding FormatStatus}" TextWrapping="Wrap" Classes="small muted" />
+        </StackPanel>
+        <TextBlock Text="Device discovery and format queries start only when requested. Opening a device replaces the current media." TextWrapping="Wrap" Classes="small muted" />
+      </StackPanel>
+    </ScrollViewer>
+    <StackPanel Grid.Row="2" Spacing="8" Margin="0,12,0,0">
+      <TextBlock Text="A device operation is running. Cancel requests cancellation; closing waits for the device call to finish." IsVisible="{Binding Busy}" TextWrapping="Wrap" Classes="small muted" />
+      <TextBlock Name="CaptureError" Text="{Binding Error}" TextWrapping="Wrap" Foreground="{DynamicResource Shadcn.DestructiveBrush}" AutomationProperties.LiveSetting="Polite" />
+      <StackPanel Classes="dialog-footer">
+        <Button Name="CancelCaptureOperationButton" Content="Cancel operation" Command="{Binding CancelCommand}" Classes="outline" IsVisible="{Binding Busy}" />
+        <Button Name="CloseCaptureDevicesButton" Content="Close" Command="{Binding CloseCommand}" Classes="outline" />
+        <Button Name="OpenCaptureDeviceButton" Content="Open device" Command="{Binding OpenCommand}" Classes="primary" />
+      </StackPanel>
+    </StackPanel>
+  </Grid>
+</Window>

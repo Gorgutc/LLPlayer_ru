@@ -163,6 +163,16 @@ internal static class PortableVideoTestMedia
         o => RunCli("-f", "lavfi", "-i", "color=c=red:s=320x180:r=25:d=1[a];color=c=blue:s=320x180:r=25:d=1[b];[a][b]concat=n=2:v=1:a=0[out0]",
             "-c:v", "libx264", "-g", "5", "-pix_fmt", "yuv420p", o));
 
+    /// <summary>50 changing H.264 frames in one GOP, with no later key frame or B-frame reordering.</summary>
+    public static string SingleGop => Clip("single-gop-no-b-v1.mp4",
+        o => RunCli("-f", "lavfi", "-i", "testsrc2=s=160x90:r=25:d=2", "-c:v", "libx264",
+            "-g", "250", "-bf", "0", "-x264-params", "scenecut=0:keyint=250:min-keyint=250", "-pix_fmt", "yuv420p", o));
+
+    /// <summary>The same final GOP with B frames, exercising delayed references and drain after fallback.</summary>
+    public static string SingleGopBFrames => Clip("single-gop-b-v1.mp4",
+        o => RunCli("-f", "lavfi", "-i", "testsrc2=s=160x90:r=25:d=2", "-c:v", "libx264",
+            "-g", "250", "-bf", "3", "-x264-params", "scenecut=0:keyint=250:min-keyint=250", "-pix_fmt", "yuv420p", o));
+
     /// <summary>320x180 HDR10 (PQ, BT.2020, 10-bit) solid grey at ~1000 nits, lossless HEVC.</summary>
     public static string HdrGrey => Clip("hdr-grey.mkv",
         o => RunCli("-f", "lavfi", "-i", "color=c=0xC0C0C0:s=320x180:r=25:d=1,format=yuv420p10le,setparams=color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc:range=tv",

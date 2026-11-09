@@ -1,5 +1,24 @@
 # LLPlayer_ru — Task Backlog (рабочий бэклог)
 
+## Текущий F-13 — реализация и поставка 2026-11-09
+
+**Исходники завершены и проверены; поставка фиксируется отдельными receipts.** Уже согласованный цельный блок «Команды и служебные экраны + медиабэкенды»
+по [сохранённому плану](plans/2026-11-02-f13-commands-media-backends.md), база main `28ced28d3c88`.
+Новых F-карточек и дополнительных продуктовых этапов нет. Первый блок ASR/OCR/моделей и языковых workflows
+доставлен PR198+199 с отдельными actual-main Windows/Linux CI, свежим Desktop и scoped Vault sync;
+его старые PENDING-описания ниже сохраняют исторический checkpoint.
+
+В текущий SECOND входят palette/F1/About/debug/New/Clone/Restart, существующие Record/Snapshot/HW и полные
+mouse/menu-команды, opt-in D3D11VA/VAAPI, timed planar OpenGL и выбор capture-устройств/форматов.
+Текущие проверки/доставка: [F-13 status](f13-status-2026-10-18.md#final-source-local-verification--2026-11-09).
+Полный WPF/Windows Avalonia/Linux/package/review/PR/main CI/Desktop/Vault ритуал этого же блока обязателен.
+
+По новому решению владельца полная Computer Use/native-приёмка всего F-13 требует **отдельного согласования**;
+старое разрешение ниже ею заменено. Native GUI/GPU/камеры/модели/providers/DPI/Linux остаются NOT_RUN.
+Wayland, AppImage/Flatpak, отдельные Linux release/source-offer и отказ от WPF не входят в этот блок.
+
+## Сохранённый бэклог и история
+
 > **Назначение:** единый, максимально подробный список незакрытых задач для работы в будущих сессиях.
 > Каждая задача имеет стабильный ID (`DOC-`/`B-`/`F-`/`T-`/`HC-`), описание, файлы, ссылки, важность, сложность, статус
 > и мои рассуждения. В конце — два ранжирования: **по важности** и **по сложности**.
@@ -67,7 +86,7 @@
 
 ## 0. Как пользоваться этим файлом / ссылки на репозитории
 
-**Текущая одобренная поставка F-13, 2026-11-02: ASR/OCR и модели + языковые рабочие процессы.**
+**Исторический checkpoint поставки F-13, 2026-11-02: ASR/OCR и модели + языковые рабочие процессы.**
 База — доставленные PR № 196/197, actual main `b11d168776dfab503f53af9681357702713a2ca3`.
 Владелец объединил распознавание/менеджеры ресурсов, Batch/watch/background/tray, существующий дубляж
 и AI Insights в одну поставку. Общий Windows/Linux UI/Core сохраняет WPF и defaults; полный состав —
@@ -731,7 +750,7 @@ reasoning/чистого аудио стоит вернуть `condition_on_prev
 
 ### F-13 — Кросс-платформенность (Windows + Linux; Avalonia) 🟠 ⓍⓁ · 🚧 **IN PROGRESS (as-of 2026-11-02; этапы 1–2 закрыты, паритет частичный)** · (upstream «Future»)
 
-**Текущая одобренная поставка, 2026-11-02: Settings + Subtitles/words + Playlists/online video.**
+**Исторический checkpoint поставки, 2026-11-02: Settings + Subtitles/words + Playlists/online video.**
 Владелец одобрил три существующих раздела вместе, одной поставкой от доставленного PR № 195/main
 `280f58278752a7375e1068563740a71355f624f6` на `codex/f13-av-settings-subtitles-online`.
 [Единый план и полное соответствие WPF](plans/2026-11-02-f13-settings-subtitles-online.md) не добавляет F-карточек.

@@ -119,6 +119,15 @@ for asset in Microsoft.Windows.SDK.NET.dll WinRT.Runtime.dll SevenZipSharp.dll 7
     expect_fail "Windows-only dependency $asset" "Windows-only recognition or archive dependencies" \
         check_pkg "$(mutate "windows-only-$asset" "echo x > $asset")"
 done
+for asset in Vortice.DXGI.dll Vortice.MediaFoundation.dll Vortice.DirectX.dll Vortice.Mathematics.dll \
+    SharpGen.Runtime.dll SharpGen.Runtime.COM.dll Vortice.Windows.LICENSE Vortice.Mathematics.LICENSE SharpGen.Runtime.LICENSE; do
+    expect_fail "Windows media dependency $asset" "Windows-only media adapter dependencies" \
+        check_pkg "$(mutate "windows-media-$asset" "echo x > $asset")"
+    expect_fail "nested Windows media dependency $asset" "Windows-only media adapter dependencies" \
+        check_pkg "$(mutate "nested-windows-media-$asset" "mkdir -p nested/licenses; echo x > nested/licenses/$asset")"
+    expect_fail "case-variant Windows media dependency $asset" "Windows-only media adapter dependencies" \
+        check_pkg "$(mutate "case-windows-media-$asset" "echo x > ${asset^^}")"
+done
 expect_fail "missing Core assembly" "missing required file LLPlayer.Core.dll" \
     check_pkg "$(mutate missing-core 'rm LLPlayer.Core.dll')"
 expect_fail "missing FFmpeg soname" "missing required file FFmpeg/libavcodec.so.62" \

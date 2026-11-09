@@ -13,7 +13,20 @@ public class AppKeyRowsPolicyTests
         AppShortcutMap absent = new(new Dictionary<string, Action>(), legacy);
         Assert.NotNull(absent.Find(WpfKey.B, true, false, true));
         Assert.Equal(2, absent.Shortcuts.Count(row => row.ActionName == AppShortcutMap.OpenWindowCheatSheet));
-        Assert.All(absent.Shortcuts, row => Assert.False(row.IsKeyUp));
+        AppShortcut[] legacyRows = [.. absent.Shortcuts.Where(row => row.ActionName is not "OpenCommandPalette" and not "ToggleDebugOverlay")];
+        Assert.Equal(new[]
+        {
+            "SubsPositionUp", "SubsPositionDown", "SubsSizeIncrease", "SubsSizeDecrease", "SubsPrimaryTextCopy",
+            "ActivateSubsSearch", "ToggleSidebar", "OpenWindowCheatSheet", "OpenWindowCheatSheet", "OpenSubtitles", "ToggleTheme",
+        }, legacyRows.Select(row => row.ActionName));
+        Assert.All(legacyRows, row => { Assert.False(row.IsKeyUp); Assert.True(row.IsEnabled); });
+        Assert.Equal(new[] { "OpenCommandPalette", "ToggleDebugOverlay" }, absent.Shortcuts.Where(row => row.IsKeyUp).Select(row => row.ActionName));
+        AppShortcut palette = Assert.Single(absent.Shortcuts, row => row.ActionName == "OpenCommandPalette");
+        AppShortcut debug = Assert.Single(absent.Shortcuts, row => row.ActionName == "ToggleDebugOverlay");
+        Assert.Equal((WpfKey.K, true, false, false, true, true), (palette.Key, palette.Ctrl, palette.Alt, palette.Shift, palette.IsKeyUp, palette.IsEnabled));
+        Assert.Equal((WpfKey.D, true, false, true, true, true), (debug.Key, debug.Ctrl, debug.Alt, debug.Shift, debug.IsKeyUp, debug.IsEnabled));
+        Assert.Same(palette, absent.Find(WpfKey.K, true, false, false));
+        Assert.Same(debug, absent.Find(WpfKey.D, true, false, true));
 
         AppShortcutMap malformed = new(new Dictionary<string, Action>(), legacy,
             [new() { ActionName = "RunScript", Key = "F6" }]);

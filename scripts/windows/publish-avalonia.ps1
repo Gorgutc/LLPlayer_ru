@@ -115,6 +115,45 @@ try {
     Copy-RegularFile (Join-Path $repoRoot 'LICENSE') (Join-Path $package 'FFmpeg/LICENSE.GPLv3.txt')
     Copy-RegularFile (Join-Path $repoRoot 'LLPlayer.Avalonia/THIRD-PARTY-NOTICES.md') (Join-Path $package 'THIRD-PARTY-NOTICES.md')
     $assets = Get-Content -LiteralPath (Join-Path $repoRoot 'LLPlayer.Avalonia/obj/project.assets.json') -Raw | ConvertFrom-Json
+    # The portable Windows adapters need only this managed closure, not the WPF renderer/XAudio host.
+    # Bind each published assembly to its selected, pinned runtime asset before archiving.
+    $windowsTarget = @($assets.targets.PSObject.Properties | Where-Object { $_.Name -eq 'net10.0/win-x64' })
+    if ($windowsTarget.Count -ne 1) { throw 'Expected one restored net10.0/win-x64 dependency target.' }
+    foreach ($dependency in @(
+        @{Id='Vortice.DXGI'; Version='3.7.6-beta'},
+        @{Id='Vortice.MediaFoundation'; Version='3.7.6-beta'},
+        @{Id='Vortice.DirectX'; Version='3.7.6-beta'},
+        @{Id='Vortice.Mathematics'; Version='1.9.3'},
+        @{Id='SharpGen.Runtime'; Version='2.4.2-beta'},
+        @{Id='SharpGen.Runtime.COM'; Version='2.4.2-beta'}
+    )) {
+        $assembly = $dependency.Id + '.dll'
+        $runtimePath = 'lib/net9.0/' + $assembly
+        $key = $dependency.Id + '/' + $dependency.Version
+        $entry = @($windowsTarget[0].Value.PSObject.Properties | Where-Object { $_.Name -ceq $key })
+        if ($entry.Count -ne 1 -or $null -eq $entry[0].Value.PSObject.Properties['runtime'] -or
+            $null -eq $entry[0].Value.runtime.PSObject.Properties[$runtimePath]) {
+            throw "Pinned Windows media runtime asset is missing from selected target: $key/$runtimePath"
+        }
+        $restored = Join-Path (Resolve-RestoredPackage $dependency.Id $dependency.Version) $runtimePath
+        Assert-NormalPath $restored
+        if ((Get-FileHash -LiteralPath $restored -Algorithm SHA256).Hash -cne
+            (Get-FileHash -LiteralPath (Join-Path $package $assembly) -Algorithm SHA256).Hash) {
+            throw "Published Windows media assembly differs from its pinned restored package: $assembly"
+        }
+    }
+    # Exact MIT texts from the repository commits declared by these NuGet packages.
+    foreach ($legal in @(
+        @{Name='Vortice.Windows.LICENSE'; Hash='fd6b7cb561d91ac7c0f1d94c2e9c62bf26a5c8f555a577d24a1b4c34a00620ba'},
+        @{Name='Vortice.Mathematics.LICENSE'; Hash='a2434e83a0048f9941a50886c267cec973f7513c368ae9d67ee3bb749007f32f'},
+        @{Name='SharpGen.Runtime.LICENSE'; Hash='70b29e56dfb83c36e973ceed0e154859dced78542ffb719a87f0abf09b73adba'}
+    )) {
+        $source = Join-Path $repoRoot ('LLPlayer.Avalonia/Licenses/Vortice/' + $legal.Name)
+        if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant() -cne $legal.Hash) {
+            throw "Pinned Windows media legal text changed: $($legal.Name)"
+        }
+        Copy-RegularFile $source (Join-Path $package ('licenses/' + $legal.Name))
+    }
     $tesseract = Resolve-RestoredPackage 'TesseractOCR' '5.5.2'
     foreach ($nativeFile in @(
         @{Name='leptonica-1.85.0.dll'; Hash='64bb1d584bce83db5e5c3625f1857e4bc12993625699cabd0a9b8b76e393bd01'},

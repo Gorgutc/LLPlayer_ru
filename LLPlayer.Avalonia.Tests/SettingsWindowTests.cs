@@ -69,7 +69,8 @@ public class SettingsWindowTests
             var gear = window.FindControl<Button>("SettingsButton")!;
             Assert.NotNull(gear); AssertContained(gear, window);
             var menu = window.FindControl<Menu>("MainMenu")!;
-            Assert.Equal(8, menu.Items.Count);
+            Assert.Equal(new[] { "Words", "Translation", "Recognition", "_Media", "_Playback", "_Subtitles", "_View", "_Help", "App" },
+                menu.Items.OfType<MenuItem>().Select(item => item.Header?.ToString()));
             foreach (object? item in menu.Items)
             {
                 var header = Assert.IsType<MenuItem>(item); AssertContained(header, window);

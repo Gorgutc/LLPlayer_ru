@@ -16,7 +16,7 @@ public class AvStreamMenuTests
     {
         using WindowFixture fixture = new();
         Menu menu = fixture.Window.FindControl<Menu>("MainMenu")!;
-        Assert.Equal(new[] { "Words", "Translation", "Recognition", "_Media", "_Playback", "_Subtitles", "_View", "_Help" },
+        Assert.Equal(new[] { "Words", "Translation", "Recognition", "_Media", "_Playback", "_Subtitles", "_View", "_Help", "App" },
             menu.Items.OfType<MenuItem>().Select(item => item.Header?.ToString()));
         MenuItem playback = Assert.Single(menu.Items.OfType<MenuItem>(), item => Equals(item.Header, "_Playback"));
         AssertChoiceHeaders(playback.Items.OfType<MenuItem>());
