@@ -269,14 +269,15 @@ function Protected-Paths {
         while ($pending.Count) {
             foreach ($item in @(Get-ChildItem -LiteralPath $pending.Dequeue() -Force)) {
                 if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-                    # Localized Start Menu aliases point at the canonical Programs Known Folder.
-                    # Only skip an alias whose exact physical directory is independently scanned below.
+                    # Skip only targets independently scanned through a reference root or its physical descendants.
                     $covered = $false
                     if ($item.PSIsContainer) {
                         $resolved = [LLPlayerRetention.Native]::ResolveReference($item.FullName)
                         foreach ($referenceRoot in @($ReferenceRoots)) {
-                            if ($referenceRoot -and (Test-Path -LiteralPath $referenceRoot -PathType Container) -and
-                                ([LLPlayerRetention.Native]::ResolveReference($referenceRoot) -ieq $resolved)) { $covered = $true; break }
+                            if (-not $referenceRoot -or -not (Test-Path -LiteralPath $referenceRoot -PathType Container)) { continue }
+                            $referencePath = [LLPlayerRetention.Native]::ResolveReference($referenceRoot)
+                            if ($referencePath -ieq $resolved -or
+                                ((Within $referencePath $resolved) -and (Physical $referenceRoot) -ieq $referencePath -and (Physical $resolved) -ieq $resolved)) { $covered = $true; break }
                         }
                     }
                     if ($covered) { continue }

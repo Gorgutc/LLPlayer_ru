@@ -1,5 +1,5 @@
 ﻿# Offline, tiny filesystem/COM fixtures. Never builds, launches, or touches a real installation.
-param([ValidateSet('all','hosted-process','record-unknown','reference-alias','native-process','resolved-reference')][string]$ReviewRegression='all')
+param([ValidateSet('all','hosted-process','record-unknown','reference-alias','native-process','resolved-reference','reference-descendant')][string]$ReviewRegression='all')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -75,6 +75,27 @@ function Restore-NewestBuild($Fixture) {
     Write-Json $rPath $r
 }
 try {
+    if ($ReviewRegression -in @('all','reference-descendant')) {
+        $f=New-Fixture 'known-reference-descendant'
+        $modules=Join-Path $f.desktop 'node_modules'; $canonical=Join-Path $modules '.pnpm/cspell@10.0.0/node_modules/cspell'
+        $null=[IO.Directory]::CreateDirectory($canonical)
+        $null=New-Item -ItemType Junction -Path (Join-Path $modules 'cspell') -Target $canonical
+        $r=Read-Json (Join-Path $f.builds.a 'receipt.json')
+        $link=$shell.CreateShortcut((Join-Path $canonical 'Keep older build.lnk'))
+        try { $link.TargetPath=$r.executablePath; $link.Save() } finally { [void][Runtime.InteropServices.Marshal]::ReleaseComObject($link) }
+        $result=Invoke-Retention $f @{Apply=$true}
+        Check ((Kept $f 'a') -and -not (Kept $f 'b')) 'An alias to an independently reachable physical descendant must retain its nested shortcut reference while unrelated old builds prune.'
+
+        $f=New-Fixture 'reference-descendant-aliased-ancestor'
+        $physicalRoot=Join-Path $work 'physical-reference-root'; $canonical=Join-Path $physicalRoot 'nested/canonical'
+        $null=[IO.Directory]::CreateDirectory($canonical)
+        $null=New-Item -ItemType Junction -Path (Join-Path $physicalRoot 'AliasNode') -Target $canonical
+        $rootAlias=Join-Path $work 'aliased-reference-root'
+        $null=New-Item -ItemType Junction -Path $rootAlias -Target $physicalRoot
+        $result=& $helper -InstallRoot $f.root -DesktopPath $f.desktop -IconPath $icon -ReferenceRoots @($f.desktop,$rootAlias) -Apply
+        Check ((Kept $f 'a') -and (Kept $f 'b') -and $result.deletedBuilds.Count -eq 0) 'A descendant reachable only through an aliased reference-root ancestor must preserve candidates.'
+        if ($ReviewRegression -eq 'reference-descendant') { Write-Host 'Reference-descendant review regressions passed.'; return }
+    }
     if ($ReviewRegression -in @('all','resolved-reference')) {
         $f=New-Fixture 'resolved-reference'
         $null=Invoke-Retention $f # Loads the same native type used by physical paths and read-only references.
