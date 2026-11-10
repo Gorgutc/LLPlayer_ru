@@ -1,4 +1,4 @@
-param([string]$DotNetRoot = $env:DOTNET_ROOT)
+param([string]$DotNetRoot = $env:DOTNET_ROOT, [switch]$RetentionAfterThirdRefresh)
 # Offline filesystem/COM contracts for the direct schema-2 Windows desktop test build.
 # All runs use -PackageDir fixtures: these checks never claim a fresh publish of HEAD and never launch the player.
 # Fixtures live under ignored artifacts/. The real default root and the real desktop shortcut are not touched here.
@@ -439,6 +439,11 @@ try {
     Assert-True ((Hash $first.ownerPath) -ceq $ownerBeforeRefresh -and $null -eq $flatOwner.PSObject.Properties['legacy']) 'Refresh changed a flat owner record or invented a migration.'
     Assert-True ((Hash $wpf) -ceq $wpfHash) 'Refresh changed the original WPF shortcut.'
     Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $install 'builds') -Directory).Count -eq 2) 'Refresh did not retain exactly the two immutable builds.'
+    if ($RetentionAfterThirdRefresh) {
+        $third = & $updater @params -PackageDir $packageA
+        Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $install 'builds') -Directory).Count -eq 2) 'Third refresh must retain current plus one fallback (two builds). '
+        return
+    }
     $link2 = Get-Link $second.shortcutPath
     Assert-True ($link2.target -ieq $receipt2.executablePath -and $link2.working -ieq $receipt2.payloadPath -and $link2.iconFile -ieq $receipt2.iconPath) 'Refresh did not rebind the direct link to the new payload/icon.'
     Assert-True ($link2.target -ieq $state2.executablePath -and $state2.iconPath -ieq $receipt2.iconPath) 'current.json and the refreshed shortcut select different payload identities.'
@@ -792,7 +797,7 @@ try {
     $finalState = Read-Json $runtimeOnly.currentPath
     Assert-True ($finalState.buildId -eq $runtimeReceipt.buildId -and $finalState.shortcutSha256 -ceq $runtimeReceipt.shortcutSha256 -and
         $finalState.iconSha256 -ceq $runtimeReceipt.iconSha256) 'The final current.json, receipt and shortcut do not select one build.'
-    Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $install 'builds') -Directory).Count -eq 5) 'The contract fixture lost or merged immutable builds.'
+    Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $install 'builds') -Directory).Count -eq 2) 'The contract fixture did not retain current plus its verified previous selection.'
     Assert-NoAtomicTemps $install 'The contract suite left install-root temporary files behind.'
     Assert-NoAtomicTemps $desktop 'The contract suite left Desktop temporary files behind.'
     Assert-DesktopOnlyContract $desktop $wpf 'The contract suite left unexpected Desktop entries.'
