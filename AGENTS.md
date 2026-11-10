@@ -75,8 +75,13 @@ establish acceptance of the current imported tree. Change product decisions only
   newly published payload. The stable Desktop shortcut `LLPlayer Avalonia (Windows)` must target the selected immutable
   payload's `LLPlayer.Avalonia.exe` directly, with no arguments, that payload as working directory and its blue icon.
   Persist physical resolved paths outside AppData virtualization; the default root is `%USERPROFILE%\Applications\LLPlayer-Avalonia-TestBuild`.
-  Keep `current.json` consistent with the link. Preserve earlier payloads and the original WPF shortcut; the updater never launches or stops
-  the player. See [Windows desktop test build](docs/agent/windows-desktop-test-build.md). Direct user read-only/no-build
+  Keep `current.json` consistent with the link. Owner policy from 2026-11-10 replaces unlimited retention with automatic
+  post-success Keep2: retain the current build and one verified fallback when available. Running, pinned, changed or
+  unverifiable builds remain protected extras, so more than two may remain. Preserve retained receipts' `sourceArchive`
+  and `packageSource` dependencies. Cleanup is limited to verified obsolete managed builds and their unreferenced owned
+  publish jobs; never prune arbitrary `-PackageDir` inputs, user data/models/config, legacy installations or the WPF shortcut.
+  Pruning follows successful activation/readback, outside rollback; skipped or failed cleanup is reported separately.
+  The updater never launches or stops the player. See [Windows desktop test build](docs/agent/windows-desktop-test-build.md). Direct user read-only/no-build
   or other explicit execution constraints override refresh. If refresh cannot run, report `NOT_RUN` with the reason and
   do not claim the icon is current; on other hosts, report the actual Windows-refresh status.
 

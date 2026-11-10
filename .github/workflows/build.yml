@@ -59,6 +59,15 @@ jobs:
     - name: Verify Windows Avalonia package contract
       run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
 
+    - name: Verify desktop test build retention
+      run: |
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-build-retention.ps1
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop retention contracts failed.' }
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop updater contracts failed.' }
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1 -RetentionAfterThirdRefresh
+        if ($LASTEXITCODE -ne 0) { throw 'Third-refresh retention contracts failed.' }
+
     - name: Publish Windows Avalonia package
       run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1 -OutDir "$env:RUNNER_TEMP\windows-avalonia-package" -StagingDir "$env:GITHUB_WORKSPACE\artifacts\ci-windows-online-package"
 

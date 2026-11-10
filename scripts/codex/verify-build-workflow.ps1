@@ -29,6 +29,15 @@ $windowsAvaloniaJob = @'
     - name: Verify Windows Avalonia package contract
       run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-package-avalonia.ps1
 
+    - name: Verify desktop test build retention
+      run: |
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-build-retention.ps1
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop retention contracts failed.' }
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop updater contracts failed.' }
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1 -RetentionAfterThirdRefresh
+        if ($LASTEXITCODE -ne 0) { throw 'Third-refresh retention contracts failed.' }
+
     - name: Publish Windows Avalonia package
       run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-avalonia.ps1 -OutDir "$env:RUNNER_TEMP\windows-avalonia-package" -StagingDir "$env:GITHUB_WORKSPACE\artifacts\ci-windows-online-package"
 
@@ -324,7 +333,7 @@ function Assert-WindowsAvaloniaJobContract([string[]]$JobsLines, [string]$Source
         $_.Trim() -and -not $_.TrimStart().StartsWith("#", [System.StringComparison]::Ordinal)
     } | ForEach-Object { $_.TrimEnd() })
     if (($actualLines -join "`n") -cne ($expectedLines -join "`n")) {
-        throw "$Source jobs.avalonia-windows must match the canonical seven-step Windows Avalonia gate (full verify, package fixtures, publish/content/archive integrity, staged/archive plugin load, upload); skips, extra steps, inputs, overrides and unpinned actions are forbidden."
+        throw "$Source jobs.avalonia-windows must match the canonical eight-step Windows Avalonia gate (full verify, package fixtures, fail-closed retention/full updater/third-refresh fixtures, publish/content/archive integrity, staged/archive plugin load, upload); skips, extra steps, inputs, overrides and unpinned actions are forbidden."
     }
 }
 
@@ -930,6 +939,64 @@ jobs:
 $positiveFixture = $positiveFixture + "`n" + $windowsAvaloniaJob
 Assert-BuildWorkflowContract $positiveFixture "positive fixture"
 
+$desktopRetentionStep = @'
+    - name: Verify desktop test build retention
+      run: |
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-build-retention.ps1
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop retention contracts failed.' }
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1
+        if ($LASTEXITCODE -ne 0) { throw 'Desktop updater contracts failed.' }
+        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1 -RetentionAfterThirdRefresh
+        if ($LASTEXITCODE -ne 0) { throw 'Third-refresh retention contracts failed.' }
+'@
+$desktopRetentionCommands = @(
+    '        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-build-retention.ps1',
+    '        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1',
+    '        powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1 -RetentionAfterThirdRefresh'
+)
+$desktopRetentionGuards = @(
+    '        if ($LASTEXITCODE -ne 0) { throw ''Desktop retention contracts failed.'' }',
+    '        if ($LASTEXITCODE -ne 0) { throw ''Desktop updater contracts failed.'' }',
+    '        if ($LASTEXITCODE -ne 0) { throw ''Third-refresh retention contracts failed.'' }'
+)
+if (-not $windowsAvaloniaJob.Contains($desktopRetentionStep)) { throw 'Desktop retention positive fixture is stale.' }
+$commentedDesktopFixture = $positiveFixture.Replace(
+    $desktopRetentionCommands[0],
+    $desktopRetentionCommands[0] + "`n        # Comments may separate a command from its immediate executable guard."
+)
+Assert-BuildWorkflowContract $commentedDesktopFixture "positive desktop retention comment fixture"
+$firstDesktopPair = $desktopRetentionCommands[0] + "`n" + $desktopRetentionGuards[0]
+$secondDesktopPair = $desktopRetentionCommands[1] + "`n" + $desktopRetentionGuards[1]
+$desktopRetentionMutations = @(
+    @{ Description = 'missing Desktop retention step'; Before = $desktopRetentionStep; After = '' },
+    @{ Description = 'conditional Desktop retention step'; Before = '    - name: Verify desktop test build retention'; After = "    - name: Verify desktop test build retention`n      if: false" },
+    @{ Description = 'non-fatal Desktop retention step'; Before = '    - name: Verify desktop test build retention'; After = "    - name: Verify desktop test build retention`n      continue-on-error: true" },
+    @{ Description = 'custom Desktop retention shell'; Before = '    - name: Verify desktop test build retention'; After = "    - name: Verify desktop test build retention`n      shell: cmd" },
+    @{ Description = 'retention guard runs after the updater command'; Before = $firstDesktopPair + "`n" + $desktopRetentionCommands[1]; After = $desktopRetentionCommands[0] + "`n" + $desktopRetentionCommands[1] + "`n" + $desktopRetentionGuards[0] },
+    @{ Description = 'retention guard suppresses failure'; Before = $desktopRetentionGuards[0]; After = '        if ($LASTEXITCODE -ne 0) { exit 0 }' },
+    @{ Description = 'third-refresh case omitted'; Before = $desktopRetentionCommands[2]; After = $desktopRetentionCommands[1] },
+    @{ Description = 'retention suite narrowed to one regression'; Before = $desktopRetentionCommands[0]; After = $desktopRetentionCommands[0] + ' -ReviewRegression hosted-process' },
+    @{ Description = 'full updater suite replaced with third-refresh case'; Before = $secondDesktopPair; After = $desktopRetentionCommands[2] + "`n" + $desktopRetentionGuards[1] },
+    @{ Description = 'duplicate retention command'; Before = $desktopRetentionCommands[0]; After = $desktopRetentionCommands[0] + "`n" + $desktopRetentionCommands[0] },
+    @{ Description = 'updater runs before retention contracts'; Before = $firstDesktopPair + "`n" + $secondDesktopPair; After = $secondDesktopPair + "`n" + $firstDesktopPair },
+    @{ Description = 'success exit before Desktop contracts'; Before = $desktopRetentionCommands[0]; After = "        exit 0`n" + $desktopRetentionCommands[0] },
+    @{ Description = 'native exit code reset before retention guard'; Before = $desktopRetentionGuards[0]; After = '        $LASTEXITCODE = 0' + "`n" + $desktopRetentionGuards[0] }
+)
+for ($index = 0; $index -lt $desktopRetentionCommands.Count; $index++) {
+    $pair = $desktopRetentionCommands[$index] + "`n" + $desktopRetentionGuards[$index]
+    $desktopRetentionMutations += @(
+        @{ Description = "Desktop command $($index + 1) omitted"; Before = $pair; After = $desktopRetentionGuards[$index] },
+        @{ Description = "Desktop command $($index + 1) exit guard omitted"; Before = $desktopRetentionGuards[$index]; After = '' },
+        @{ Description = "Desktop command $($index + 1) exit guard inverted"; Before = $desktopRetentionGuards[$index]; After = $desktopRetentionGuards[$index].Replace('-ne 0', '-eq 0') }
+    )
+}
+foreach ($mutation in $desktopRetentionMutations) {
+    if (-not $windowsAvaloniaJob.Contains($mutation.Before)) { throw "Desktop workflow fixture mutation is stale: $($mutation.Description)." }
+    $changedJob = $windowsAvaloniaJob.Replace($mutation.Before, $mutation.After)
+    Assert-ContractRejected ($positiveFixture.Replace($windowsAvaloniaJob, $changedJob)) $mutation.Description "must match the canonical eight-step Windows Avalonia gate"
+}
+Write-Host "Desktop workflow fixtures passed: 2 positive, $($desktopRetentionMutations.Count) adversarial."
+
 $positiveWindowsRunner = '$ErrorActionPreference = "Stop"' + "`ntry {`n    " + $windowsAvaloniaCheckedRunner + "`n    " +
     ($windowsAvaloniaDotnetCommands -join "`n    ") + "`n}`nfinally { Pop-Location }"
 Assert-WindowsAvaloniaRunnerContract $positiveWindowsRunner "positive Windows Avalonia runner"
@@ -1005,7 +1072,7 @@ foreach ($mutation in $windowsAvaloniaMutations) {
     }
     $changedJob = $windowsAvaloniaJob.Replace($mutation.Before, $mutation.After)
     $fixture = $positiveFixture.Replace($windowsAvaloniaJob, $changedJob)
-    Assert-ContractRejected $fixture "Windows Avalonia $($mutation.Description)" "must match the canonical seven-step Windows Avalonia gate"
+    Assert-ContractRejected $fixture "Windows Avalonia $($mutation.Description)" "must match the canonical eight-step Windows Avalonia gate"
 }
 $positiveLinuxFixture = @'
 name: Linux Build & Test

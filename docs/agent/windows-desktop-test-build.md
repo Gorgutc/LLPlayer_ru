@@ -5,6 +5,9 @@ every completed LLPlayer task/stage, including documentation and tooling work. T
 for the existing shared Avalonia app. Windows and Linux still use one Views/ViewModels/Themes tree and shared Core;
 the shortcut does not replace the supported WPF product or establish desktop/model acceptance.
 
+On 2026-11-10 the owner replaced unlimited build retention with automatic **Keep2**: the current build and one verified
+fallback, plus protected exceptions. This changes local deployment retention, not player behavior or native acceptance.
+
 ## Refresh before handoff
 
 Run from the repository on Windows after the task's final commit is in place. The updater refuses an uncommitted or dirty
@@ -90,7 +93,8 @@ validates; any other value is refused, because the direct apphost would then dep
 survive on another host. Process-scoped `-DotNetRoot` remains build-only.
 
 The updater and its tests never launch the player, stop an existing player process or modify the original WPF
-shortcut. Earlier payloads remain available. Activation follows package validation, installation and shortcut/readback
+shortcut. The previous selection remains available throughout activation; successful updates then apply Keep2 below.
+Activation follows package validation, installation and shortcut/readback
 checks and is a compensating transaction: it snapshots the previous shortcut/pointer/owner, then updates the link,
 `current.json` and `owner.json`, and re-reads the link natively. Any exception restores the snapshots and refuses to
 overwrite state that changed concurrently. This is not crash-atomic: if the process is killed between the link
@@ -102,6 +106,41 @@ and an emptied `builds` directory is pruned, so the next attempt can run cleanly
 that reaches its rollback path: a process killed mid-run can leave an incomplete build directory or temporary file
 for the next handoff to inspect, because there is no startup sweep. Report a failed refresh from its actual receipt and
 preserved prior state rather than claiming that a new payload became current.
+
+## Automatic Keep2 retention
+
+After successful activation and readback, `desktop-build-retention.ps1` keeps the current immutable build and one
+verified fallback when available. It prefers the verified previously selected build supplied by the updater; otherwise
+it uses the newest verified noncurrent receipt's `createdUtc`. Directory modification time is not selection evidence.
+The helper defaults to `-KeepLast 2` (minimum two); normal updater use applies the policy automatically, without another
+confirmation. There is no player setting or separate product task for retention.
+
+Running builds and builds referenced by Desktop or pinned Taskbar shortcuts are protected extras. Changed, foreign,
+unverifiable or unsafe candidates are skipped and reported; unresolved protection must not be guessed away to meet a
+count. More than two builds can therefore remain. Protect user data, downloaded models, configuration, legacy
+installations and the WPF shortcut. An arbitrary prebuilt `-PackageDir` is never a cleanup target.
+
+Every kept or protected receipt's `sourceArchive` and `packageSource` dependencies remain available. Associated publish
+jobs can be removed only inside a verified owned `artifacts/windows-desktop-test-build-<32hex>/` boundary, after their
+build is pruned and no retained receipt depends on them. New jobs carry separate ownership and whole-tree hash
+manifests; immutable build receipts are not rewritten. Historical jobs without those manifests are skipped by automatic
+retention and belong to the owner's reviewed one-time cleanup allowlist. Generic `artifacts/`, QA, SDK and unrelated
+source/data directories are not swept.
+
+Pruning runs outside the activation rollback transaction. Failed activation does not trigger retention; cleanup errors
+do not roll back a successfully selected new build. The updater returns a separate `retention` result with retained and
+protected builds, deleted builds/jobs and errors. Report partial or skipped cleanup honestly rather than claiming a
+strict two-build result. Revalidate physical boundaries, ownership, content and the current selection before deletion;
+never follow reparse points or delete changed/unowned content to satisfy Keep2.
+
+The helper can also show a read-only preview; omit `-Apply` for that mode:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\desktop-build-retention.ps1
+```
+
+Scoped helper inputs are `-InstallRoot`, `-DesktopPath`, `-IconPath`, `-KeepLast` and optional `-PreviousBuildId`.
+The updater supplies `-Apply` only after its successful readback. Preview does not replace the actual cleanup receipt.
 
 ## Evidence and recovery
 
@@ -147,30 +186,43 @@ allowlist, and `-FailAfterReceiptForTests` injects a post-receipt failure for cl
 resolution or any owner/receipt/executable/icon/launcher/shortcut identity check. A normal refresh can therefore only
 migrate the bound known legacy locations and cannot inject failures.
 
-Do not edit the pointer by hand, delete older payloads or restart the player to recover from an update failure.
+Do not edit the pointer by hand, bypass Keep2 protection or restart the player to recover from an update failure.
 Keep the previous build/receipt and failed verification output. If the owner explicitly requests rollback, extract a
 verified previous archive/package into separate staging **outside `InstallRoot`**, then select that staged package
 through the updater's prebuilt mode. `-PackageDir` must not point inside the managed installation, including retained
 `builds/<id>/payload/`. The resulting receipt shows only `buildMode=prebuilt-validated`, `sourceCommit=null`,
 `sourceArchive=null` and `packageSource=<staging>`; it carries no automatic rollback label, so record the deliberate
 rollback, the staged archive SHA-256 and its older provenance in the handoff and do not describe it as current-source
-refresh. There is no rollback flag and no automatic cleanup of earlier selected payloads or app launch; incomplete or
-newly created build/root state from a failed attempt is the only thing the updater removes.
+refresh. There is no rollback flag or automatic app launch. Failed-attempt cleanup remains limited to incomplete or
+newly created build/root state; Keep2 pruning runs only after a successful update.
 
-Each default refresh retains its ignored
-`artifacts/windows-desktop-test-build-<id>/` directory with the published ZIP and the staging package referenced by the
-new receipt (`sourceArchive`, `packageSource`). That directory is local evidence, not source; it is not pruned
-automatically, so a later cleanup needs an explicit owner request.
+Each default refresh creates an ignored `artifacts/windows-desktop-test-build-<id>/` directory containing the published
+ZIP and staging package referenced by its receipt (`sourceArchive`, `packageSource`). These are local evidence, not
+source. Keep2 preserves dependencies of retained/protected receipts and prunes only verified obsolete owned jobs as
+described above; historical unmanifested jobs are handled by the already authorized one-time cleanup scope.
 
-The offline updater contract checks are separate from a fresh build:
+The offline retention and updater contract checks are separate from a fresh build. Run all three commands;
+the full updater suite and the targeted third-refresh mode are distinct invocations:
 
 ```powershell
+# Retention helper contracts.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-build-retention.ps1
+# Full updater contracts, including later migration, rollback and negative-package cases.
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1
+# Targeted third-refresh retention regression; this mode returns early.
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\test-desktop-test-build.ps1 -RetentionAfterThirdRefresh
 ```
 
-They build synthetic packages under ignored `artifacts/` and exercise, through the production code path: direct
+All three run in the `LLPlayer Windows Avalonia Build & Test` CI job. They create synthetic package/filesystem fixtures
+under ignored `artifacts/`; the real default installation and Desktop shortcut are not changed. The helper suite covers
+Keep2 retention, protected references/processes, retained source dependencies and refusal of unsafe cleanup. The targeted
+third-refresh mode checks successful-update pruning and exits before the later updater cases; it supplements the full
+suite rather than replacing it.
+
+The full updater suite exercises, through the production code path: direct
 argument-free target/working-directory/per-build-icon COM and independent IShellLink/`ExtractIconEx` readback;
-physical/canonical stored paths; a fresh schema-2 root; repeated refresh with retained immutable payloads/receipts/icons;
+physical/canonical stored paths; a fresh schema-2 root; repeated refresh with current/fallback immutable payloads,
+receipts and icons;
 all three verified schema 1 shortcut forms (the PowerShell form through a subst logical alias, including
 logical-to-physical record translation) and preserved legacy bytes; refusal of edited/foreign owner, pointer, receipt,
 payload, icon, launcher and link identities; refusal of missing pointer identity fields, unbound/aliased legacy roots,
@@ -178,12 +230,15 @@ foreign install roots, foreign shortcuts, reparse points, redirected drive alias
 plural/roll-forward/dev/non-matching deps runtimeconfig and broken/locked packages; static checks of the fresh publish
 branch, clean-`HEAD` binding and publisher location; injected post-receipt cleanup for pre-existing empty and new roots;
 compensating pointer/owner
-failure rollback without temporary or staged link files; and the absence of process, runtime-install or persistent
-environment changes. The suite requires
-Windows, `subst` with a free drive letter and a registered x64 .NET 10 runtime; it is not part of CI. The real
-nominal/Codex-cache legacy-root regexes are exercised by the actual migration, not by the fixture allowlist. The
-offline suite always uses prebuilt fixtures, so it cannot prove the fresh-publish wiring, clean-`HEAD` binding or the
-actual deployment; only the real default refresh and its readback do that. Bind every reported suite result to the
+failure rollback without temporary or staged link files; and the absence of player starts/stops, runtime installation or
+persistent environment changes.
+
+All three checks require Windows, writable fixture storage and ShellLink COM. Both updater modes require a registered
+x64 .NET 10 runtime; the full updater suite additionally requires `subst` with a free drive letter. These prerequisites
+also apply to the Windows CI runner. The real nominal/Codex-cache legacy-root regexes are exercised by the actual
+migration, not by the fixture allowlist. The offline suites use synthetic/prebuilt fixtures: static source assertions
+check fresh-publish wiring, but do not execute a real fresh publish, clean-`HEAD` deployment or player launch.
+Only the real default refresh and its readback establish deployment evidence. Bind every reported suite result to the
 tested commit and script SHA-256 values and keep the actual log; report the actual result without a fixed passing-case
 count. Complete a spawned infrastructure/instruction review and final `/review` before handoff, and keep generated
 payloads, receipts and logs out of source Git.

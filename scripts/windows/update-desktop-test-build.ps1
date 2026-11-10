@@ -7,7 +7,7 @@ param(
     [string[]]$LegacyRootsForTests,
     [switch]$FailAfterReceiptForTests
 )
-# Local test deployment only. Never starts/stops a player, installs a runtime or deletes old payloads.
+# Local test deployment only. Never starts/stops a player or installs a runtime. Verified retention follows selection.
 # -LegacyRootsForTests and -FailAfterReceiptForTests are contract-fixture seams: they require -PackageDir, do not
 # bypass identity checks, and are rejected before any fresh publish. A normal refresh cannot use them.
 $ErrorActionPreference = 'Stop'
@@ -430,6 +430,7 @@ try {
     $beforeLink = Get-Snapshot $shortcut
     $beforePointer = Get-Snapshot $currentPath
     $beforeOwner = Get-Snapshot $ownerPath
+    $job = $null
     $sourceCommit = $null; $sourceArchive = $null; $archiveHash = $null; $buildMode = 'prebuilt-validated'
     if ($PackageDir) {
         $package = Assert-PhysicalPath $PackageDir
@@ -565,7 +566,14 @@ try {
         Assert-Snapshot $beforeLink; Assert-Snapshot $beforePointer; Assert-Snapshot $beforeOwner
         if ($FailAfterReceiptForTests) { throw 'Injected post-receipt failure for contract fixtures.' }
         if ($sourceCommit -and (Get-CleanCommit) -cne $sourceCommit) { throw 'Source HEAD changed before selection; the previous build is retained.' }
-        if (Test-Path -LiteralPath $shortcut) { [IO.File]::Replace($stagedLink, $shortcut, [System.Management.Automation.Language.NullString]::Value) }
+        if (Test-Path -LiteralPath $shortcut) {
+            try { [IO.File]::Replace($stagedLink, $shortcut, [System.Management.Automation.Language.NullString]::Value) }
+            catch {
+                $cause = $_.Exception.GetBaseException()
+                $message = 'Desktop shortcut activation Replace failed (HResult=0x{0}; target={1}; staged={2}): {3}' -f $cause.HResult.ToString('X8'), $shortcut, $stagedLink, $cause.Message
+                throw [IO.IOException]::new($message, $cause)
+            }
+        }
         else { [IO.File]::Move($stagedLink, $shortcut) }
         Write-Atomic $currentPath $pointerBytes
         Write-Atomic $ownerPath $ownerBytes
@@ -611,12 +619,26 @@ try {
         if ($rollbackFailures.Count) { throw ($failure.Exception.Message + '; rollback: ' + ($rollbackFailures -join '; ')) }
         throw $failure
     }
+    # Activation and rollback are finished. Retention can warn, but can never undo a usable selection.
+    $retention = $null
+    try {
+        $retentionParams = @{ InstallRoot=$InstallRoot; DesktopPath=$DesktopPath; IconPath=$IconPath; Apply=$true }
+        if ($oldState -and $stateRoot -ieq $InstallRoot) { $retentionParams['PreviousBuildId'] = [string]$oldState.buildId }
+        if ($job) { $retentionParams['CreatedPublishJob'] = $job }
+        $retention = & (Join-Path $PSScriptRoot 'desktop-build-retention.ps1') @retentionParams
+        if ($retention.status -ne 'ok') { Write-Warning ('Desktop build selected; retention is partial: ' + ($retention.errors -join '; ')) }
+    }
+    catch {
+        $retention = [pscustomobject]@{ mode='apply'; status='failed'; errors=@($_.Exception.Message); deletedBuilds=@(); deletedJobs=@() }
+        Write-Warning ('Desktop build selected; retention failed: ' + $_.Exception.Message)
+    }
     [LLPlayerDesktopTest.NativeShortcutV2]::Notify($shortcut)
     Write-Host "Desktop direct test build selected: $buildId ($buildMode). The player was not launched."
     Write-Output ([pscustomobject]@{
         currentPath=$currentPath; ownerPath=$ownerPath; receiptPath=$receiptPath; shortcutPath=$shortcut; payloadPath=$payload
         sourceCommit=$sourceCommit; buildMode=$buildMode; schema=2; buildId=$buildId
         receiptSha256=$receiptHash; shortcutSha256=$newLinkHash; executableSha256=$exeHash; iconSha256=$iconHash
+        retention=$retention
         legacyVariant=$(if ($legacyMigration) { $legacyMigration.variant } else { $null })
     })
 }
