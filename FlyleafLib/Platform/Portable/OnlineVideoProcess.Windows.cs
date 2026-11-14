@@ -12,7 +12,8 @@ namespace FlyleafLib.Plugins;
 public sealed partial class OnlineVideoProcess
 {
     [SupportedOSPlatform("windows")]
-    static unsafe OnlineVideoProcess StartWindows(ProcessStartInfo info)
+    static unsafe OnlineVideoProcess StartWindows(ProcessStartInfo info, bool ownedEngine = false,
+        ProcessPriorityClass priority = ProcessPriorityClass.Normal)
     {
         // Process.Start cannot create a suspended child. Set up the pipes and restrict
         // inheritance to these three handles; unrelated player handles must stay private.
@@ -51,6 +52,8 @@ public sealed partial class OnlineVideoProcess
                         .Select(k => k.Key + "=" + k.Value)) + "\0\0";
                     var command = new StringBuilder();
                     AppendArgument(command, info.FileName);
+                    if (ownedEngine && info.Arguments.Length > 0)
+                        command.Append(' ').Append(info.Arguments);
                     foreach (var argument in info.ArgumentList)
                     {
                         command.Append(' ');
@@ -75,6 +78,8 @@ public sealed partial class OnlineVideoProcess
                     throw new IOException("Could not contain the extractor in a Windows job.");
                 root = Process.GetProcessById(child.Pid);
                 _ = root.Handle; // Retain a handle for ExitCode, even if this child exits immediately.
+                if (priority != ProcessPriorityClass.Normal)
+                    root.PriorityClass = priority;
                 input.DisposeLocalCopyOfClientHandle();
                 output.DisposeLocalCopyOfClientHandle();
                 error.DisposeLocalCopyOfClientHandle();

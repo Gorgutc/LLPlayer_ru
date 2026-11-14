@@ -153,6 +153,39 @@ public sealed class BatchWorkflowTests
     }
 
     [Fact]
+    public async Task Shutdown_closes_watch_and_manual_admission_until_failed_shutdown_is_recovered()
+    {
+        var runs = new Runs();
+        var watcher = new Watcher();
+        await using var workflow = Create(runs, watcher);
+        workflow.Open();
+        long session = watcher.Session;
+        watcher.Ready("active.mkv");
+        await runs.Started.Task;
+        watcher.Ready("queued.mkv");
+
+        workflow.BeginShutdown();
+        await workflow.DrainAsync();
+        watcher.Ready("stale.mkv", session);
+        await workflow.StartAsync();
+        await workflow.RetryAsync(workflow.Jobs[0]);
+        Assert.False(workflow.CanStart);
+        Assert.False(workflow.WatchFolder);
+        Assert.Single(runs.Scopes);
+        Assert.DoesNotContain(workflow.Jobs, job => job.FileName == "stale.mkv");
+
+        workflow.ResumeAfterFailedShutdown();
+        Assert.True(workflow.CanStart);
+        Assert.True(workflow.WatchFolder);
+        Assert.NotEqual(session, watcher.Session);
+        watcher.Ready("fresh.mkv");
+        await workflow.DrainAsync();
+        Assert.Equal(2, runs.Scopes.Count);
+        Assert.Equal("fresh.mkv", Assert.Single(runs.Scopes[1]).FileName);
+        Assert.Equal(BatchSubtitleStatus.Pending, workflow.Jobs.Single(job => job.FileName == "queued.mkv").Status);
+    }
+
+    [Fact]
     public async Task Watch_failure_stops_session_but_preserves_persisted_intent()
     {
         var factory = new Runs();

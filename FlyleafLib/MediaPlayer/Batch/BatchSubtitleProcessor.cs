@@ -96,6 +96,8 @@ public sealed class BatchSubtitleProcessor
                 catch (Exception ex)
                 {
                     MarkFailed(job, ex);
+                    if (ex is EngineProcessDrainException)
+                        throw;
                 }
             }
         }
@@ -173,6 +175,8 @@ public sealed class BatchSubtitleProcessor
                 catch (Exception ex)
                 {
                     MarkFailed(job, ex);
+                    if (ex is EngineProcessDrainException)
+                        throw;
                 }
             }
         }

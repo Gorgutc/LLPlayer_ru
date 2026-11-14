@@ -168,23 +168,20 @@ public sealed class GpuCoordinatorProofTests
             }
         };
         await using var renderer = new DubbingRenderer(new DubbingConfig(), () => tts);
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => renderer.RenderAsync(
+        var failure = await Assert.ThrowsAsync<EngineProcessDrainException>(() => renderer.RenderAsync(
             [Cue("line")], "movie.mkv", "unused.ru.dub.flac", progress: null, test.Token));
-        Assert.Contains("Child exit could not be confirmed", failure.Message);
+        Assert.Contains("Child exit could not be confirmed", failure.InnerException!.Message);
         Assert.Equal(1, stopAttempts);
 
-        // The failed start never published a host to the renderer; the lifecycle owner must retain it.
-        // A successful renderer.DisposeAsync alone cannot confirm exit in this case.
-        await renderer.DisposeAsync();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => owner.ReleaseAfterStopAsync(tts.DisposeAsync).AsTask());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => owner.ReleaseAfterStopAsync(failure.RetryStop).AsTask());
         Task<ProofLease?> waiting = admission.AdmitAsync(useGpu: true, test.Token).AsTask();
         Assert.False(waiting.IsCompleted);
         Assert.Equal(2, stopAttempts);
 
         exited.SetResult();
-        await owner.ReleaseAfterStopAsync(tts.DisposeAsync);
+        await owner.ReleaseAfterStopAsync(failure.RetryStop);
         ProofLease next = (await waiting.WaitAsync(test.Token))!;
-        await owner.ReleaseAfterStopAsync(tts.DisposeAsync);
+        await owner.ReleaseAfterStopAsync(failure.RetryStop);
         Assert.Equal(3, stopAttempts);
         Task<ProofLease?> later = admission.AdmitAsync(useGpu: true, test.Token).AsTask();
         Assert.False(later.IsCompleted);

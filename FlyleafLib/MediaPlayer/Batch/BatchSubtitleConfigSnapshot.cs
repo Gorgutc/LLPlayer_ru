@@ -10,14 +10,18 @@ namespace FlyleafLib.MediaPlayer.Batch;
 
 public static class BatchSubtitleConfigSnapshot
 {
-    public static Config Create(Config source)
+    public static Config Create(Config source) => Create(source, forBatch: true);
+
+    public static Config CreateForRecognition(Config source) => Create(source, forBatch: false);
+
+    private static Config Create(Config source, bool forBatch)
     {
         Config snapshot = new(true)
         {
             Version = source.Version,
             Audio = CloneAudioConfig(source.Audio),
             Video = source.Video.Clone(),
-            Subtitles = CreateSubtitlesConfig(source.Subtitles),
+            Subtitles = CreateSubtitlesConfig(source.Subtitles, forBatch),
             Demuxer = source.Demuxer.Clone(),
             Decoder = source.Decoder.Clone(),
             Player = source.Player.Clone(),
@@ -46,7 +50,9 @@ public static class BatchSubtitleConfigSnapshot
         return audio;
     }
 
-    public static Config.SubtitlesConfig CreateSubtitlesConfig(Config.SubtitlesConfig source)
+    public static Config.SubtitlesConfig CreateSubtitlesConfig(Config.SubtitlesConfig source) => CreateSubtitlesConfig(source, forBatch: true);
+
+    private static Config.SubtitlesConfig CreateSubtitlesConfig(Config.SubtitlesConfig source, bool forBatch)
     {
         Config.SubtitlesConfig snapshot = new()
         {
@@ -107,9 +113,9 @@ public static class BatchSubtitleConfigSnapshot
         };
 
         snapshot.WhisperConfig = CloneWhisperConfig(source.WhisperConfig);
-        snapshot.WhisperConfig.Translate = false;
+        if (forBatch) snapshot.WhisperConfig.Translate = false;
         snapshot.WhisperCppConfig = CloneWhisperCppConfig(source.WhisperCppConfig);
-        snapshot.FasterWhisperConfig = CloneFasterWhisperConfig(source.FasterWhisperConfig);
+        snapshot.FasterWhisperConfig = CloneFasterWhisperConfig(source.FasterWhisperConfig, forBatch);
         snapshot.TranslateChatConfig = CloneTranslateChatConfig(source.TranslateChatConfig);
         snapshot.TranslateServiceSettings = CloneTranslateServiceSettings(source.TranslateServiceSettings);
         // F-05-gap: deep-copy the nested AI-dubbing config for snapshot self-consistency, so any headless/
@@ -122,7 +128,7 @@ public static class BatchSubtitleConfigSnapshot
         // snapshot's copy at the default. Pinned by the DubbingConfig guard + focused regression in
         // BatchSubtitleConfigSnapshotTests.
         snapshot.DubbingConfig = CloneDubbingConfig(source.DubbingConfig);
-        snapshot.TranslateTargetLanguage = TargetLanguage.Russian;
+        snapshot.TranslateTargetLanguage = forBatch ? TargetLanguage.Russian : source.TranslateTargetLanguage;
 
         // Per-slot subtitle language preferences + unknown-source fallbacks (primary/secondary). These were dropped
         // from the batch snapshot, so batch transcription/translation silently ignored the user's language prefs
@@ -233,7 +239,7 @@ public static class BatchSubtitleConfigSnapshot
         };
     }
 
-    private static FasterWhisperConfig CloneFasterWhisperConfig(FasterWhisperConfig source)
+    private static FasterWhisperConfig CloneFasterWhisperConfig(FasterWhisperConfig source, bool forBatch)
     {
         return new FasterWhisperConfig
         {
@@ -242,7 +248,7 @@ public static class BatchSubtitleConfigSnapshot
             UseManualModel = source.UseManualModel,
             ManualModelDir = source.ManualModelDir,
             Model = source.Model,
-            ExtraArguments = RemoveFasterWhisperTaskArgument(source.ExtraArguments),
+            ExtraArguments = forBatch ? RemoveFasterWhisperTaskArgument(source.ExtraArguments) : source.ExtraArguments,
             ProcessPriority = source.ProcessPriority,
             AntiHallucination = source.AntiHallucination,
             Prompt = source.Prompt

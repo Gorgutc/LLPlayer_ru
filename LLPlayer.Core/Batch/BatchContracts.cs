@@ -6,6 +6,7 @@ namespace LLPlayer.Core.Batch;
 public interface IBatchRun : IAsyncDisposable
 {
     bool IsRunningOnCpu { get; }
+    bool IsWaitingForGpu => false;
     Task ProcessAsync(IProgress<BatchSubtitleProgress> progress, CancellationToken token);
 }
 

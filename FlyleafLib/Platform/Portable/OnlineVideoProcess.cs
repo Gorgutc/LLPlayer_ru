@@ -30,7 +30,7 @@ public sealed partial class OnlineVideoProcess : IDisposable
             throw new PlatformNotSupportedException();
 
         // Without --fork the new session leader execs the configured helper under this PID.
-        const string setsid = "/usr/bin/setsid";
+        const string setsid = LinuxSessionLauncher;
         if (!OnlineVideoRequest.IsExecutablePath(setsid))
             throw new FileNotFoundException("Online video requires /usr/bin/setsid (util-linux).");
         info.ArgumentList.Insert(0, info.FileName);
@@ -73,6 +73,8 @@ public sealed partial class OnlineVideoProcess : IDisposable
             root.Dispose();
         }
     }
+
+    private const string LinuxSessionLauncher = "/usr/bin/setsid";
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]
     private static partial int Kill(int pid, int signal);

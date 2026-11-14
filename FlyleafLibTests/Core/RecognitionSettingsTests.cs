@@ -5,6 +5,7 @@ using Whisper.net.Ggml;
 
 namespace FlyleafLibTests.Core;
 
+[Collection(RecognitionCommandQueueCollection.Name)]
 public class RecognitionSettingsTests
 {
     static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);

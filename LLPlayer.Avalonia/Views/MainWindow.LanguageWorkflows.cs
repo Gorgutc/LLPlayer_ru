@@ -15,6 +15,8 @@ public partial class MainWindow
     public Func<bool>? KeepAliveOnClose { get; set; }
     public Action<Window>? BackgroundRequested { get; set; }
     public Action? ShutdownStarting { get; set; }
+    internal Func<Task>? DrainGpuWorkBeforeShutdown { get; set; }
+    internal Action? GpuShutdownFailed { get; set; }
     bool explicitQuit;
     Task? applicationShutdown;
 
@@ -36,10 +38,8 @@ public partial class MainWindow
         if (shutdownStarted || shutdownComplete) return;
         shutdownStarted = true;
         ClearCommandButtonKeys();
-        vm?.BeginWordActionsShutdown();
-        vm?.CancelAppShortcuts();
         ShutdownStarting?.Invoke();
-        DisableLanguageWindows();
+        EnableLanguageWindows(false);
         IsEnabled = false;
         applicationShutdown = DrainBeforeClosingAsync();
     }
@@ -55,10 +55,10 @@ public partial class MainWindow
             ? WindowClosingBehavior.OwnerWindowOnly : WindowClosingBehavior.OwnerAndChildWindows;
     }
 
-    void DisableLanguageWindows()
+    void EnableLanguageWindows(bool enabled)
     {
         foreach (Window? child in new Window?[] { insightsWindow, dubbingWindow, voicePickerWindow, modelManagerWindow, batchWindow, recognitionWindow })
-            if (child != null) child.IsEnabled = false;
+            if (child != null) child.IsEnabled = enabled;
     }
 
     public void ShowAiInsights(AiInsightsViewModel model)

@@ -1,5 +1,23 @@
 # Media Runtime Contract
 
+## Managed GPU admission — Avalonia Windows/Linux, owner-approved 2026-11-14
+
+Avalonia shares one [GPU coordinator](gpu-coordinator-adr.md) between interactive FasterWhisper and the batch
+factory. A potentially GPU-capable batch or a batch with CosyVoice holds admission across the run, including manual,
+watch, and retry entry points. The batch uses its detached configuration and retains a warm CosyVoice sidecar across
+files. An unambiguous CPU device bypasses GPU admission for FasterWhisper without dubbing. A batch that can use
+the GPU keeps its admission when the existing activity policy selects CPU for a subsequent chunk.
+
+Interactive ASR waits outside the recognition command queue, then revalidates the media generation, audio track,
+and engine settings before launch. The admission belongs to the shared ASR run. Attaching the second subtitle
+slot, pausing, and canceling one of two attached slots all preserve ownership while the worker runs.
+
+Managed GPU jobs release admission after their owned work and process shutdown are confirmed. Failed or partial
+startup and uncertain shutdown keep the process owner available for cleanup retry. A batch with an unconfirmed
+stop retains model-file protection and ends before scheduling another file. Explicit Quit first signals cancellation
+to interactive and batch owners, then drains both. If process shutdown cannot be confirmed, Avalonia keeps the
+window available to retry Quit. WPF continues through its existing launch paths and full compatibility gate.
+
 ## Portable backends and commands — owner-approved SECOND, resumed 2026-11-03
 
 Shared Avalonia uses one Windows/Linux host. Software decode/presentation remain defaults. Opt-in D3D11VA/VAAPI

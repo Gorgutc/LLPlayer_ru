@@ -42,6 +42,7 @@ public class SubtitlesASR
     private readonly Lock _locker = new();
     private readonly Lock _lockerSubs = new();
     private CancellationTokenSource? _cts = null;
+    private long _slotRevision;
     // Guarded by _lockerSubs (HC-37). Private so no consumer can enumerate it without the lock; external readers
     // (e.g. the audio screamer) use SnapshotSubIndexes().
     private readonly HashSet<int> SubIndexSet = new();
@@ -72,6 +73,20 @@ public class SubtitlesASR
     /// <summary>True while the interactive ASR run is paused at a chunk boundary (accumulated subtitles kept).</summary>
     public bool IsPaused => _pauseSource.IsPaused;
 
+    /// <summary>Whether this slot can attach to another slot's cues without starting an ASR engine.</summary>
+    public bool CanAttach(int slot)
+    {
+        lock (_lockerSubs)
+            return SubIndexSet.Count > 0 && !SubIndexSet.Contains(slot);
+    }
+
+    /// <summary>Retires a run before admission for its restart while preserving its existing cues.</summary>
+    public void CancelForRestart()
+    {
+        try { _cts?.Cancel(); }
+        catch (ObjectDisposedException) { /* The previous ASR run has already retired its token. */ }
+    }
+
     /// <summary>
     /// Pause the interactive ASR run at the next chunk boundary, keeping already-produced subtitles. No-op when
     /// ASR is not running. A chunk is transcribed atomically, so the chunk in flight (incl. the external
@@ -100,11 +115,12 @@ public class SubtitlesASR
     /// <param name="err">error information</param>
     /// <param name="actionHint">recoverable-action hint (see KnownErrorActionKeys); empty when none</param>
     /// <returns></returns>
-    public bool CanExecute(out string err, out string actionHint)
+    public bool CanExecute(out string err, out string actionHint, Config? runConfig = null)
     {
+        Config config = runConfig ?? _config;
         actionHint = "";
 
-        if (_config.Subtitles.ASREngine == SubASREngineType.WhisperCpp)
+        if (config.Subtitles.ASREngine == SubASREngineType.WhisperCpp)
         {
             // whisper.cpp loads its native runtime in-process; without the VC++ redistributable that load
             // aborts the whole app (README). Preflight the CRT here so the user gets an actionable message
@@ -118,30 +134,30 @@ public class SubtitlesASR
             }
 #endif
 
-            if (_config.Subtitles.WhisperCppConfig.Model == null)
+            if (config.Subtitles.WhisperCppConfig.Model == null)
             {
                 err = "whisper.cpp model is not set. Please download it from the settings.";
                 actionHint = KnownErrorActionKeys.DownloadWhisperModel;
                 return false;
             }
 
-            if (!File.Exists(_config.Subtitles.WhisperCppConfig.GetModelFilePath()))
+            if (!File.Exists(config.Subtitles.WhisperCppConfig.GetModelFilePath()))
             {
 #if WINDOWS
-                err = $"whisper.cpp model file '{_config.Subtitles.WhisperCppConfig.Model.ModelFileName}' does not exist in the folder. Please download it from the settings.";
+                err = $"whisper.cpp model file '{config.Subtitles.WhisperCppConfig.Model.ModelFileName}' does not exist in the folder. Please download it from the settings.";
 #else
-                err = $"whisper.cpp model file does not exist: '{_config.Subtitles.WhisperCppConfig.GetModelFilePath()}'. Place the selected ggml model at this path.";
+                err = $"whisper.cpp model file does not exist: '{config.Subtitles.WhisperCppConfig.GetModelFilePath()}'. Place the selected ggml model at this path.";
 #endif
                 actionHint = KnownErrorActionKeys.DownloadWhisperModel;
                 return false;
             }
         }
-        else if (_config.Subtitles.ASREngine == SubASREngineType.FasterWhisper)
+        else if (config.Subtitles.ASREngine == SubASREngineType.FasterWhisper)
         {
 #if WINDOWS
-            if (_config.Subtitles.FasterWhisperConfig.UseManualEngine)
+            if (config.Subtitles.FasterWhisperConfig.UseManualEngine)
             {
-                if (!File.Exists(_config.Subtitles.FasterWhisperConfig.ManualEnginePath))
+                if (!File.Exists(config.Subtitles.FasterWhisperConfig.ManualEnginePath))
                 {
                     err = "faster-whisper engine does not exist in the manual path.";
                     return false;
@@ -156,13 +172,13 @@ public class SubtitlesASR
                 }
             }
 #else
-            if (!_config.Subtitles.FasterWhisperConfig.ValidateEngine(out err))
+            if (!config.Subtitles.FasterWhisperConfig.ValidateEngine(out err))
                 return false;
 #endif
 
-            if (_config.Subtitles.FasterWhisperConfig.UseManualModel)
+            if (config.Subtitles.FasterWhisperConfig.UseManualModel)
             {
-                if (!Directory.Exists(_config.Subtitles.FasterWhisperConfig.ManualModelDir))
+                if (!Directory.Exists(config.Subtitles.FasterWhisperConfig.ManualModelDir))
                 {
                     err = "faster-whisper manual model directory does not exist.";
                     return false;
@@ -184,18 +200,19 @@ public class SubtitlesASR
     /// <param name="type">Demuxer type</param>
     /// <param name="curTime">Current playback timestamp, from which whisper is run</param>
     /// <returns>true: process completed, false: run in progress</returns>
-    public bool Execute(int subIndex, string url, int streamIndex, MediaType type, TimeSpan curTime, Action? startupAcknowledged = null)
+    public bool Execute(int subIndex, string url, int streamIndex, MediaType type, TimeSpan curTime, Action? startupAcknowledged = null,
+        Config? runConfig = null, bool attachOnly = false, bool confirmProcessExit = false,
+        CancellationToken startCancellation = default, Func<bool>? isCurrentInput = null)
     {
+        startCancellation.ThrowIfCancellationRequested();
+        long revision;
         // When Dual ASR: Copy the other ASR result and return early. HC-37: read SubIndexSet under _lockerSubs
         // (every mutation uses it) instead of racing the raw HashSet.
-        bool copyFromOtherAsr;
         lock (_lockerSubs)
         {
-            copyFromOtherAsr = SubIndexSet.Count > 0 && !SubIndexSet.Contains(subIndex);
-        }
-        if (copyFromOtherAsr)
-        {
-            lock (_lockerSubs)
+            CheckInput();
+            revision = _slotRevision;
+            if (CanAttach(subIndex))
             {
                 SubIndexSet.Add(subIndex);
                 int otherIndex = (subIndex + 1) % 2;
@@ -228,11 +245,12 @@ public class SubtitlesASR
                         _subtitlesManager[subIndex].LanguageSource = _subtitlesManager[otherIndex].LanguageSource;
                     }
                 }
-            }
 
-            // return early
-            startupAcknowledged?.Invoke();
-            return false;
+                startupAcknowledged?.Invoke();
+                return false;
+            }
+            if (attachOnly)
+                throw new OperationCanceledException("The ASR run for the other subtitle slot is no longer available.");
         }
 
         // If it has already been executed, cancel it to start over from the current playback position.
@@ -257,29 +275,40 @@ public class SubtitlesASR
                 }
             }
             // Cancel preceding execution and wait
-            TryCancel(true);
+            CancelForRestart();
+            lock (_locker) { /* Wait for the run whose cues are being preserved. */ }
 
             // restore previous result
             lock (_lockerSubs)
             {
+                CheckInput();
+                if (revision != _slotRevision || !SubIndexSet.Contains(subIndex))
+                    throw new OperationCanceledException("The subtitle source changed before ASR could restart.");
                 foreach (int i in prevSubIndexSet)
                 {
+                    // A concurrent dual-ASR detach keeps the remaining worker alive.
+                    // Restore its cues without reattaching a slot the user has since disabled.
+                    if (!SubIndexSet.Contains(i)) continue;
                     _subtitlesManager[i].Load(prevSubs[i]);
                     // Re-enable spinner
                     _subtitlesManager[i].StartLoading();
-
-                    SubIndexSet.Add(i);
                 }
             }
         }
 
         lock (_locker)
         {
+            startCancellation.ThrowIfCancellationRequested();
             // HC-37: SubIndexSet is guarded by _lockerSubs everywhere else; add under it here too (was _locker),
             // keeping the established _locker -> _lockerSubs nesting order.
             lock (_lockerSubs)
             {
+                CheckInput();
+                if (revision != _slotRevision || (alreadyRunning && !SubIndexSet.Contains(subIndex)))
+                    throw new OperationCanceledException("The subtitle source changed before ASR could start.");
                 SubIndexSet.Add(subIndex);
+                _cts?.Dispose();
+                _cts = new CancellationTokenSource();
             }
 
             // UI status flag (e.g. the ASR chip): true only while actively transcribing. Reset in the
@@ -287,30 +316,29 @@ public class SubtitlesASR
             _config.Subtitles.player.IsASRRunning = true;
             try
             {
-            _cts = new CancellationTokenSource();
+            CancellationToken token = _cts!.Token;
+            using CancellationTokenRegistration startupCancellation = startCancellation.Register(_cts.Cancel);
             // A fresh run must never start paused (e.g. left paused before a seek-triggered restart).
             _pauseSource.Resume();
             _config.Subtitles.player.IsASRPaused = false;
             startupAcknowledged?.Invoke();
             // F-19 slice 2: enable VAD cue-boundary snapping only on the interactive ASR path (batch re-segments
             // post-hoc without per-chunk audio, so it does not run VAD). Gated by the config toggle; fail-soft.
-            using AudioReader reader = new(_config, subIndex, enableVadSnapping: _config.Subtitles.VadCueSnapping);
-            reader.Open(url, streamIndex, type, _cts.Token);
+            Config effectiveConfig = runConfig ?? _config;
+            using AudioReader reader = new(effectiveConfig, subIndex, enableVadSnapping: effectiveConfig.Subtitles.VadCueSnapping,
+                confirmProcessExit: confirmProcessExit);
+            reader.Open(url, streamIndex, type, token);
 
-            if (_cts.Token.IsCancellationRequested)
+            if (token.IsCancellationRequested)
             {
                 return true;
             }
 
             reader.ReadAll(curTime, data =>
             {
-                if (_cts.Token.IsCancellationRequested)
-                {
-                    return;
-                }
-
                 lock (_lockerSubs)
                 {
+                    if (token.IsCancellationRequested || revision != _slotRevision) return;
                     // F-18: normalize an ALL-CAPS ASR artifact (a faster-whisper(-XXL) quirk) to sentence-case
                     // before re-segmentation. Gated; a non-all-caps cue is returned unchanged.
                     string? asrText = data.Text;
@@ -365,9 +393,9 @@ public class SubtitlesASR
                         }
                     }
                 }
-            }, _cts.Token, _pauseSource.Token);
+            }, token, _pauseSource.Token);
 
-            if (!_cts.Token.IsCancellationRequested)
+            if (!token.IsCancellationRequested)
             {
                 Utils.PlayCompletionSound();
                 // Also surface a non-blocking visual confirmation (the UI subscribes to ASRCompleted).
@@ -395,45 +423,37 @@ public class SubtitlesASR
         }
 
         return true;
+
+        void CheckInput()
+        {
+            if (isCurrentInput?.Invoke() == false)
+                throw new OperationCanceledException("The audio source changed before ASR could start.");
+        }
     }
 
     public void TryCancel(bool isWait)
     {
-        var cts = _cts;
-        if (cts != null)
+        CancellationTokenSource? cts;
+        lock (_lockerSubs)
         {
-            if (!cts.IsCancellationRequested)
-            {
-                lock (_lockerSubs)
-                {
-                    foreach (var i in SubIndexSet)
-                    {
-                        _subtitlesManager[i].Clear();
-                    }
-                }
+            cts = _cts;
+            _slotRevision++;
+            foreach (int slot in SubIndexSet) _subtitlesManager[slot].Clear();
+            // A coordinated restart may already have requested cancellation. Reset still retires the slots so
+            // an ASR command for replacement media cannot attach to the canceled run.
+            SubIndexSet.Clear();
+        }
 
-                cts.Cancel();
-                lock (_lockerSubs)
-                {
-                    SubIndexSet.Clear();
-                }
-            }
-            else
-            {
-                Log.Info("Already cancel requested");
-            }
+        try { cts?.Cancel(); }
+        catch (ObjectDisposedException) { /* Another reset already retired this exact run. */ }
+        if (!isWait || cts == null) return;
 
-            if (!isWait)
-            {
-                return;
-            }
-
-            lock (_locker)
-            {
-                // dispose after it is no longer used.
-                cts.Dispose();
-                _cts = null;
-            }
+        lock (_locker)
+        {
+            if (!ReferenceEquals(_cts, cts)) return;
+            // Dispose after the worker exits. A newer owner must keep its own cancellation source.
+            cts.Dispose();
+            _cts = null;
         }
     }
 
@@ -464,6 +484,7 @@ public class AudioReader : IDisposable
     private readonly Config _config;
     private readonly int _subIndex;
     private readonly Func<bool>? _preferCpu;
+    private readonly bool _confirmProcessExit;
 
     // F-19 slice 2: when true, run Silero VAD over each chunk's PCM and attach the speech segments so
     // re-segmentation can snap cue boundaries onto pauses. Only the interactive ASR path enables it (batch leaves
@@ -488,12 +509,14 @@ public class AudioReader : IDisposable
     /// <param name="preferCpu">Optional per-chunk device policy for the faster-whisper engine (batch only):
     /// when it returns true a chunk is transcribed on CPU instead of the configured GPU device. Null keeps
     /// the configured device (the interactive ASR path passes nothing, so its behaviour is unchanged).</param>
-    public AudioReader(Config config, int subIndex, Func<bool>? preferCpu = null, bool enableVadSnapping = false)
+    public AudioReader(Config config, int subIndex, Func<bool>? preferCpu = null, bool enableVadSnapping = false,
+        bool confirmProcessExit = false)
     {
         _config = config;
         _subIndex = subIndex;
         _preferCpu = preferCpu;
         _enableVadSnapping = enableVadSnapping;
+        _confirmProcessExit = confirmProcessExit;
         Log = new LogHandler(("[#1]").PadRight(8, ' ') + " [AudioReader   ] ");
     }
 
@@ -582,8 +605,12 @@ public class AudioReader : IDisposable
         {
             Task.WhenAll(consumerTask, producerTask).Wait();
         }
-        catch (AggregateException)
+        catch (AggregateException exception)
         {
+            var drainFailure = exception.Flatten().InnerExceptions.OfType<EngineProcessDrainException>().FirstOrDefault();
+            if (drainFailure is not null)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(drainFailure);
+
             if (cancellationToken.IsCancellationRequested)
             {
                 // canceled by caller
@@ -609,7 +636,7 @@ public class AudioReader : IDisposable
             await using IASRService asrService = _config.Subtitles.ASREngine switch
             {
                 SubASREngineType.WhisperCpp => new WhisperCppASRService(_config),
-                SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config, _preferCpu),
+                SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config, _preferCpu, _confirmProcessExit),
                 _ => throw new InvalidOperationException()
             };
 
@@ -1486,11 +1513,19 @@ public class WhisperCppASRService : IASRService
 public partial class FasterWhisperASRService : IASRService
 {
     private readonly Config _config;
+#if !WINDOWS
+    private readonly bool _confirmProcessExit;
+    private readonly ProcessPriorityClass _processPriority;
+#endif
 
-    public FasterWhisperASRService(Config config, Func<bool>? preferCpu = null)
+    public FasterWhisperASRService(Config config, Func<bool>? preferCpu = null, bool confirmProcessExit = false)
     {
         _config = config;
         _preferCpu = preferCpu;
+#if !WINDOWS
+        _confirmProcessExit = confirmProcessExit;
+        _processPriority = config.Subtitles.FasterWhisperConfig.ProcessPriority;
+#endif
 
         bool wordTimestamps = _config.Subtitles.WordTimestamps;
         _cmdBase = BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig, wordTimestamps: wordTimestamps);
@@ -1760,6 +1795,9 @@ public partial class FasterWhisperASRService : IASRService
             forceCts.CancelAfter(5000);
         });
 
+#if !WINDOWS
+        FlyleafLib.Plugins.OnlineVideoProcess? engine = null;
+#endif
         try
         {
             string? lastLine = null;
@@ -1794,7 +1832,27 @@ public partial class FasterWhisperASRService : IASRService
             Command baseCmd = _preferCpu?.Invoke() == true ? _cmdBaseCpu : _cmdBase;
             Command cmd = baseCmd.WithArguments($"{baseCmd.Arguments} {addedArgs}");
 
-            await foreach (var cmdEvent in cmd.ListenAsync(Encoding.Default, Encoding.Default, forceCts.Token, token))
+            IAsyncEnumerable<CommandEvent> events;
+#if !WINDOWS
+            if (_confirmProcessExit)
+            {
+                token.ThrowIfCancellationRequested();
+                engine = FlyleafLib.Plugins.OnlineVideoProcess.StartEngine(new ProcessStartInfo
+                {
+                    FileName = Path.GetFullPath(cmd.TargetFilePath),
+                    Arguments = cmd.Arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                }, _processPriority);
+                events = engine.ReadEngineEventsAsync(token);
+            }
+            else
+#endif
+                events = cmd.ListenAsync(Encoding.Default, Encoding.Default, forceCts.Token, token);
+
+            await foreach (var cmdEvent in events)
             {
                 token.ThrowIfCancellationRequested();
 #if !WINDOWS
@@ -1941,6 +1999,26 @@ public partial class FasterWhisperASRService : IASRService
             }
         }
         finally
+        {
+#if !WINDOWS
+            if (engine is not null)
+            {
+                try { await engine.DisposeEngineAsync().ConfigureAwait(false); }
+                catch (Exception stopFailure)
+                {
+                    throw new EngineProcessDrainException("Could not confirm that FasterWhisper stopped. Retry shutdown before starting another GPU job.",
+                        stopFailure, async () =>
+                        {
+                            await engine.DisposeEngineAsync().ConfigureAwait(false);
+                            CleanupChunkFiles();
+                        });
+                }
+            }
+#endif
+            CleanupChunkFiles();
+        }
+
+        void CleanupChunkFiles()
         {
             // delete tmp wave
             if (File.Exists(tempFilePath))

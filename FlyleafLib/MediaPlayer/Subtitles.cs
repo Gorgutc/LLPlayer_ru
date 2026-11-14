@@ -766,8 +766,11 @@ public class Subtitle : NotifyPropertyChanged
 
     /// <summary>Exact attempt acknowledgement after ASR cancellation ownership has been installed.</summary>
     public Task ASRStartup { get; private set; } = Task.CompletedTask;
+    /// <summary>Exact attempt completion, including teardown of its audio reader and managed processes.</summary>
+    public Task ASRCompletion { get; private set; } = Task.CompletedTask;
 
-    public void EnableASR()
+    public void EnableASR(Config runConfig = null, bool attachOnly = false, bool confirmProcessExit = false,
+        CancellationToken startCancellation = default)
     {
         TaskCompletionSource startup = new(TaskCreationOptions.RunContinuationsAsynchronously);
         ASRStartup = startup.Task;
@@ -775,47 +778,61 @@ public class Subtitle : NotifyPropertyChanged
 
         var url = _player.AudioDecoder.Demuxer.Url;
         var type = _player.AudioDecoder.Demuxer.Type;
-        var streamIndex = _player.AudioDecoder.AudioStream.StreamIndex;
+        var audioStream = _player.AudioDecoder.AudioStream;
+        var streamIndex = audioStream.StreamIndex;
+        var mediaGeneration = _player.MediaGeneration;
 
         TimeSpan curTime = new(_player.CurTime);
 
-        Task.Run(() =>
+        ASRCompletion = Task.Run(() =>
+        {
+            try
             {
                 bool isDone;
 
                 using (_player.SubtitlesManager[_subIndex].StartLoading())
                 {
-                    isDone = _player.SubtitlesASR.Execute(_subIndex, url, streamIndex, type, curTime, () => startup.TrySetResult());
+                    isDone = _player.SubtitlesASR.Execute(_subIndex, url, streamIndex, type, curTime, () => startup.TrySetResult(),
+                        runConfig, attachOnly, confirmProcessExit, startCancellation, () =>
+                            !_player.IsMediaResetting && mediaGeneration == _player.MediaGeneration
+                            && ReferenceEquals(audioStream, _player.AudioDecoder.AudioStream));
                 }
 
                 // F-16: restore persisted per-line voices onto the freshly transcribed cues too (same gated,
                 // fill-empty, best-effort restore as the loaded-subtitle path), so re-ASR of a file the user
                 // previously voiced re-applies those choices.
-                RestorePersistedVoiceAssignments();
+                if (mediaGeneration == _player.MediaGeneration) RestorePersistedVoiceAssignments();
 
-                if (!isDone)
+                if (!isDone && mediaGeneration == _player.MediaGeneration)
                 {
                     // re-enable spinner because it is running
                     _player.SubtitlesManager[_subIndex].StartLoading();
                 }
                 startup.TrySetResult();
-            })
-            .ContinueWith(t =>
+            }
+            catch (Exception error)
             {
-                if (t.IsFaulted)
+                // A failed attempt may finish while another command opens media or restarts this slot.
+                try
                 {
-                    startup.TrySetException(t.Exception!.Flatten().InnerExceptions);
-                    if (_player.SubtitlesManager[_subIndex].Subs.Count == 0)
-                    {
-                        // reset if not single subtitles generated
+                    if (mediaGeneration == _player.MediaGeneration && ReferenceEquals(ASRStartup, startup.Task)
+                        && _player.SubtitlesManager[_subIndex].Subs.Count == 0)
                         Disable();
-                    }
-
-                    var ex = t.Exception.Flatten().InnerException;
-
-                    _player.RaiseUnknownErrorOccurred($"Cannot execute ASR: {ex?.Message}", UnknownErrorType.ASR, t.Exception);
+                    if (error is not OperationCanceledException)
+                        _player.RaiseUnknownErrorOccurred($"Cannot execute ASR: {error.GetBaseException().Message}", UnknownErrorType.ASR, error);
                 }
-            }, TaskContinuationOptions.OnlyOnFaulted);
+                catch (Exception reportError)
+                {
+                    throw new AggregateException(error, reportError);
+                }
+                finally { startup.TrySetException(error); }
+                throw;
+            }
+        });
+
+        // The command path observes startup while the coordinated owner observes ASRCompletion. The legacy
+        // engine command also starts work without an awaiting caller, so observe failures there as well.
+        _ = ASRCompletion.ContinueWith(task => _ = task.Exception, TaskContinuationOptions.OnlyOnFaulted);
 
         UpdateUI();
     }

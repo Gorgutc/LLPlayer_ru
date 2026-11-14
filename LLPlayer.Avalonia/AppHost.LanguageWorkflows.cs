@@ -71,7 +71,7 @@ public sealed partial class AppHost
             return snapshot!;
         }
         var factory = new BatchRunFactory(ConfigSnapshot, activity.IsUserActive,
-            snapshot => DubbingWorkflow.CreateRenderer(snapshot.Subtitles.DubbingConfig),
+            snapshot => DubbingWorkflow.CreateRenderer(snapshot.Subtitles.DubbingConfig, confirmProcessExit: true),
             () =>
             {
                 IDubbingVoiceAssignmentProvider? assignments = null;
@@ -79,9 +79,10 @@ public sealed partial class AppHost
                 return assignments;
             },
             controller.LanguageResources.AcquireUse,
-            getUtf8Bom: () => controller.GetPlaybackSettings().SubtitleExportUtf8Bom);
+            getUtf8Bom: () => controller.GetPlaybackSettings().SubtitleExportUtf8Bom,
+            gpuCoordinator: gpuCoordinator);
         languageBatch = new BatchWorkflow(batchSettings, factory, new BatchFolderWatcher(), InvokeUi,
-            new FlyleafBatchMediaCatalog(ConfigSnapshot));
+            new FlyleafBatchMediaCatalog(ConfigSnapshot), gpuCoordinator: gpuCoordinator);
         languageBatchModel = new BatchSubtitlesViewModel(languageBatch, batchStore, window.PickFolderAsync,
             path => { RestoreMain(); viewModel.Open(path); return Task.CompletedTask; }, window.RevealMediaAsync,
             () => viewModel.ShowDubbingSettingsCommand.Execute(null), Voices,
@@ -107,10 +108,13 @@ public sealed partial class AppHost
                 return Task.CompletedTask;
             });
         window.KeepAliveOnClose = () => !languageShuttingDown && languageBatch.KeepAlive;
+        window.DrainGpuWorkBeforeShutdown = DrainGpuWorkBeforeShutdownAsync;
+        window.GpuShutdownFailed = ResumeAfterFailedGpuShutdown;
         window.ShutdownStarting = () =>
         {
             languageShuttingDown = true;
-            controller.Recognition.Dispose(); // Cancel active OCR before waiting for any queued model/voice work.
+            controller.BeginRecognitionShutdown();
+            languageBatch.BeginShutdown();
         };
         window.BackgroundRequested = backgroundWindow =>
         {

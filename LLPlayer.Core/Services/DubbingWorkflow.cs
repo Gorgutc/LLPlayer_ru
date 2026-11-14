@@ -7,11 +7,11 @@ namespace LLPlayer.Core.Services;
 /// <summary>Shared run construction; neither opening settings nor enumerating voices starts Python.</summary>
 public static class DubbingWorkflow
 {
-    public static IDubbingRenderer CreateRenderer(DubbingConfig snapshot)
+    public static IDubbingRenderer CreateRenderer(DubbingConfig snapshot, bool confirmProcessExit = false)
     {
         if (snapshot.TtsServiceType != TtsServiceType.LocalCosyVoice)
             throw new NotSupportedException("Only the existing local CosyVoice dubbing backend is available. Choose LocalCosyVoice in Dubbing settings.");
-        return new DubbingRenderer(snapshot);
+        return new DubbingRenderer(snapshot, confirmProcessExit: confirmProcessExit);
     }
 
     public static IDubbingVoiceAssignmentProvider? CreateVoiceAssignments(bool persistPerLineVoices,

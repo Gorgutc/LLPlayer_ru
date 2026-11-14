@@ -25,8 +25,13 @@ public sealed class DubSidecarHost : IDubbingTtsService
 
     private readonly DubbingSnapshot _cfg;
     private readonly bool _mock;
+    private readonly bool _confirmProcessExit;
 
     private Process? _process;
+#if !WINDOWS
+    private FlyleafLib.Plugins.OnlineVideoProcess? _ownedProcess;
+    private Task? _ownedOutput;
+#endif
     private bool _processStarted;
     private SafeFileHandle? _job;
     private HttpClient? _http;
@@ -36,23 +41,24 @@ public sealed class DubSidecarHost : IDubbingTtsService
     private readonly SemaphoreSlim _disposeGate = new(1, 1);
     private bool _disposed;
 
-    private DubSidecarHost(DubbingSnapshot cfg, bool mock)
+    private DubSidecarHost(DubbingSnapshot cfg, bool mock, bool confirmProcessExit)
     {
         _cfg = cfg;
         _mock = mock;
+        _confirmProcessExit = confirmProcessExit;
     }
 
     /// <summary>Create a host from a config snapshot. Does not start the process.</summary>
     public static DubSidecarHost Create(DubbingConfig config, bool mock = false)
     {
         ArgumentNullException.ThrowIfNull(config);
-        return new DubSidecarHost(DubbingSnapshot.From(config), mock);
+        return new DubSidecarHost(DubbingSnapshot.From(config), mock, false);
     }
 
-    internal static DubSidecarHost Create(DubbingSnapshot snapshot, bool mock = false)
+    internal static DubSidecarHost Create(DubbingSnapshot snapshot, bool mock = false, bool confirmProcessExit = false)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        return new DubSidecarHost(snapshot, mock);
+        return new DubSidecarHost(snapshot, mock, confirmProcessExit);
     }
 
     /// <summary>The localhost port the sidecar bound to (reported on its stdout as <c>DUB_PORT=</c>).</summary>
@@ -77,6 +83,10 @@ public sealed class DubSidecarHost : IDubbingTtsService
             if (!ready)
                 await DisposeAsync().ConfigureAwait(false);
             return ready;
+        }
+        catch (EngineProcessDrainException)
+        {
+            throw;
         }
         catch
         {
@@ -122,6 +132,8 @@ public sealed class DubSidecarHost : IDubbingTtsService
                 throw new InvalidOperationException("Cannot identify the Linux parent process for safe dubbing containment.");
             psi.ArgumentList.Add("--parent-start-time");
             psi.ArgumentList.Add(parentStartTime);
+            if (_confirmProcessExit)
+                psi.ArgumentList.Add("--managed-session");
         }
         psi.ArgumentList.Add("--work-dir");
         psi.ArgumentList.Add(_workDir);
@@ -131,42 +143,59 @@ public sealed class DubSidecarHost : IDubbingTtsService
         TaskCompletionSource<int> portReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
         StringBuilder stderr = new();
 
-        _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        _process.OutputDataReceived += (_, e) =>
+        void ReadPort(string? line)
         {
-            if (e.Data is null)
+            if (line is null)
                 return;
 
             const string marker = "DUB_PORT=";
-            int idx = e.Data.IndexOf(marker, StringComparison.Ordinal);
-            if (idx >= 0 && int.TryParse(e.Data.AsSpan(idx + marker.Length).Trim(), out int p))
+            int idx = line.IndexOf(marker, StringComparison.Ordinal);
+            if (idx >= 0 && int.TryParse(line.AsSpan(idx + marker.Length).Trim(), out int p))
                 portReady.TrySetResult(p);
-        };
-        _process.ErrorDataReceived += (_, e) =>
+        }
+        void ReadError(string? line)
         {
-            if (e.Data is null)
+            if (line is null)
                 return;
             lock (stderr)
-                stderr.AppendLine(e.Data);
-        };
-
-        if (!_process.Start())
-            throw new InvalidOperationException("Failed to start the dubbing sidecar process.");
-        _processStarted = true;
-
-        _process.BeginOutputReadLine();
-        _process.BeginErrorReadLine();
-
-        if (OperatingSystem.IsWindows())
+                stderr.AppendLine(line);
+        }
+#if !WINDOWS
+        if (_confirmProcessExit)
         {
-            try { _job = JobObjectGuard.AssignKillOnClose(_process.Handle); }
-            catch { _job = null; }
+            token.ThrowIfCancellationRequested();
+            var owned = FlyleafLib.Plugins.OnlineVideoProcess.StartEngine(psi);
+            _ownedProcess = owned;
+            _ownedOutput = ReadOwnedOutputAsync(owned);
+        }
+        else
+#endif
+        {
+            _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            _process.OutputDataReceived += (_, e) => ReadPort(e.Data);
+            _process.ErrorDataReceived += (_, e) => ReadError(e.Data);
+            if (!_process.Start())
+                throw new InvalidOperationException("Failed to start the dubbing sidecar process.");
+            _processStarted = true;
+
+            _process.BeginOutputReadLine();
+            _process.BeginErrorReadLine();
+
+            if (OperatingSystem.IsWindows())
+            {
+                try { _job = JobObjectGuard.AssignKillOnClose(_process.Handle); }
+                catch { _job = null; }
+            }
         }
 
         using (CancellationTokenSource portCts = CancellationTokenSource.CreateLinkedTokenSource(token))
         {
             portCts.CancelAfter(TimeSpan.FromSeconds(120));
-            Task exited = _process.WaitForExitAsync(portCts.Token);
+            Task exited =
+#if !WINDOWS
+                _ownedProcess?.WaitForEngineRootAsync(portCts.Token) ??
+#endif
+                _process!.WaitForExitAsync(portCts.Token);
             Task completed = await Task.WhenAny(portReady.Task, exited).ConfigureAwait(false);
             if (completed == exited && !portReady.Task.IsCompleted)
             {
@@ -174,7 +203,7 @@ public sealed class DubSidecarHost : IDubbingTtsService
                 // timeout cancels portCts, which completes `exited` while the process is still alive. Classify +
                 // map so a cancel surfaces as OperationCanceled (job Canceled, not Failed), a timeout gets its
                 // own message, and only a genuine early exit reports "exited before reporting a port".
-                SidecarStartFault fault = ClassifyPortWaitFailure(token.IsCancellationRequested, _process.HasExited);
+                SidecarStartFault fault = ClassifyPortWaitFailure(token.IsCancellationRequested, ProcessHasExited);
                 if (fault == SidecarStartFault.Canceled)
                     token.ThrowIfCancellationRequested(); // the real, token-bound cancellation
 
@@ -194,7 +223,29 @@ public sealed class DubSidecarHost : IDubbingTtsService
         };
 
         return await ProbeReadyAsync(token).ConfigureAwait(false);
+
+#if !WINDOWS
+        async Task ReadOwnedOutputAsync(FlyleafLib.Plugins.OnlineVideoProcess owned)
+        {
+            Task output = ReadLinesAsync(owned.Output, ReadPort);
+            Task error = ReadLinesAsync(owned.Error, ReadError);
+            await Task.WhenAll(output, error).ConfigureAwait(false);
+        }
+
+        static async Task ReadLinesAsync(Stream stream, Action<string> consume)
+        {
+            using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
+            while (await reader.ReadLineAsync().ConfigureAwait(false) is string line)
+                consume(line);
+        }
+#endif
     }
+
+    private bool ProcessHasExited =>
+#if !WINDOWS
+        _ownedProcess?.EngineRootExited ??
+#endif
+        _process is { HasExited: true };
 
     /// <summary>Why the port wait ended without the sidecar reporting a port.</summary>
     internal enum SidecarStartFault
@@ -248,7 +299,7 @@ public sealed class DubSidecarHost : IDubbingTtsService
         while (sw.Elapsed < budget)
         {
             token.ThrowIfCancellationRequested();
-            if (_process is { HasExited: true })
+            if (ProcessHasExited)
                 throw new InvalidOperationException("The dubbing sidecar exited before it became ready.");
             try
             {
@@ -345,6 +396,25 @@ public sealed class DubSidecarHost : IDubbingTtsService
                 _http = null;
             }
 
+#if !WINDOWS
+            if (_ownedProcess is not null)
+            {
+                try
+                {
+                    await _ownedProcess.DisposeEngineAsync().ConfigureAwait(false);
+                }
+                catch (Exception stopFailure)
+                {
+                    throw new EngineProcessDrainException("Could not confirm that the dubbing sidecar stopped. Retry shutdown.",
+                        stopFailure, DisposeAsync);
+                }
+                _ownedProcess = null;
+                try { await _ownedOutput!.ConfigureAwait(false); }
+                catch (IOException) { /* The verified process boundary is already empty. */ }
+                catch (ObjectDisposedException) { /* Disposing the pipes may break a pending read. */ }
+                _ownedOutput = null;
+            }
+#endif
             if (_process is not null)
             {
                 try
