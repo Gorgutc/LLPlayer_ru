@@ -27,7 +27,10 @@ public sealed record SubtitleExportLine(
     TimeSpan Start,
     TimeSpan End,
     string Text,
-    IReadOnlyList<SubStyle>? Styles = null);
+    IReadOnlyList<SubStyle>? Styles = null)
+{
+    public string? SpeakerId { get; init; }
+}
 
 /// <summary>
 /// Pure subtitle serializer (no file/UI I/O), shared by the export dialog. Lives next to <see cref="SubtitleData"/>
@@ -45,15 +48,17 @@ public static class SubtitleExporter
         _ => ".srt"
     };
 
-    public static string Build(IReadOnlyList<SubtitleExportLine> lines, SubtitleExportFormat format) => format switch
+    public static string Build(IReadOnlyList<SubtitleExportLine> lines, SubtitleExportFormat format) => Build(lines, format, false);
+
+    public static string Build(IReadOnlyList<SubtitleExportLine> lines, SubtitleExportFormat format, bool includeSpeakerLabels) => format switch
     {
-        SubtitleExportFormat.Srt => BuildSrt(lines),
+        SubtitleExportFormat.Srt => BuildSrt(lines, includeSpeakerLabels),
         SubtitleExportFormat.Vtt => BuildVtt(lines),
         SubtitleExportFormat.Txt => BuildTxt(lines),
-        _ => BuildSrt(lines)
+        _ => BuildSrt(lines, false)
     };
 
-    private static string BuildSrt(IReadOnlyList<SubtitleExportLine> lines)
+    private static string BuildSrt(IReadOnlyList<SubtitleExportLine> lines, bool includeSpeakerLabels)
     {
         StringBuilder sb = new();
 
@@ -63,6 +68,8 @@ public static class SubtitleExporter
 
             sb.Append(i + 1).Append(NL);
             sb.Append(FormatTime(line.Start, ',')).Append(" --> ").Append(FormatTime(line.End, ',')).Append(NL);
+            if (includeSpeakerLabels && !string.IsNullOrWhiteSpace(line.SpeakerId))
+                sb.Append('[').Append(line.SpeakerId).Append("] ");
             sb.Append(NormalizeCueText(RenderItalic(line.Text, line.Styles))).Append(NL);
 
             // Blank separator line between cues, but not a trailing one after the last cue.

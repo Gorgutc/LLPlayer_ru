@@ -33,6 +33,8 @@ $native = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxru
     @($cpu | ForEach-Object { 'runtimes/win-x64/' + $_ }) + @($ffmpeg | ForEach-Object { 'FFmpeg/' + $_ })
 $windowsMediaAssemblies = @('Vortice.DXGI.dll','Vortice.MediaFoundation.dll','Vortice.DirectX.dll',
     'Vortice.Mathematics.dll','SharpGen.Runtime.dll','SharpGen.Runtime.COM.dll')
+$diarization = @('Assets/Diarization/sidecar.py','Assets/Diarization/requirements.txt',
+    'Assets/Diarization/README.md','Assets/Diarization/NOTICE.md')
 $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
     'FlyleafLib.dll','LLPlayer.Core.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll',
     'licenses/Tesseract.LICENSE','licenses/Leptonica.LICENSE','licenses/SevenZip.LICENSE','licenses/SevenZipSharp.LICENSE',
@@ -40,7 +42,7 @@ $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia
     'Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
     'LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
     'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
-    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native + $windowsMediaAssemblies
+    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native + $windowsMediaAssemblies + $diarization
 foreach ($relative in $required) {
     $path = Join-Path $root $relative
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Windows Avalonia package is missing required file $relative." }
@@ -92,6 +94,9 @@ foreach ($item in $items) {
     }
     if ($relative -like 'Plugins/*' -and $relative -notin @('Plugins/YoutubeDL','Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb')) {
         throw "Windows Avalonia package contains unexpected plugin payload $relative."
+    }
+    if ($relative -like 'Assets/Diarization/*' -and ($item.PSIsContainer -or $relative -notin $diarization)) {
+        throw "Windows Avalonia package contains unexpected diarization payload $relative."
     }
     if ($item.PSIsContainer) {
         if ($name -match '^(DubEngine|dubmodels|\.venv|venv|__pycache__|whispermodels|Whisper|tesseractmodels|Recordings|Snapshots|x86|x64|cuda|vulkan|openvino|noavx|linux-x64|win-x86|win-arm64|osx-x64|osx-arm64)$') {

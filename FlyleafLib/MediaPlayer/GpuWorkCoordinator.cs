@@ -41,14 +41,17 @@ public sealed class GpuWorkCoordinator
         NotifyChanged();
     }
 
-    public Task<bool> RetryDrainAsync()
+    public Task<bool> RetryDrainAsync() => RetryDrainAsync(null);
+
+    /// <summary>Retries a pending stop for the given operation. A null operation retries any owner.</summary>
+    public Task<bool> RetryDrainAsync(string? operation)
     {
         GpuWorkLease owner;
         TaskCompletionSource<bool> completion;
         lock (sync)
         {
+            if (pending == null || (operation != null && pending.Operation != operation)) return Task.FromResult(true);
             if (retry != null) return retry;
-            if (pending == null) return Task.FromResult(true);
             owner = pending;
             completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
             retry = completion.Task;

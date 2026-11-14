@@ -501,3 +501,7 @@ not establish a formal corresponding-source offer for the native package.
 OpenAL upstream source: <https://github.com/kcat/openal-soft/tree/d3875f333fb6abe2f39d82caca329414871ae53b>.
 Windows requires the Microsoft Visual C++ x64 Redistributable 2022 or newer for the bundled OpenAL DLL
 (MSVCP140/VCRUNTIME140/VCRUNTIME140_1); these system runtimes are not bundled.
+
+The optional diarization sidecar ships as source under Assets/Diarization. Its NOTICE.md identifies the
+pyannote.audio and Community-1 licenses. Other separately provisioned runtime libraries carry their own
+notices. The package contains no Python environment or model weights.

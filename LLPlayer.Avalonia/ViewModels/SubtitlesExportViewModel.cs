@@ -15,8 +15,9 @@ public sealed partial class SubtitlesExportViewModel : ObservableObject, IAsyncD
     bool stopping;
     [ObservableProperty] int selectedSlot;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(SelectedTextIndex))] SubtitleExportText selectedText;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(SelectedFormatIndex))] SubtitleExportFormat selectedFormat;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SelectedFormatIndex), nameof(CanIncludeSpeakerLabels))] SubtitleExportFormat selectedFormat;
     [ObservableProperty] bool isUtf8Bom = true;
+    [ObservableProperty] bool includeSpeakerLabels;
     [ObservableProperty, NotifyCanExecuteChangedFor(nameof(ExportCommand))] bool busy;
     [ObservableProperty] bool isPartial;
     [ObservableProperty] string message = "";
@@ -24,6 +25,7 @@ public sealed partial class SubtitlesExportViewModel : ObservableObject, IAsyncD
     public IReadOnlyList<string> FormatOptions { get; } = ["SRT", "WebVTT", "TXT"];
     public int SelectedTextIndex { get => (int)SelectedText; set { if (value is >= 0 and <= 2) SelectedText = (SubtitleExportText)value; } }
     public int SelectedFormatIndex { get => (int)SelectedFormat; set { if (value is >= 0 and <= 2) SelectedFormat = (SubtitleExportFormat)value; } }
+    public bool CanIncludeSpeakerLabels => SelectedFormat == SubtitleExportFormat.Srt;
     public Func<SubtitleExportRequest, Task<string?>>? PickExportPath { get; set; }
     public Func<string, Task>? RevealExport { get; set; }
     public Func<string, Task>? ShowKnownError { get; set; }
@@ -55,6 +57,7 @@ public sealed partial class SubtitlesExportViewModel : ObservableObject, IAsyncD
             SubtitleExportText text = SelectedText;
             SubtitleExportFormat format = SelectedFormat;
             bool bom = IsUtf8Bom;
+            bool speakerLabels = IncludeSpeakerLabels;
             var snapshot = source.Capture(slot, text);
             IsPartial = snapshot.IsLoading;
             if (snapshot.Lines.Count == 0)
@@ -62,7 +65,7 @@ public sealed partial class SubtitlesExportViewModel : ObservableObject, IAsyncD
                 await KnownErrorAsync("There were no subtitles to export.");
                 return;
             }
-            string content = SubtitleExporter.Build(snapshot.Lines, format);
+            string content = SubtitleExporter.Build(snapshot.Lines, format, speakerLabels);
             string name = snapshot.SuggestedBaseName + (text == SubtitleExportText.Original ? "" : ".translated") + SubtitleExporter.Extension(format);
             var request = new SubtitleExportRequest(name, snapshot.InitialDirectory, format);
             if (PickExportPath == null) throw new IOException("A save dialog is not available.");

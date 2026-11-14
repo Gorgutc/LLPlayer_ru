@@ -45,7 +45,7 @@ printf '%s' 'H4sIAAAAAAAEAO1VzWskRRR/3TMbJokbIsqSoMSOs4tBlqaXDK6CxkkyyW5k8kFmdtw
 # ---------------------------------------------------------------- publish.sh --check-package
 make_package() { # dir
     local p="$1" so
-    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL" "$p/IpaDic"
+    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets/Diarization" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL" "$p/IpaDic"
     cp "$work/YoutubeDL.dll" "$p/Plugins/YoutubeDL/YoutubeDL.dll"
     printf 'symbols\n' > "$p/Plugins/YoutubeDL/YoutubeDL.pdb"
     for f in LLPlayer.Avalonia LLPlayer.Avalonia.dll LLPlayer.Avalonia.deps.json LLPlayer.Avalonia.runtimeconfig.json \
@@ -53,7 +53,7 @@ make_package() { # dir
         IpaDic/sys.dic IpaDic/unk.dic IpaDic/matrix.bin IpaDic/char.bin IpaDic/COPYING IpaDic/AUTHORS \
         libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libe_sqlite3.so llplayer llplayer.desktop llplayer.png llplayer.sh LLPlayer.png \
         LICENSE THIRD-PARTY-NOTICES.md FFmpeg/LICENSE.txt FFmpeg/SOURCE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
-        dub_sidecar/README.md Assets/silero_vad.onnx runtimes/linux-x64/libwhisper.so \
+        dub_sidecar/README.md Assets/silero_vad.onnx Assets/Diarization/{sidecar.py,requirements.txt,README.md,NOTICE.md} runtimes/linux-x64/libwhisper.so \
         runtimes/linux-x64/libggml-whisper.so runtimes/linux-x64/libggml-base-whisper.so \
         runtimes/linux-x64/libggml-cpu-whisper.so; do
         printf 'x\n' > "$p/$f"
@@ -100,6 +100,14 @@ expect_fail "plugin case mismatch" "missing required file Plugins/YoutubeDL/Yout
     check_pkg "$(mutate plugin-case 'mv Plugins/YoutubeDL/YoutubeDL.dll Plugins/YoutubeDL/youtubedl.dll')"
 expect_fail "unexpected plugin dependency" "unexpected plugin payload" \
     check_pkg "$(mutate plugin-dependency 'echo x > Plugins/YoutubeDL/FlyleafLib.dll')"
+expect_fail "missing diarization sidecar" "missing required file Assets/Diarization/sidecar.py" \
+    check_pkg "$(mutate no-diarization 'rm Assets/Diarization/sidecar.py')"
+expect_fail "packaged diarization model" "unexpected diarization payload" \
+    check_pkg "$(mutate diarization-model 'echo x > Assets/Diarization/model.safetensors')"
+expect_fail "packaged diarization environment" "unexpected diarization payload" \
+    check_pkg "$(mutate diarization-env 'mkdir Assets/Diarization/.venv')"
+expect_fail "linked diarization directory" "unexpected diarization payload" \
+    check_pkg "$(mutate diarization-link 'mv Assets/Diarization model; echo x > model/model.safetensors; ln -s ../model Assets/Diarization')"
 expect_fail "misplaced plugin assembly" "misplaced plugin payload" \
     check_pkg "$(mutate misplaced-plugin 'cp Plugins/YoutubeDL/YoutubeDL.dll YoutubeDL.dll')"
 for helper in yt-dlp yt-dlp.exe yt-dlp_linux yt-dlp_linux_aarch64 deno deno.exe pdic-pipe pdic-pipe.exe; do

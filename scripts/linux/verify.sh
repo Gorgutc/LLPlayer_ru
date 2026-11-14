@@ -35,7 +35,7 @@ done
 
 cd "$LLP_REPO_ROOT"
 export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
-llp_require_cmd dotnet git
+llp_require_cmd dotnet git python3
 
 step() { llp_log "==> $*"; }
 run() { llp_log "+ $*"; "$@"; }
@@ -59,6 +59,7 @@ if command -v shellcheck >/dev/null 2>&1; then
     run shellcheck -x scripts/linux/*.sh scripts/linux/tests/*.sh
 fi
 run bash scripts/linux/tests/test-scripts.sh
+run python3 -B -m unittest discover -s diarization_sidecar -p 'test_*.py'
 
 step "Linux FFmpeg libraries stay untracked"
 tracked_so="$(git ls-files -- 'FFmpeg/linux-x64' ':(glob)**/*.so' ':(glob)**/*.so.*')"

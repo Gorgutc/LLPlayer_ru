@@ -291,6 +291,7 @@ public sealed partial class FlyleafPlaybackController
     void OnPlaybackChoicesCompleted(object? sender, object? args)
     {
         Recognition.CancelStaleStarts();
+        QueueDiarizationValidation();
         QueuePlaybackChoices();
         if (args is FlyleafLib.MediaFramework.MediaContext.DecoderContext.OpenExternalVideoStreamCompletedArgs)
         {

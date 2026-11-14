@@ -335,6 +335,16 @@ public class SubManager : INotifyPropertyChanged
         }
     }
 
+#if !WINDOWS
+    /// <summary>Capture detached cue values or update cue metadata under the subtitle collection lock.</summary>
+    /// <remarks>The supplied cue list is live and must not escape the callback.</remarks>
+    public TResult WithCueLock<TResult>(Func<IReadOnlyList<SubtitleData>, TResult> action)
+    {
+        lock (_subsLocker)
+            return action(Subs);
+    }
+#endif
+
     /// <summary>
     /// Captures only cues that currently override the default dubbing voice. The assigned-cue index is maintained
     /// incrementally by load/add/restore/sidebar-edit paths, so an interactive save is O(k overrides), not O(n cues).
@@ -1411,10 +1421,9 @@ public class SubtitleData : IDisposable, INotifyPropertyChanged
     public Language? Language { get; set => Set(ref field, value); }
 
     /// <summary>
-    /// Speaker label for this cue (F-03 diarization prep), or null when unknown / not applicable. Inert metadata —
-    /// it does not change rendering, export, or translation by itself, and nothing populates it yet (speaker
-    /// diarization is a future GPU sidecar). Reserved so the per-cue speaker schema is in place; a plain string id
-    /// (e.g. "SPEAKER_00") mirrors the per-cue <see cref="Language"/> field added in T-10.
+    /// Anonymous speaker label from Avalonia's explicit diarization command (e.g. "Speaker 1").
+    /// Null when the speaker is unknown or there is no assignment. This affects the sidebar and
+    /// explicit speaker-labelled SRT export.
     /// </summary>
     public string? SpeakerId { get; set; }
 
