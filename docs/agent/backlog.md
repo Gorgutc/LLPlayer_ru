@@ -1,5 +1,12 @@
 # LLPlayer_ru — Task Backlog (рабочий бэклог)
 
+## GPU-координатор — решение владельца от 2026-11-14
+
+Согласован один этап для Avalonia Windows/Linux — [ADR GPU-координатора](gpu-coordinator-adr.md) и исполняемая
+проверка схемы допуска на тестовых движках с WPF-гейтом. `F-03` требует подключения работающего координатора
+в плеере. Остаток `F-16` и условный GPU-этап `F-19` остаются отдельными задачами. Computer Use и нативная
+приёмка `F-13` требуют отдельного согласования.
+
 ## Текущий F-13 — реализация и поставка 2026-11-09
 
 **Исходники завершены и проверены; поставка фиксируется отдельными receipts.** Уже согласованный цельный блок «Команды и служебные экраны + медиабэкенды»
@@ -1583,7 +1590,8 @@ Owner-selected трек с 2026-09-24 — `F-13`; с 2026-10-18 приорит
 host-level lifetime и non-vacuous WPF WeakReference regression доказаны, а расширенный owner-smoke сознательно
 `WAIVED / NOT RUN` и не считается `PASS`. Прочие задачи автоматически не выбираются.
 
-**Owner-gated / не брать без решения:** GPU coordinator ADR → `F-03` → остаток `F-16`/F-19 tier 3.
+**Решение от 2026-11-14:** [GPU coordinator ADR и исполняемая проверка](gpu-coordinator-adr.md) согласованы.
+Подключение в плеере → `F-03` → остаток `F-16` и условный `F-19` tier 3 требуют отдельных решений.
 
 **Активный трек (решение владельца 2026-09-24, обновление 2026-10-25):** `F-13` Windows/Linux Avalonia — 🚧 IN PROGRESS.
 Октябрьский исходный срез синхронизирован; Windows Avalonia build/package baseline реализован на общем UI/Core.
@@ -1860,8 +1868,9 @@ WPF/Windows Avalonia gates, ZIP и ограниченный dark/light native s
 используется, обычное закрытие popup сохраняет live-cache, а teardown принадлежит enclosing host. Владелец принял
 остаточный риск расширенного smoke; это `WAIVED / NOT RUN`, не `PASS`.
 
-**Вне actionable-очереди:** GPU ADR, `F-03` и остаток `F-16` крупные и заблокированы
-GPU-lease/координатором; `F-02-full` trigger-only. `F-13` (ⓍⓁ) — 🚧 IN PROGRESS: этапы 1–2 закрыты;
+**Вне actionable-очереди:** `F-03` и зависимая часть `F-16` ждут работающего GPU-координатора;
+`F-02-full` trigger-only. [GPU ADR и проверка на тестовых движках](gpu-coordinator-adr.md) согласованы
+2026-11-14. `F-13` (ⓍⓁ) — 🚧 IN PROGRESS: этапы 1–2 закрыты;
 Windows baseline, дальнейший Core, паритет и GPU оцениваются отдельными срезами.
 
 ### Исторический снимок сложности до 2026-07-01 (не использовать для выбора новой работы)
@@ -1933,7 +1942,8 @@ Windows baseline, дальнейший Core, паритет и GPU оценив
    coverage закреплено как risk-based policy, а T-03 удалён из активной очереди.
 7. **Accumulated owner smoke (параллельный owner-track)** — F-19 word/VAD ON/OFF; HC-44 ASR/waveform/external
    subtitles; B-05 `.ru.srt` + WordPopup; HC-43 cancel/re-run; T-12 slow local response.
-8. **Только после owner approval:** GPU coordinator ADR, затем `F-03` → остаток `F-16`/F-19 tier 3.
+8. **Выбрано владельцем 2026-11-14:** [GPU coordinator ADR и исполняемая проверка](gpu-coordinator-adr.md).
+   Для `F-03` требуется рабочее подключение координатора. Остаток `F-16` и условный `F-19` tier 3 остаются отдельно.
 
 9. **F-13 Windows/Linux Avalonia 🚧 (priority update владельца 2026-10-19)** — текущий одобренный блок фона
    текстовых overlay реализован на `558e4c5`; Settings владеет 22 полями. Focused Settings/render/input,
