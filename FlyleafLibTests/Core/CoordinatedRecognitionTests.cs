@@ -4,6 +4,13 @@ using LLPlayer.Core.Services;
 
 namespace FlyleafLibTests.Core;
 
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class RecognitionCommandQueueCollection
+{
+    public const string Name = "Recognition command queue";
+}
+
+[Collection(RecognitionCommandQueueCollection.Name)]
 public class CoordinatedRecognitionTests
 {
     static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);
@@ -23,7 +30,9 @@ public class CoordinatedRecognitionTests
         try
         {
             Task pending = actions.StartAsync(0);
-            await Within(waiting.Task);
+            Task entered = await Task.WhenAny(waiting.Task, pending).WaitAsync(Limit, TestContext.Current.CancellationToken);
+            await entered;
+            Assert.Same(waiting.Task, entered);
             using (resources.AcquireMutation()) await Within(actions.MutateAsync(() => { }));
             await Within(actions.CancelAsync(0));
             await Assert.ThrowsAsync<RecognitionActionCanceledException>(() => Within(pending));
@@ -88,6 +97,7 @@ public class CoordinatedRecognitionTests
         public bool IsCurrentInput(object input) => ReferenceEquals(input, this);
         public Config CaptureSettings()
         {
+            Utils.IsTesting = true;
             var config = new Config(true);
             config.Subtitles.ASREngine = SubASREngineType.FasterWhisper;
             config.Subtitles.FasterWhisperConfig.ExtraArguments = UseCpu ? "--device cpu" : "--device cuda";
