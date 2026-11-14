@@ -329,22 +329,30 @@ public class Commands
             return;
         }
 
+        StartSubtitlesASR(subIndex);
+    }
+
+    public bool StartSubtitlesASR(int subIndex, Config runConfig = null, bool attachOnly = false,
+        bool confirmProcessExit = false, CancellationToken startCancellation = default)
+    {
+        startCancellation.ThrowIfCancellationRequested();
+
         if (!player.Audio.IsOpened)
         {
             // not opened
-            return;
+            return false;
         }
 
-        if (!player.SubtitlesASR.CanExecute(out string err, out string asrActionHint))
+        if (!player.SubtitlesASR.CanExecute(out string err, out string asrActionHint, runConfig))
         {
             player.RaiseKnownErrorOccurred(err, KnownErrorType.Configuration, KnownErrorSettingsTab.SubtitlesASR, asrActionHint);
-            return;
+            return false;
         }
 
         if (player.IsLive)
         {
             player.RaiseKnownErrorOccurred("Currently ASR is not available for live streams.", KnownErrorType.ASR);
-            return;
+            return false;
         }
 
         SubtitlesSelectedHelper.CurIndex = subIndex;
@@ -355,7 +363,8 @@ public class Commands
             player.Subtitles[subIndex].Disable();
         }
 
-        player.Subtitles[subIndex].EnableASR();
+        player.Subtitles[subIndex].EnableASR(runConfig, attachOnly, confirmProcessExit, startCancellation);
+        return true;
     }
 
     public void SubtitlesOffAction(object input)

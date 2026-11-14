@@ -71,6 +71,27 @@ public class DubbingRendererLifecycleTests
         Assert.Empty(backend.Voices);
     }
 
+    [Fact]
+    public async Task Failed_partial_start_remains_owned_until_renderer_can_confirm_stop()
+    {
+        var backend = new FakeBackend { Ready = false, FailDisposal = true };
+        var renderer = new DubbingRenderer(new(), () => backend);
+        CancellationToken token = TestContext.Current.CancellationToken;
+
+        await Assert.ThrowsAnyAsync<Exception>(() => renderer.RenderAsync([Cue(null)], "movie.mkv", "unused.ru.dub.flac", null, token));
+        Assert.Equal(1, backend.Initializations);
+        Assert.Equal(1, backend.Disposals);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => renderer.RenderAsync([Cue(null)], "other.mkv", "unused.ru.dub.flac", null, token));
+        Assert.Equal(1, backend.Initializations);
+
+        backend.FailDisposal = false;
+        await renderer.DisposeAsync();
+        await renderer.DisposeAsync();
+        Assert.Equal(2, backend.Disposals);
+        Assert.Empty(backend.Voices);
+    }
+
     static SubtitleData Cue(string? voice) => new()
     { Text = "line", StartTime = TimeSpan.Zero, EndTime = TimeSpan.FromSeconds(1), AssignedVoiceId = voice };
 
@@ -82,6 +103,7 @@ public class DubbingRendererLifecycleTests
         public bool CancelAssembly { get; init; }
         public CancellationTokenSource? CancelOnAssembly { get; init; }
         public bool Ready { get; init; } = true;
+        public bool FailDisposal { get; set; }
         public Task<bool> TryInitializeAsync(CancellationToken token) { Initializations++; return Task.FromResult(Ready); }
         public Task<TtsResult> SynthesizeAsync(TtsRequest request, CancellationToken token)
         { Voices.Add(request.VoiceId); return Task.FromResult(new TtsResult("clip.wav", 1000)); }
@@ -101,6 +123,8 @@ public class DubbingRendererLifecycleTests
         public ValueTask DisposeAsync()
         {
             Disposals++;
+            if (FailDisposal)
+                throw new IOException("Sidecar process could still be alive.");
             if (CancelAssembly)
                 foreach (var request in Assembled) File.WriteAllText(request.OutputPath, "late completed output");
             return ValueTask.CompletedTask;

@@ -401,17 +401,40 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             return;
         }
         ClearCommandButtonKeys();
-        vm?.BeginWordActionsShutdown();
-        vm?.CancelAppShortcuts();
-        if (ShutdownRequested == null) { vm?.SavePrefs(); return; }
+        if (ShutdownRequested == null)
+        {
+            vm?.BeginWordActionsShutdown();
+            vm?.CancelAppShortcuts();
+            vm?.SavePrefs();
+            return;
+        }
         e.Cancel = true;
         BeginApplicationShutdown();
     }
 
     async Task DrainBeforeClosingAsync()
     {
+        if (DrainGpuWorkBeforeShutdown != null)
+        {
+            try { await DrainGpuWorkBeforeShutdown(); }
+            catch (Exception exception)
+            {
+                // Keep process ownership and the Quit action available for another attempt.
+                await Task.Yield();
+                shutdownStarted = false;
+                explicitQuit = false;
+                GpuShutdownFailed?.Invoke();
+                IsEnabled = true;
+                EnableLanguageWindows(true);
+                CrashLog.Write("GPU engine shutdown", exception);
+                vm?.ShowToast("GPU work still stopping", "Quit again to retry. " + exception.Message, ToastVariant.Destructive);
+                return;
+            }
+        }
         try
         {
+            vm?.BeginWordActionsShutdown();
+            vm?.CancelAppShortcuts();
             if (translationWindow?.DataContext is TranslationViewModel translation)
                 await translation.DrainDiagnosticsAsync();
             if (vm != null) await vm.DrainBrowserOperationsAsync();

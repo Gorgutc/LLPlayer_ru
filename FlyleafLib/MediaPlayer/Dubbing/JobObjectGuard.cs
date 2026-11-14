@@ -1,5 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.ComponentModel;
 using Microsoft.Win32.SafeHandles;
 
 namespace FlyleafLib.MediaPlayer.Dubbing;
@@ -18,6 +19,38 @@ internal static partial class JobObjectGuard
 {
     private const int JobObjectExtendedLimitInformation = 9;
     private const uint JobObjectLimitKillOnJobClose = 0x2000;
+
+    internal static void Terminate(SafeFileHandle job)
+    {
+        if (!TerminateJobObject(job, 1))
+            throw new Win32Exception();
+    }
+
+    internal static unsafe bool IsEmpty(SafeFileHandle job)
+    {
+        const int basicAccountingInformation = 1;
+        JobAccounting accounting;
+        if (!QueryInformationJobObject(job, basicAccountingInformation, (nint)(&accounting),
+                (uint)sizeof(JobAccounting), 0))
+            throw new Win32Exception();
+        return accounting.ActiveProcesses == 0;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JobAccounting
+    {
+        public long TotalUserTime, TotalKernelTime, ThisPeriodTotalUserTime, ThisPeriodTotalKernelTime;
+        public uint TotalPageFaultCount, TotalProcesses, ActiveProcesses, TotalTerminatedProcesses;
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool TerminateJobObject(SafeFileHandle job, uint exitCode);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool QueryInformationJobObject(SafeFileHandle job, int infoClass, nint info,
+        uint cbInfo, nint returnLength);
 
     /// <summary>
     /// Create a kill-on-close job and assign <paramref name="processHandle"/> to it. Returns the job

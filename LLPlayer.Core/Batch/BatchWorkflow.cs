@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using FlyleafLib;
+using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Batch;
 
 namespace LLPlayer.Core.Batch;
@@ -12,12 +13,14 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     readonly IBatchFolderWatcher watcher;
     readonly IBatchMediaCatalog catalog;
     readonly Action<Action> dispatch;
+    readonly GpuWorkCoordinator? gpuCoordinator;
     readonly HashSet<string> watchQueued = new(PathComparer);
     CancellationTokenSource? runCancellation, scanCancellation, probeCancellation;
     Task runTask = Task.CompletedTask, scanTask = Task.CompletedTask, probeTask = Task.CompletedTask;
+    Task cleanupRetry = Task.CompletedTask;
     IReadOnlyList<BatchSubtitleJob> runScope = [];
     IBatchRun? activeRun;
-    bool disposed, cancelRequested;
+    bool disposed, shutdownRequested, cancelRequested;
     readonly object teardownGate = new();
     Task? teardownTask;
     long activeWatchSession;
@@ -25,9 +28,11 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
 
     /// <param name="dispatch">Synchronously execute on the UI thread (Invoke), or inline in tests.</param>
     public BatchWorkflow(BatchSettings settings, IBatchRunFactory factory, IBatchFolderWatcher watcher,
-        Action<Action> dispatch, IBatchMediaCatalog catalog)
+        Action<Action> dispatch, IBatchMediaCatalog catalog, GpuWorkCoordinator? gpuCoordinator = null)
     {
         Settings = settings; this.factory = factory; this.watcher = watcher; this.dispatch = dispatch; this.catalog = catalog;
+        this.gpuCoordinator = gpuCoordinator;
+        if (gpuCoordinator != null) gpuCoordinator.Changed += OnGpuChanged;
         watcher.FileReady += OnFileReady; watcher.Error += OnWatchError;
         Jobs.CollectionChanged += (_, args) =>
         {
@@ -43,13 +48,13 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     public bool IsRunning { get; private set => Set(ref field, value); }
     public bool LastRunCanceled { get; private set => Set(ref field, value); }
     public bool IsScanning { get; private set => Set(ref field, value); }
-    public bool IsRunningOnCpu => IsRunning && activeRun?.IsRunningOnCpu == true;
+    public bool IsRunningOnCpu => IsRunning && activeRun is { IsWaitingForGpu: false, IsRunningOnCpu: true };
     public bool IsIdle => !IsRunning && !IsScanning;
     public bool KeepAlive => !disposed && (IsOpen || IsRunning || IsScanning || WatchFolder);
-    public bool CanScan => !disposed && IsIdle && catalog.FolderExists(Settings.LastFolder);
-    public bool CanStart => !disposed && IsIdle && Jobs.Any(j => j.Include);
-    public bool CanCancel => IsRunning || IsScanning;
-    public bool CanRetryFailed => !disposed && IsIdle && Jobs.Any(j => j.Status == BatchSubtitleStatus.Failed);
+    public bool CanScan => !disposed && !shutdownRequested && IsIdle && catalog.FolderExists(Settings.LastFolder);
+    public bool CanStart => !disposed && !shutdownRequested && IsIdle && Jobs.Any(j => j.Include);
+    public bool CanCancel => IsRunning || IsScanning || gpuCoordinator?.PendingDrain != null;
+    public bool CanRetryFailed => !disposed && !shutdownRequested && IsIdle && Jobs.Any(j => j.Status == BatchSubtitleStatus.Failed);
     public string Message { get; private set => Set(ref field, value); } = "";
     public string Summary { get; private set => Set(ref field, value); } = "0 files";
     public double OverallProgress { get; private set => Set(ref field, value); }
@@ -87,7 +92,7 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     public void RefreshWatcher()
     {
         activeWatchSession = 0; WatchFolder = false; watcher.Stop();
-        if (!disposed && IsOpen && Settings.WatchFolder)
+        if (!disposed && !shutdownRequested && IsOpen && Settings.WatchFolder)
         {
             try
             {
@@ -143,7 +148,7 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     public Task RetryFailedAsync() => BeginRun(Jobs.Where(j => j.Status == BatchSubtitleStatus.Failed).ToArray(), true);
     Task BeginRun(IReadOnlyList<BatchSubtitleJob> scope, bool overwrite)
     {
-        if (!IsIdle || disposed || scope.Count == 0) return Task.CompletedTask;
+        if (!IsIdle || disposed || shutdownRequested || scope.Count == 0) return Task.CompletedTask;
         cancelRequested = false; LastRunCanceled = false; IsRunning = true; runCancellation = new();
         runTask = RunAndDrainAsync(scope, overwrite, runCancellation.Token); return runTask;
     }
@@ -158,17 +163,21 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
                 BatchSettings options = Settings.Clone(); options.OverwriteExisting |= overwrite;
                 var workers = scope.Select(j => new BatchSubtitleJob(j.MediaPath) { AudioStreamIndexOverride = j.AudioStreamIndexOverride }).ToArray();
                 var byPath = scope.ToDictionary(j => j.MediaPath, PathComparer);
+                bool stopRequested = false;
                 try
                 {
                     activeRun = factory.Create(options, workers);
-                    await activeRun.ProcessAsync(new CallbackProgress(update => dispatch(() =>
+                    Task work = activeRun.ProcessAsync(new CallbackProgress(update => dispatch(() =>
                     {
                         if (!disposed && byPath.TryGetValue(update.Job.MediaPath, out var ui)) ApplyProgress(ui, update);
                     })), token);
+                    Refresh();
+                    await work;
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { }
                 catch (Exception ex)
                 {
+                    stopRequested = ex is EngineProcessDrainException;
                     Message = $"Batch subtitles failed: {ex.Message}";
                     foreach (var job in scope.Where(j => !IsTerminal(j.Status)))
                     { job.Status = BatchSubtitleStatus.Failed; job.Error = ex.Message; job.CompletedAt = DateTimeOffset.Now; }
@@ -178,7 +187,11 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
                     if (activeRun != null)
                     {
                         try { await activeRun.DisposeAsync(); }
-                        catch (Exception ex) { Message = $"Batch cleanup failed: {ex.Message}"; }
+                        catch (Exception ex)
+                        {
+                            stopRequested |= gpuCoordinator?.PendingDrain != null;
+                            Message = $"Batch cleanup failed: {ex.Message}";
+                        }
                         activeRun = null;
                     }
                 }
@@ -188,7 +201,8 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
                     { job.Status = BatchSubtitleStatus.Canceled; job.CompletedAt = DateTimeOffset.Now; }
                     watchQueued.Clear(); break;
                 }
-                scope = WatchFolder && !disposed ? TakeWatchQueue() : []; overwrite = false;
+                if (stopRequested) break;
+                scope = WatchFolder && !disposed && !shutdownRequested ? TakeWatchQueue() : []; overwrite = false;
             } while (scope.Count > 0);
         }
         finally
@@ -199,13 +213,61 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
             IsRunning = false; Refresh();
         }
     }
-    public void Cancel() { cancelRequested = true; watchQueued.Clear(); runCancellation?.Cancel(); scanCancellation?.Cancel(); }
-    public async Task DrainAsync() { await runTask; await scanTask; await probeTask; }
+    public void Cancel()
+    {
+        if (IsRunning || IsScanning || gpuCoordinator?.PendingDrain == null)
+        {
+            cancelRequested = true;
+            watchQueued.Clear();
+            runCancellation?.Cancel();
+            scanCancellation?.Cancel();
+        }
+        if (!disposed && !shutdownRequested && cleanupRetry.IsCompleted && gpuCoordinator?.PendingDrain != null)
+            cleanupRetry = RetryGpuCleanupAsync(gpuCoordinator);
+    }
+
+    public void BeginShutdown()
+    {
+        if (disposed || shutdownRequested) return;
+        shutdownRequested = true;
+        Cancel();
+        probeCancellation?.Cancel();
+        RefreshWatcher();
+    }
+
+    public void ResumeAfterFailedShutdown()
+    {
+        if (disposed || !shutdownRequested) return;
+        shutdownRequested = false;
+        RefreshWatcher();
+    }
+
+    public async Task DrainAsync() { await runTask; await scanTask; await probeTask; await cleanupRetry; }
+
+    async Task RetryGpuCleanupAsync(GpuWorkCoordinator coordinator)
+    {
+        try
+        {
+            await coordinator.RetryDrainAsync();
+            if (!disposed) SetMessage("GPU process cleanup completed.");
+        }
+        catch (Exception error)
+        {
+            if (!disposed) SetMessage($"GPU process cleanup failed: {error.Message}");
+        }
+    }
+
+    void OnGpuChanged() => dispatch(() =>
+    {
+        if (disposed) return;
+        Refresh();
+        if (gpuCoordinator?.PendingDrain == null) MaybeStartWatch();
+    });
     void OnFileReady(BatchWatchReady ready)
     {
         dispatch(() =>
         {
-        if (disposed || !WatchFolder || ready.SessionId != activeWatchSession) return;
+        if (disposed || shutdownRequested || !WatchFolder || ready.SessionId != activeWatchSession) return;
         List<BatchSubtitleJob> admitted = [];
         foreach (string path in Utils.GetMoviesSorted(ready.Paths.ToList()))
         {
@@ -245,7 +307,11 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
             .ToDictionary(job => job.MediaPath, PathComparer);
         return Utils.GetMoviesSorted(pending.Keys.ToList()).Select(path => pending[path]).ToArray();
     }
-    void MaybeStartWatch() { if (WatchFolder && IsIdle && !disposed) _ = BeginRun(TakeWatchQueue(), false); }
+    void MaybeStartWatch()
+    {
+        if (WatchFolder && IsIdle && !disposed && !shutdownRequested)
+            _ = BeginRun(TakeWatchQueue(), false);
+    }
     void BeginProbing(IReadOnlyList<BatchSubtitleJob> scope, bool replace = true)
     {
         if (replace) { probeCancellation?.Cancel(); probeCancellation?.Dispose(); probeCancellation = new(); }
@@ -324,6 +390,8 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
         EtaText = seconds > 0 && double.IsFinite(seconds) && seconds < TimeSpan.MaxValue.TotalSeconds ? $"~{TimeSpan.FromSeconds(seconds):g} left" : "";
         Summary = $"{(WatchFolder ? "Watching · " : "")}{(IsRunningOnCpu ? "ASR on CPU · " : "")}{Jobs.Count} files ({Jobs.Count(j => j.Include)} selected) · {Jobs.Count(j => j.Status == BatchSubtitleStatus.Completed)} completed · {Jobs.Count(j => j.Status == BatchSubtitleStatus.Failed)} failed · {Jobs.Count(j => j.Status == BatchSubtitleStatus.Skipped)} skipped · {Jobs.Count(j => j.Status == BatchSubtitleStatus.Canceled)} canceled";
         if (IsRunning) Summary += $" · {done}/{runScope.Count} · {OverallProgress:P0} {EtaText}";
+        if (activeRun?.IsWaitingForGpu == true) Summary += " · Waiting for GPU";
+        if (gpuCoordinator?.PendingDrain != null) Summary += " · GPU process still stopping. Choose Cancel to retry.";
         Raise(nameof(IsIdle)); Raise(nameof(KeepAlive)); Raise(nameof(CanScan)); Raise(nameof(CanStart)); Raise(nameof(CanCancel)); Raise(nameof(CanRetryFailed)); Raise(nameof(IsRunningOnCpu)); Changed?.Invoke();
     }
     public ValueTask DisposeAsync()
@@ -352,6 +420,7 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     async Task TeardownAsync()
     {
         disposed = true; IsOpen = false; WatchFolder = false; activeWatchSession = 0;
+        if (gpuCoordinator != null) gpuCoordinator.Changed -= OnGpuChanged;
         watcher.FileReady -= OnFileReady; watcher.Error -= OnWatchError; watcher.Dispose();
         Cancel(); scanCancellation?.Cancel(); probeCancellation?.Cancel();
         await Task.WhenAll(DrainAsync(), watcher.DisposeAsync().AsTask());

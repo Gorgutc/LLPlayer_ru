@@ -20,6 +20,7 @@ namespace LLPlayer.Avalonia;
 public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleApplicationLifetime desktop)
 {
     readonly AppPaths paths = AppPaths.FromEnvironment();
+    readonly GpuWorkCoordinator gpuCoordinator = new();
     PrefsStore? prefsStore;
     AppPrefs prefs = new();
     Player? player;
@@ -88,7 +89,7 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         recognition?.Apply(playerConfig.Subtitles);
         if (playbackStore.HasSavedSettings) playbackSettings.ApplyTo(playerConfig);
         player = new Player(playerConfig);
-        controller = new FlyleafPlaybackController(player, dispatcher, bridge)
+        controller = new FlyleafPlaybackController(player, dispatcher, bridge, gpuCoordinator)
         { RecognitionStore = recognitionStore, RecognitionWarning = recognitionStore.LoadWarning };
         PlaybackSettings initialPlaybackSettings = playbackStore.HasSavedSettings
             ? playbackSettings : PlaybackSettings.FromConfig(playerConfig, Engine.Config);
@@ -250,6 +251,23 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         Task pdicDrain = viewModel?.DrainPdicOperationsAsync() ?? Task.CompletedTask;
         await Task.WhenAll(popupDrain, managerDrain, translationDrain, recognitionDrain, exportDrain, pdicDrain);
         if (pdicClient != null) await pdicClient.DisposeAsync();
+    }
+
+    async Task DrainGpuWorkBeforeShutdownAsync()
+    {
+        // Signal both owners before awaiting either; batch and recognition share a permit.
+        controller?.BeginRecognitionShutdown();
+        languageBatch?.BeginShutdown();
+        await Task.WhenAll(controller?.DrainRecognitionAsync() ?? Task.CompletedTask,
+            languageBatch?.DrainAsync() ?? Task.CompletedTask);
+        await gpuCoordinator.RetryDrainAsync();
+    }
+
+    void ResumeAfterFailedGpuShutdown()
+    {
+        languageShuttingDown = false;
+        controller?.ResumeRecognitionAfterFailedShutdown();
+        languageBatch?.ResumeAfterFailedShutdown();
     }
 
     /// <summary>Developer option --screenshot: render <paramref name="window"/> to a PNG after the delay and exit.</summary>

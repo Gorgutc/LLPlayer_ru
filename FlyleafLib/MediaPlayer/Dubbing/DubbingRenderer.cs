@@ -25,13 +25,15 @@ public sealed class DubbingRenderer : IDubbingRenderer
     // DisposeAsync (once the sidecar is reaped).
     private readonly DubOrphanCleanup _orphans = new();
     private IDubbingTtsService? _host;
+    private bool _hostReady;
+    private Exception? _startupDrainFailure;
     private readonly Func<IDubbingTtsService> _hostFactory;
     private bool _disposed;
 
     /// <param name="config">Live dubbing config; scalar fields are snapshotted here so a later config
     /// change does not affect an in-flight render.</param>
     /// <param name="mock">Run the sidecar in mock mode (tone/silence, no heavy models) for off-GPU tests.</param>
-    public DubbingRenderer(DubbingConfig config, bool mock = false)
+    public DubbingRenderer(DubbingConfig config, bool mock = false, bool confirmProcessExit = false)
     {
         ArgumentNullException.ThrowIfNull(config);
         _voiceId = config.DefaultVoiceId;
@@ -43,7 +45,7 @@ public sealed class DubbingRenderer : IDubbingRenderer
             : config.OutputFormat.TrimStart('.').Trim().ToLowerInvariant();
         _mock = mock;
         _sidecarSnapshot = DubSidecarHost.DubbingSnapshot.From(config);
-        _hostFactory = () => DubSidecarHost.Create(_sidecarSnapshot, _mock);
+        _hostFactory = () => DubSidecarHost.Create(_sidecarSnapshot, _mock, confirmProcessExit);
     }
 
     internal DubbingRenderer(DubbingConfig config, Func<IDubbingTtsService> hostFactory) : this(config)
@@ -160,28 +162,39 @@ public sealed class DubbingRenderer : IDubbingRenderer
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_host is not null)
-            return _host;
-
         await _hostGate.WaitAsync(token).ConfigureAwait(false);
         try
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_host is not null)
-                return _host;
+            if (_hostReady)
+                return _host!;
+            if (_startupDrainFailure is not null)
+                throw UnconfirmedStop(_startupDrainFailure);
 
-            IDubbingTtsService host = _hostFactory();
+            _host = _hostFactory();
             try
             {
-                if (!await host.TryInitializeAsync(token).ConfigureAwait(false))
+                if (!await _host.TryInitializeAsync(token).ConfigureAwait(false))
                     throw new InvalidOperationException("The dubbing sidecar did not become ready.");
 
-                _host = host;
-                return host;
+                _hostReady = true;
+                return _host;
             }
-            catch
+            catch (Exception startFailure)
             {
-                await host.DisposeAsync().ConfigureAwait(false);
+                if (startFailure is EngineProcessDrainException)
+                {
+                    _startupDrainFailure = startFailure;
+                    throw UnconfirmedStop(startFailure);
+                }
+
+                try { await _host.DisposeAsync().ConfigureAwait(false); }
+                catch (Exception stopFailure)
+                {
+                    _startupDrainFailure = stopFailure;
+                    throw UnconfirmedStop(stopFailure);
+                }
+                _host = null;
                 throw;
             }
         }
@@ -190,6 +203,9 @@ public sealed class DubbingRenderer : IDubbingRenderer
             _hostGate.Release();
         }
     }
+
+    private EngineProcessDrainException UnconfirmedStop(Exception cause) =>
+        new("The dubbing sidecar could not be stopped. Retry shutdown before starting another render.", cause, DisposeAsync);
 
     private static void TryDeleteOutput(string path)
     {

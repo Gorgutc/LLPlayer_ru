@@ -370,27 +370,38 @@ def _read_parent_start_time(parent_pid):
         return None
 
 
-def _establish_managed_session(parent_pid, parent_start_time):
+def _establish_managed_session(parent_pid, parent_start_time, inherited_session=False):
     global _OWN_POSIX_SESSION
     if not sys.platform.startswith("linux") or not parent_pid:
         return
     # Fail before model initialization if the spawning parent already disappeared or its PID was reused.
-    if (os.getppid() != int(parent_pid) or not parent_start_time or
-            _read_parent_start_time(parent_pid) != parent_start_time):
-        raise RuntimeError("The dubbing parent process identity is no longer valid.")
-    os.setsid()
+    immediate_parent = os.getppid()
     own_pid = os.getpid()
-    if os.getsid(0) != own_pid or os.getpgrp() != own_pid:
+    if not parent_start_time or _read_parent_start_time(parent_pid) != parent_start_time:
+        raise RuntimeError("The dubbing parent process identity is no longer valid.")
+    if inherited_session:
+        # LLPlayer's launcher establishes a session before spawning the engine. Verify that
+        # its immediate parent owns that session and was itself started by this LLPlayer.
+        with open(f"/proc/{immediate_parent}/stat", encoding="utf-8") as stat:
+            supervisor = stat.read().rsplit(")", 1)[-1].split()
+        if len(supervisor) < 4 or supervisor[1] != str(parent_pid):
+            raise RuntimeError("The dubbing session supervisor identity is no longer valid.")
+        session_owner = immediate_parent
+    else:
+        if immediate_parent != int(parent_pid):
+            raise RuntimeError("The dubbing parent process identity is no longer valid.")
+        os.setsid()
+        session_owner = own_pid
+    if os.getsid(0) != session_owner or os.getpgrp() != session_owner:
         raise RuntimeError("The dubbing sidecar could not establish its own process session.")
-    _OWN_POSIX_SESSION = own_pid
+    _OWN_POSIX_SESSION = session_owner
 
 
 def _exit_owned_run():
     # Only signal a session established by this process for this managed run. A manually started server,
     # a failed setsid, or a changed session must never signal LLPlayer's or the user's terminal's group.
     own_pid = _OWN_POSIX_SESSION
-    if (own_pid is not None and own_pid == os.getpid() and
-            os.getsid(0) == own_pid and os.getpgrp() == own_pid):
+    if own_pid is not None and os.getsid(0) == own_pid and os.getpgrp() == own_pid:
         import signal
         try:
             os.killpg(own_pid, signal.SIGKILL)
@@ -444,10 +455,11 @@ def main():
     parser.add_argument("--models-dir", default=".")
     parser.add_argument("--parent-pid", type=int, default=0)
     parser.add_argument("--parent-start-time", default=None)
+    parser.add_argument("--managed-session", action="store_true")
     parser.add_argument("--work-dir", default="")
     parser.add_argument("--mock", action="store_true")
     ARGS = parser.parse_args()
-    _establish_managed_session(ARGS.parent_pid, ARGS.parent_start_time)
+    _establish_managed_session(ARGS.parent_pid, ARGS.parent_start_time, ARGS.managed_session)
 
     # Per-run temp dir for synth clips so they never leak into %TEMP%. The C# host normally passes one it
     # owns + deletes; a manual run gets its own (cleaned on /shutdown).

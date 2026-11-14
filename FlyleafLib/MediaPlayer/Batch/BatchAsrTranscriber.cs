@@ -10,6 +10,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     private readonly Func<bool>? _preferCpu;
     private readonly bool _preferRussianAudio;
     private readonly Func<string, int?>? _forcedStreamIndexResolver;
+    private readonly bool _confirmProcessExit;
 
     /// <param name="preferCpu">Optional per-chunk device policy for faster-whisper: when it returns true the
     /// NEXT audio chunk is transcribed on CPU instead of GPU (the chunk in flight finishes on its current
@@ -19,16 +20,19 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     /// language order.</param>
     /// <param name="forcedStreamIndexResolver">Optional per-file manual audio-track override: given the media
     /// path, returns the audio stream index to force (or null for automatic selection).</param>
+    /// <param name="confirmProcessExit">Verify the external engine's process lifetime for GPU-coordinated runs.</param>
     public BatchAsrTranscriber(
         Config sourceConfig,
         Func<bool>? preferCpu = null,
         bool preferRussianAudio = false,
-        Func<string, int?>? forcedStreamIndexResolver = null)
+        Func<string, int?>? forcedStreamIndexResolver = null,
+        bool confirmProcessExit = false)
     {
         _batchConfig = BatchSubtitleConfigSnapshot.Create(sourceConfig);
         _preferCpu = preferCpu;
         _preferRussianAudio = preferRussianAudio;
         _forcedStreamIndexResolver = forcedStreamIndexResolver;
+        _confirmProcessExit = confirmProcessExit;
         ValidateAsrConfig(_batchConfig);
     }
 
@@ -62,7 +66,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig)
             .Probe(mediaPath, token, forced, _preferRussianAudio);
 
-        return TranscribeInternal(_batchConfig, audio, token, asrProgress, _preferCpu);
+        return TranscribeInternal(_batchConfig, audio, token, asrProgress, _preferCpu, _confirmProcessExit);
     }
 
     private static BatchAsrResult TranscribeInternal(
@@ -70,13 +74,14 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         MediaAudioProbeResult audio,
         CancellationToken token,
         IProgress<BatchAsrProgress>? asrProgress,
-        Func<bool>? preferCpu)
+        Func<bool>? preferCpu,
+        bool confirmProcessExit)
     {
         List<SubtitleData> subtitles = [];
         Language sourceLanguage = ResolveInitialSourceLanguage(batchConfig, audio);
         Language selectedAudioLanguage = GetKnownLanguage(audio.Language?.ISO6391);
 
-        using AudioReader reader = new(batchConfig, 0, preferCpu);
+        using AudioReader reader = new(batchConfig, 0, preferCpu, confirmProcessExit: confirmProcessExit);
         reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
         token.ThrowIfCancellationRequested();
 

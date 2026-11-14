@@ -38,11 +38,14 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     public RecognitionSettingsStore? RecognitionStore { get; set; }
     public string? RecognitionWarning { get; set; }
     public RecognitionSettings RecognitionSettings => RecognitionSettings.FromConfig(player.Config.Subtitles);
-    public string RecognitionStatus => $"ASR: {(player.IsASRRunning ? player.IsASRPaused ? "paused" : "running" : "idle")} · Primary: {(player.Subtitles[0].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[0].IsLoading ? "loading" : "ready")}, {GetCues(0).Count} cues · Secondary: {(player.Subtitles[1].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[1].IsLoading ? "loading" : "ready")}, {GetCues(1).Count} cues";
+    public string RecognitionStatus => $"ASR: {(Recognition.IsWaitingForGpu ? "waiting for GPU" : player.IsASRRunning ? player.IsASRPaused ? "paused" : "running" : "idle")} · Primary: {(player.Subtitles[0].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[0].IsLoading ? "loading" : "ready")}, {GetCues(0).Count} cues · Secondary: {(player.Subtitles[1].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[1].IsLoading ? "loading" : "ready")}, {GetCues(1).Count} cues";
     public Task StartRecognitionAsync(int slot) => Recognition.StartAsync(slot);
     public Task CancelRecognitionAsync(int slot) => Recognition.CancelAsync(slot);
     public Task OcrRecognitionAsync(int slot) => Recognition.OcrAsync(slot);
     public Task ToggleRecognitionPauseAsync() => Recognition.TogglePauseAsync();
+    public void BeginRecognitionShutdown() => Recognition.BeginShutdown();
+    public Task DrainRecognitionAsync() => Recognition.DrainAsync();
+    public void ResumeRecognitionAfterFailedShutdown() => Recognition.ResumeAfterFailedShutdown();
     public Task SaveRecognitionSettingsAsync(RecognitionSettings settings, RecognitionSettingsStore store)
     {
         RecognitionSettings detached = settings.Clone();
@@ -55,19 +58,23 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             detached.OcrSecondarySame = current.OcrSecondarySame;
             store.Save(detached);
             PublishLanguageConfiguration(() => detached.Apply(player.Config.Subtitles));
+            Recognition.CancelPendingStarts();
         });
     }
 
-    public FlyleafPlaybackController(Player player, IUIDispatcher? ui, CollectionSyncBridge bridge)
+    public FlyleafPlaybackController(Player player, IUIDispatcher? ui, CollectionSyncBridge bridge, GpuWorkCoordinator? gpuCoordinator = null)
     {
         this.player = player;
         this.ui = ui;
         this.bridge = bridge;
-        Recognition = new RecognitionActions(new PlayerRecognitionBackend(player), LanguageResources.AcquireUse);
+        Recognition = new RecognitionActions(new PlayerRecognitionBackend(player), LanguageResources.AcquireUse, gpuCoordinator);
+        Recognition.GpuWaitChanged += OnGpuWaitChanged;
 
         playerChanged = (_, e) => OnPlayerChanged(e.PropertyName);
         audioChanged = (_, e) =>
         {
+            if (e.PropertyName is nameof(FlyleafLib.MediaPlayer.Audio.IsOpened) or nameof(FlyleafLib.MediaPlayer.Audio.StreamIndex))
+                Recognition.CancelStaleStarts();
             if (e.PropertyName is nameof(FlyleafLib.MediaPlayer.Audio.Volume) or nameof(FlyleafLib.MediaPlayer.Audio.Mute))
                 Raise(e.PropertyName);
         };
@@ -549,7 +556,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
     public async ValueTask DisposeAsync()
     {
-        Recognition.Invalidate();
+        Recognition.BeginShutdown();
         await StopAudioRecoveryAsync();
         await Recognition.DisposeAsync();
         await Task.WhenAll(player.SubtitlesManager[0].Translator.DisposeAsync().AsTask(), player.SubtitlesManager[1].Translator.DisposeAsync().AsTask());
@@ -564,6 +571,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         disposed = true;
         DisposePlaylistChoices();
         DisposePlaybackChoices();
+        Recognition.GpuWaitChanged -= OnGpuWaitChanged;
         Recognition.Dispose();
 
         foreach (IDisposable? w in cueWatchers)
@@ -627,6 +635,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
     void OnPlayerChanged(string? name)
     {
+        if (name is nameof(Player.CanPlay) or nameof(Player.Status)) Recognition.CancelStaleStarts();
         if (name is nameof(Player.CanPlay) or nameof(Player.Status) or nameof(Player.Chapters)) QueuePlaybackChoices();
         if (name is nameof(Player.IsASRRunning) or nameof(Player.IsASRPaused)) Raise(nameof(RecognitionStatus));
         switch (name)
@@ -668,6 +677,8 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
                 break;
         }
     }
+
+    void OnGpuWaitChanged() => Raise(nameof(RecognitionStatus));
 
     void OnSubsDataChanged(int slot, string? name)
     {
