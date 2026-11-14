@@ -185,6 +185,12 @@ internal static class PortableVideoTestMedia
     /// <summary>1280x720 30 fps testsrc2, 3 s (performance measurement).</summary>
     public static string Hd => Clip("test-720p-short.mp4",
         o => RunCli("-f", "lavfi", "-i", "testsrc2=s=1280x720:r=30:d=3", "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", o));
+
+    /// <summary>Both tracks start beyond PTS zero. The second starts later and contains a gap.</summary>
+    public static string DiarizationAudio => Clip("diarization-two-tracks-offset.mkv", o => RunCli(
+        "-f", "lavfi", "-i", "aevalsrc=0.15:s=48000:d=1", "-f", "lavfi", "-i", "aevalsrc=0.7:s=48000:d=1",
+        "-filter_complex", "[1:a]asetpts='PTS+(0.25+0.25*gte(T,0.5))/TB'[delayed]",
+        "-map", "0:a:0", "-map", "[delayed]", "-c:a", "pcm_s16le", "-output_ts_offset", "5", o));
 }
 
 /// <summary>Captures the frames presented by the portable renderer (copies the last one).</summary>

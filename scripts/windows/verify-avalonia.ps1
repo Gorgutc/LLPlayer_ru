@@ -135,6 +135,7 @@ Language learning with subtitles.
     Write-Host "Windows Avalonia native fixtures: FFmpeg=$env:LLPLAYER_FFMPEG_DIR; media=$env:LLPLAYER_TEST_MEDIA; CLI=$env:LLPLAYER_FFMPEG_CLI"
 
     Invoke-Checked powershell.exe "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" ".\scripts\windows\test-package-avalonia.ps1"
+    Invoke-Checked python.exe "-B" "-m" "unittest" "discover" "-s" "diarization_sidecar" "-p" "test_*.py"
     # The opt-in restore includes both Windows/WPF and portable targets, retaining the original Windows asset graph.
     Invoke-Checked dotnet "restore" "-warnaserror" "-p:LLPlayerPortableTests=true"
     Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\FlyleafLib" "-f" "net10.0"

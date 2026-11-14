@@ -229,6 +229,10 @@ public class SubtitlesASR
                         .Load(otherSubs.Select(s =>
                         {
                             SubtitleData clone = s.Clone();
+#if !WINDOWS
+                            // Speaker labels were explicitly analyzed for the other subtitle slot.
+                            clone.SpeakerId = null;
+#endif
 
                             if (!enableTranslated)
                             {

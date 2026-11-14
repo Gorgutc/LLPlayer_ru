@@ -44,7 +44,8 @@ validate_package() {
     pkg="$(readlink -f "$1")"
     [[ -d "$pkg" ]] || llp_die "package directory not found: $1"
     # ---- Positive content validation (mirrors "Release package is missing required file" on Windows) ----
-    local required rel path resolved exe hits so_path name ok so link target allowed_natives
+    local required diarization rel path resolved exe hits so_path name ok so link target allowed_natives
+    diarization=(Assets/Diarization/{sidecar.py,requirements.txt,README.md,NOTICE.md})
     required=(
         "LLPlayer.Avalonia"
         "LLPlayer.Avalonia.dll"
@@ -84,6 +85,7 @@ validate_package() {
         "dub_sidecar/pyproject.toml"
         "dub_sidecar/uv.lock"
         "dub_sidecar/README.md"
+        "${diarization[@]}"
     )
     for so in "${LLP_FFMPEG_SONAMES[@]}"; do required+=("FFmpeg/$so"); done
     for rel in "${required[@]}"; do
@@ -143,6 +145,13 @@ validate_package() {
             *) reject "an unexpected plugin payload" "$rel" ;;
         esac
     done < <(find "$pkg/Plugins" -mindepth 1 -print)
+    [[ ! -L "$pkg/Assets" && ! -L "$pkg/Assets/Diarization" ]] ||
+        reject "an unexpected diarization payload" "linked Assets/Diarization directory"
+    while IFS= read -r path; do
+        rel="${path#"$pkg"/}"
+        [[ -f "$path" && ! -L "$path" && " ${diarization[*]} " == *" $rel "* ]] ||
+            reject "an unexpected diarization payload" "$rel"
+    done < <(find "$pkg/Assets/Diarization" -mindepth 1 -print)
     hits="$(find "$pkg" -type d \( -name DubEngine -o -name dubmodels -o -name '.venv' -o -name venv -o -name __pycache__ \
         -o -name whispermodels -o -name Whisper -o -name tesseractmodels -o -name Recordings -o -name Snapshots \) -print)"
     [[ -z "$hits" ]] || reject "dubbing venv / model / user media folders" "$hits"

@@ -141,11 +141,24 @@ public sealed class S16MonoResampler : IDisposable
         }
     }
 
-    public unsafe void Dispose()
+    // Offline timeline reconstruction drains each contiguous mono segment before resetting the filter.
+    internal unsafe int DrainMono(int targetSampleRate)
     {
-        if (_isDisposed)
-            return;
+        if (_swrContext == null)
+            return 0;
 
+        int nOut = ComputeOutputSampleCapacity(0, targetSampleRate, targetSampleRate,
+            swr_get_delay(_swrContext, targetSampleRate));
+        EnsureCapacity(nOut * sizeof(short));
+        int converted;
+        fixed (byte* dst = _buffer)
+            converted = swr_convert(_swrContext, &dst, nOut, null, 0);
+        converted.ThrowExceptionIfError("swr_convert drain");
+        return converted * sizeof(short);
+    }
+
+    internal unsafe void Reset()
+    {
         if (_swrContext != null)
         {
             fixed (SwrContext** ptr = &_swrContext)
@@ -154,7 +167,14 @@ public sealed class S16MonoResampler : IDisposable
             }
             _swrContext = null;
         }
+    }
 
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+
+        Reset();
         _isDisposed = true;
     }
 }

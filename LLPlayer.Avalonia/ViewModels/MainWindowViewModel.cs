@@ -1377,6 +1377,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (e.PropertyName is nameof(IPlaybackController.PrimaryTranslationEnabled) or nameof(IPlaybackController.SecondaryTranslationEnabled)) OnPropertyChanged(e.PropertyName);
         if (e.PropertyName == "SubtitleLanguage") { RefreshOverlayLanguages(); InvalidateTranslation(); }
         if (e.PropertyName == "RecognitionStatus") OnPropertyChanged(nameof(RecognitionStatus));
+        if (e.PropertyName is nameof(IDiarizationController.IsDiarizing) or nameof(IDiarizationController.CanCancelDiarization)
+            or nameof(IPlaybackController.IsOpened) or nameof(IPlaybackController.IsOpening))
+            RefreshDiarizationCommandState();
         switch (e.PropertyName)
         {
             case "VideoBackendPreferences":

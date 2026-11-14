@@ -19,14 +19,19 @@ public sealed class FlyleafSubtitleExportSource(Player player) : ISubtitleExport
         if (!Enum.IsDefined(text)) throw new ArgumentOutOfRangeException(nameof(text));
         var manager = player.SubtitlesManager[slot];
         bool original = text == SubtitleExportText.Original;
-        List<SubtitleExportLine> lines = [];
-        foreach (var cue in manager.SnapshotSubs())
+        var (lines, isLoading) = manager.WithCueLock(cues =>
         {
-            if (!cue.IsText || (text == SubtitleExportText.TranslatedOnly && !cue.IsTranslated)) continue;
-            // Match the WPF exporter's DisplayText semantics, including hidden translated text.
-            string content = (original ? cue.Text : cue.DisplayText) ?? "";
-            lines.Add(new(cue.StartTime, cue.EndTime, content, original ? cue.SubStyles?.ToArray() : null));
-        }
+            List<SubtitleExportLine> snapshot = [];
+            foreach (var cue in cues)
+            {
+                if (!cue.IsText || (text == SubtitleExportText.TranslatedOnly && !cue.IsTranslated)) continue;
+                // Match the WPF exporter's DisplayText semantics, including hidden translated text.
+                string content = (original ? cue.Text : cue.DisplayText) ?? "";
+                snapshot.Add(new(cue.StartTime, cue.EndTime, content, original ? cue.SubStyles?.ToArray() : null)
+                    { SpeakerId = cue.SpeakerId });
+            }
+            return (snapshot.ToArray(), manager.IsLoading);
+        });
         var selected = player.Playlist.Selected;
         string? url = selected?.Url;
         bool local = File.Exists(url);
@@ -34,6 +39,6 @@ public sealed class FlyleafSubtitleExportSource(Player player) : ISubtitleExport
         const string invalid = "<>:\"/\\|?*";
         name = new string(name.Select(ch => char.IsControl(ch) || invalid.Contains(ch) ? '_' : ch).ToArray()).Trim().TrimEnd('.');
         if (name.Length == 0) name = "LLPlayer";
-        return new(lines.ToArray(), name, local ? Path.GetDirectoryName(url) : null, manager.IsLoading);
+        return new(lines, name, local ? Path.GetDirectoryName(url) : null, isLoading);
     }
 }

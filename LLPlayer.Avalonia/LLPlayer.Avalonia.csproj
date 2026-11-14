@@ -30,6 +30,9 @@
     <AvaloniaResource Include="Assets/llplayer.png" />
     <None Include="../LLPlayer/Assets/silero_vad.onnx" Link="Assets/silero_vad.onnx"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../diarization_sidecar/sidecar.py;../diarization_sidecar/requirements.txt;../diarization_sidecar/README.md;../diarization_sidecar/NOTICE.md"
+          Link="Assets/Diarization/%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

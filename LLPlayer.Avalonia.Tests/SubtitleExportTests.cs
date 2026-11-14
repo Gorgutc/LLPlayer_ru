@@ -49,6 +49,30 @@ public sealed class SubtitleExportTests
     }
 
     [AvaloniaFact]
+    public async Task Speaker_export_captures_labels_and_keeps_subtitle_timing_and_italic_offsets()
+    {
+        using var player = CreatePlayer();
+        using TempDir dir = new();
+        string path = Path.Combine(dir.Path, "speakers.srt");
+        var cue = Cue("one\ntwo");
+        cue.SpeakerId = "Speaker 1";
+        player.SubtitlesManager[1].Add(cue);
+        var picker = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var vm = new SubtitlesExportViewModel(new FlyleafSubtitleExportSource(player))
+            { SelectedSlot = 1, IsUtf8Bom = false, IncludeSpeakerLabels = true, PickExportPath = _ => picker.Task };
+
+        Task export = vm.ExportAsync();
+        vm.IncludeSpeakerLabels = false;
+        cue.SpeakerId = "Speaker 2";
+        cue.Text = "changed";
+        cue.SubStyles!.Clear();
+        picker.SetResult(path);
+        await export;
+
+        Assert.Equal("1\r\n00:00:01,234 --> 00:00:04,567\r\n[Speaker 1] <i>one\r\ntwo</i>\r\n", File.ReadAllText(path));
+    }
+
+    [AvaloniaFact]
     public void Real_source_preserves_Wpf_translated_mode_display_semantics_and_omits_original_style_offsets()
     {
         using var player = CreatePlayer();
@@ -82,6 +106,26 @@ public sealed class SubtitleExportTests
         Assert.Equal(suggested, request!.SuggestedFileName); Assert.Equal(format, request.Format);
         Assert.Equal(path, revealed); Assert.Single(Directory.GetFiles(dir.Path));
         Assert.False(vm.Busy); await vm.DisposeAsync();
+    }
+
+    [Theory]
+    [InlineData(SubtitleExportFormat.Srt)]
+    [InlineData(SubtitleExportFormat.Vtt)]
+    [InlineData(SubtitleExportFormat.Txt)]
+    public void Speaker_metadata_preserves_legacy_export_bytes_except_when_opted_into_srt(SubtitleExportFormat format)
+    {
+        var plain = new SubtitleExportLine(TimeSpan.Zero, TimeSpan.FromSeconds(1), "one", [new(SubStyles.ITALIC, 0, 3)]);
+        var labeled = plain with { SpeakerId = "Speaker 1" };
+        var unmatched = new SubtitleExportLine(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(3), "two");
+        byte[] expected = Encoding.UTF8.GetBytes(SubtitleExporter.Build([plain, unmatched], format));
+        Assert.Equal(expected, Encoding.UTF8.GetBytes(SubtitleExporter.Build([labeled, unmatched], format)));
+        if (format != SubtitleExportFormat.Srt)
+            Assert.Equal(expected, Encoding.UTF8.GetBytes(SubtitleExporter.Build([labeled, unmatched], format, includeSpeakerLabels: true)));
+        else
+        {
+            Assert.Equal("1\r\n00:00:00,000 --> 00:00:01,000\r\n[Speaker 1] <i>one</i>\r\n\r\n2\r\n00:00:02,000 --> 00:00:03,000\r\ntwo\r\n",
+                SubtitleExporter.Build([labeled, unmatched], format, includeSpeakerLabels: true));
+        }
     }
 
     [Theory]
@@ -208,6 +252,25 @@ public sealed class SubtitleExportTests
             await command.ExecuteAsync(null);
             Assert.Equal("movie.translated.txt", request!.SuggestedFileName); Assert.Equal("Hello", File.ReadAllText(path));
             Assert.Contains("ASR/OCR", vm.Message);
+        }
+        finally { await vm.DisposeAsync(); window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Speaker_export_is_unchecked_by_default_and_only_available_for_srt()
+    {
+        var vm = new SubtitlesExportViewModel(new Source());
+        var window = new SubtitlesExportWindow(vm);
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var speakers = Assert.IsType<CheckBox>(window.FindControl<CheckBox>("ExportSpeakerLabels"));
+            Assert.Equal(false, speakers.IsChecked);
+            Assert.True(speakers.IsEnabled);
+            window.FindControl<ComboBox>("ExportFormat")!.SelectedIndex = (int)SubtitleExportFormat.Vtt;
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(speakers.IsEnabled);
         }
         finally { await vm.DisposeAsync(); window.Close(); }
     }

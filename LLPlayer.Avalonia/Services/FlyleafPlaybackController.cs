@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 using FlyleafLib;
 using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer;
+using FlyleafLib.MediaPlayer.Diarization;
+using LLPlayer.Core.Services.Diarization;
 using FlyleafLib.Plugins;
 using LLPlayer.Core.Services;
 using WpfKey = System.Windows.Input.Key;
@@ -63,10 +65,20 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     }
 
     public FlyleafPlaybackController(Player player, IUIDispatcher? ui, CollectionSyncBridge bridge, GpuWorkCoordinator? gpuCoordinator = null)
+        : this(player, ui, bridge, gpuCoordinator, ReadDiarizationSetup)
+    {
+    }
+
+    internal FlyleafPlaybackController(Player player, IUIDispatcher? ui, CollectionSyncBridge bridge, GpuWorkCoordinator? gpuCoordinator,
+        Func<(IDiarizationEngine Engine, bool UseGpu)> configureDiarization)
     {
         this.player = player;
         this.ui = ui;
         this.bridge = bridge;
+        this.configureDiarization = configureDiarization;
+        diarizationCoordinator = gpuCoordinator ?? new GpuWorkCoordinator();
+        diarization = new DiarizationWorkflow(diarizationCoordinator);
+        diarizationCoordinator.Changed += OnDiarizationCoordinatorChanged;
         Recognition = new RecognitionActions(new PlayerRecognitionBackend(player), LanguageResources.AcquireUse, gpuCoordinator);
         Recognition.GpuWaitChanged += OnGpuWaitChanged;
 
@@ -74,7 +86,10 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         audioChanged = (_, e) =>
         {
             if (e.PropertyName is nameof(FlyleafLib.MediaPlayer.Audio.IsOpened) or nameof(FlyleafLib.MediaPlayer.Audio.StreamIndex))
+            {
                 Recognition.CancelStaleStarts();
+                QueueDiarizationValidation();
+            }
             if (e.PropertyName is nameof(FlyleafLib.MediaPlayer.Audio.Volume) or nameof(FlyleafLib.MediaPlayer.Audio.Mute))
                 Raise(e.PropertyName);
         };
@@ -84,14 +99,22 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         {
             if (e.PropertyName == nameof(SubManager.CurrentIndex))
                 Raise(nameof(PrimaryCueIndex));
-            if (e.PropertyName == nameof(SubManager.IsLoading)) Raise(nameof(RecognitionStatus));
+            if (e.PropertyName == nameof(SubManager.IsLoading))
+            {
+                Raise(nameof(RecognitionStatus));
+                QueueDiarizationValidation();
+            }
             if (e.PropertyName == nameof(SubManager.Language)) Raise("SubtitleLanguage");
         };
         secondaryManagerChanged = (_, e) =>
         {
             if (e.PropertyName == nameof(SubManager.CurrentIndex))
                 Raise(nameof(SecondaryCueIndex));
-            if (e.PropertyName == nameof(SubManager.IsLoading)) Raise(nameof(RecognitionStatus));
+            if (e.PropertyName == nameof(SubManager.IsLoading))
+            {
+                Raise(nameof(RecognitionStatus));
+                QueueDiarizationValidation();
+            }
             if (e.PropertyName == nameof(SubManager.Language)) Raise("SubtitleLanguage");
         };
         recognitionSlotChanged = (sender, e) =>
@@ -99,7 +122,10 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             if (e.PropertyName == nameof(Subtitle.EnabledASR)) Raise(nameof(RecognitionStatus));
             // Subtitle.Enabled = IsOpened || EnabledASR; ASR subtitles also make a slot "loaded" for the dual anchor.
             if (e.PropertyName is nameof(Subtitle.IsOpened) or nameof(Subtitle.EnabledASR))
+            {
                 Raise(ReferenceEquals(sender, player.Subtitles[0]) ? nameof(PrimarySlotEnabled) : nameof(SecondarySlotEnabled));
+                QueueDiarizationValidation();
+            }
         };
         subConfigChanged = (_, e) =>
         {
@@ -112,12 +138,15 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             }
             if (e.PropertyName == nameof(Config.SubConfig.Visible))
                 Raise(nameof(SubtitlesVisible));
+            if (e.PropertyName == nameof(Config.SubConfig.Delay))
+                QueueDiarizationValidation();
         };
         primaryBitmapPositionChanged = (_, e) => OnBitmapPositionChanged(0, e.PropertyName);
         secondaryBitmapPositionChanged = (_, e) => OnBitmapPositionChanged(1, e.PropertyName);
 
         player.PropertyChanged += playerChanged;
         player.Audio.PropertyChanged += audioChanged;
+        player.Config.Audio.PropertyChanged += OnDiarizationAudioConfigChanged;
         player.Subtitles[0].Data.PropertyChanged += primaryDataChanged;
         player.Subtitles[1].Data.PropertyChanged += secondaryDataChanged;
         player.SubtitlesManager[0].PropertyChanged += primaryManagerChanged;
@@ -148,8 +177,15 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             cueChanged[slot] = (_, e) =>
             {
                 if (e.PropertyName is nameof(SubtitleData.DisplayText) or nameof(SubtitleData.UseTranslated) or nameof(SubtitleData.AssignedVoiceId)) QueueCueNotification(slot);
+                if (e.PropertyName == nameof(SubtitleData.IsText)) QueueDiarizationValidation();
             };
-            cueWatchers[i] = bridge.Watch(player.SubtitlesManager[slot].Subs, () => { WatchCues(slot); QueueCueNotification(slot); Raise(nameof(RecognitionStatus)); });
+            cueWatchers[i] = bridge.Watch(player.SubtitlesManager[slot].Subs, () =>
+            {
+                WatchCues(slot);
+                QueueDiarizationValidation();
+                QueueCueNotification(slot);
+                Raise(nameof(RecognitionStatus));
+            });
             WatchCues(slot);
         }
     }
@@ -364,11 +400,15 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         if (slot is < 0 or > 1) return [];
         if (player.CanPlay && !player.Subtitles[slot].Enabled) return [];
         SubtitleCueSource? source = CaptureSubtitleCueSource(slot);
-        List<SubtitleData> subs = bridge.Snapshot(player.SubtitlesManager[slot].Subs);
-        List<CueInfo> cues = new(subs.Count);
-        foreach (SubtitleData s in subs)
-            cues.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, player.SubtitlesManager[slot].Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391(), s.Text ?? "",
-                source == null ? null : new SubtitleCueIdentity(new SubtitleCueToken(source, s)), s.IsBitmap, s.AssignedVoiceId));
+        SubManager manager = player.SubtitlesManager[slot];
+        List<CueInfo> cues = manager.WithCueLock(subs =>
+        {
+            List<CueInfo> snapshot = new(subs.Count);
+            foreach (SubtitleData s in subs)
+                snapshot.Add(new CueInfo(s.Index, s.StartTime, s.EndTime, s.DisplayText ?? (s.IsBitmap ? "[image]" : ""), s.UseTranslated, manager.Language?.ISO6391 ?? "", player.Config.Subtitles.TranslateTargetLanguage.ToISO6391(), s.Text ?? "",
+                    source == null ? null : new SubtitleCueIdentity(new SubtitleCueToken(source, s)), s.IsBitmap, s.AssignedVoiceId, s.SpeakerId));
+            return snapshot;
+        });
         if (source != null && !IsCurrentSubtitleCueSource(source)) return [];
         return cues;
     }
@@ -557,6 +597,8 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     public async ValueTask DisposeAsync()
     {
         Recognition.BeginShutdown();
+        BeginDiarizationShutdown();
+        await DrainDiarizationAsync();
         await StopAudioRecoveryAsync();
         await Recognition.DisposeAsync();
         await Task.WhenAll(player.SubtitlesManager[0].Translator.DisposeAsync().AsTask(), player.SubtitlesManager[1].Translator.DisposeAsync().AsTask());
@@ -568,7 +610,9 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         if (disposed)
             return;
         CancelAudioRecovery();
+        BeginDiarizationShutdown();
         disposed = true;
+        diarizationCoordinator.Changed -= OnDiarizationCoordinatorChanged;
         DisposePlaylistChoices();
         DisposePlaybackChoices();
         Recognition.GpuWaitChanged -= OnGpuWaitChanged;
@@ -579,6 +623,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
         player.PropertyChanged -= playerChanged;
         player.Audio.PropertyChanged -= audioChanged;
+        player.Config.Audio.PropertyChanged -= OnDiarizationAudioConfigChanged;
         player.Subtitles[0].Data.PropertyChanged -= primaryDataChanged;
         player.Subtitles[1].Data.PropertyChanged -= secondaryDataChanged;
         player.SubtitlesManager[0].PropertyChanged -= primaryManagerChanged;
@@ -636,6 +681,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     void OnPlayerChanged(string? name)
     {
         if (name is nameof(Player.CanPlay) or nameof(Player.Status)) Recognition.CancelStaleStarts();
+        if (name is nameof(Player.CanPlay) or nameof(Player.Status) or nameof(Player.IsASRRunning)) QueueDiarizationValidation();
         if (name is nameof(Player.CanPlay) or nameof(Player.Status) or nameof(Player.Chapters)) QueuePlaybackChoices();
         if (name is nameof(Player.IsASRRunning) or nameof(Player.IsASRPaused)) Raise(nameof(RecognitionStatus));
         switch (name)
@@ -700,6 +746,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     void OnOpening(object? sender, OpeningArgs e)
     {
         if (e.IsSubtitles) return;
+        CancelActiveDiarization();
         // Native engine shortcuts open outside the app mutation queue. Invalidate immediately, before the UI
         // notification can run, so an already-posted app completion cannot attach its sidecars to the new media.
         if (appMediaOpenEpoch.Value == 0)

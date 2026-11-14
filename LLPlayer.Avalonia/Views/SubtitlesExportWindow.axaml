@@ -27,6 +27,7 @@
           <TextBlock Text="Format" />
           <ComboBox Name="ExportFormat" ItemsSource="{Binding FormatOptions}" SelectedIndex="{Binding SelectedFormatIndex}" HorizontalAlignment="Stretch" AutomationProperties.Name="Export format" />
           <TextBlock Text="SRT and WebVTT keep original-text italics. TXT contains plain transcript text." Classes="small muted" TextWrapping="Wrap" />
+          <CheckBox Name="ExportSpeakerLabels" Content="Include speaker labels (SRT only)" IsEnabled="{Binding CanIncludeSpeakerLabels}" IsChecked="{Binding IncludeSpeakerLabels}" />
           <CheckBox Name="ExportBom" Content="With UTF-8 BOM" IsChecked="{Binding IsUtf8Bom}" />
         </StackPanel>
         <TextBlock Name="ExportPartialWarning" IsVisible="{Binding IsPartial}" Text="ASR/OCR is running. Only the subtitles captured when you choose Export will be saved." TextWrapping="Wrap" Classes="small muted" />

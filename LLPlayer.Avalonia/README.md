@@ -29,7 +29,8 @@ and full WPF feature parity require separately evidenced work; Linux model recei
 
 ### Windows x64
 
-Install the .NET 10 SDK for development. The extracted package needs the .NET 10 runtime and **Microsoft Visual
+Install the .NET 10 SDK for development. The full Avalonia verification scripts also use Python 3 on PATH
+for offline sidecar tests. The extracted package needs the .NET 10 runtime and **Microsoft Visual
 C++ x64 Redistributable 2022 or newer** for its native dependencies. WSL is not required for this native app.
 
 ```powershell
@@ -105,6 +106,19 @@ the detached settings draft; Linux tests, package review, and installation readb
 acceptance was not performed, and the work does not claim full F-13 parity. See
 [`docs/agent/plans/2026-10-03-f13-subtitle-translation.md`](../docs/agent/plans/2026-10-03-f13-subtitle-translation.md) and
 [`docs/agent/plans/2026-10-03-f13-translation-chat.md`](../docs/agent/plans/2026-10-03-f13-translation-chat.md).
+
+## Local speaker analysis
+
+Open a local video or audio file, select its audio track and load text subtitles or finish ASR. In **Recognition**,
+choose **Analyze speakers — primary** or **Analyze speakers — secondary**. The result labels unambiguous cues
+in that slot's sidebar. **Cancel speaker analysis** stops the job. To save a copy with labels, choose SRT in the
+subtitle export dialog and enable **Include speaker labels (SRT only)**. The checkbox starts off and in-session labels
+are cleared when the subtitle slot is replaced.
+
+Follow the [sidecar setup](../diarization_sidecar/README.md), also shipped as `Assets/Diarization/README.md`.
+Set `LLPLAYER_DIARIZATION_PYTHON` and `LLPLAYER_DIARIZATION_MODEL` to absolute paths before launch. CPU is
+the default. Set `LLPLAYER_DIARIZATION_DEVICE=cuda` to use a CUDA-capable Python environment and the player's
+shared GPU coordinator. The explicit command reads the selected track locally and the sidecar uses offline mode.
 
 ## Features (MVP)
 
