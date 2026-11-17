@@ -43,6 +43,13 @@ public sealed record MediaAudioProbeResult(
     IReadOnlyList<MediaAudioTrack> Tracks,
     bool LanguageTagged);
 
+public enum MediaAudioSelectionFailure { LiveSource, StaleTrack }
+
+public sealed class MediaAudioSelectionException(MediaAudioSelectionFailure failure, string message) : IOException(message)
+{
+    public MediaAudioSelectionFailure Failure { get; } = failure;
+}
+
 public sealed class MediaAudioProbe
 {
     private readonly Config _config;
@@ -58,8 +65,10 @@ public sealed class MediaAudioProbe
     /// <param name="forcedStreamIndex">When set and present, use exactly this track (manual override).</param>
     /// <param name="preferRussian">When true, auto-select a Russian-tagged track if one exists (so ASR yields
     /// Russian subtitles and translation is skipped) before falling back to the configured language order.</param>
+    /// <param name="strictSource">Reject live sources and stale explicit audio stream indexes.</param>
     public MediaAudioProbeResult Probe(
-        string mediaPath, CancellationToken token, int? forcedStreamIndex = null, bool preferRussian = false)
+        string mediaPath, CancellationToken token, int? forcedStreamIndex = null, bool preferRussian = false,
+        bool strictSource = false)
     {
         token.ThrowIfCancellationRequested();
 
@@ -81,6 +90,12 @@ public sealed class MediaAudioProbe
             }
 
             List<AudioStream> streams = demuxer.AudioStreams.ToList();
+            if (strictSource && demuxer.IsLive)
+                throw new MediaAudioSelectionException(MediaAudioSelectionFailure.LiveSource,
+                    "Recognition is unavailable for live streams.");
+            if (strictSource && forcedStreamIndex.HasValue && !streams.Any(s => s.StreamIndex == forcedStreamIndex.Value))
+                throw new MediaAudioSelectionException(MediaAudioSelectionFailure.StaleTrack,
+                    "The requested audio track is no longer available.");
 
             List<MediaAudioTrack> tracks = streams
                 .OrderBy(s => s.StreamIndex)

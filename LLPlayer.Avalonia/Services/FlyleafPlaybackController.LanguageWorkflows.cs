@@ -117,6 +117,25 @@ public sealed partial class FlyleafPlaybackController
 
     public IDubbingVoiceAssignmentProvider? CaptureBatchVoiceAssignments()
     {
+        var snapshot = CaptureBatchVoiceSnapshot();
+        return snapshot.Cleared.Count == 0
+            ? DubbingWorkflow.CreateVoiceAssignments(player.Config.Subtitles.PersistPerLineVoices, snapshot.MediaPath, snapshot.Cues)
+            : new DubbingBatchVoiceAssignmentProvider(snapshot.MediaPath, snapshot.Cues, snapshot.Cleared,
+                player.Config.Subtitles.PersistPerLineVoices);
+    }
+
+    internal LLPlayer.Avalonia.Services.Automation.ControlBatchVoiceSnapshot? CaptureControlBatchVoiceAssignments()
+    {
+        var snapshot = CaptureBatchVoiceSnapshot();
+        if (LocalDubbingMediaPath(snapshot.MediaPath) is not { } local) return null;
+        var applied = snapshot.Cues.Where(cue => !string.IsNullOrWhiteSpace(cue.AssignedVoiceId));
+        var claims = applied.Concat(snapshot.Cleared).Select(cue =>
+            new LLPlayer.Avalonia.Services.Automation.ControlBatchVoiceCue(cue.StartTime.Ticks, cue.EndTime.Ticks, cue.Text, cue.AssignedVoiceId)).ToArray();
+        return claims.Length == 0 ? null : new(local, claims);
+    }
+
+    (string? MediaPath, IReadOnlyList<SubtitleData> Cues, IReadOnlyList<SubtitleData> Cleared) CaptureBatchVoiceSnapshot()
+    {
         long generation = player.MediaGeneration;
         var item = player.Playlist?.Selected;
         string? mediaPath = CurrentMediaPath;
@@ -135,29 +154,32 @@ public sealed partial class FlyleafPlaybackController
             || mediaPath != CurrentMediaPath || sources.Where((source, slot) => !Equals(source, after[slot])
                 || source != null && !IsCurrentSubtitleCueSource(source)).Any())
             throw new InvalidOperationException("The media or subtitle source changed. Start the batch again.");
-        return cleared.Length == 0
-            ? DubbingWorkflow.CreateVoiceAssignments(player.Config.Subtitles.PersistPerLineVoices, mediaPath, cues)
-            : new DubbingBatchVoiceAssignmentProvider(mediaPath, cues, cleared, player.Config.Subtitles.PersistPerLineVoices);
+        return (mediaPath, cues, cleared);
     }
 
     public string? GetCueVoiceId(CueInfo cue, int slot) => IsCueCurrent(cue, slot)
         && cue.Identity?.Source is SubtitleCueToken token ? token.Cue.AssignedVoiceId : null;
 
-    public async Task SetCueVoiceAsync(CueInfo cue, int slot, string? voiceId)
+    public Task SetCueVoiceAsync(CueInfo cue, int slot, string? voiceId) =>
+        SetCueVoiceAsync(cue, slot, voiceId, expectedDelay: null, CancellationToken.None);
+
+    internal async Task SetCueVoiceAsync(CueInfo cue, int slot, string? voiceId, long? expectedDelay,
+        CancellationToken requestCancellation)
     {
         // Resolve both ready sources before applying an edit: clearing A must not suppress an in-flight read
         // that carries B's saved voice. No disk work occurs when opt-in persistence is disabled.
         await Task.WhenAll(RestoreDubbingVoicesAsync(0), RestoreDubbingVoicesAsync(1)).ConfigureAwait(false);
         await Recognition.MutateIfIdleAsync(cancellation =>
         {
-            if (!IsCueCurrent(cue, slot) || cue.Identity?.Source is not SubtitleCueToken token)
-                throw new InvalidOperationException("The subtitle changed. Select the current row again.");
+            requestCancellation.ThrowIfCancellationRequested();
+            if (cue.Identity?.Source is not SubtitleCueToken token || !Current()) throw Stale();
             string? saveMedia = null;
             IReadOnlyList<SubtitleData>? saveSnapshot = null;
             long saveRevision = 0;
             if (!player.TryMutateMedia(token.Source.Media.Generation, token.Source.Media.Item,
-                    () => IsCueCurrent(cue, slot), () =>
+                    Current, () =>
                     {
+                        requestCancellation.ThrowIfCancellationRequested();
                         NotifyDubbingVoiceEdited(slot);
                         token.Cue.AssignedVoiceId = voiceId;
                         saveRevision = RecordDubbingVoiceEdit(token);
@@ -170,7 +192,7 @@ public sealed partial class FlyleafPlaybackController
                         saveSnapshot = [new SubtitleData { StartTime = token.Cue.StartTime,
                             EndTime = token.Cue.EndTime, AssignedVoiceId = token.Cue.AssignedVoiceId }];
                     }, cancellation))
-                throw new InvalidOperationException("The subtitle changed. Select the current row again.");
+                throw Stale();
             QueueCueNotification(slot);
             if (saveMedia != null && saveSnapshot != null)
                 lock (voiceSaveQueueGate)
@@ -180,7 +202,15 @@ public sealed partial class FlyleafPlaybackController
                         TimeSpan.FromMilliseconds(400));
                     voiceSaveQueue.Enqueue(saveMedia, saveSnapshot, saveRevision);
                 }
+
+            bool Current() => IsCueCurrent(cue, slot) && (expectedDelay is null ||
+                (player.Config.Subtitles[slot].Delay == expectedDelay && token.Cue.Text == cue.OriginalText
+                    && token.Cue.DisplayText == cue.Text && token.Cue.AssignedVoiceId == cue.AssignedVoiceId));
         }).ConfigureAwait(false);
+
+        Exception Stale() => expectedDelay is null
+            ? new InvalidOperationException("The subtitle changed. Select the current row again.")
+            : new LLPlayer.ControlApi.ControlException(new("stale_revision", "Read the current subtitle cue before changing its voice."));
     }
 
     public Task DrainVoiceAssignmentsAsync()

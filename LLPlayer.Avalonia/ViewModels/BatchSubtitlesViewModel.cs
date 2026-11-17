@@ -22,7 +22,7 @@ public partial class BatchSubtitlesViewModel : ObservableObject, IAsyncDisposabl
     bool refreshingVoices;
     bool closing;
     Task pendingOptions = Task.CompletedTask;
-    public BatchWorkflow Workflow { get; }
+    public IBatchWorkspace Workflow { get; }
     public ObservableCollection<BatchSubtitleJob> Jobs => Workflow.Jobs;
     public ObservableCollection<BatchJobRow> Rows { get; } = [];
     [ObservableProperty] BatchSettings draft;
@@ -40,14 +40,20 @@ public partial class BatchSubtitlesViewModel : ObservableObject, IAsyncDisposabl
         get => Jobs.Count == 0 || Jobs.All(j => !j.Include) ? false : Jobs.All(j => j.Include) ? true : null;
         set { foreach (var job in Jobs) job.Include = value == true; OnPropertyChanged(); }
     }
-    public BatchSubtitlesViewModel(BatchWorkflow workflow, BatchSettingsStore store,
+    readonly Func<BatchSettings, BatchSettings, Task>? saveBatchWithHost;
+    BatchSettings draftBaseline;
+
+    public BatchSubtitlesViewModel(IBatchWorkspace workflow, BatchSettingsStore store,
         Func<string?, Task<string?>> pickFolder, Func<string, Task> openMedia, Func<string, Task<bool>> reveal,
         Action? showDubbingSettings = null, Func<IReadOnlyList<TtsVoice>>? getVoices = null,
-        Func<string>? getDefaultVoiceId = null, Func<string, Task>? saveDefaultVoiceId = null)
+        Func<string>? getDefaultVoiceId = null, Func<string, Task>? saveDefaultVoiceId = null,
+        Func<BatchSettings, BatchSettings, Task>? saveBatchWithHost = null)
     {
         Workflow = workflow; this.store = store; this.pickFolder = pickFolder; this.openMedia = openMedia; this.reveal = reveal;
         this.showDubbingSettings = showDubbingSettings; this.getVoices = getVoices; this.getDefaultVoiceId = getDefaultVoiceId;
         this.saveDefaultVoiceId = saveDefaultVoiceId; draft = workflow.Settings.Clone(); warning = store.LoadWarning ?? "";
+        this.saveBatchWithHost = saveBatchWithHost;
+        draftBaseline = draft.Clone();
         Workflow.Changed += OnWorkflowChanged;
         Jobs.CollectionChanged += OnJobsChanged;
         RebuildRows();
@@ -78,9 +84,14 @@ public partial class BatchSubtitlesViewModel : ObservableObject, IAsyncDisposabl
     void OnWorkflowChanged() { OnPropertyChanged(nameof(AllIncluded)); OnPropertyChanged(nameof(WatchButtonText)); }
     public void Opened()
     {
-        Draft = Workflow.Settings.Clone(); RefreshVoices(); Workflow.Open();
+        ReloadDraft(); RefreshVoices(); Workflow.Open();
     }
-    public void Closed() { Draft = Workflow.Settings.Clone(); Workflow.Closed(); }
+    public void Closed() { ReloadDraft(); Workflow.Closed(); }
+    void ReloadDraft()
+    {
+        draftBaseline = Workflow.Settings.Clone();
+        Draft = draftBaseline.Clone();
+    }
     void RefreshVoices()
     {
         refreshingVoices = true;
@@ -93,42 +104,55 @@ public partial class BatchSubtitlesViewModel : ObservableObject, IAsyncDisposabl
         }
         finally { refreshingVoices = false; }
     }
-    Task<bool> CommitOptionsAsync(bool explicitSave = false)
+    Task<bool> CommitOptionsAsync(bool explicitSave = false, bool updateWatcher = false)
     {
         Task previous = pendingOptions;
-        Task<bool> operation = CommitOptionsAfterAsync(previous, explicitSave);
+        Task<bool> operation = CommitOptionsAfterAsync(previous, explicitSave, updateWatcher);
         pendingOptions = operation;
         return operation;
     }
-    async Task<bool> CommitOptionsAfterAsync(Task previous, bool explicitSave)
+    async Task<bool> CommitOptionsAfterAsync(Task previous, bool explicitSave, bool updateWatcher)
     {
         await previous;
         if (closing) return false;
-        return await CommitOptionsCoreAsync(explicitSave);
+        return await CommitOptionsCoreAsync(explicitSave, updateWatcher);
     }
-    async Task<bool> CommitOptionsCoreAsync(bool explicitSave)
+    async Task<bool> CommitOptionsCoreAsync(bool explicitSave, bool updateWatcher)
     {
         try
         {
             if (!explicitSave && !string.IsNullOrEmpty(Warning))
                 throw new InvalidOperationException("Review the options and choose Save options to replace the unreadable settings file before running this operation.");
             BatchSettings candidate = Draft.Clone(); candidate.Validate();
+            BatchSettings baseline = draftBaseline;
             bool saveVoice = voiceEdited && saveDefaultVoiceId != null && SelectedVoice != null && SelectedVoice.Id != getDefaultVoiceId?.Invoke();
             // The voice owner guarantees persist-before-apply and preserves its state when its write fails.
             // Write batch first so a failed batch path never changes the voice; compensate batch if voice fails.
-            BatchSettingsSaveReceipt? write = saveVoice ? store.SaveReversible(candidate) : null;
-            if (!saveVoice) store.Save(candidate);
+            BatchSettingsSaveReceipt? write = null;
+            if (saveBatchWithHost != null) await saveBatchWithHost(baseline, candidate);
+            else if (saveVoice) write = store.SaveReversible(candidate);
+            else store.Save(candidate);
             try
             {
                 if (saveVoice) await saveDefaultVoiceId!(SelectedVoice!.Id);
             }
             catch (Exception voiceError)
             {
-                try { write!.Rollback(); }
+                try
+                {
+                    if (saveBatchWithHost != null) await saveBatchWithHost(candidate, baseline);
+                    else write!.Rollback();
+                }
                 catch (Exception rollbackError) { throw new IOException($"{voiceError.Message} Batch settings rollback failed: {rollbackError.Message}", new AggregateException(voiceError, rollbackError)); }
                 throw;
             }
-            if (!closing) Workflow.ApplySettings(candidate);
+            if (!closing)
+            {
+                bool repointWatcher = Workflow.WatchFolder && (baseline.LastFolder != candidate.LastFolder
+                    || baseline.Recursive != candidate.Recursive);
+                await Workflow.ApplyWorkspaceSettingsAsync(candidate, updateWatcher || repointWatcher);
+                if (saveBatchWithHost != null) ReloadDraft();
+            }
             Warning = "";
             // Refresh from the owner after a successful commit. An untouched stale picker never writes its old value.
             RefreshVoices(); return true;
@@ -139,7 +163,7 @@ public partial class BatchSubtitlesViewModel : ObservableObject, IAsyncDisposabl
     [RelayCommand] async Task ToggleWatchAsync()
     {
         Draft.WatchFolder = !Workflow.WatchFolder; OnPropertyChanged(nameof(Draft));
-        if (await CommitOptionsAsync()) Workflow.SetMessage(Workflow.WatchFolder ? "Watching for new videos. Copying files are queued after they become stable and readable." : "Folder watch stopped.");
+        if (await CommitOptionsAsync(updateWatcher: true)) Workflow.SetMessage(Workflow.WatchFolder ? "Watching for new videos. Copying files are queued after they become stable and readable." : "Folder watch stopped.");
     }
     [RelayCommand] async Task BrowseAsync()
     {

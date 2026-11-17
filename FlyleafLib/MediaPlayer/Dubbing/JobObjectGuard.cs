@@ -56,11 +56,19 @@ internal static partial class JobObjectGuard
     /// Create a kill-on-close job and assign <paramref name="processHandle"/> to it. Returns the job
     /// handle to hold open, or null on any failure (the caller logs and continues without the net).
     /// </summary>
-    public static SafeFileHandle? AssignKillOnClose(IntPtr processHandle)
+    public static SafeFileHandle? AssignKillOnClose(IntPtr processHandle, string? name = null)
     {
-        SafeFileHandle job = CreateJobObjectW(IntPtr.Zero, IntPtr.Zero);
+        SafeFileHandle job = CreateJobObjectW(IntPtr.Zero, name);
         if (job.IsInvalid)
+        {
+            job.Dispose();
             return null;
+        }
+        if (name != null && Marshal.GetLastPInvokeError() == 183) // ERROR_ALREADY_EXISTS
+        {
+            job.Dispose();
+            return null;
+        }
 
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION info = default;
         info.BasicLimitInformation.LimitFlags = JobObjectLimitKillOnJobClose;
@@ -90,8 +98,20 @@ internal static partial class JobObjectGuard
         }
     }
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial SafeFileHandle CreateJobObjectW(IntPtr lpJobAttributes, IntPtr lpName);
+    internal static bool IsNamedJobDrained(string name)
+    {
+        using SafeFileHandle job = OpenJobObjectW(0x0004, false, name); // JOB_OBJECT_QUERY
+        if (!job.IsInvalid)
+            return IsEmpty(job);
+        // The kernel destroys named jobs when their handles and all member processes are gone.
+        return Marshal.GetLastPInvokeError() == 2; // ERROR_FILE_NOT_FOUND
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial SafeFileHandle CreateJobObjectW(IntPtr lpJobAttributes, string? lpName);
+
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    private static partial SafeFileHandle OpenJobObjectW(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, string name);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

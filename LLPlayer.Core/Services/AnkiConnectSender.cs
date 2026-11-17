@@ -27,8 +27,18 @@ public sealed class AnkiConnectSender
     /// <summary>The caller owns the supplied client; no HTTP request occurs before PushAsync.</summary>
     public AnkiConnectSender(HttpClient http) => this.http = http ?? throw new ArgumentNullException(nameof(http));
 
-    public async Task<AnkiAddNotesOutcome> PushAsync(
+    public Task<AnkiAddNotesOutcome> PushAsync(
         IReadOnlyList<SavedWord> words, string deckName, CancellationToken token = default)
+        => PushAsync(words, deckName, null, token);
+
+    /// <summary>Lets the job owner persist the intent and receipt of the only non-idempotent Anki operation.</summary>
+    public Task<AnkiAddNotesOutcome> PushWithTrackedNotesAsync(IReadOnlyList<SavedWord> words, string deckName,
+        Func<Func<CancellationToken, Task<AnkiAddNotesOutcome>>, CancellationToken, Task<AnkiAddNotesOutcome>> trackNotes,
+        CancellationToken token = default) => PushAsync(words, deckName, trackNotes, token);
+
+    private async Task<AnkiAddNotesOutcome> PushAsync(IReadOnlyList<SavedWord> words, string deckName,
+        Func<Func<CancellationToken, Task<AnkiAddNotesOutcome>>, CancellationToken, Task<AnkiAddNotesOutcome>>? trackNotes,
+        CancellationToken token)
     {
         if (words.Count == 0)
         {
@@ -60,20 +70,8 @@ public sealed class AnkiConnectSender
                 return new AnkiAddNotesOutcome(0, 0, $"AnkiConnect could not create the note type: {modelError}");
             }
 
-            string reply = await PostAsync(AnkiConnectRequests.BuildAddNotes(words, deck), token);
-            string? notesError = GetPreparationError(reply);
-            if (notesError != null) return new AnkiAddNotesOutcome(0, 0, notesError);
-            using JsonDocument notesReply = JsonDocument.Parse(reply);
-            JsonElement ids = notesReply.RootElement.GetProperty("result");
-            if (ids.ValueKind != JsonValueKind.Array || ids.GetArrayLength() != words.Count)
-                return new AnkiAddNotesOutcome(0, 0, "Unexpected response from AnkiConnect.");
-            foreach (JsonElement id in ids.EnumerateArray())
-            {
-                if (id.ValueKind != JsonValueKind.Null &&
-                    (id.ValueKind != JsonValueKind.Number || !id.TryGetInt64(out long noteId) || noteId <= 0))
-                    return new AnkiAddNotesOutcome(0, 0, "Unexpected response from AnkiConnect.");
-            }
-            return AnkiConnectResponses.ParseAddNotes(reply, words.Count);
+            Task<AnkiAddNotesOutcome> Add(CancellationToken ct) => AddNotesAsync(words, deck, ct);
+            return trackNotes == null ? await Add(token) : await trackNotes(Add, token);
         }
         catch (TaskCanceledException) when (!token.IsCancellationRequested)
         {
@@ -84,6 +82,24 @@ public sealed class AnkiConnectSender
             return new AnkiAddNotesOutcome(0, 0,
                 "Could not reach Anki. Make sure Anki is running and the AnkiConnect add-on (code 2055492159) is installed.");
         }
+    }
+
+    private async Task<AnkiAddNotesOutcome> AddNotesAsync(IReadOnlyList<SavedWord> words, string deck, CancellationToken token)
+    {
+        string reply = await PostAsync(AnkiConnectRequests.BuildAddNotes(words, deck), token);
+        string? error = GetPreparationError(reply);
+        if (error != null) return new AnkiAddNotesOutcome(0, 0, error);
+        using JsonDocument notesReply = JsonDocument.Parse(reply);
+        JsonElement ids = notesReply.RootElement.GetProperty("result");
+        if (ids.ValueKind != JsonValueKind.Array || ids.GetArrayLength() != words.Count)
+            return new AnkiAddNotesOutcome(0, 0, "Unexpected response from AnkiConnect.");
+        foreach (JsonElement id in ids.EnumerateArray())
+        {
+            if (id.ValueKind != JsonValueKind.Null &&
+                (id.ValueKind != JsonValueKind.Number || !id.TryGetInt64(out long noteId) || noteId <= 0))
+                return new AnkiAddNotesOutcome(0, 0, "Unexpected response from AnkiConnect.");
+        }
+        return AnkiConnectResponses.ParseAddNotes(reply, words.Count);
     }
 
     private static string? GetPreparationError(string reply, bool requireVersion = false, bool requireDeckId = false, bool requireModel = false)

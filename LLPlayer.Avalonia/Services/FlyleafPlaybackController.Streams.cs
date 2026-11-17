@@ -150,20 +150,32 @@ public sealed partial class FlyleafPlaybackController
             && ReferenceEquals(token.SourceIO, source.IOStream);
 
     public Task SelectAudioTrackAsync(PlaybackStreamTrack track)
+        => SelectAudioTrackAsync(track, false, CancellationToken.None);
+
+    internal Task SelectControlAudioTrackAsync(PlaybackStreamTrack track, CancellationToken token)
+        => SelectAudioTrackAsync(track, true, token);
+
+    Task SelectAudioTrackAsync(PlaybackStreamTrack track, bool reportOutcome, CancellationToken token)
         => MutatePlaybackChoiceAsync(track.Token, PlaybackChoiceKind.Audio, (source, _) => source switch
         {
             AudioStream stream => player.Open(stream, defaultAudio: false)?.Error ?? (ReferenceEquals(player.decoder.AudioStream, stream) ? null : "Audio track could not be opened."),
             ExternalAudioStream stream => player.Open(stream)?.Error ?? (ReferenceEquals(player.decoder.AudioStream?.ExternalStream, stream) ? null : "Audio track could not be opened."),
             _ => null
-        });
+        }, reportOutcome, token);
 
     public Task SelectVideoTrackAsync(PlaybackStreamTrack track)
+        => SelectVideoTrackAsync(track, false, CancellationToken.None);
+
+    internal Task SelectControlVideoTrackAsync(PlaybackStreamTrack track, CancellationToken token)
+        => SelectVideoTrackAsync(track, true, token);
+
+    Task SelectVideoTrackAsync(PlaybackStreamTrack track, bool reportOutcome, CancellationToken token)
         => MutatePlaybackChoiceAsync(track.Token, PlaybackChoiceKind.Video, (source, cancellation) => source switch
         {
             VideoStream stream => player.Open(stream, defaultAudio: false)?.Error ?? (ReferenceEquals(player.decoder.VideoStream, stream) ? null : "Video track could not be opened."),
             ExternalVideoStream stream => player.OpenExternalVideoPreservingState(stream, cancellation)?.Error ?? (ReferenceEquals(player.decoder.VideoStream?.ExternalStream, stream) ? null : "Video track could not be opened."),
             _ => null
-        });
+        }, reportOutcome, token);
 
     public Task SeekToChapterAsync(PlaybackChapter chapter)
         => MutatePlaybackChoiceAsync(chapter.Token, PlaybackChoiceKind.Chapter, (source, _) =>
@@ -172,20 +184,27 @@ public sealed partial class FlyleafPlaybackController
             return null;
         });
 
-    async Task MutatePlaybackChoiceAsync(object handle, PlaybackChoiceKind kind, Func<object, CancellationToken, string?> mutation)
+    async Task MutatePlaybackChoiceAsync(object handle, PlaybackChoiceKind kind, Func<object, CancellationToken, string?> mutation,
+        bool reportOutcome = false, CancellationToken tokenFromClient = default)
     {
         if (handle is not PlaybackChoiceToken token || token.Kind != kind || !ReferenceEquals(token.Owner, this) || disposed)
+        {
+            if (reportOutcome) throw StaleControlMedia();
             return;
+        }
         long operationRevision = 0;
         PlaybackChoiceFailureState? failureState = null;
         try
         {
-            await MutateWithTranslationAsync(cancellation =>
+            await MutateWithTranslationAsync(mutationToken =>
             {
+                using CancellationTokenSource? linked = tokenFromClient.CanBeCanceled
+                    ? CancellationTokenSource.CreateLinkedTokenSource(mutationToken, tokenFromClient) : null;
+                CancellationToken cancellation = linked?.Token ?? mutationToken;
                 CancellationTokenRegistration interruption = default;
                 try
                 {
-                    player.TryMutateMedia(token.Media.Generation, token.Media.Item,
+                    bool changed = player.TryMutateMedia(token.Media.Generation, token.Media.Item,
                         () => IsCurrentPlaybackChoice(token), () =>
                         {
                             ActivePlaybackChoice? active = null;
@@ -238,14 +257,15 @@ public sealed partial class FlyleafPlaybackController
                                 }
                             }
                         }, cancellation);
+                    if (!changed && reportOutcome) throw StaleControlMedia();
                 }
                 // Drain a racing interrupt callback before the queue admits another operation. Its ownership
                 // was cleared inside the engine gate, so it cannot interrupt a native replacement afterward.
                 finally { interruption.Dispose(); }
             }).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { }
-        catch (Exception error)
+        catch (OperationCanceledException) when (!reportOutcome) { }
+        catch (Exception error) when (!reportOutcome)
         {
             Post(() =>
             {

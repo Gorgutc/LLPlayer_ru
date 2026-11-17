@@ -9,7 +9,7 @@ namespace LLPlayer.Avalonia.Services;
 public sealed class BatchTrayService : IDisposable, IAsyncDisposable
 {
     readonly Application app;
-    readonly BatchWorkflow workflow;
+    readonly IBatchWorkspace workflow;
     readonly Action restoreMain, showBatch;
     readonly Func<Task> quit;
     TrayIcon? icon;
@@ -23,7 +23,7 @@ public sealed class BatchTrayService : IDisposable, IAsyncDisposable
         ? "Batch work continues in the tray. Use the LLPlayer tray menu to restore the player, open Batch Subtitles or Quit."
         : "Batch work continues in the minimized window. Restore it from the taskbar; tray availability cannot be confirmed on this desktop.";
 
-    public BatchTrayService(Application app, BatchWorkflow workflow, Action restoreMain, Action showBatch, Func<Task> quit)
+    public BatchTrayService(Application app, IBatchWorkspace workflow, Action restoreMain, Action showBatch, Func<Task> quit)
     {
         this.app = app; this.workflow = workflow; this.restoreMain = restoreMain; this.showBatch = showBatch; this.quit = quit;
         workflow.Changed += Update;

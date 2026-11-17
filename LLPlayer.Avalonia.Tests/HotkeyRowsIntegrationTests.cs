@@ -145,6 +145,32 @@ public class HotkeyRowsIntegrationTests
     }
 
     [AvaloniaFact]
+    public void Explicit_Word_reset_survives_a_newer_persisted_menu_the_GUI_has_not_seen()
+    {
+        var (main, _, _, prefs, saved) = TestVm.Create();
+        using var owned = main;
+        using TempDir temp = new();
+        var store = new PrefsStore(Path.Combine(temp.Path, "preferences.json"));
+        prefs.WordMenuActions = WordActions.Defaults();
+        AppPrefs opening = prefs.Clone();
+        store.Save(opening);
+        SettingsViewModel draft = main.CreateSettings();
+        AppPrefs fromHost = opening.Clone();
+        fromHost.WordMenuActions = [new() { Kind = WordMenuActionKind.Clipboard, Title = "Host menu" }];
+        fromHost.AnkiDeck = "Host deck";
+        store.Save(fromHost);
+
+        draft.ResetWordActionsCommand.Execute(null);
+        draft.SaveCommand.Execute(null);
+        Assert.Null(draft.Error);
+        store.SaveEdits(opening, Assert.Single(saved));
+
+        AppPrefs persisted = store.Load();
+        Assert.Equal("Copy", persisted.WordMenuActions![0].Title);
+        Assert.Equal("Host deck", persisted.AnkiDeck);
+    }
+
+    [AvaloniaFact]
     public void Failed_save_keeps_pending_release_and_retry_replaces_the_effective_map()
     {
         bool fail = true;

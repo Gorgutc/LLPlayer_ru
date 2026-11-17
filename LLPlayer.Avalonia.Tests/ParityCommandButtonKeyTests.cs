@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
 using LLPlayer.Avalonia.Views;
@@ -13,6 +14,44 @@ namespace LLPlayer.Avalonia.Tests;
 
 public sealed class ParityCommandButtonKeyTests
 {
+    [AvaloniaTheory]
+    [InlineData(Key.Space)] [InlineData(Key.Enter)]
+    public void FocusedAutomationJobsButtonOpensFlyoutWithoutRoutingPlayback(Key key)
+    {
+        using Fixture fixture = new();
+        fixture.Main.AutomationJobsStatus = "Automation jobs: one active";
+        fixture.Pump();
+        Button button = Assert.Single(fixture.Window.GetVisualDescendants().OfType<Button>(),
+            candidate => Equals(candidate.Content, fixture.Main.AutomationJobsStatus));
+        Assert.True(button.Focus());
+        fixture.Pump();
+        fixture.Press(key);
+        fixture.Press(key);
+        Assert.False(button.Flyout!.IsOpen);
+        fixture.Release(key);
+        Assert.True(button.Flyout.IsOpen);
+        Assert.Empty(fixture.Player.KeysDown);
+        Assert.Empty(fixture.Player.KeysUp);
+        Assert.Equal(0, fixture.Player.ToggleCalls);
+    }
+
+    [AvaloniaFact]
+    public void FullscreenDoesNotReserveTheAutomationJobsRow()
+    {
+        using Fixture fixture = new();
+        fixture.Main.AutomationJobsStatus = "Automation jobs: latest completed";
+        fixture.Pump();
+        Button button = Assert.Single(fixture.Window.GetVisualDescendants().OfType<Button>(),
+            candidate => Equals(candidate.Content, fixture.Main.AutomationJobsStatus));
+        Assert.True(button.IsEffectivelyVisible);
+        fixture.Window.IsFullScreen = true;
+        fixture.Pump();
+        Assert.False(button.IsEffectivelyVisible);
+        fixture.Window.IsFullScreen = false;
+        fixture.Pump();
+        Assert.True(button.IsEffectivelyVisible);
+    }
+
     [AvaloniaTheory]
     [InlineData(Key.Space)] [InlineData(Key.Enter)]
     public void TitleButtonOwnsOnePressReleaseWithoutCallingTheEngine(Key key)

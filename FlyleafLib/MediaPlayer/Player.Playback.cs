@@ -232,18 +232,39 @@ partial class Player
         Seek(ms, false, !IsLive);
     }
 
+#if !WINDOWS
+    /// <summary>Runs the same native accurate seek as the UI and observes the result of this request.</summary>
+    public Task<bool> SeekControlAsync(TimeSpan time, int subIndex, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        long milliseconds = (long)time.TotalMilliseconds;
+        if (subIndex >= 0)
+        {
+            if (time.Microseconds > 0) milliseconds++;
+            milliseconds += Config.Subtitles[subIndex].Delay / 10000;
+        }
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Seek(checked((int)Math.Clamp(milliseconds, 0, int.MaxValue)), false, !IsLive, completion, token);
+        return completion.Task;
+    }
+#endif
+
     public void ToggleSeekAccurate()
         => Config.Player.SeekAccurate = !Config.Player.SeekAccurate;
 
-    private void Seek(int ms, bool forward, bool accurate)
+    private void Seek(int ms, bool forward, bool accurate, TaskCompletionSource<bool> completion = null,
+        CancellationToken cancellation = default)
     {
         if (!canPlay)
+        {
+            completion?.TrySetResult(false);
             return;
+        }
 
         lock (seeks)
         {
             _CurTime = curTime = ms * (long)10000;
-            seeks.Push(new SeekData(ms, forward, accurate));
+            seeks.Push(new SeekData(ms, forward, accurate, completion, cancellation));
         }
 
         // Set timestamp to Manager immediately after seek to enable continuous seek
@@ -280,13 +301,11 @@ partial class Player
                 {
                     lock (seeks)
                     {
-                        if (!(seeks.TryPop(out seekData) && canPlay && status != Status.Playing))
+                        if (!canPlay || status == Status.Playing || !TryTakeNewestSeek(out seekData))
                         {
                             taskSeekRuns = false;
                             break;
                         }
-
-                        seeks.Clear();
                     }
 
                     if (status == Status.Ended)
@@ -388,11 +407,13 @@ partial class Player
                         }
                     }
 
+                    seekData.Complete(ret);
                     Thread.Sleep(20);
                 }
             }
             catch (Exception e)
             {
+                seekData?.Fail(e);
                 lock (seeks) taskSeekRuns = false;
                 Log.Error($"Seek failed ({e.Message})");
             }
@@ -404,6 +425,38 @@ partial class Player
                     Play();
             }
         });
+    }
+
+    private bool TryTakeNewestSeek(out SeekData seek)
+    {
+        lock (seeks)
+        {
+            if (!seeks.TryPop(out seek)) return false;
+            DiscardPendingSeeks();
+            if (!seek.Cancellation.IsCancellationRequested) return true;
+            seek.Discard();
+            return false;
+        }
+    }
+
+    private void DiscardPendingSeeks()
+    {
+        while (seeks.TryPop(out SeekData pending)) pending.Discard();
+    }
+
+    private static int ExecutePlaybackSeek(SeekData seek, Func<int> run)
+    {
+        try
+        {
+            int result = run();
+            seek.Complete(result);
+            return result;
+        }
+        catch (Exception error)
+        {
+            seek.Fail(error);
+            throw;
+        }
     }
 
     /// <summary>
@@ -525,6 +578,19 @@ class SeekData
     public int  ms;
     public bool forward;
     public bool accurate;
-    public SeekData(int ms, bool forward, bool accurate)
-        { this.ms = ms; this.forward = forward && !accurate; this.accurate = accurate; }
+    private readonly TaskCompletionSource<bool> completion;
+    public CancellationToken Cancellation { get; }
+
+    public SeekData(int ms, bool forward, bool accurate, TaskCompletionSource<bool> completion, CancellationToken cancellation)
+    {
+        this.ms = ms;
+        this.forward = forward && !accurate;
+        this.accurate = accurate;
+        this.completion = completion;
+        Cancellation = cancellation;
+    }
+
+    public void Complete(int result) => completion?.TrySetResult(result >= 0);
+    public void Fail(Exception error) => completion?.TrySetException(error);
+    public void Discard() => completion?.TrySetCanceled(Cancellation);
 }

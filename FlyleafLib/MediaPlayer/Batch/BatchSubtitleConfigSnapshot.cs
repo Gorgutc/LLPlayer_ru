@@ -129,6 +129,8 @@ public static class BatchSubtitleConfigSnapshot
         // BatchSubtitleConfigSnapshotTests.
         snapshot.DubbingConfig = CloneDubbingConfig(source.DubbingConfig);
         snapshot.TranslateTargetLanguage = forBatch ? TargetLanguage.Russian : source.TranslateTargetLanguage;
+        snapshot[0].OCREngine = source[0].OCREngine;
+        snapshot[1].OCREngine = source[1].OCREngine;
 
         // Per-slot subtitle language preferences + unknown-source fallbacks (primary/secondary). These were dropped
         // from the batch snapshot, so batch transcription/translation silently ignored the user's language prefs

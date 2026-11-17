@@ -3,6 +3,11 @@
     <TargetFrameworks>net10.0-windows10.0.18362.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <LLPlayerNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</LLPlayerNativeRuntimeIdentifier>
+    <LLPlayerNativeRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">win-x64</LLPlayerNativeRuntimeIdentifier>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0' and '$(LLPlayerNativeRuntimeIdentifier)' == 'win-x64'">
+    <DefineConstants>$(DefineConstants);LLPLAYER_CONTROL_WINDOWS</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.17" />
@@ -10,6 +15,23 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FlyleafLib/FlyleafLib.csproj" />
+    <ProjectReference Include="../LLPlayer.Control/LLPlayer.Control.csproj" />
     <InternalsVisibleTo Include="FlyleafLibTests" />
+    <InternalsVisibleTo Include="LLPlayer.Avalonia.Tests" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0' and '$(LLPlayerNativeRuntimeIdentifier)' == 'win-x64'">
+    <PackageReference Include="Squid-Box.SevenZipSharp.Lite" Version="1.6.2.24" />
+    <PackageDownload Include="Microsoft.Windows.SDK.NET.Ref" Version="[10.0.18362.57]" />
+    <Reference Include="Microsoft.Windows.SDK.NET">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.18362.57/lib/net8.0/Microsoft.Windows.SDK.NET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="WinRT.Runtime">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.18362.57/lib/net8.0/WinRT.Runtime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' != 'net10.0' or '$(LLPlayerNativeRuntimeIdentifier)' != 'win-x64'">
+    <Compile Remove="Services/Models/WindowsEngineArchiveExtractor.cs" />
   </ItemGroup>
 </Project>

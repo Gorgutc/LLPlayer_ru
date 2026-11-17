@@ -84,11 +84,20 @@ public sealed partial class FlyleafPlaybackController : IAudioSettingsController
     }
 
     public Task SelectAudioDeviceAsync(string? deviceId)
+        => SelectAudioDeviceAsync(deviceId, validate: false, CancellationToken.None);
+
+    internal Task SelectControlAudioDeviceAsync(string? deviceId, CancellationToken token)
+        => SelectAudioDeviceAsync(deviceId, validate: true, token);
+
+    Task SelectAudioDeviceAsync(string? deviceId, bool validate, CancellationToken caller)
     {
         string selected = deviceId ?? "";
         return Recognition.MutateAsync(token =>
         {
             CheckAudioAdmission(token);
+            caller.ThrowIfCancellationRequested();
+            if (validate && selected.Length != 0 && !bridge.Snapshot(Engine.Audio.Devices).Any(device => device.Id == selected))
+                throw new LLPlayer.ControlApi.ControlException(new("stale_revision", "Refresh the audio device catalog and select an available device."));
             selectedAudioDeviceId = selected;
             ApplyAudioDeviceSelection();
             PublishAudioSettings();

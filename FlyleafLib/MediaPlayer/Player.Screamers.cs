@@ -130,19 +130,18 @@ unsafe partial class Player
 
         while (IsPlaying)
         {
-            if (seeks.TryPop(out var seekData))
+            if (TryTakeNewestSeek(out var seekData))
             {
-                seeks.Clear();
                 requiresBuffering = true;
 
                 if (AudioDecoder.OnVideoDemuxer)
                 {
-                    if (decoder.Seek(seekData.ms, seekData.forward) < 0)
+                    if (ExecutePlaybackSeek(seekData, () => decoder.Seek(seekData.ms, seekData.forward)) < 0)
                         Log.Warn("Seek failed 1");
                 }
                 else
                 {
-                    if (decoder.SeekAudio(seekData.ms, seekData.forward) < 0)
+                    if (ExecutePlaybackSeek(seekData, () => decoder.SeekAudio(seekData.ms, seekData.forward)) < 0)
                         Log.Warn("Seek failed 2");
                 }
             }
@@ -228,13 +227,12 @@ unsafe partial class Player
 
         while (status == Status.Playing)
         {
-            if (seeks.TryPop(out var seekData))
+            if (TryTakeNewestSeek(out var seekData))
             {
                 vFrame = null;
                 Renderer.RenderIdleStart();
 
-                seeks.Clear();
-                if (decoder.Seek(seekData.ms, seekData.forward) < 0)
+                if (ExecutePlaybackSeek(seekData, () => decoder.Seek(seekData.ms, seekData.forward)) < 0)
                     Log.Warn("Seek failed");
             }
 

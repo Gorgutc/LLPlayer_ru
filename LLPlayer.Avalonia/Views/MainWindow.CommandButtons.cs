@@ -1,6 +1,7 @@
 ﻿using ICommand = System.Windows.Input.ICommand;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
@@ -13,6 +14,7 @@ public partial class MainWindow
     {
         public Button? Button { get; init; }
         public ICommand? Command { get; init; }
+        public FlyoutBase? Flyout { get; init; }
         public object? Parameter { get; init; }
         public PlaylistViewModel? Playlist { get; init; }
         public object? CurrentToken { get; init; }
@@ -22,15 +24,16 @@ public partial class MainWindow
         public bool Retired { get; set; }
     }
 
-    // Observe physical downs even outside these three buttons, so a held video key cannot become a button
+    // Observe physical downs even outside owned buttons, so a held video key cannot become a button
     // press merely because focus moved before a repeat or release. Other controls retain their existing route.
     readonly Dictionary<Key, CommandButtonKeyPress> commandButtonKeys = [];
 
     Button? FocusedParityCommandButton()
     {
         if (FocusManager?.GetFocusedElement() is not Button button) return null;
-        return button.Name == "CueVoiceButton" || ReferenceEquals(button, MediaTitleButton) || ReferenceEquals(button, PreviousPlaylistButton)
-            || ReferenceEquals(button, NextPlaylistButton) ? button : null;
+        return button.Name is "CueVoiceButton" or "CancelAutomationJobButton"
+            || ReferenceEquals(button, MediaTitleButton) || ReferenceEquals(button, PreviousPlaylistButton)
+            || ReferenceEquals(button, NextPlaylistButton) || ReferenceEquals(button, AutomationJobsButton) ? button : null;
     }
 
     bool TryHandleCommandButtonKeyDown(KeyEventArgs e)
@@ -55,9 +58,9 @@ public partial class MainWindow
         (PlaybackPlaylistItem? current, PlaybackPlaylistItem? target) = AdjacentPlaylistItems(playlist, direction);
         commandButtonKeys[e.Key] = new()
         {
-            Button = button, Command = button.Command, Parameter = button.CommandParameter,
+            Button = button, Command = button.Command, Flyout = button.Flyout, Parameter = button.CommandParameter,
             Playlist = playlist, Direction = direction, CurrentToken = current?.Token, TargetToken = target?.Token,
-            Canceled = e.KeyModifiers != KeyModifiers.None || button.Command == null
+            Canceled = e.KeyModifiers != KeyModifiers.None || (button.Command == null && button.Flyout == null)
                 || direction != 0 && (current == null || target == null),
         };
         button.LostFocus += OnParityCommandButtonLostFocus;
@@ -87,10 +90,11 @@ public partial class MainWindow
         if (press.Button is { } owner) owner.LostFocus -= OnParityCommandButtonLostFocus;
         ConsumeParityCommandButtonRelease(e.Key);
         e.Handled = true;
-        if (press.Canceled || press.Retired || press.Button == null || press.Command == null
+        if (press.Canceled || press.Retired || press.Button == null || (press.Command == null && press.Flyout == null)
             || !ReferenceEquals(press.Button, focused) || !press.Button.IsEffectivelyEnabled
             || !press.Button.IsEffectivelyVisible || e.KeyModifiers != KeyModifiers.None
             || !ReferenceEquals(press.Button.Command, press.Command)
+            || !ReferenceEquals(press.Button.Flyout, press.Flyout)
             || !Equals(press.Button.CommandParameter, press.Parameter)) return true;
 
         if (press.Direction != 0)
@@ -100,7 +104,8 @@ public partial class MainWindow
             if (current == null || target == null || !Equals(current.Token, press.CurrentToken)
                 || !Equals(target.Token, press.TargetToken)) return true;
         }
-        if (press.Command.CanExecute(press.Parameter)) press.Command.Execute(press.Parameter);
+        if (press.Command == null) press.Flyout!.ShowAt(press.Button);
+        else if (press.Command.CanExecute(press.Parameter)) press.Command.Execute(press.Parameter);
         return true;
     }
 

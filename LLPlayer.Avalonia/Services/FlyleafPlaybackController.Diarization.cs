@@ -1,9 +1,11 @@
 using System.ComponentModel;
+using System.Text.Json;
 using FlyleafLib;
 using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaStream;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Diarization;
+using LLPlayer.ControlApi;
 using LLPlayer.Core.Services.Diarization;
 
 namespace LLPlayer.Avalonia.Services;
@@ -20,6 +22,8 @@ public sealed partial class FlyleafPlaybackController : IDiarizationController
     {
         public CancellationTokenSource Cancellation { get; } = new();
         public TaskCompletionSource<int> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<Guid?> RemoteJob { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public AppPaths? ControlPaths { get; init; }
     }
 
     readonly DiarizationWorkflow diarization;
@@ -50,12 +54,13 @@ public sealed partial class FlyleafPlaybackController : IDiarizationController
         if (slot is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(slot));
         lock (diarizationGate) CheckDiarizationAdmission();
         DiarizationSelection selection = CaptureDiarizationSelection(slot);
-        (IDiarizationEngine engine, bool useGpu) = configureDiarization();
+        AppPaths? control = controlRecognitionPaths;
+        (IDiarizationEngine? engine, bool useGpu) = control == null ? configureDiarization() : (null, false);
         DiarizationOperation operation;
         lock (diarizationGate)
         {
             CheckDiarizationAdmission();
-            operation = new(selection);
+            operation = new(selection) { ControlPaths = control };
             activeDiarization = operation;
         }
         NotifyDiarizationStatus();
@@ -127,7 +132,7 @@ public sealed partial class FlyleafPlaybackController : IDiarizationController
         return true;
     }
 
-    async Task RunDiarizationAsync(DiarizationOperation operation, IDiarizationEngine engine, bool useGpu)
+    async Task RunDiarizationAsync(DiarizationOperation operation, IDiarizationEngine? engine, bool useGpu)
     {
         CancellationToken token = operation.Cancellation.Token;
         DiarizationSelection selection = operation.Selection;
@@ -141,12 +146,15 @@ public sealed partial class FlyleafPlaybackController : IDiarizationController
             TimeSpan shift = TimeSpan.FromTicks(checked(selection.SubtitleDelay - selection.AudioDelay));
             DiarizationCue[] timings = selection.Cues.Where(cue => cue.IsText)
                 .Select(cue => new DiarizationCue(cue.Start + shift, cue.End + shift)).ToArray();
-            IReadOnlyList<string?> labels = await diarization.RunAsync(engine, selection.Input, timings, useGpu, token).ConfigureAwait(false);
+            IReadOnlyList<string?> labels = operation.ControlPaths is { } paths
+                ? await RunControlDiarizationAsync(operation, paths, timings, token).ConfigureAwait(false)
+                : await diarization.RunAsync(engine!, selection.Input, timings, useGpu, token).ConfigureAwait(false);
             count = await ApplyDiarizationAsync(selection, labels, token).ConfigureAwait(false);
         }
         catch (Exception exception) { error = exception; }
         finally
         {
+            operation.RemoteJob.TrySetResult(null);
             lock (diarizationGate) activeDiarization = null;
             operation.Cancellation.Dispose();
             if (error is OperationCanceledException) operation.Completion.TrySetCanceled(token);
@@ -155,6 +163,35 @@ public sealed partial class FlyleafPlaybackController : IDiarizationController
             NotifyDiarizationStatus();
         }
     }
+
+    static async Task<IReadOnlyList<string?>> RunControlDiarizationAsync(DiarizationOperation operation, AppPaths paths,
+        IReadOnlyList<DiarizationCue> timings, CancellationToken token)
+    {
+        using ControlClient client = await ControlClient.ConnectOrStartAsync(paths.ConfigDir, paths.StateDir, token).ConfigureAwait(false);
+        ControlScope scope = new(ControlProtocol.DefaultProfileId);
+        var cues = timings.Select(cue => new { CueId = Guid.NewGuid(), StartTicks = cue.Start.Ticks, EndTicks = cue.End.Ticks }).ToArray();
+        var request = new
+        {
+            MediaPath = operation.Selection.Input.Path,
+            operation.Selection.Input.StreamIndex,
+            Cues = cues
+        };
+        ControlResult accepted = await client.InvokeAsync(new(Guid.NewGuid(), "diarization.start", scope, null,
+            ControlProtocol.Encode(request)), token).ConfigureAwait(false);
+        ThrowControlError(accepted);
+        Guid jobId = accepted.JobId ?? throw new InvalidOperationException("The host did not return a speaker analysis job.");
+        operation.RemoteJob.TrySetResult(jobId);
+        ControlJob job = await WaitForControlJobAsync(client, scope, jobId, token).ConfigureAwait(false);
+        SpeakerResult result = job.Value?.Deserialize<SpeakerResult>(ControlProtocol.Json)
+            ?? throw new InvalidOperationException("The host returned no speaker analysis result.");
+        var speakers = result.Speakers.ToDictionary(speaker => speaker.CueId, speaker => speaker.SpeakerId);
+        if (speakers.Count != cues.Length || cues.Any(cue => !speakers.ContainsKey(cue.CueId)))
+            throw new InvalidOperationException("The speaker analysis result does not match the requested cues.");
+        return cues.Select(cue => speakers[cue.CueId]).ToArray();
+    }
+
+    sealed record SpeakerResult(IReadOnlyList<SpeakerLabel> Speakers);
+    sealed record SpeakerLabel(Guid CueId, string? SpeakerId);
 
     Task<int> ApplyDiarizationAsync(DiarizationSelection selection, IReadOnlyList<string?> labels, CancellationToken token)
     {
@@ -237,7 +274,19 @@ public sealed partial class FlyleafPlaybackController : IDiarizationController
     bool IsCurrentDiarizationSelection(DiarizationSelection selection)
         => OwnsDiarizationSelection(selection) && selection.Source.Manager.WithCueLock(cues => SameDiarizationCues(selection, cues));
 
-    public Task CancelDiarizationAsync() => DrainDiarizationAsync();
+    public async Task CancelDiarizationAsync()
+    {
+        DiarizationOperation? operation;
+        lock (diarizationGate) operation = activeDiarization;
+        if (operation?.ControlPaths is not { } paths)
+        {
+            await DrainDiarizationAsync().ConfigureAwait(false);
+            return;
+        }
+        if (await operation.RemoteJob.Task.ConfigureAwait(false) is not { } jobId) return;
+        using ControlClient client = await ControlClient.ConnectOrStartAsync(paths.ConfigDir, paths.StateDir).ConfigureAwait(false);
+        ThrowControlError(await client.CancelAsync(new(jobId, new(ControlProtocol.DefaultProfileId))).ConfigureAwait(false));
+    }
 
     void CancelActiveDiarization()
     {

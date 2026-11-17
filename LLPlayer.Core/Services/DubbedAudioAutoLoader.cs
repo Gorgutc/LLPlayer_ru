@@ -26,13 +26,21 @@ public static class DubbedAudioAutoLoader
                     if (selectedItem() is not { } item || !File.Exists(mediaPath) ||
                         (!SameLocalPath(item.Url, mediaPath) && !SameLocalPath(item.DirectUrl, mediaPath))) return;
                     string? dubPath = DubbingOutputPathBuilder.ResolveExistingRussianDubPath(mediaPath);
-                    if (dubPath == null || item.ExternalAudioStreams.Any(stream => SameLocalPath(stream.Url, dubPath))) return;
-                    PlaylistItem.AddExternalStream(new ExternalAudioStream { Url = dubPath, Language = Language.Russian }, item, "Dubbing");
+                    if (dubPath != null) Attach(item, dubPath);
                 }
                 catch { /* Convenience only: never fail an otherwise valid media open. */ }
             });
         }
         catch { /* A closing dispatcher must not fail media opening. */ }
+    }
+
+    public static ExternalAudioStream Attach(PlaylistItem item, string dubPath)
+    {
+        if (item.ExternalAudioStreams.FirstOrDefault(stream => SameLocalPath(stream.Url, dubPath)) is { } attached)
+            return attached;
+        var stream = new ExternalAudioStream { Url = dubPath, Language = Language.Russian };
+        PlaylistItem.AddExternalStream(stream, item, "Dubbing");
+        return stream;
     }
 
     static bool SameLocalPath(string? candidate, string path)

@@ -166,7 +166,9 @@ public sealed record BatchAsrProgress(
     int SubtitleCount,
     string Text,
     TimeSpan Position,
-    TimeSpan Duration);
+    TimeSpan Duration,
+    IReadOnlyList<SubtitleData>? NewCues = null,
+    Language? SourceLanguage = null);
 
 public interface IBatchAsrTranscriber
 {

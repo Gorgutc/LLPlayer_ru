@@ -24,16 +24,47 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
         _createService = createService;
     }
 
-    public async Task TranslateAsync(IList<SubtitleData> subtitles, Language sourceLanguage, CancellationToken token)
+    public Task TranslateAsync(IList<SubtitleData> subtitles, Language sourceLanguage, CancellationToken token) =>
+        TranslateCoreAsync(subtitles, sourceLanguage, TargetLanguage.Russian, null, token);
+
+    /// <summary>Translates every text cue to the requested language and commits only a complete result.</summary>
+    public async Task TranslateDocumentAsync(IList<SubtitleData> subtitles, Language sourceLanguage,
+        TargetLanguage targetLanguage, IProgress<(int Completed, int Total)>? progress, CancellationToken token)
+    {
+        if (!Enum.IsDefined(targetLanguage))
+            throw new TranslationConfigException("target language is unknown");
+
+        SubtitleData[] draft = subtitles.Select(cue => new SubtitleData { Text = cue.Text }).ToArray();
+        // An existing translation may have a different target, so always work from the original text.
+        if (sourceLanguage.ISO6391 == targetLanguage.ToISO6391())
+        {
+            foreach (SubtitleData cue in draft)
+                cue.TranslatedText = cue.Text;
+        }
+        else
+        {
+            await TranslateCoreAsync(draft, sourceLanguage, targetLanguage, progress, token).ConfigureAwait(false);
+            if (draft.Any(cue => !string.IsNullOrWhiteSpace(cue.Text) && !cue.IsTranslated))
+                throw new TranslationException("The provider returned an incomplete subtitle translation.")
+                { Kind = TranslationFailureKind.EmptyResponse };
+        }
+
+        token.ThrowIfCancellationRequested();
+        for (int index = 0; index < draft.Length; index++)
+            subtitles[index].TranslatedText = draft[index].TranslatedText;
+    }
+
+    private async Task TranslateCoreAsync(IList<SubtitleData> subtitles, Language sourceLanguage,
+        TargetLanguage targetLanguage, IProgress<(int Completed, int Total)>? progress, CancellationToken token)
     {
         if (sourceLanguage == Language.Unknown)
             throw new TranslationConfigException("source language is unknown");
 
-        if (sourceLanguage.ISO6391 == TargetLanguage.Russian.ToISO6391())
+        if (sourceLanguage.ISO6391 == targetLanguage.ToISO6391())
             return;
 
         using ITranslateService service = _createService();
-        service.Initialize(sourceLanguage, TargetLanguage.Russian);
+        service.Initialize(sourceLanguage, targetLanguage);
 
         // Indices (into the full list) of the lines that still need translation. Indices — not a filtered
         // sublist — so the ContextWindow neighbours can be read from the full, in-order list (including lines
@@ -63,12 +94,19 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             concurrency = 1;
         }
 
+        int completed = 0;
+        async ValueTask TranslateAndReportAsync(int index, CancellationToken cancellationToken)
+        {
+            await TranslateSubAsync(service, subtitles, index, _config, useWindow, cancellationToken).ConfigureAwait(false);
+            progress?.Report((Interlocked.Increment(ref completed), targetIndices.Count));
+        }
+
         if (concurrency <= 1)
         {
             foreach (int i in targetIndices)
             {
                 token.ThrowIfCancellationRequested();
-                await TranslateSubAsync(service, subtitles, i, _config, useWindow, token);
+                await TranslateAndReportAsync(i, token).ConfigureAwait(false);
             }
 
             return;
@@ -80,10 +118,7 @@ public sealed class BatchSubtitleTranslator : IBatchSubtitleTranslator
             MaxDegreeOfParallelism = concurrency
         };
 
-        await Parallel.ForEachAsync(
-            targetIndices,
-            parallelOptions,
-            async (i, ct) => await TranslateSubAsync(service, subtitles, i, _config, useWindow, ct));
+        await Parallel.ForEachAsync(targetIndices, parallelOptions, TranslateAndReportAsync).ConfigureAwait(false);
     }
 
     private static async Task TranslateSubAsync(

@@ -366,6 +366,28 @@ public class SubtitleFontSettingsTests
     }
 
     [AvaloniaFact]
+    public void Modal_save_preserves_an_untouched_field_updated_after_the_editor_opened()
+    {
+        AppPrefs prefs = AtomicBaselinePrefs();
+        AppPrefs? saved = null;
+        using var main = new MainWindowViewModel(new FakePlaybackController(), prefs,
+            value => saved = value, new FakeTranslator(), new FakeShell());
+        var draft = main.CreateSettings();
+        AppPrefs fromHost = prefs.Clone();
+        fromHost.Theme = "Light";
+        main.ApplyPersistedAppSettings(fromHost);
+
+        draft.SidebarFontSize = 22;
+        draft.SaveCommand.Execute(null);
+
+        Assert.Null(draft.Error);
+        Assert.NotNull(saved);
+        Assert.Equal("Light", saved.Theme);
+        Assert.Equal(22, saved.SidebarFontSize);
+        Assert.False(main.IsDarkTheme);
+    }
+
+    [AvaloniaFact]
     public void A_real_atomic_write_failure_preserves_all_live_state_and_file_until_the_same_font_draft_is_retried()
     {
         using TempDir temp = new(); var store = new PrefsStore(Path.Combine(temp.Path, "preferences.json"));

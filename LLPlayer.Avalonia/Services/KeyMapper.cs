@@ -43,44 +43,8 @@ public sealed class KeyMapper
         _ => false,
     };
 
-    /// <summary>Human-readable chord for the cheat sheet, e.g. "Ctrl+Shift+Right".</summary>
     public static string[] ChordParts(WpfKey key, bool ctrl, bool alt, bool shift)
-    {
-        List<string> parts = [];
-        if (ctrl) parts.Add("Ctrl");
-        if (alt) parts.Add("Alt");
-        if (shift) parts.Add("Shift");
-        parts.Add(KeyName(key));
-        return [.. parts];
-    }
+        => AppShortcutMap.DisplayChordParts(key, ctrl, alt, shift);
 
-    public static string KeyName(WpfKey key) => key switch
-    {
-        WpfKey.OemSemicolon => ";",
-        WpfKey.OemQuotes => "'",
-        WpfKey.OemPlus => "+",
-        WpfKey.OemMinus => "-",
-        WpfKey.OemComma => ",",
-        WpfKey.OemPeriod => ".",
-        WpfKey.OemQuestion => "/",
-        WpfKey.OemOpenBrackets => "[",
-        WpfKey.OemCloseBrackets => "]",
-        WpfKey.OemTilde => "`",
-        WpfKey.OemPipe => "\\",
-        WpfKey.Left => "←",
-        WpfKey.Right => "→",
-        WpfKey.Up => "↑",
-        WpfKey.Down => "↓",
-        WpfKey.Escape => "Esc",
-        WpfKey.Space => "Space",
-        WpfKey.Return => "Enter",
-        WpfKey.MediaPlayPause => "Play/Pause",
-        // enum aliases whose ToString() would print the other (IME / legacy) name
-        WpfKey.Play => "Play",
-        WpfKey.PageUp => "PgUp",
-        WpfKey.PageDown => "PgDn",
-        WpfKey.CapsLock => "CapsLock",
-        >= WpfKey.D0 and <= WpfKey.D9 => ((char)('0' + (key - WpfKey.D0))).ToString(),
-        _ => key.ToString(),
-    };
+    public static string KeyName(WpfKey key) => AppShortcutMap.DisplayKeyName(key);
 }

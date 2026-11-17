@@ -25,4 +25,18 @@ public class DemuxerInput : NotifyPropertyChanged
     public string   UserAgent       { get; set; }
 
     public string   Referrer        { get; set; }
+
+    public void ApplyHttpFormatOptions(Dictionary<string, string> options)
+    {
+        if (UserAgent != null)
+            options["user_agent"] = UserAgent;
+        if (Referrer != null)
+            options["referer"] = Referrer;
+        if (HTTPHeaders != null)
+        {
+            options["headers"] = "";
+            foreach (var header in HTTPHeaders)
+                options["headers"] += header.Key + ": " + header.Value + "\r\n";
+        }
+    }
 }

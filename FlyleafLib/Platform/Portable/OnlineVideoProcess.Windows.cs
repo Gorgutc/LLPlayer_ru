@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Dubbing;
 using Microsoft.Win32.SafeHandles;
 
@@ -74,18 +75,30 @@ public sealed partial class OnlineVideoProcess
             using var thread = new SafeWaitHandle(child.Thread, ownsHandle: true);
             try
             {
-                job = JobObjectGuard.AssignKillOnClose(child.Process) ??
+                var owner = ownedEngine ? EngineProcessOwnership.Current : null;
+                Guid identity = owner != null ? Guid.NewGuid() : Guid.Empty;
+                string jobName = owner != null ? EngineProcessOwnership.WindowsJobName(identity) : null;
+                job = JobObjectGuard.AssignKillOnClose(child.Process, jobName) ??
                     throw new IOException("Could not contain the extractor in a Windows job.");
                 root = Process.GetProcessById(child.Pid);
                 _ = root.Handle; // Retain a handle for ExitCode, even if this child exits immediately.
                 if (priority != ProcessPriorityClass.Normal)
                     root.PriorityClass = priority;
+                var engine = new OnlineVideoProcess(root, output, error, job);
+                if (owner != null)
+                {
+                    var record = new EngineProcessIdentity(identity, "windows-job", "global",
+                        child.Pid, root.StartTime.ToUniversalTime().Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    owner.Record(record);
+                    engine.engineOwner = owner;
+                    engine.engineIdentity = record;
+                }
                 input.DisposeLocalCopyOfClientHandle();
                 output.DisposeLocalCopyOfClientHandle();
                 error.DisposeLocalCopyOfClientHandle();
                 if (ResumeThread(thread) == uint.MaxValue)
                     throw new Win32Exception();
-                return new(root, output, error, job);
+                return engine;
             }
             catch
             {

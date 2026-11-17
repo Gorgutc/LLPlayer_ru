@@ -13,11 +13,11 @@ public enum SubtitleVerticalAlignment
 /// <summary>Single source of truth for the text-subtitle layout option strings and their Avalonia mappings.</summary>
 public static class SubtitleLayoutOptions
 {
-    public static IReadOnlyList<string> LineAlignments { get; } = ["Center", "Left", "Right"];
+    public static IReadOnlyList<string> LineAlignments => AppPrefs.SubtitleLineAlignments;
 
     // WPF exposes Top/Center/Bottom for both single and dual text blocks. The Avalonia transport keeps its approved
     // DIP bottom model and treats the option as which block edge is anchored at the configured bottom distance.
-    public static IReadOnlyList<string> PositionAlignments { get; } = ["Top", "Center", "Bottom"];
+    public static IReadOnlyList<string> PositionAlignments => AppPrefs.SubtitlePositionAlignments;
 
     /// <summary>Maps a persisted option to Avalonia alignment; unsupported/null values fall back to Center.</summary>
     public static TextAlignment ToTextAlignment(string? value)

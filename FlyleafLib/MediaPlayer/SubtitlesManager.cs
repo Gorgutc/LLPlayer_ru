@@ -909,6 +909,9 @@ public unsafe class SubtitleReader : IDisposable
 
     private AVPacket* _packet = null;
 
+    public bool IsBitmap => _stream?.IsBitmap == true;
+    public Language TrackLanguage => _stream?.Language ?? Language.Unknown;
+
     public SubtitleReader(SubManager manager, Config config, int subIndex)
     {
         _manager = manager;
@@ -929,7 +932,9 @@ public unsafe class SubtitleReader : IDisposable
             throw new InvalidOperationException($"demuxer open error: {error}");
         }
 
-        _stream = (SubtitlesStream)_demuxer.Demuxer.AVStreamToStream[streamIndex];
+        if (!_demuxer.Demuxer.AVStreamToStream.TryGetValue(streamIndex, out var stream) || stream is not SubtitlesStream subtitles)
+            throw new InvalidDataException("The requested subtitle track is no longer available.");
+        _stream = subtitles;
 
         if (type == MediaType.Subs)
         {

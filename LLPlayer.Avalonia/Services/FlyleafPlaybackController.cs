@@ -40,25 +40,82 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     public RecognitionSettingsStore? RecognitionStore { get; set; }
     public string? RecognitionWarning { get; set; }
     public RecognitionSettings RecognitionSettings => RecognitionSettings.FromConfig(player.Config.Subtitles);
-    public string RecognitionStatus => $"ASR: {(Recognition.IsWaitingForGpu ? "waiting for GPU" : player.IsASRRunning ? player.IsASRPaused ? "paused" : "running" : "idle")} · Primary: {(player.Subtitles[0].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[0].IsLoading ? "loading" : "ready")}, {GetCues(0).Count} cues · Secondary: {(player.Subtitles[1].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[1].IsLoading ? "loading" : "ready")}, {GetCues(1).Count} cues";
-    public Task StartRecognitionAsync(int slot) => Recognition.StartAsync(slot);
-    public Task CancelRecognitionAsync(int slot) => Recognition.CancelAsync(slot);
-    public Task OcrRecognitionAsync(int slot) => Recognition.OcrAsync(slot);
-    public Task ToggleRecognitionPauseAsync() => Recognition.TogglePauseAsync();
+    public string RecognitionStatus
+    {
+        get
+        {
+            string hostStatus = ControlRecognitionStatus;
+            if (hostStatus.Length > 0) return hostStatus;
+            return $"ASR: {(Recognition.IsWaitingForGpu ? "waiting for GPU" : player.IsASRRunning ? player.IsASRPaused ? "paused" : "running" : "idle")} · Primary: {(player.Subtitles[0].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[0].IsLoading ? "loading" : "ready")}, {GetCues(0).Count} cues · Secondary: {(player.Subtitles[1].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[1].IsLoading ? "loading" : "ready")}, {GetCues(1).Count} cues";
+        }
+    }
+    public Task StartRecognitionAsync(int slot)
+        => controlAsrPaths is { } paths
+            ? StartControlRecognitionAsync(CaptureControlRecognitionInput(slot), paths) : Recognition.StartAsync(slot);
+    public Task CancelRecognitionAsync(int slot)
+    {
+        if (slot is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(slot));
+        Task<Guid?>? accepted;
+        ControlRecognitionSlot? detached = null;
+        ControlRecognitionSlot? stopping = null;
+        lock (controlRecognitionGate)
+        {
+            ControlRecognitionSlot? attachment = controlRecognition[slot];
+            ControlRecognitionSlot? other = controlRecognition[(slot + 1) % 2];
+            if (attachment != null && other != null && ReferenceEquals(attachment.Run, other.Run)
+                && !other.Observation.IsCancellationRequested)
+            {
+                detached = attachment;
+                attachment.Observation.Cancel();
+            }
+            else if (attachment != null)
+            {
+                stopping = attachment;
+                attachment.Run.StopRequested = true;
+                if (!attachment.Run.Finished.Task.IsCompleted)
+                    attachment.Run.Preparation.Cancel();
+            }
+            accepted = attachment?.Run.Job.Task ?? controlOcr[slot]?.Job.Task;
+        }
+        if (detached != null) return DetachSharedControlRecognitionAsync(detached);
+        if (stopping != null && controlAsrPaths is { } recognitionPaths)
+            return CancelControlRecognitionSlotAsync(stopping, recognitionPaths);
+        return controlRecognitionPaths is { } paths && accepted != null
+            ? CancelControlRecognitionAsync(accepted, paths) : Recognition.CancelAsync(slot);
+    }
+    public Task OcrRecognitionAsync(int slot)
+        => controlRecognitionPaths is { } paths && CaptureControlOcrInput(slot) is { } input
+            ? RunControlOcrAsync(input, paths) : Recognition.OcrAsync(slot);
+    public Task ToggleRecognitionPauseAsync()
+    {
+        ControlRecognitionRun[] runs;
+        lock (controlRecognitionGate) runs = controlRecognition.OfType<ControlRecognitionSlot>().Select(slot => slot.Run).Distinct().ToArray();
+        return controlAsrPaths is { } paths && runs.Length > 0
+            ? ToggleControlRecognitionPauseAsync(runs, paths) : Recognition.TogglePauseAsync();
+    }
     public void BeginRecognitionShutdown() => Recognition.BeginShutdown();
     public Task DrainRecognitionAsync() => Recognition.DrainAsync();
     public void ResumeRecognitionAfterFailedShutdown() => Recognition.ResumeAfterFailedShutdown();
     public Task SaveRecognitionSettingsAsync(RecognitionSettings settings, RecognitionSettingsStore store)
     {
         RecognitionSettings detached = settings.Clone();
+        return ApplyRecognitionSettingsAsync(_ => detached, store);
+    }
+
+    internal Task ApplyPersistedRecognitionSettingsAsync(Func<CancellationToken, RecognitionSettings> load)
+        => ApplyRecognitionSettingsAsync(load, store: null);
+
+    Task ApplyRecognitionSettingsAsync(Func<CancellationToken, RecognitionSettings> load, RecognitionSettingsStore? store)
+    {
         // Fallback languages have one editor in Playback settings. A model draft cannot restore older values.
-        return Recognition.MutateIfIdleAsync(_ =>
+        return Recognition.MutateIfIdleAsync(token =>
         {
+            RecognitionSettings detached = load(token);
             RecognitionSettings current = RecognitionSettings.FromConfig(player.Config.Subtitles);
             detached.OcrPrimaryLanguage = current.OcrPrimaryLanguage;
             detached.OcrSecondaryLanguage = current.OcrSecondaryLanguage;
             detached.OcrSecondarySame = current.OcrSecondarySame;
-            store.Save(detached);
+            store?.Save(detached);
             PublishLanguageConfiguration(() => detached.Apply(player.Config.Subtitles));
             Recognition.CancelPendingStarts();
         });
@@ -87,6 +144,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         {
             if (e.PropertyName is nameof(FlyleafLib.MediaPlayer.Audio.IsOpened) or nameof(FlyleafLib.MediaPlayer.Audio.StreamIndex))
             {
+                Interlocked.Increment(ref controlAudioRevision);
                 Recognition.CancelStaleStarts();
                 QueueDiarizationValidation();
             }
@@ -123,7 +181,9 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             // Subtitle.Enabled = IsOpened || EnabledASR; ASR subtitles also make a slot "loaded" for the dual anchor.
             if (e.PropertyName is nameof(Subtitle.IsOpened) or nameof(Subtitle.EnabledASR))
             {
-                Raise(ReferenceEquals(sender, player.Subtitles[0]) ? nameof(PrimarySlotEnabled) : nameof(SecondarySlotEnabled));
+                int slot = ReferenceEquals(sender, player.Subtitles[0]) ? 0 : 1;
+                Interlocked.Increment(ref controlSubtitleRevision[slot]);
+                Raise(slot == 0 ? nameof(PrimarySlotEnabled) : nameof(SecondarySlotEnabled));
                 QueueDiarizationValidation();
             }
         };
@@ -289,21 +349,33 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
     public bool PrimaryTranslationEnabled => player.Config.Subtitles[0].EnabledTranslated;
     public bool SecondaryTranslationEnabled => player.Config.Subtitles[1].EnabledTranslated;
-    public Task ToggleTranslationAsync(int slot)
+    public Task ToggleTranslationAsync(int slot) => ChangeTranslationAsync(slot, null, CancellationToken.None);
+
+    internal Task SetControlTranslationEnabledAsync(int slot, bool enabled, CancellationToken token)
+        => ChangeTranslationAsync(slot, enabled, token);
+
+    Task ChangeTranslationAsync(int slot, bool? enabled, CancellationToken token)
     {
         if (slot is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(slot));
         return Recognition.MutateAsync(() =>
         {
-            if (!sentenceAvailable) throw new InvalidOperationException("Choose a sentence provider in Translation settings before enabling subtitle translation.");
+            token.ThrowIfCancellationRequested();
+            bool previous = player.Config.Subtitles[slot].EnabledTranslated;
+            bool next = enabled ?? !previous;
+            if (next == previous) return;
+            if (next && !sentenceAvailable) throw new InvalidOperationException("Choose a sentence provider in Translation settings before enabling subtitle translation.");
             var manager = player.SubtitlesManager[slot];
             manager.Translator.SuspendAsync().GetAwaiter().GetResult();
-            player.Config.Subtitles[slot].EnabledTranslated = !player.Config.Subtitles[slot].EnabledTranslated;
+            player.Config.Subtitles[slot].EnabledTranslated = next;
             manager.Translator.Resume();
             RefreshOverlay(slot);
         });
     }
 
     public Task SaveTranslationAsync(Func<Task> save) => Recognition.MutateAsync(() => save().GetAwaiter().GetResult());
+
+    internal Task SaveTranslationAsync(Func<CancellationToken, Task> save)
+        => Recognition.MutateAsync(token => save(token).GetAwaiter().GetResult());
 
     public void ApplyTranslationSettings(TranslationSettings settings)
     {
@@ -354,6 +426,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
     void QueueCueNotification(int slot)
     {
+        Interlocked.Increment(ref controlSubtitleRevision[slot]);
         if (Interlocked.Exchange(ref cueNotificationPending[slot], 1) != 0) return;
         void Notify()
         {
@@ -449,59 +522,87 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
     public void Open(string url) => Open(url, _ => { });
     public void Open(string url, Action<string?> completed, bool onlineVideo = false)
+        => Observe(OpenAndNotifyAsync(url, completed, onlineVideo));
+
+    async Task OpenAndNotifyAsync(string url, Action<string?> completed, bool onlineVideo)
     {
+        (int epoch, string? error) = await OpenMediaAsync(url, onlineVideo, CancellationToken.None).ConfigureAwait(false);
+        Post(() => { if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) completed(error); });
+    }
+
+    internal async Task OpenControlMediaAsync(string url, bool onlineVideo, CancellationToken cancellationToken)
+    {
+        (_, string? error) = await OpenMediaAsync(url, onlineVideo, cancellationToken).ConfigureAwait(false);
+        if (error != null) throw new InvalidOperationException(error);
+    }
+
+    async Task<(int Epoch, string? Error)> OpenMediaAsync(string url, bool onlineVideo, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
         int epoch;
         lock (mediaOpenInterruption)
             cancelableAppEpoch = epoch = Interlocked.Increment(ref mediaOpenEpoch);
         Raise(nameof(CanCancelOpen));
         QueuePlaybackChoices();
-        Observe(MutateWithTranslationAsync(token =>
+        try
         {
-            // Player.Open raises Opening/OpenCompleted synchronously. Carry this request's identity through those
-            // events instead of inferring ownership from a URL, which may be opened more than once.
-            int previous = appMediaOpenEpoch.Value;
-            appMediaOpenEpoch.Value = epoch;
-            string? error;
-            try
+            string? error = null;
+            using CancellationTokenRegistration cancelOpen = cancellationToken.Register(() => CancelOpen(epoch));
+            await MutateWithTranslationAsync(token =>
             {
-                token.ThrowIfCancellationRequested();
-                if (epoch != Volatile.Read(ref mediaOpenEpoch)) return;
-                using var cancellation = OnlineVideoRequest.ObserveCancellation(token, onlineVideo ? url : null);
-                // Extraction and the subsequent FFmpeg open share one owned cancellation lifetime. Disposing
-                // the registration drains a racing callback before the next serialized mutation can begin.
-                lock (mediaOpenInterruption)
+                // A repeated URL can have several distinct native requests. Carry this attempt's identity
+                // through the synchronous engine events as well as its public completion.
+                int previous = appMediaOpenEpoch.Value;
+                appMediaOpenEpoch.Value = epoch;
+                try
                 {
                     token.ThrowIfCancellationRequested();
-                    if (epoch != Volatile.Read(ref mediaOpenEpoch)) return;
-                    interruptibleAppEpoch = epoch;
+                    using var cancellation = OnlineVideoRequest.ObserveCancellation(token, onlineVideo ? url : null);
+                    lock (mediaOpenInterruption)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        if (epoch != Volatile.Read(ref mediaOpenEpoch)) throw new OperationCanceledException("The media opening was superseded.");
+                        interruptibleAppEpoch = epoch;
+                    }
+                    using var interruption = token.Register(() =>
+                    {
+                        lock (mediaOpenInterruption)
+                            if (interruptibleAppEpoch == epoch && !player.IsDisposed) player.decoder.Interrupt = true;
+                    });
+                    error = player.Open(url).Error;
+                    token.ThrowIfCancellationRequested();
                 }
-                using var interruption = token.Register(() =>
+                finally
                 {
                     lock (mediaOpenInterruption)
-                        if (interruptibleAppEpoch == epoch && !player.IsDisposed) player.decoder.Interrupt = true;
-                });
-                error = player.Open(url).Error;
-                token.ThrowIfCancellationRequested();
-            }
-            finally
-            {
-                lock (mediaOpenInterruption)
-                {
-                    if (interruptibleAppEpoch == epoch) interruptibleAppEpoch = 0;
-                    if (cancelableAppEpoch == epoch) cancelableAppEpoch = 0;
+                        if (interruptibleAppEpoch == epoch) interruptibleAppEpoch = 0;
+                    appMediaOpenEpoch.Value = previous;
                 }
-                Raise(nameof(CanCancelOpen));
-                QueuePlaybackChoices();
-                appMediaOpenEpoch.Value = previous;
+            }, mediaChange: true).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (mediaOpenInterruption)
+            {
+                if (epoch != Volatile.Read(ref mediaOpenEpoch)) throw new OperationCanceledException("The media opening was superseded.");
+                if (cancelableAppEpoch == epoch) cancelableAppEpoch = 0;
             }
-            Post(() => { if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) completed(error); });
-        }, mediaChange: true), epoch);
+            return (epoch, error);
+        }
+        finally
+        {
+            lock (mediaOpenInterruption)
+                if (cancelableAppEpoch == epoch) cancelableAppEpoch = 0;
+            Raise(nameof(CanCancelOpen));
+            QueuePlaybackChoices();
+        }
     }
-    public bool CancelOpen()
+
+    public bool CancelOpen() => CancelOpen(null);
+
+    bool CancelOpen(int? expectedEpoch)
     {
         lock (mediaOpenInterruption)
         {
-            if (cancelableAppEpoch == 0) return false;
+            if (cancelableAppEpoch == 0 || (expectedEpoch.HasValue && cancelableAppEpoch != expectedEpoch)) return false;
             cancelableAppEpoch = 0;
             Interlocked.Increment(ref mediaOpenEpoch);
             Recognition.Invalidate();
@@ -513,30 +614,31 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
 
     public Task SaveOnlineVideoSettingsAsync(OnlineVideoSettingsStore store, OnlineVideoSettings settings)
     {
+        var detached = settings.Clone();
+        return ApplyOnlineVideoSettingsAsync(_ => { store.Save(detached); return detached; });
+    }
+
+    internal Task ApplyPersistedOnlineVideoSettingsAsync(OnlineVideoSettings settings)
+        => ApplyOnlineVideoSettingsAsync(_ => settings);
+
+    internal Task ApplyOnlineVideoSettingsAsync(Func<CancellationToken, OnlineVideoSettings> load)
+    {
         // A modal Save must never wait behind a stalled extraction while its owner holds the Cancel button.
         if (Recognition.IsBusy)
             throw new InvalidOperationException("Cancel the current opening, or wait for playback and recognition work to finish, before saving tool paths.");
-        OnlineVideoSettings detached = settings.Clone();
-        return Recognition.MutateAsync(() => { store.Save(detached); PublishLanguageConfiguration(() => detached.Apply(player.Config)); });
+        return Recognition.MutateAsync(token =>
+        {
+            OnlineVideoSettings detached = load(token).Clone();
+            PublishLanguageConfiguration(() => detached.Apply(player.Config));
+        });
     }
     public void OpenSubtitles(string path) => Observe(MutateWithTranslationAsync(() => player.Open(path, forceSubtitles: true)));
-    async void Observe(Task work, int openEpoch = 0)
+    async void Observe(Task work)
     {
         try { await work.ConfigureAwait(false); }
         catch (RecognitionActionCanceledException) { }
         catch (OperationCanceledException) { }
         catch (Exception e) { Post(() => { if (!disposed) ErrorOccurred?.Invoke(e.Message); }); }
-        finally
-        {
-            // A queued mutation can be rejected before its body runs.
-            if (openEpoch != 0)
-            {
-                lock (mediaOpenInterruption)
-                    if (cancelableAppEpoch == openEpoch) cancelableAppEpoch = 0;
-                Raise(nameof(CanCancelOpen));
-                QueuePlaybackChoices();
-            }
-        }
     }
     public void Play() => player.Play();
     public void Pause() => player.Pause();

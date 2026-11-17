@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using LLPlayer.ControlApi;
 
 namespace LLPlayer.Avalonia.Services;
 
@@ -11,7 +12,7 @@ public sealed record ApplicationLaunchContext(string ExecutablePath, string Work
 public static class ApplicationProcessPlanner
 {
     public static ProcessStartInfo Create(ApplicationLaunchKind kind, ApplicationLaunchContext context,
-        string? mediaUrl)
+        string? mediaUrl, Guid? controlLaunchId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(context.ExecutablePath);
         ProcessStartInfo plan = new()
@@ -27,6 +28,8 @@ public static class ApplicationProcessPlanner
             plan.ArgumentList.Add("--");
             plan.ArgumentList.Add(mediaUrl);
         }
+        if (controlLaunchId.HasValue)
+            plan.Environment[ControlProtocol.GuiLaunchIdVariable] = controlLaunchId.Value.ToString("D");
         return plan;
     }
 }

@@ -1,4 +1,3 @@
-﻿using System.Reflection;
 using LLPlayer.Avalonia.Services;
 
 namespace LLPlayer.Avalonia.Tests;
@@ -16,10 +15,10 @@ public sealed class LocalMediaNavigationTests
         AddFile(directory, "Episode 4.mkv.bak");
         Directory.CreateDirectory(Path.Combine(directory.Path, "Episode 5.mkv"));
 
-        Assert.Equal(middle, Sibling(first, next: true));
-        Assert.Equal(last, Sibling(middle, next: true));
-        Assert.Equal(first, Sibling(middle, next: false));
-        Assert.Equal(middle, Sibling(last, next: false));
+        Assert.Equal(middle, LocalMediaNavigation.GetSibling(first, next: true));
+        Assert.Equal(last, LocalMediaNavigation.GetSibling(middle, next: true));
+        Assert.Equal(first, LocalMediaNavigation.GetSibling(middle, next: false));
+        Assert.Equal(middle, LocalMediaNavigation.GetSibling(last, next: false));
     }
 
     [Fact]
@@ -29,8 +28,8 @@ public sealed class LocalMediaNavigationTests
         string first = AddFile(directory, "Part 1.mp4");
         string last = AddFile(directory, "Part 2.mp4");
 
-        Assert.Null(Sibling(first, next: false));
-        Assert.Null(Sibling(last, next: true));
+        Assert.Null(LocalMediaNavigation.GetSibling(first, next: false));
+        Assert.Null(LocalMediaNavigation.GetSibling(last, next: true));
     }
 
     [Fact]
@@ -41,9 +40,9 @@ public sealed class LocalMediaNavigationTests
         string next = AddFile(directory, "Lesson 2 #50%.mkv");
         string uri = new Uri(current).AbsoluteUri;
 
-        Assert.Equal(next, Sibling(uri, next: true));
+        Assert.Equal(next, LocalMediaNavigation.GetSibling(uri, next: true));
         File.Delete(next);
-        Assert.Null(Sibling(uri, next: true));
+        Assert.Null(LocalMediaNavigation.GetSibling(uri, next: true));
     }
 
     [Theory]
@@ -59,7 +58,7 @@ public sealed class LocalMediaNavigationTests
     [InlineData("bad\0name.mkv")]
     public void Local_path_admission_rejects_nonlocal_or_invalid_inputs(string? source)
     {
-        Assert.Null(LocalPath(source));
+        Assert.False(LocalMediaNavigation.TryGetLocalPath(source, out _));
     }
 
     [Fact]
@@ -68,8 +67,10 @@ public sealed class LocalMediaNavigationTests
         using TempDir directory = new();
         string missing = Path.Combine(directory.Path, "not created #1.mkv");
 
-        Assert.Equal(missing, LocalPath(missing));
-        Assert.Equal(missing, LocalPath(new Uri(missing).AbsoluteUri));
+        Assert.True(LocalMediaNavigation.TryGetLocalPath(missing, out string absolute));
+        Assert.Equal(missing, absolute);
+        Assert.True(LocalMediaNavigation.TryGetLocalPath(new Uri(missing).AbsoluteUri, out string fromUri));
+        Assert.Equal(missing, fromUri);
         Assert.False(File.Exists(missing));
     }
 
@@ -81,8 +82,8 @@ public sealed class LocalMediaNavigationTests
         string plain = AddFile(directory, "Part 1.mkv");
         string last = AddFile(directory, "Part 2.mkv");
 
-        Assert.Equal(plain, Sibling(padded, next: true));
-        Assert.Equal(last, Sibling(plain, next: true));
+        Assert.Equal(plain, LocalMediaNavigation.GetSibling(padded, next: true));
+        Assert.Equal(last, LocalMediaNavigation.GetSibling(plain, next: true));
     }
 
     [Fact]
@@ -92,8 +93,8 @@ public sealed class LocalMediaNavigationTests
         string missing = Path.Combine(directory.Path, "missing.mkv");
         string extensionless = AddFile(directory, "media");
 
-        Assert.IsType<FileNotFoundException>(Assert.Throws<TargetInvocationException>(() => Sibling(missing, true)).InnerException);
-        Assert.IsType<InvalidOperationException>(Assert.Throws<TargetInvocationException>(() => Sibling(extensionless, true)).InnerException);
+        Assert.Throws<FileNotFoundException>(() => LocalMediaNavigation.GetSibling(missing, next: true));
+        Assert.Throws<InvalidOperationException>(() => LocalMediaNavigation.GetSibling(extensionless, next: true));
     }
 
     static string AddFile(TempDir directory, string name)
@@ -101,21 +102,5 @@ public sealed class LocalMediaNavigationTests
         string path = Path.Combine(directory.Path, name);
         File.WriteAllText(path, "fixture");
         return path;
-    }
-
-    // Compiles on the unchanged baseline so RED is an absent capability assertion, not a compiler error.
-    static Type NavigationType => Assert.IsAssignableFrom<Type>(typeof(AppPrefs).Assembly.GetType("LLPlayer.Avalonia.Services.LocalMediaNavigation"));
-
-    static string? Sibling(string source, bool next)
-    {
-        MethodInfo method = Assert.IsAssignableFrom<MethodInfo>(NavigationType.GetMethod("GetSibling", BindingFlags.Public | BindingFlags.Static));
-        return (string?)method.Invoke(null, [source, next]);
-    }
-
-    static string? LocalPath(string? source)
-    {
-        MethodInfo method = Assert.IsAssignableFrom<MethodInfo>(NavigationType.GetMethod("TryGetLocalPath", BindingFlags.Public | BindingFlags.Static));
-        object?[] arguments = [source, null];
-        return method.Invoke(null, arguments) is true ? (string?)arguments[1] : null;
     }
 }

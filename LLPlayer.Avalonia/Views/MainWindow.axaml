@@ -62,6 +62,40 @@
   </Window.Styles>
 
   <DockPanel>
+    <Button Name="AutomationJobsButton" DockPanel.Dock="Bottom" Content="{Binding AutomationJobsStatus}" Classes="ghost" Margin="8,2"
+            AutomationProperties.Name="Automation jobs" HorizontalAlignment="Left">
+      <Button.IsVisible>
+        <MultiBinding Converter="{x:Static BoolConverters.And}">
+          <Binding Path="!IsFullScreen" />
+          <Binding Path="AutomationJobsStatus" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+        </MultiBinding>
+      </Button.IsVisible>
+      <Button.Flyout>
+        <Flyout Placement="TopEdgeAlignedLeft">
+          <ScrollViewer MaxHeight="340">
+            <ItemsControl ItemsSource="{Binding AutomationJobs}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:AutomationJobRow">
+                  <Grid ColumnDefinitions="*,Auto" MinWidth="320" Margin="4,8" ColumnSpacing="12">
+                    <StackPanel Spacing="3">
+                      <TextBlock Text="{Binding Operation}" />
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding Status}" Classes="small muted" />
+                        <TextBlock Text="{Binding Progress}" Classes="small muted" />
+                      </StackPanel>
+                      <TextBlock Text="{Binding Stage}" Classes="small muted" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding JobId}" Classes="small muted" />
+                    </StackPanel>
+                    <Button Name="CancelAutomationJobButton" Grid.Column="1" Content="Cancel" Command="{Binding CancelCommand}"
+                            IsVisible="{Binding CanCancel}" VerticalAlignment="Center" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Flyout>
+      </Button.Flyout>
+    </Button>
     <TextBlock DockPanel.Dock="Bottom" Text="{Binding RecognitionStatus}" Classes="small muted" TextWrapping="Wrap" Margin="12,4" />
     <TextBlock Name="DiarizationStatusText" DockPanel.Dock="Bottom" Text="{Binding DiarizationStatus}" Classes="small muted"
                IsVisible="{Binding DiarizationStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"

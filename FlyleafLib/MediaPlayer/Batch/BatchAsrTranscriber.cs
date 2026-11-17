@@ -11,6 +11,8 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     private readonly bool _preferRussianAudio;
     private readonly Func<string, int?>? _forcedStreamIndexResolver;
     private readonly bool _confirmProcessExit;
+    private readonly bool _forRecognition;
+    private readonly bool _strictExplicitStream;
 
     /// <param name="preferCpu">Optional per-chunk device policy for faster-whisper: when it returns true the
     /// NEXT audio chunk is transcribed on CPU instead of GPU (the chunk in flight finishes on its current
@@ -21,18 +23,26 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     /// <param name="forcedStreamIndexResolver">Optional per-file manual audio-track override: given the media
     /// path, returns the audio stream index to force (or null for automatic selection).</param>
     /// <param name="confirmProcessExit">Verify the external engine's process lifetime for GPU-coordinated runs.</param>
+    /// <param name="forRecognition">Preserve interactive ASR settings instead of applying batch defaults.</param>
+    /// <param name="strictExplicitStream">Use only the requested audio stream and a finite local source.</param>
     public BatchAsrTranscriber(
         Config sourceConfig,
         Func<bool>? preferCpu = null,
         bool preferRussianAudio = false,
         Func<string, int?>? forcedStreamIndexResolver = null,
-        bool confirmProcessExit = false)
+        bool confirmProcessExit = false,
+        bool forRecognition = false,
+        bool strictExplicitStream = false)
     {
-        _batchConfig = BatchSubtitleConfigSnapshot.Create(sourceConfig);
+        _batchConfig = forRecognition
+            ? BatchSubtitleConfigSnapshot.CreateForRecognition(sourceConfig)
+            : BatchSubtitleConfigSnapshot.Create(sourceConfig);
         _preferCpu = preferCpu;
         _preferRussianAudio = preferRussianAudio;
         _forcedStreamIndexResolver = forcedStreamIndexResolver;
         _confirmProcessExit = confirmProcessExit;
+        _forRecognition = forRecognition;
+        _strictExplicitStream = strictExplicitStream;
         ValidateAsrConfig(_batchConfig);
     }
 
@@ -60,11 +70,32 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         IProgress<BatchAsrProgress>? asrProgress = null)
         => Task.Run(() => Transcribe(mediaPath, token, asrProgress), token);
 
+    /// <summary>Runs a detached local source with the exact selected stream and optional playhead.</summary>
+    public Task<BatchAsrResult> TranscribeSelectedAsync(string mediaPath, int? streamIndex, TimeSpan startTime,
+        int? slot, PauseToken pause, CancellationToken token, IProgress<BatchAsrProgress>? asrProgress = null,
+        Language? sourceLanguage = null)
+    {
+        if (slot is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(slot));
+        if (startTime < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(startTime));
+
+        return Task.Run(() =>
+        {
+            Config localConfig = _forRecognition ? BatchSubtitleConfigSnapshot.CreateForRecognition(_batchConfig)
+                : BatchSubtitleConfigSnapshot.Create(_batchConfig);
+            localConfig.Demuxer.FormatOpt["protocol_whitelist"] = "file";
+            MediaAudioProbeResult audio = new MediaAudioProbe(localConfig).Probe(mediaPath, token, streamIndex, strictSource: true);
+            if (sourceLanguage != null)
+                audio = audio with { Language = sourceLanguage, LanguageTagged = true };
+            return TranscribeInternal(localConfig, audio, token, asrProgress, _preferCpu, _confirmProcessExit,
+                startTime, slot, pause);
+        }, token);
+    }
+
     private BatchAsrResult Transcribe(string mediaPath, CancellationToken token, IProgress<BatchAsrProgress>? asrProgress)
     {
         int? forced = _forcedStreamIndexResolver?.Invoke(mediaPath);
         MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig)
-            .Probe(mediaPath, token, forced, _preferRussianAudio);
+            .Probe(mediaPath, token, forced, _preferRussianAudio, strictSource: _strictExplicitStream);
 
         return TranscribeInternal(_batchConfig, audio, token, asrProgress, _preferCpu, _confirmProcessExit);
     }
@@ -75,41 +106,44 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         CancellationToken token,
         IProgress<BatchAsrProgress>? asrProgress,
         Func<bool>? preferCpu,
-        bool confirmProcessExit)
+        bool confirmProcessExit,
+        TimeSpan startTime = default,
+        int? slot = null,
+        PauseToken pause = default)
     {
         List<SubtitleData> subtitles = [];
         Language sourceLanguage = ResolveInitialSourceLanguage(batchConfig, audio);
         Language selectedAudioLanguage = GetKnownLanguage(audio.Language?.ISO6391);
 
-        using AudioReader reader = new(batchConfig, 0, preferCpu, confirmProcessExit: confirmProcessExit);
+        bool interactive = slot.HasValue;
+        using AudioReader reader = new(batchConfig, slot.GetValueOrDefault(), preferCpu,
+            enableVadSnapping: interactive && batchConfig.Subtitles.VadCueSnapping, confirmProcessExit: confirmProcessExit);
         reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
         token.ThrowIfCancellationRequested();
 
-        reader.ReadAll(TimeSpan.Zero, data =>
+        reader.ReadAll(startTime, data =>
         {
             if (token.IsCancellationRequested)
                 return;
 
+            int firstNewCue = subtitles.Count;
             Language asrLanguage = GetKnownLanguage(data.Language);
             sourceLanguage = ResolveReportedSourceLanguage(sourceLanguage, selectedAudioLanguage, asrLanguage);
 
-            SubtitleData subtitle = new()
+            if (interactive)
             {
-                Index = subtitles.Count,
-                Text = data.Text,
-                StartTime = data.StartTime,
-                EndTime = data.EndTime,
-                // Per-cue source language (T-10); with per-segment detection on, mixed-language audio records
-                // each cue's own language. Not persisted to the SRT the batch writes, but kept for model parity.
-                Language = asrLanguage,
-#if DEBUG
-                ChunkNo = data.ChunkNo,
-                StartTimeChunk = data.StartTimeChunk,
-                EndTimeChunk = data.EndTimeChunk,
-#endif
-            };
-
-            subtitles.Add(subtitle);
+                string text = batchConfig.Subtitles.FixAllCaps ? SubtitleCaseFixer.FixAllCaps(data.Text) : data.Text;
+                var segments = batchConfig.Subtitles.ResegmentSubtitles
+                    ? SubtitleSegmenter.Resegment(text, data.StartTime, data.EndTime,
+                        batchConfig.Subtitles.SubtitleSegmentOptions, data.Words, data.Speech)
+                    : [(text, data.StartTime, data.EndTime)];
+                foreach (var (textSegment, start, end) in segments)
+                    AddCue(textSegment, start, end);
+            }
+            else
+            {
+                AddCue(data.Text, data.StartTime, data.EndTime);
+            }
 
             // Stream per-segment progress so the UI shows live feedback during the (otherwise opaque) ASR.
             asrProgress?.Report(new BatchAsrProgress(
@@ -117,15 +151,34 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
                 subtitles.Count,
                 data.Text,
                 data.EndTime,
-                audio.Duration));
-        }, token);
+                audio.Duration,
+                interactive ? subtitles.GetRange(firstNewCue, subtitles.Count - firstNewCue) : null,
+                interactive ? sourceLanguage : null));
+
+            void AddCue(string text, TimeSpan start, TimeSpan end)
+            {
+                subtitles.Add(new SubtitleData
+                {
+                    Index = subtitles.Count,
+                    Text = text,
+                    StartTime = start,
+                    EndTime = end,
+                    Language = asrLanguage,
+#if DEBUG
+                    ChunkNo = data.ChunkNo,
+                    StartTimeChunk = data.StartTimeChunk,
+                    EndTimeChunk = data.EndTimeChunk,
+#endif
+                });
+            }
+        }, token, pause);
         token.ThrowIfCancellationRequested();
 
         subtitles = subtitles.OrderBy(s => s.StartTime).ToList();
 
         // F-18: normalize ALL-CAPS ASR artifacts to sentence-case (gated). Engine-agnostic, applied before
         // re-segmentation so the split cues carry the corrected casing.
-        if (batchConfig.Subtitles.FixAllCaps)
+        if (!interactive && batchConfig.Subtitles.FixAllCaps)
         {
             foreach (SubtitleData s in subtitles)
             {
@@ -137,7 +190,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         // Re-segment over-long Whisper cues into short, capped-line cues (proportional timings) so a single
         // subtitle does not fill the frame. Engine-agnostic, gated by the config toggle. Cues that already fit
         // pass through unchanged.
-        if (batchConfig.Subtitles.ResegmentSubtitles)
+        if (!interactive && batchConfig.Subtitles.ResegmentSubtitles)
         {
             SubtitleSegmentOptions segOpt = batchConfig.Subtitles.SubtitleSegmentOptions;
             subtitles = subtitles

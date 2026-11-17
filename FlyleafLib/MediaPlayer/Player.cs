@@ -685,7 +685,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
                 this.status = status;
                 canPlay = false;
                 isVideoSwitch = false;
-                seeks.Clear();
+                lock (seeks) DiscardPendingSeeks();
 
                 while (taskPlayRuns || taskSeekRuns) Thread.Sleep(5);
 

@@ -6,12 +6,12 @@ using static FlyleafLib.MediaPlayer.Diarization.DiarizationWaveWriter;
 
 namespace FlyleafLib.MediaPlayer.Diarization;
 
-internal static class DiarizationAudioExtractor
+public static class DiarizationAudioExtractor
 {
     private static readonly AVRational Ticks = new() { Num = 1, Den = (int)TimeSpan.TicksPerSecond };
     private static readonly AVRational Samples = new() { Num = 1, Den = SampleRate };
 
-    public static unsafe TimeSpan WriteWave(DiarizationAudioSource source, Stream wave, CancellationToken token)
+    internal static TimeSpan WriteWave(DiarizationAudioSource source, Stream wave, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (!Path.IsPathFullyQualified(source.Path) || !File.Exists(source.Path))
@@ -20,14 +20,36 @@ internal static class DiarizationAudioExtractor
         Config config = new();
         // A local manifest can otherwise load remote resources through nested demuxers.
         config.Demuxer.FormatOpt["protocol_whitelist"] = "file";
-        using var isolated = OfflineDemuxer.OpenIsolated(config, MediaType.Video, 1, "DemuxerDiarization:",
-            source.Path, token, out string? error);
+        return WriteWave(config, MediaType.Video, source.Path, source.StreamIndex, wave, token, fromNetwork: false);
+    }
+
+    /// <summary>Snapshots one finite, reopenable HTTP audio stream into timestamped mono 16 kHz PCM.</summary>
+    public static TimeSpan WriteNetworkWave(Config config, MediaType demuxerType, string url, int streamIndex,
+        Stream wave, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) || uri.Scheme is not ("http" or "https")
+            || demuxerType is not (MediaType.Video or MediaType.Audio) || streamIndex < 0)
+            throw new InvalidDataException("A selected HTTP audio stream is required.");
+
+        config.Demuxer.GetFormatOptPtr(demuxerType)["protocol_whitelist"] = "http,https,tcp,tls,crypto,httpproxy";
+        return WriteWave(config, demuxerType, url, streamIndex, wave, token, fromNetwork: true);
+    }
+
+    private static unsafe TimeSpan WriteWave(Config config, MediaType demuxerType, string url, int streamIndex,
+        Stream wave, CancellationToken token, bool fromNetwork)
+    {
+        using var isolated = OfflineDemuxer.OpenIsolated(config, demuxerType, 1,
+            fromNetwork ? "DemuxerControlAudio:" : "DemuxerDiarization:", url, token, out string? error);
         token.ThrowIfCancellationRequested();
         if (error is not null)
-            throw new IOException($"Could not open local audio for diarization. {error}");
+            throw new IOException(fromNetwork ? "Could not reopen the selected audio source."
+                : $"Could not open local audio for diarization. {error}");
 
         var demuxer = isolated.Demuxer;
-        if (!demuxer.AVStreamToStream.TryGetValue(source.StreamIndex, out var stream) || stream is not AudioStream audio)
+        if (fromNetwork && (demuxer.IsLive || demuxer.Duration <= 0))
+            throw new InvalidDataException("Recognition requires a finite audio source.");
+        if (!demuxer.AVStreamToStream.TryGetValue(streamIndex, out var stream) || stream is not AudioStream audio)
             throw new InvalidDataException("The selected audio track is no longer available.");
 
         var decoder = new AudioDecoder(config, 1);
@@ -68,7 +90,7 @@ internal static class DiarizationAudioExtractor
                     break;
                 result.ThrowExceptionIfError("Could not read the selected audio");
 
-                if (packet->stream_index == source.StreamIndex)
+                if (packet->stream_index == streamIndex)
                 {
                     avcodec_send_packet(decoder.CodecCtx, packet).ThrowExceptionIfError("Could not submit an audio packet");
                     Receive(decoder.CodecCtx, frame);

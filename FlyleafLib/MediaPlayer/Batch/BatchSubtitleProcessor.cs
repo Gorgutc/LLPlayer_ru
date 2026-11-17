@@ -15,6 +15,7 @@ public sealed class BatchSubtitleProcessor
     private readonly IProgress<BatchSubtitleProgress>? _progress;
     private readonly IDubbingRenderer? _dubber;
     private readonly IDubbingVoiceAssignmentProvider? _voiceAssignments;
+    private readonly Func<string, bool>? _ownsExistingSubtitle;
 
     public BatchSubtitleProcessor(
         IBatchAsrTranscriber asrTranscriber,
@@ -23,7 +24,8 @@ public sealed class BatchSubtitleProcessor
         BatchSubtitleOptions options,
         IProgress<BatchSubtitleProgress>? progress = null,
         IDubbingRenderer? dubber = null,
-        IDubbingVoiceAssignmentProvider? voiceAssignments = null)
+        IDubbingVoiceAssignmentProvider? voiceAssignments = null,
+        Func<string, bool>? ownsExistingSubtitle = null)
     {
         _asrTranscriber = asrTranscriber;
         _translator = translator;
@@ -32,6 +34,7 @@ public sealed class BatchSubtitleProcessor
         _progress = progress;
         _dubber = dubber;
         _voiceAssignments = voiceAssignments;
+        _ownsExistingSubtitle = ownsExistingSubtitle;
     }
 
     private bool DubbingEnabled => _options.GenerateDubbing && _dubber is not null;
@@ -256,12 +259,13 @@ public sealed class BatchSubtitleProcessor
     // (the caller's per-job try/catch maps that to Failed/Canceled).
     private async Task<bool> TryCompleteFromExistingAsync(BatchSubtitleJob job, CancellationToken token)
     {
-        if (_options.OverwriteExisting || !SubtitleOutputPathBuilder.OutputExists(job.OutputPath))
+        bool owned = _ownsExistingSubtitle?.Invoke(job.OutputPath) == true;
+        if ((!owned && _options.OverwriteExisting) || !SubtitleOutputPathBuilder.OutputExists(job.OutputPath))
             return false;
 
         if (DubbingEnabled)
         {
-            if (!DubbingOutputPathBuilder.DubExistsAnyFormat(job.MediaPath))
+            if ((owned && _options.OverwriteExisting) || !DubbingOutputPathBuilder.DubExistsAnyFormat(job.MediaPath))
             {
                 List<SubtitleData> existing = DubbingSrtReader.ParseFile(job.OutputPath);
                 if (existing.Count > 0)

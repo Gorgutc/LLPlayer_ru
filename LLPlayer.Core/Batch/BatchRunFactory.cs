@@ -6,12 +6,15 @@ using FlyleafLib.MediaPlayer.Dubbing;
 
 namespace LLPlayer.Core.Batch;
 
+public sealed record BatchOutputOwnership(Func<IBatchSubtitleWriter, IBatchSubtitleWriter> OwnWriter,
+    Func<IDubbingRenderer, IDubbingRenderer> OwnDubbing, Func<string, bool> OwnsExistingSubtitle);
+
 /// <summary>Captures engine configuration and per-file selection before any worker starts.</summary>
 public sealed class BatchRunFactory(Func<Config> getConfig, Func<int, bool>? isUserActive = null,
     Func<Config, IDubbingRenderer?>? createDubbingRenderer = null,
     Func<IDubbingVoiceAssignmentProvider?>? snapshotVoiceAssignments = null,
     Func<IDisposable>? acquireRunLease = null, Func<bool>? getUtf8Bom = null,
-    GpuWorkCoordinator? gpuCoordinator = null) : IBatchRunFactory
+    GpuWorkCoordinator? gpuCoordinator = null, BatchOutputOwnership? outputOwnership = null) : IBatchRunFactory
 {
     public IBatchRun Create(BatchSettings settings, IReadOnlyList<BatchSubtitleJob> jobs)
     {
@@ -25,16 +28,22 @@ public sealed class BatchRunFactory(Func<Config> getConfig, Func<int, bool>? isU
             bool coordinateGpu = gpuCoordinator != null &&
                 (settings.GenerateDubbing || FasterWhisperDevicePolicy.RequiresGpuAdmission(snapshot));
             IBatchAsrTranscriber CreateTranscriber() => new BatchAsrTranscriber(snapshot, preferCpu,
-                settings.PreferRussianAudio, path => overrides.GetValueOrDefault(path), confirmProcessExit: coordinateGpu);
+                settings.PreferRussianAudio, path => overrides.GetValueOrDefault(path), confirmProcessExit: coordinateGpu || outputOwnership != null,
+                strictExplicitStream: outputOwnership != null);
             IBatchAsrTranscriber? transcriber = gpuCoordinator == null ? CreateTranscriber() : null;
             var translator = new BatchSubtitleTranslator(snapshot.Subtitles);
             var assignments = settings.GenerateDubbing ? snapshotVoiceAssignments?.Invoke() : null;
             IDubbingRenderer? renderer = settings.GenerateDubbing
                 ? createDubbingRenderer?.Invoke(snapshot) ?? throw new InvalidOperationException("Dubbing is not configured. Open dubbing settings before starting the batch.") : null;
-            return new Run(jobs, () => transcriber ?? CreateTranscriber(), translator,
-                new SrtSubtitleWriter(new UTF8Encoding(options.Utf8Bom)), options, renderer, assignments,
+            IBatchSubtitleWriter writer = new SrtSubtitleWriter(new UTF8Encoding(options.Utf8Bom));
+            if (outputOwnership != null)
+            {
+                writer = outputOwnership.OwnWriter(writer);
+                if (renderer != null) renderer = outputOwnership.OwnDubbing(renderer);
+            }
+            return new Run(jobs, () => transcriber ?? CreateTranscriber(), translator, writer, options, renderer, assignments,
                 () => snapshot.Subtitles.ASREngine == SubASREngineType.FasterWhisper && preferCpu(), lease,
-                gpuCoordinator == null ? null : acquireRunLease, coordinateGpu ? gpuCoordinator : null);
+                gpuCoordinator == null ? null : acquireRunLease, coordinateGpu ? gpuCoordinator : null, outputOwnership);
         }
         catch { lease?.Dispose(); throw; }
     }
@@ -49,7 +58,7 @@ public sealed class BatchRunFactory(Func<Config> getConfig, Func<int, bool>? isU
     sealed class Run(IReadOnlyList<BatchSubtitleJob> jobs, Func<IBatchAsrTranscriber> createTranscriber, IBatchSubtitleTranslator translator,
         IBatchSubtitleWriter writer, BatchSubtitleOptions options, IDubbingRenderer? renderer,
         IDubbingVoiceAssignmentProvider? assignments, Func<bool> cpu, IDisposable? resourceLease,
-        Func<IDisposable>? acquireResource, GpuWorkCoordinator? coordinator) : IBatchRun
+        Func<IDisposable>? acquireResource, GpuWorkCoordinator? coordinator, BatchOutputOwnership? outputOwnership) : IBatchRun
     {
         IDisposable? models = resourceLease;
         GpuWorkLease? gpuLease;
@@ -76,7 +85,8 @@ public sealed class BatchRunFactory(Func<Config> getConfig, Func<int, bool>? isU
             try
             {
                 await Task.Run(() =>
-                    new BatchSubtitleProcessor(createTranscriber(), translator, writer, options, progress, renderer, assignments)
+                    new BatchSubtitleProcessor(createTranscriber(), translator, writer, options, progress, renderer, assignments,
+                        outputOwnership?.OwnsExistingSubtitle)
                         .ProcessAsync(jobs, token), CancellationToken.None).ConfigureAwait(false);
             }
             catch (EngineProcessDrainException error)
@@ -92,6 +102,15 @@ public sealed class BatchRunFactory(Func<Config> getConfig, Func<int, bool>? isU
             disposed = true;
             if (gpuLease == null)
             {
+                if (outputOwnership != null && uncertainStop is { } failure)
+                {
+                    try { await ConfirmStopAsync().ConfigureAwait(false); }
+                    catch (Exception retryFailure)
+                    {
+                        throw new EngineProcessDrainException(failure.Message, retryFailure, ConfirmStopAsync);
+                    }
+                    return;
+                }
                 try { if (renderer != null) await renderer.DisposeAsync().ConfigureAwait(false); }
                 finally { models?.Dispose(); }
                 return;

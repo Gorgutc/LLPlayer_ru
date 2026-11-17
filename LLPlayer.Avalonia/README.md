@@ -29,9 +29,10 @@ and full WPF feature parity require separately evidenced work; Linux model recei
 
 ### Windows x64
 
-Install the .NET 10 SDK for development. The full Avalonia verification scripts also use Python 3 on PATH
-for offline sidecar tests. The extracted package needs the .NET 10 runtime and **Microsoft Visual
-C++ x64 Redistributable 2022 or newer** for its native dependencies. WSL is not required for this native app.
+Install the .NET 10 SDK for development. The Avalonia verification and packaged transport checks also use
+Python 3. For the extracted package, install the x64 **ASP.NET Core 10 Runtime** and **Microsoft Visual C++ x64
+Redistributable 2022 or newer**. Verify that `dotnet --list-runtimes` lists both `Microsoft.NETCore.App 10.0.x`
+and `Microsoft.AspNetCore.App 10.0.x`.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
@@ -40,9 +41,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\publish-av
 ```
 
 The publisher produces `artifacts/windows-avalonia/LLPlayer-Avalonia-<version>-win-x64.zip` and its `.sha256`.
-Extract it and launch **`LLPlayer.Avalonia.exe`** inside the extracted directory; keep `FFmpeg/`, `soft_oal.dll`
-and the other native dependencies in place. This is the shared Avalonia UI; **`LLPlayer.exe`** is the separately
-supported WPF app. Both can be built without replacing the other.
+Extract it and launch **`LLPlayer.Avalonia.exe`** from the extracted directory. Keep `LLPlayer.ControlHost.exe`,
+`mcp/`, `FFmpeg/`, `soft_oal.dll`, and the rest of the package together. **`LLPlayer.exe`** is
+the separately supported WPF app with its own runtime requirements.
 
 For a source-tree development launch:
 
@@ -57,6 +58,10 @@ for generating the test fixture when `LLPLAYER_FFMPEG_CLI` is unset; this test t
 job. Shared changes also run the Linux gate below.
 
 ### Linux x64
+
+The extracted package needs the **ASP.NET Core 10 Runtime** and OpenAL Soft. On Ubuntu, install
+`aspnetcore-runtime-10.0` and `libopenal1`. Check `dotnet --list-runtimes` for both
+`Microsoft.NETCore.App 10.0.x` and `Microsoft.AspNetCore.App 10.0.x`, then run `llplayer.sh` from the extracted directory.
 
 ```sh
 dotnet build LLPlayer.Avalonia

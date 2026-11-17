@@ -2,6 +2,7 @@
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Translation;
+using LLPlayer.Core.Services;
 
 namespace LLPlayer.Avalonia.Services;
 
@@ -30,7 +31,7 @@ public static class EngineBootstrap
     }
 
     /// <summary>Environment variable overriding the engine log level (Quiet, Error, Warn, Info, Debug, Trace).</summary>
-    public const string LogLevelVariable = "LLPLAYER_LOG_LEVEL";
+    public const string LogLevelVariable = PlaybackSettings.LogLevelVariable;
 
     public static EngineConfig CreateEngineConfig(string ffmpegDir, AppPaths paths) => new()
     {

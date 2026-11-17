@@ -394,19 +394,19 @@ public static class TargetLanguageExtensions
 
     public static string ToISO6391(this TargetLanguage targetLang)
     {
+        string tag = targetLang.ToLanguageTag();
+        // The ISO language code is the first subtag.
+        int separator = tag.IndexOf('-');
+        return separator < 0 ? tag : tag[..separator];
+    }
+
+    public static string ToLanguageTag(this TargetLanguage targetLang)
+    {
         // Get EnumMember language code
         Type type = targetLang.GetType();
         MemberInfo[] memInfo = type.GetMember(targetLang.ToString());
         object[] attributes = memInfo[0].GetCustomAttributes(typeof(EnumMemberAttribute), false);
-        string enumValue = ((EnumMemberAttribute)attributes[0]).Value;
-
-        // ISO6391 code is the first half of a hyphen
-        if (enumValue != null && enumValue.Contains("-"))
-        {
-            return enumValue.Split('-')[0];
-        }
-
-        return enumValue;
+        return ((EnumMemberAttribute)attributes[0]).Value;
     }
 
     public static TargetLanguage? ToTargetLanguage(this Language lang)

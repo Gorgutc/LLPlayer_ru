@@ -10,6 +10,9 @@ using LLPlayer.Avalonia.Controls;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
 using LLPlayer.Avalonia.Views;
+using LLPlayer.Core.Automation;
+
+using LLPlayer.ControlApi;
 
 namespace LLPlayer.Avalonia;
 
@@ -23,6 +26,7 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
     readonly GpuWorkCoordinator gpuCoordinator = new();
     PrefsStore? prefsStore;
     AppPrefs prefs = new();
+    AppPrefs? lastUiPrefs;
     Player? player;
     FlyleafPlaybackController? controller;
     FlyleafWordTranslator? translator;
@@ -37,6 +41,7 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         Dispatcher.UIThread.UnhandledException += OnUnhandledUIException;
         prefsStore = new PrefsStore(paths.PrefsFile);
         prefs = prefsStore.Load();
+        lastUiPrefs = prefs.Clone();
         ThemeService.Apply(options.Theme ?? prefs.Theme);
 
         if (options.ThemeGallery)
@@ -107,21 +112,62 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
             mode => window.VideoSurface.PresentationMode = mode);
         viewModel = new MainWindowViewModel(controller, prefs, SavePrefs, translator, window)
         { SubtitleExportSource = new FlyleafSubtitleExportSource(player) };
-        viewModel.OnlineVideoDialog = () => new OnlineVideoViewModel(onlineSettings,
-            async draft =>
+        reloadControlSettings["app"] = () =>
+        {
+            viewModel.ApplyPersistedAppSettings(prefsStore.Load());
+            lastUiPrefs = prefs.Clone();
+            return Task.CompletedTask;
+        };
+        async Task SaveOnlineVideoDraftAsync(OnlineVideoSettings baseline, OnlineVideoSettings edited)
+        {
+            if (!CanCommitControlSettings)
             {
-                await controller.SaveOnlineVideoSettingsAsync(onlineStore, draft);
-                onlineSettings = draft.Clone();
-            }, viewModel.OpenOnlineVideo, onlineStore.LoadWarning);
-        viewModel.PluginOptionsDialog = () => new PluginOptionsViewModel(onlineSettings,
-            async draft =>
+                await controller.SaveOnlineVideoSettingsAsync(onlineStore, edited);
+                onlineSettings = edited.Clone();
+                return;
+            }
+            var draft = ControlSettingsService.CreateDraft(baseline, edited);
+            OnlineVideoSettings? saved = null;
+            await controller.ApplyOnlineVideoSettingsAsync(token =>
             {
-                await controller.SaveOnlineVideoSettingsAsync(onlineStore, draft);
-                onlineSettings = draft.Clone();
+                CommitControlSettingsAsync(draft, token,
+                    comparePrivate: () => ControlSettingsService.CreateDraft(baseline, onlineStore.Load())).GetAwaiter().GetResult();
+                return saved = onlineStore.Load();
             });
+            onlineSettings = saved!;
+        }
+        viewModel.OnlineVideoDialog = () =>
+        {
+            var baseline = onlineSettings.Clone();
+            return new OnlineVideoViewModel(baseline, draft => SaveOnlineVideoDraftAsync(baseline, draft),
+                viewModel.OpenOnlineVideo, onlineStore.LoadWarning);
+        };
+        viewModel.PluginOptionsDialog = () =>
+        {
+            var baseline = onlineSettings.Clone();
+            return new PluginOptionsViewModel(baseline, draft => SaveOnlineVideoDraftAsync(baseline, draft));
+        };
+        reloadControlSettings["online_video"] = async () =>
+        {
+            var saved = onlineStore.Load();
+            if (!ControlSettingsService.CreateDraft(onlineSettings, saved).HasChanges) return;
+            await controller.ApplyPersistedOnlineVideoSettingsAsync(saved);
+            onlineSettings = saved;
+        };
         viewModel.PlaybackSettingsDialog = () => new PlaybackSettingsViewModel(controller.GetPlaybackSettings(),
             controller.GetPlaybackRuntimeSettings(), async (edited, baseline, runtime, defaultVolumeEdited) =>
             {
+                if (CanCommitControlSettings)
+                {
+                    var draft = ControlSettingsService.CreateDraft(baseline, edited);
+                    await controller.ApplyPersistedPlaybackSettingsAsync(edited, baseline, runtime, defaultVolumeEdited, token =>
+                    {
+                        CommitControlSettingsAsync(draft, token).GetAwaiter().GetResult();
+                        var saved = playbackStore.Load();
+                        return playbackStore.HasSavedSettings ? saved : controller.GetPlaybackSettings();
+                    });
+                    return;
+                }
                 await controller.SavePlaybackSettingsAndRememberAsync(edited, baseline, runtime, defaultVolumeEdited, (volume, mute) =>
                 {
                     prefsStore!.SaveRememberedVolume(volume, mute);
@@ -132,17 +178,41 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
                 return controller.GetPlaybackRuntimeSettings();
             }, controller.GetVideoDecodeStatus, controller.GetVideoPresentationStatus,
             controller.GetVideoAdapters, controller.RefreshVideoAdaptersAsync);
+        reloadControlSettings["playback"] = () =>
+        {
+            var saved = playbackStore.Load();
+            if (!playbackStore.HasSavedSettings) return Task.CompletedTask;
+            var baseline = controller.GetPlaybackSettings();
+            return controller.ApplyPersistedPlaybackSettingsAsync(saved, baseline, controller.GetPlaybackRuntimeSettings(),
+                saved.AudioVolumeDefault != baseline.AudioVolumeDefault, _ => saved);
+        };
         viewModel.SubtitleExportBom = () => controller.GetPlaybackSettings().SubtitleExportUtf8Bom;
         PdicSettingsStore pdicStore = new(paths.PdicFile);
         PdicSettings pdicSettings = pdicStore.Load();
         pdicClient = new PdicClient(() => pdicSettings.ExecutablePath);
         viewModel.PdicSender = pdicClient.SendAsync;
-        viewModel.PdicSettingsDialog = () => new PdicSettingsViewModel(pdicSettings, draft =>
+        viewModel.PdicSettingsDialog = () =>
         {
-            pdicStore.Save(draft);
-            pdicSettings = draft.Clone();
+            var baseline = pdicSettings.Clone();
+            return new PdicSettingsViewModel(baseline, async draft =>
+            {
+                if (CanCommitControlSettings)
+                {
+                    await CommitControlSettingsAsync(ControlSettingsService.CreateDraft(baseline, draft), default);
+                    pdicSettings = pdicStore.Load();
+                }
+                else
+                {
+                    pdicStore.Save(draft);
+                    pdicSettings = draft.Clone();
+                }
+            });
+        };
+        reloadControlSettings["pdic"] = () =>
+        {
+            pdicSettings = pdicStore.Load();
             return Task.CompletedTask;
-        });
+        };
         viewModel.SubtitleDownloadDialog = () => new OpenSubtitlesDownloadViewModel(new OpenSubtitlesClient(),
             controller.Title ?? "", viewModel.SubtitleExportBom,
             capturePrimaryLoadTarget: controller.CaptureSubtitlePrimaryLoadTarget,
@@ -153,9 +223,31 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         viewModel.WordLibrary = wordLibrary;
         viewModel.WordPopup.Library = wordLibrary;
         ConfigureLanguageWorkflows(window, wordLibrary, recognitionStore, dispatcher);
-        viewModel.TranslationDialog = () => new TranslationViewModel(translator.Settings,
-            draft => controller.SaveTranslationAsync(() => translator.SaveAndApplyAsync(draft, translationStore,
-                () => dispatcher.Post(viewModel.WordPopup.Invalidate), controller.ApplyTranslationSettings)), translationStore.LoadWarning);
+        void InvalidateTranslationDisplay() => dispatcher.Post(viewModel.WordPopup.Invalidate);
+        TranslationSettings ReadTranslationSettings() => translationStore.Load(prefs.WordTranslationService, prefs.TranslateTargetLanguage);
+        viewModel.TranslationDialog = () =>
+        {
+            var baseline = translator.Settings;
+            return new TranslationViewModel(baseline, edited => controller.SaveTranslationAsync(token =>
+            {
+                if (!CanCommitControlSettings)
+                    return translator.SaveAndApplyAsync(edited, translationStore, InvalidateTranslationDisplay, controller.ApplyTranslationSettings);
+                return translator.QueueSettingsAsync(edited, candidate =>
+                {
+                    var draft = ControlSettingsService.CreateDraft(baseline, candidate);
+                    CommitControlSettingsAsync(draft, token,
+                        comparePrivate: () => ControlSettingsService.CreateDraft(baseline, ReadTranslationSettings())).GetAwaiter().GetResult();
+                    return ReadTranslationSettings();
+                }, InvalidateTranslationDisplay, controller.ApplyTranslationSettings);
+            }), translationStore.LoadWarning);
+        };
+        reloadControlSettings["translation"] = () =>
+        {
+            var saved = ReadTranslationSettings();
+            if (!ControlSettingsService.CreateDraft(translator.Settings, saved).HasChanges) return Task.CompletedTask;
+            return controller.SaveTranslationAsync(() => translator.ApplyPersistedAsync(saved,
+                InvalidateTranslationDisplay, controller.ApplyTranslationSettings));
+        };
         window.ShutdownRequested = ShutdownAsync;
         ConfigureApplicationProcessCommands(window, ffmpeg.Directory);
         window.Attach(viewModel, player.Renderer, () => viewModel.Shortcuts.BuildCheatSheet(player.Config.Player.KeyBindings.Keys));
@@ -187,13 +279,24 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         };
         desktop.MainWindow = window;
         window.Show();
+        bool correlatedLaunch = Guid.TryParse(Environment.GetEnvironmentVariable(ControlProtocol.GuiLaunchIdVariable), out _);
+        Task<bool>? startupMedia = null;
+        if (!correlatedLaunch)
+            ConfigureAutomation(window);
 
         if (options.MediaPath != null)
         {
             if (options.SeekSeconds is { } seek)
                 controller.OpenCompleted += SeekOnce(seek);
-            viewModel.Open(FullPathIfFile(options.MediaPath), options.SubtitlesPath is { } sub ? [FullPathIfFile(sub)] : null);
+            string path = FullPathIfFile(options.MediaPath);
+            string[]? subtitles = options.SubtitlesPath is { } sub ? [FullPathIfFile(sub)] : null;
+            if (correlatedLaunch)
+                startupMedia = viewModel.OpenForControlLaunchAsync(path, subtitles);
+            else
+                viewModel.Open(path, subtitles);
         }
+        if (correlatedLaunch)
+            ConfigureAutomation(window, startupMedia);
 
         ScheduleScreenshot(window, viewModel);
     }
@@ -229,7 +332,13 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         return handler;
     }
 
-    void SavePrefs(AppPrefs p) => prefsStore?.Save(p);
+    void SavePrefs(AppPrefs p)
+    {
+        if (prefsStore == null) return;
+        if (lastUiPrefs == null) prefsStore.Save(p);
+        else prefsStore.SaveEdits(lastUiPrefs, p);
+        lastUiPrefs = p.Clone();
+    }
 
     void ShowFatal(ErrorWindow error)
     {
@@ -240,7 +349,9 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
 
     async Task ShutdownAsync()
     {
+        await DetachAutomationAsync();
         await DrainLanguageWorkflowsAsync();
+        controller?.FinishOwnedControlRecordingBeforeClose();
         viewModel?.SavePrefs();
         viewModel?.Dispose();
         Task exportDrain = viewModel?.DrainSubtitlesExportAsync() ?? Task.CompletedTask;
