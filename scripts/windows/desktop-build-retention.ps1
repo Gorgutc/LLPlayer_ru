@@ -174,7 +174,12 @@ function Assert-Retained {
         if ((Build $retained.path).fingerprint -cne $retained.fingerprint) { throw 'A retained current/fallback build changed during retention.' }
     }
 }
-function Check-GeneratedPaths($Files) {
+function Check-GeneratedPaths($Files,[string]$PackageName) {
+    $controlHostManifest = 'LLPlayer.ControlHost.staticwebassets.endpoints.json'
+    $controlHostManifestPaths = @(
+        "staging/$PackageName/$controlHostManifest"
+        "staging/archive-readback/$PackageName/$controlHostManifest"
+    )
     foreach ($file in $Files) {
         # Publisher products only. Settings, model downloads and arbitrary additions never gain ownership.
         if ($file.path -match '(^|/)(control|automation)(/|$)' -or
@@ -182,7 +187,11 @@ function Check-GeneratedPaths($Files) {
             ($file.path -match '\.(gguf|safetensors|pt|pth|ckpt|db|sqlite(?:-(wal|shm|journal))?|sqlite3)$') -or
             ($file.path -match '(^|/)(control\.lock$|host\.json($|\.))') -or
             ($file.path -match '\.onnx$' -and $file.path -notmatch '/Assets/silero_vad\.onnx$')) { throw "User data/model-like publish contents are protected: $($file.path)" }
-        if ($file.path -match '\.json$' -and $file.path -notmatch '(\.deps|\.runtimeconfig|/native-dependencies)\.json$') { throw "Unknown JSON in publish workspace is protected: $($file.path)" }
+        if ($file.path -match '\.json$' -and
+            $file.path -notmatch '(\.deps|\.runtimeconfig|/native-dependencies)\.json$' -and
+            ($file.sha256 -ceq 'directory' -or $file.path -cnotin $controlHostManifestPaths)) {
+            throw "Unknown JSON in publish workspace is protected: $($file.path)"
+        }
     }
 }
 function Job-Path($Receipt) {
@@ -202,11 +211,11 @@ function Job-Path($Receipt) {
 }
 function Job($Build, [switch]$Record) {
     $r = $Build.receipt; $job = Job-Path $r
+    $name = [IO.Path]::GetFileName($r.packageSource)
     if ((Hash $r.sourceArchive) -cne $r.sourceArchiveSha256) { throw 'Associated archive hash changed.' }
     $markerPath = Join-Path $job 'desktop-publish-owner.json'
     if ($Record) {
         if (Test-Path -LiteralPath $markerPath) { throw 'Refusing to overwrite publish ownership evidence.' }
-        $name = [IO.Path]::GetFileName($r.packageSource)
         $top = @(Get-ChildItem -LiteralPath $job -Force)
         if ($top.Count -ne 2 -or @($top | Where-Object { $_.Name -notin @('archive','staging') -or -not $_.PSIsContainer }).Count) { throw 'Unexpected publish workspace roots.' }
         $staged = @(Get-ChildItem -LiteralPath (Join-Path $job 'staging') -Force)
@@ -226,14 +235,14 @@ function Job($Build, [switch]$Record) {
         if ((Hash (Join-Path $job ('staging/' + $name + '.zip'))) -cne $r.sourceArchiveSha256) { throw 'Staging archive differs.' }
         $archiveFiles = @(Get-ChildItem -LiteralPath (Join-Path $job 'archive') -Force)
         if ($archiveFiles.Count -ne 2 -or @($archiveFiles | Where-Object { $_.PSIsContainer -or $_.Name -notin @(($name+'.zip'),($name+'.zip.sha256')) }).Count) { throw 'Unexpected publish archive contents.' }
-        $files = @(Tree $job); Check-GeneratedPaths $files
+        $files = @(Tree $job); Check-GeneratedPaths $files $name
         $marker = [ordered]@{ schema=1; owner=$ownerTag; buildId=$Build.id; receiptSha256=$Build.receiptHash; files=$files }
         [IO.File]::WriteAllText($markerPath, ($marker | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
     }
     $m = Json $markerPath
     if ($m.schema -ne 1 -or $m.owner -cne $ownerTag -or $m.buildId -cne $Build.id -or $m.receiptSha256 -cne $Build.receiptHash) { throw 'Invalid publish ownership evidence.' }
     $files = @(Tree $job | Where-Object { $_.path -cne 'desktop-publish-owner.json' })
-    Check-GeneratedPaths $files
+    Check-GeneratedPaths $files $name
     if ((Fingerprint $files) -cne (Fingerprint @($m.files | Sort-Object path))) { throw 'Changed/extra generated publish contents are protected.' }
     return [pscustomobject]@{ path=$job; fingerprint=(Fingerprint @(Tree $job)) }
 }

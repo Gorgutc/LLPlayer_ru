@@ -1,5 +1,5 @@
 ﻿# Offline, tiny filesystem/COM fixtures. Never builds, launches, or touches a real installation.
-param([ValidateSet('all','hosted-process','record-unknown','reference-alias','native-process','resolved-reference','reference-descendant')][string]$ReviewRegression='all')
+param([ValidateSet('all','hosted-process','record-unknown','reference-alias','native-process','resolved-reference','reference-descendant','controlhost-manifest')][string]$ReviewRegression='all')
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 2.0
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -25,7 +25,7 @@ function Hash([string]$Path) { return (Get-FileHash -LiteralPath $Path -Algorith
 function Write-Text([string]$Path,[string]$Text) { $null=[IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path)); [IO.File]::WriteAllText($Path,$Text,$utf8) }
 function Write-Json([string]$Path,$Value) { Write-Text $Path ($Value | ConvertTo-Json -Depth 9) }
 function Read-Json([string]$Path) { Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json }
-function New-Fixture([string]$Name) {
+function New-Fixture([string]$Name,[string]$ControlHostManifestPath) {
     $root = Join-Path $work ($Name+'/install'); $desktop = Join-Path $work ($Name+'/desktop')
     $null = [IO.Directory]::CreateDirectory((Join-Path $root 'builds')); $null = [IO.Directory]::CreateDirectory($desktop)
     Write-Json (Join-Path $root 'owner.json') @{schema=2;owner=$owner;installRoot=$root;shortcutName='LLPlayer Avalonia (Windows).lnk'}
@@ -37,6 +37,9 @@ function New-Fixture([string]$Name) {
         foreach ($companion in @('LLPlayer.ControlHost','mcp/LLPlayer.Mcp')) {
             Write-Text (Join-Path $payload ($companion+'.exe')) ('fixture-apphost-'+$id)
             Write-Text (Join-Path $payload ($companion+'.dll')) ('fixture-companion-'+$id)
+        }
+        if ($id -eq 'a' -and $ControlHostManifestPath) {
+            Write-Text (Join-Path $payload $ControlHostManifestPath) '{"Version":1,"ManifestType":"Publish","Endpoints":[]}'
         }
         Write-Text (Join-Path $payload 'lib/library.dll') ('library-'+$id)
         Write-Text (Join-Path $payload 'Plugins/YoutubeDL/YoutubeDL.dll') ('plugin-'+$id)
@@ -142,7 +145,7 @@ try {
         Check ((Get-Content -LiteralPath (Join-Path $outside 'sentinel.txt') -Raw) -ceq 'REFERENCE SENTINEL') 'Read-only alias inventory changed its target.'
         if ($ReviewRegression -eq 'reference-alias') { Write-Host 'Reference-alias review regressions passed.'; return }
     }
-    if ($ReviewRegression -ne 'record-unknown') {
+    if ($ReviewRegression -notin @('record-unknown','controlhost-manifest')) {
     $f = New-Fixture 'hosted-process'
     $result = Invoke-Retention $f @{Apply=$true;ProcessDescriptorsForTests=@([pscustomobject]@{ProcessName='dotnet';Path='C:\fixture-host\dotnet.exe';CommandLine=('dotnet "'+(Join-Path $f.builds.a 'payload/LLPlayer.Avalonia.dll')+'"')})}
     Check ((Kept $f 'a') -and -not (Kept $f 'b')) 'A dotnet-hosted old assembly must be protected while an unrelated old build prunes.'
@@ -220,9 +223,19 @@ try {
 
     # A future fresh-publish workspace has its own ownership+complete tree manifest; arbitrary packages never do.
     $companionCases = @('ControlHost-exe','ControlHost-dll','Mcp-exe','Mcp-dll')
-    $jobCases=if($ReviewRegression -eq 'record-unknown'){@('record-unknown','adopt-fallback','reject-unselected')}else{@('clean','modified','dependency','record-unknown','adopt-fallback','reject-unselected') + $companionCases}
+    $manifestCases = @('controlhost-manifest','controlhost-manifest-nested')
+    $manifestName = 'LLPlayer.ControlHost.staticwebassets.endpoints.json'
+    $jobCases = switch ($ReviewRegression) {
+        'record-unknown' { 'record-unknown','adopt-fallback','reject-unselected' }
+        'controlhost-manifest' { $manifestCases }
+        default { @('clean','modified','dependency','record-unknown','adopt-fallback','reject-unselected') + $companionCases + $manifestCases }
+    }
     foreach ($jobCase in $jobCases) {
-    $f = New-Fixture ('publish-job-'+$jobCase)
+    $manifestPath = switch ($jobCase) {
+        'controlhost-manifest' { $manifestName }
+        'controlhost-manifest-nested' { 'mcp/' + $manifestName }
+    }
+    $f = New-Fixture ('publish-job-'+$jobCase) $manifestPath
     Select-Build $f 'a'
     $job = Join-Path $repoRoot ('artifacts/windows-desktop-test-build-'+[guid]::NewGuid().ToString('N'))
     $packageName = 'LLPlayer-Avalonia-0.0-fixture-win-x64'
@@ -261,9 +274,13 @@ try {
         Check ($result.retainedBuildIds -contains 'a' -and $result.currentBuildId -ceq 'c') 'Explicit migration changed the selected build.'
     }
     else { $result=Invoke-Retention $f @{Apply=$true;CreatedPublishJob=$job;PreviousBuildId='c'} }
-    if (($jobCase -ne 'record-unknown' -and $result.errors.Count) -or (Kept $f 'b') -or (Kept $f 'd')) { throw ('Initial publish-job retention did not complete: '+($result | ConvertTo-Json -Depth 8 -Compress)) }
+    if (($jobCase -notin @('record-unknown','controlhost-manifest-nested') -and $result.errors.Count) -or (Kept $f 'b') -or (Kept $f 'd')) { throw ('Initial publish-job retention did not complete: '+($result | ConvertTo-Json -Depth 8 -Compress)) }
     if ($jobCase -eq 'record-unknown') {
         Check (-not (Test-Path -LiteralPath (Join-Path $job 'desktop-publish-owner.json'))) 'Unknown portable-plugin files must not be adopted into a deletion manifest.'
+    }
+    elseif ($jobCase -eq 'controlhost-manifest-nested') {
+        Check (($result.errors -join ' ') -match ('Unknown JSON .*/' + [regex]::Escape($manifestPath))) 'A misplaced ControlHost manifest was not rejected by the generated file check.'
+        Check (-not (Test-Path -LiteralPath (Join-Path $job 'desktop-publish-owner.json'))) 'A misplaced ControlHost manifest must not be adopted into a deletion manifest.'
     }
     else { Check (Test-Path -LiteralPath (Join-Path $job 'desktop-publish-owner.json')) 'Successful fresh job did not get scoped ownership evidence.' }
     Check (Test-Path -LiteralPath $archive) 'Retained source archive was removed.'
@@ -291,7 +308,7 @@ try {
     }
     $result=Invoke-Retention $f @{Apply=$true}
     Check (-not (Kept $f 'a')) 'Old verified build did not prune.'
-    if ($jobCase -in @('clean','adopt-fallback')) {
+    if ($jobCase -in @('clean','adopt-fallback','controlhost-manifest')) {
         Check (-not (Test-Path -LiteralPath $job) -and $result.deletedJobs.Count -eq 1) 'Unreferenced owned publish workspace did not prune.'
     }
     else { Check (Test-Path -LiteralPath $archive) 'Changed/dependent publish workspace was removed.' }
