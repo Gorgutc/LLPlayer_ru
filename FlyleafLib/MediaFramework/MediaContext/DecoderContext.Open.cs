@@ -957,22 +957,7 @@ public partial class DecoderContext
                 foreach (var opt in formatOpt)
                     copied.Add(opt.Key, opt.Value);
 
-                if (demuxerInput.UserAgent != null)
-                    formatOpt["user_agent"] = demuxerInput.UserAgent;
-
-                if (demuxerInput.Referrer != null)
-                    formatOpt["referer"] = demuxerInput.Referrer;
-
-                // this can cause issues
-                //else if (!formatOpt.ContainsKey("referer") && Playlist.Url != null)
-                //    formatOpt["referer"] = Playlist.Url;
-
-                if (demuxerInput.HTTPHeaders != null)
-                {
-                    formatOpt["headers"] = "";
-                    foreach(var header in demuxerInput.HTTPHeaders)
-                        formatOpt["headers"] += header.Key + ": " + header.Value + "\r\n";
-                }
+                demuxerInput.ApplyHttpFormatOptions(formatOpt);
             }
 
             // Open Demuxer Input

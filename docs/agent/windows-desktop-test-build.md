@@ -25,7 +25,10 @@ as the final build. Re-run refresh after the final source/docs/tooling commit ch
 
 Use an already available .NET 10 SDK for publication (pass it via `-DotNetRoot` when it is not the default `PATH` SDK
 and record the SDK version in the handoff; the updater never installs or selects an SDK itself) and the existing
-registered system x64 .NET 10 runtime for the direct app target. The updater accepts `-DotNetRoot` for an existing SDK
+registered system x64 .NET 10 runtime for the direct app target. Fresh refresh also requires
+`Microsoft.AspNetCore.App 10.0.x` in the same registered installation for `LLPlayer.ControlHost`. It checks both
+frameworks before changing the selected payload and records the ASP.NET Core version in `globalAspNetRuntimeVersion`.
+Check the registered installation with `dotnet --list-runtimes`. The updater accepts `-DotNetRoot` for an existing SDK
 directory and also resolves the process's `DOTNET_ROOT` or the system installation. For example:
 
 ```powershell
@@ -133,6 +136,9 @@ protected builds, deleted builds/jobs and errors. Report partial or skipped clea
 strict two-build result. Revalidate physical boundaries, ownership, content and the current selection before deletion;
 never follow reparse points or delete changed/unowned content to satisfy Keep2.
 
+Keep2 protects builds used by live `LLPlayer.ControlHost` and `LLPlayer.Mcp` processes. It resolves their executable
+paths and the assembly paths passed to `dotnet`. A retained build keeps its associated package and source archive.
+
 The helper can also show a read-only preview; omit `-Apply` for that mode:
 
 ```powershell
@@ -158,9 +164,9 @@ Explorer therefore displayed a generic icon. A native ShellLink/ICO-extraction p
 icon file, so extraction inside the virtualizing host did not establish cross-process path usability. The confirmed
 cause is the logical/physical path mismatch; neither stale display/cache nor ICO encoding is established as its cause.
 
-The system x64 runtime present on this machine is .NET `10.0.7`, which satisfies the package's declared `10.0.0`
-framework requirement. The user-confirmed direct-EXE startup of the retained payload presumably resolved that
-registered runtime (it is the only eligible `10.x` installation), but the runtime identity was not instrumented, so
+At the earlier desktop checkpoint the registered x64 runtime was .NET `10.0.7`, which satisfied the retained package's
+declared `10.0.0` requirement. The user-confirmed direct-EXE startup presumably resolved that
+registered runtime, then the only eligible `10.x` installation. The runtime identity was not instrumented, so
 execution on `10.0.7` is inferred rather than measured. One separately authorized `--version` trace
 exited 0 using an explicit temporary `DOTNET_ROOT_X64` runtime `10.0.13`, not the registered `10.0.7` runtime, and
 proves only that non-GUI host resolution. At the 2026-10-25 bounded manual checkpoint, the user confirmed application
@@ -234,7 +240,8 @@ failure rollback without temporary or staged link files; and the absence of play
 persistent environment changes.
 
 All three checks require Windows, writable fixture storage and ShellLink COM. Both updater modes require a registered
-x64 .NET 10 runtime; the full updater suite additionally requires `subst` with a free drive letter. These prerequisites
+x64 .NET 10 runtime. Prebuilt fixture receipts have `globalAspNetRuntimeVersion` set to `null`. The full updater suite
+additionally requires `subst` with a free drive letter. These prerequisites
 also apply to the Windows CI runner. The real nominal/Codex-cache legacy-root regexes are exercised by the actual
 migration, not by the fixture allowlist. The offline suites use synthetic/prebuilt fixtures: static source assertions
 check fresh-publish wiring, but do not execute a real fresh publish, clean-`HEAD` deployment or player launch.

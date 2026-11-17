@@ -245,11 +245,10 @@ unsafe partial class Player
         while (status == Status.Playing)
         {
             // Seeks and then requiresBuffering | TBR: missing SeekCompleted callback?
-            if (seeks.TryPop(out var seekData))
+            if (TryTakeNewestSeek(out var seekData))
             {
                 Renderer.RenderIdleStart();
 
-                seeks.Clear();
                 requiresBuffering = true;
                 ResetFrameStats();
 
@@ -298,10 +297,14 @@ unsafe partial class Player
                 decoder.PauseDecoders(); // TBR: Required to avoid gettings packets between Seek and ShowFrame which causes resync issues
                 StopScreamerVASDAudio();
 
-                if (decoder.Seek(seekData.accurate ? Math.Max(0, seekData.ms - 3000) : seekData.ms, seekData.forward, !seekData.accurate) < 0) // Consider using GetVideoFrame with no timestamp (any) to ensure keyframe packet for faster seek in HEVC
-                    Log.Warn("[V] Seek Failed");
-                else if (seekData.accurate)
-                    decoder.GetVideoFrame(seekData.ms * (long)10000);
+                ExecutePlaybackSeek(seekData, () =>
+                {
+                    int result = decoder.Seek(seekData.accurate ? Math.Max(0, seekData.ms - 3000) : seekData.ms,
+                        seekData.forward, !seekData.accurate);
+                    if (result < 0) Log.Warn("[V] Seek Failed");
+                    else if (seekData.accurate) decoder.GetVideoFrame(seekData.ms * 10000L);
+                    return result;
+                });
             }
 
             // Ensures we have rendered vFrame ready for present (startTicks/sw)

@@ -7,7 +7,7 @@ using FlyleafLib.MediaPlayer.Batch;
 namespace LLPlayer.Core.Batch;
 
 /// <summary>App-owned queue. Native workers receive detached jobs; the dispatcher alone changes UI jobs.</summary>
-public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
+public sealed class BatchWorkflow : NotifyPropertyChanged, IBatchWorkspace
 {
     readonly IBatchRunFactory factory;
     readonly IBatchFolderWatcher watcher;
@@ -62,6 +62,9 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     public BatchSubtitleJob? ActiveJob { get; private set => Set(ref field, value); }
     public event Action? Changed;
 
+    /// <summary>When supplied, the host owns automatic admission as a durable batch job.</summary>
+    public Action<IReadOnlyList<string>>? AdmitWatchedFiles { private get; set; }
+
     public void Open() { ObjectDisposedException.ThrowIf(disposed, this); IsOpen = true; RefreshWatcher(); }
     public void Closed()
     {
@@ -70,6 +73,12 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
         scanCancellation?.Cancel(); probeCancellation?.Cancel(); Refresh();
     }
     public void SetMessage(string message) { Message = message; Refresh(); }
+    public Task ApplyWorkspaceSettingsAsync(BatchSettings settings, bool updateWatcher)
+    {
+        ApplySettings(settings);
+        return Task.CompletedTask;
+    }
+
     public void ApplySettings(BatchSettings settings)
     {
         settings.Validate();
@@ -146,13 +155,34 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     public Task StartAsync() => BeginRun(Jobs.Where(j => j.Include).ToArray(), false);
     public Task RetryAsync(BatchSubtitleJob job) => BeginRun([job], true);
     public Task RetryFailedAsync() => BeginRun(Jobs.Where(j => j.Status == BatchSubtitleStatus.Failed).ToArray(), true);
-    Task BeginRun(IReadOnlyList<BatchSubtitleJob> scope, bool overwrite)
+    public IReadOnlyList<BatchSubtitleJob> SelectWatched(IReadOnlyList<string> paths)
+    {
+        var requested = paths.ToHashSet(PathComparer);
+        return Jobs.Where(job => requested.Contains(job.MediaPath) && IsWithinWatchScope(job.MediaPath)
+            && job.Include && job.Status == BatchSubtitleStatus.Pending).ToArray();
+    }
+    public Task StartWatchedAsync(IReadOnlyList<string> paths) => BeginRun(SelectWatched(paths), false);
+
+    public Task StartOwnedAsync(IReadOnlyList<BatchSubtitleJob> scope, BatchSettings options, IBatchRunFactory runFactory) =>
+        BeginRun(scope, false, options, runFactory);
+
+    Task BeginRun(IReadOnlyList<BatchSubtitleJob> scope, bool overwrite, BatchSettings? savedOptions = null,
+        IBatchRunFactory? runFactory = null)
     {
         if (!IsIdle || disposed || shutdownRequested || scope.Count == 0) return Task.CompletedTask;
         cancelRequested = false; LastRunCanceled = false; IsRunning = true; runCancellation = new();
-        runTask = RunAndDrainAsync(scope, overwrite, runCancellation.Token); return runTask;
+        Task result = RunAndDrainAsync(scope, overwrite, runCancellation.Token, savedOptions, runFactory);
+        runTask = runFactory == null ? result : ObserveOwnedRunAsync(result);
+        return result;
     }
-    async Task RunAndDrainAsync(IReadOnlyList<BatchSubtitleJob> scope, bool overwrite, CancellationToken token)
+
+    static async Task ObserveOwnedRunAsync(Task result)
+    {
+        try { await result; }
+        catch (EngineProcessDrainException) { /* The durable owner retains the process cleanup callback. */ }
+    }
+    async Task RunAndDrainAsync(IReadOnlyList<BatchSubtitleJob> scope, bool overwrite, CancellationToken token,
+        BatchSettings? savedOptions, IBatchRunFactory? runFactory)
     {
         try
         {
@@ -160,13 +190,13 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
             {
                 foreach (var job in scope) { watchQueued.Remove(job.MediaPath); Reset(job); }
                 runScope = scope; ActiveJob = null; Refresh();
-                BatchSettings options = Settings.Clone(); options.OverwriteExisting |= overwrite;
+                BatchSettings options = (savedOptions ?? Settings).Clone(); options.OverwriteExisting |= overwrite;
                 var workers = scope.Select(j => new BatchSubtitleJob(j.MediaPath) { AudioStreamIndexOverride = j.AudioStreamIndexOverride }).ToArray();
                 var byPath = scope.ToDictionary(j => j.MediaPath, PathComparer);
                 bool stopRequested = false;
                 try
                 {
-                    activeRun = factory.Create(options, workers);
+                    activeRun = (runFactory ?? factory).Create(options, workers);
                     Task work = activeRun.ProcessAsync(new CallbackProgress(update => dispatch(() =>
                     {
                         if (!disposed && byPath.TryGetValue(update.Job.MediaPath, out var ui)) ApplyProgress(ui, update);
@@ -191,8 +221,10 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
                         {
                             stopRequested |= gpuCoordinator?.PendingDrain != null;
                             Message = $"Batch cleanup failed: {ex.Message}";
+                            if (runFactory != null && ex is EngineProcessDrainException)
+                                throw;
                         }
-                        activeRun = null;
+                        finally { activeRun = null; }
                     }
                 }
                 if (token.IsCancellationRequested)
@@ -202,7 +234,8 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
                     watchQueued.Clear(); break;
                 }
                 if (stopRequested) break;
-                scope = WatchFolder && !disposed && !shutdownRequested ? TakeWatchQueue() : []; overwrite = false;
+                scope = runFactory == null && AdmitWatchedFiles == null && WatchFolder && !disposed && !shutdownRequested ? TakeWatchQueue() : [];
+                overwrite = false;
             } while (scope.Count > 0);
         }
         finally
@@ -211,9 +244,13 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
             if (cancelRequested) watchQueued.Clear();
             runScope = []; runCancellation?.Dispose(); runCancellation = null;
             IsRunning = false; Refresh();
+            if (AdmitWatchedFiles != null && !cancelRequested && !token.IsCancellationRequested) MaybeStartWatch();
         }
     }
-    public void Cancel()
+    public void Cancel() => CancelCore(null);
+    public void CancelBatchOnly() => CancelCore("Batch subtitles");
+
+    void CancelCore(string? cleanupOwner)
     {
         if (IsRunning || IsScanning || gpuCoordinator?.PendingDrain == null)
         {
@@ -222,8 +259,9 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
             runCancellation?.Cancel();
             scanCancellation?.Cancel();
         }
-        if (!disposed && !shutdownRequested && cleanupRetry.IsCompleted && gpuCoordinator?.PendingDrain != null)
-            cleanupRetry = RetryGpuCleanupAsync(gpuCoordinator);
+        if (!disposed && !shutdownRequested && cleanupRetry.IsCompleted && gpuCoordinator?.PendingDrain is { } pending
+            && (cleanupOwner == null || cleanupOwner == pending))
+            cleanupRetry = RetryGpuCleanupAsync(gpuCoordinator, cleanupOwner);
     }
 
     public void BeginShutdown()
@@ -244,11 +282,11 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
 
     public async Task DrainAsync() { await runTask; await scanTask; await probeTask; await cleanupRetry; }
 
-    async Task RetryGpuCleanupAsync(GpuWorkCoordinator coordinator)
+    async Task RetryGpuCleanupAsync(GpuWorkCoordinator coordinator, string? cleanupOwner)
     {
         try
         {
-            await coordinator.RetryDrainAsync();
+            await coordinator.RetryDrainAsync(cleanupOwner);
             if (!disposed) SetMessage("GPU process cleanup completed.");
         }
         catch (Exception error)
@@ -310,7 +348,19 @@ public sealed class BatchWorkflow : NotifyPropertyChanged, IAsyncDisposable
     void MaybeStartWatch()
     {
         if (WatchFolder && IsIdle && !disposed && !shutdownRequested)
-            _ = BeginRun(TakeWatchQueue(), false);
+        {
+            IReadOnlyList<BatchSubtitleJob> scope = TakeWatchQueue();
+            if (AdmitWatchedFiles == null)
+            {
+                _ = BeginRun(scope, false);
+            }
+            else if (scope.Count > 0)
+            {
+                string[] paths = scope.Select(job => job.MediaPath).ToArray();
+                watchQueued.ExceptWith(paths);
+                AdmitWatchedFiles(paths);
+            }
+        }
     }
     void BeginProbing(IReadOnlyList<BatchSubtitleJob> scope, bool replace = true)
     {

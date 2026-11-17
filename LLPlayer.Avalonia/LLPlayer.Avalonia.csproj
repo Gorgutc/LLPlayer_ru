@@ -50,6 +50,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FlyleafLib\FlyleafLib.csproj" />
+    <ProjectReference Include="..\LLPlayer.Control\LLPlayer.Control.csproj" />
     <ProjectReference Include="..\LLPlayer.Core\LLPlayer.Core.csproj" />
   </ItemGroup>
 
@@ -67,17 +68,6 @@
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' == 'win-x64'">
-    <!-- Same SDK projection pin as WPF; keep this host portable and compile the WinRT adapter only for Windows. -->
-    <PackageDownload Include="Microsoft.Windows.SDK.NET.Ref" Version="[10.0.18362.57]" />
-    <Reference Include="Microsoft.Windows.SDK.NET">
-      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.18362.57/lib/net8.0/Microsoft.Windows.SDK.NET.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
-    <Reference Include="WinRT.Runtime">
-      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.18362.57/lib/net8.0/WinRT.Runtime.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
-    <PackageReference Include="Squid-Box.SevenZipSharp.Lite" Version="1.6.2.24" />
     <PackageReference Include="TesseractOCR" Version="5.5.2" ExcludeAssets="build" GeneratePathProperty="true" />
     <None Include="$(PkgTesseractOCR)/x64/leptonica-1.85.0.dll;$(PkgTesseractOCR)/x64/tesseract55.dll"
           TargetPath="runtimes/win-x64/%(Filename)%(Extension)"
@@ -100,9 +90,6 @@
   <PropertyGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' == 'win-x64'">
     <DefineConstants>$(DefineConstants);LLPLAYER_WINDOWS_OCR</DefineConstants>
   </PropertyGroup>
-  <ItemGroup Condition="'$(LLPlayerNativeRuntimeIdentifier)' != 'win-x64'">
-    <Compile Remove="Services/MicrosoftOcrService.Windows.cs;Services/WindowsEngineArchiveExtractor.cs" />
-  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="LLPlayer.Avalonia.Tests" />

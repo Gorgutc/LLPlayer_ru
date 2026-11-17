@@ -23,6 +23,7 @@ public sealed partial class SettingsViewModel
         if (AnkiDeck != initialTools.Deck) candidate.AnkiDeck = AnkiDeck;
         if (WordMenuResetRequested || SerializeMenu(ValidatedWordMenuActions) != initialTools.Menu)
             candidate.WordMenuActions = ValidatedWordMenuActions.Select(row => row.Clone()).ToList();
+        if (WordMenuResetRequested) candidate.MarkWordMenuReset();
         if (WordCopyOnSelected != initialTools.CopyOnSelected) candidate.WordCopyOnSelected = WordCopyOnSelected;
         if (WordLastSearchOnSelected != initialTools.SearchOnSelected) candidate.WordLastSearchOnSelected = WordLastSearchOnSelected;
         if (WordLastSearchModifier != initialTools.Modifier) candidate.WordLastSearchModifier = WordLastSearchModifier;

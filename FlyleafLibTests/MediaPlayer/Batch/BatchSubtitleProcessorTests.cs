@@ -8,6 +8,29 @@ namespace FlyleafLib.MediaPlayer;
 
 public class BatchSubtitleProcessorTests
 {
+    [Fact]
+    public async Task Reconciled_owned_subtitle_is_not_recomputed_even_when_overwrite_was_enabled()
+    {
+        DirectoryInfo folder = Directory.CreateTempSubdirectory("llplayer-reconciled-batch");
+        try
+        {
+            var job = new BatchSubtitleJob(Path.Combine(folder.FullName, "original.mkv"));
+            string existing = "1\r\n00:00:01,000 --> 00:00:02,000\r\nSaved subtitle.\r\n";
+            File.WriteAllText(job.OutputPath, existing);
+            var writer = new MemorySubtitleWriter();
+            var processor = new BatchSubtitleProcessor(
+                new FakeAsrTranscriber(_ => throw new InvalidOperationException("Published subtitles must not run ASR again.")),
+                new FakeBatchTranslator(), writer, new BatchSubtitleOptions { OverwriteExisting = true },
+                ownsExistingSubtitle: path => path == job.OutputPath);
+
+            await processor.ProcessAsync([job], TestContext.Current.CancellationToken);
+
+            Assert.Equal(BatchSubtitleStatus.Completed, job.Status);
+            Assert.Empty(writer.Writes);
+            Assert.Equal(existing, File.ReadAllText(job.OutputPath));
+        }
+        finally { folder.Delete(recursive: true); }
+    }
     [Theory]
     [InlineData(false)] // pipelined
     [InlineData(true)]  // serialized (no-overlap) — same status/skip/failure handling must hold

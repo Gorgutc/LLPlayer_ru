@@ -48,6 +48,8 @@ $windowsAvaloniaJob = @'
           $env:LLPLAYER_PACKAGE_DIR = $PackageRoot
           dotnet test .\FlyleafLibTests\FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 -p:LLPlayerPortableTests=true --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
           if ($LASTEXITCODE -ne 0) { throw "Portable packaged plugin load failed: $PackageRoot" }
+          python .\scripts\codex\test-control-package.py $PackageRoot
+          if ($LASTEXITCODE -ne 0) { throw "Packaged control transport failed: $PackageRoot" }
         }
         $staged = @(Get-ChildItem -LiteralPath "$env:GITHUB_WORKSPACE\artifacts\ci-windows-online-package" -Directory -Filter 'LLPlayer-Avalonia-*-win-x64')
         if ($staged.Count -ne 1) { throw 'Expected exactly one staged Windows package.' }
@@ -333,15 +335,18 @@ function Assert-WindowsAvaloniaJobContract([string[]]$JobsLines, [string]$Source
         $_.Trim() -and -not $_.TrimStart().StartsWith("#", [System.StringComparison]::Ordinal)
     } | ForEach-Object { $_.TrimEnd() })
     if (($actualLines -join "`n") -cne ($expectedLines -join "`n")) {
-        throw "$Source jobs.avalonia-windows must match the canonical eight-step Windows Avalonia gate (full verify, package fixtures, fail-closed retention/full updater/third-refresh fixtures, publish/content/archive integrity, staged/archive plugin load, upload); skips, extra steps, inputs, overrides and unpinned actions are forbidden."
+        throw "$Source jobs.avalonia-windows must match the canonical eight-step Windows Avalonia gate (full verify, package fixtures, fail-closed retention/full updater/third-refresh fixtures, publish/content/archive integrity, staged/archive plugin and companion execution, upload); skips, extra steps, inputs, overrides and unpinned actions are forbidden."
     }
 }
 
-# Build the portable plugin explicitly, keep the portable test target opt-in, and run both complete suites with warnings as errors.
+# Explicitly build the portable plugin and companions, keeping both complete warning-clean test suites.
 $windowsAvaloniaDotnetCommands = @(
     'Invoke-Checked dotnet "restore" "-warnaserror" "-p:LLPlayerPortableTests=true"',
     'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\FlyleafLib" "-f" "net10.0"',
     'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\Plugins\YoutubeDL" "-f" "net10.0"',
+    'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Control"',
+    'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.ControlHost"',
+    'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Mcp"',
     'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Avalonia"',
     'Invoke-Checked dotnet "build" "--no-restore" "-warnaserror" ".\LLPlayer.Avalonia.Tests"',
     'Invoke-Checked dotnet "test" "--no-restore" "-warnaserror" ".\FlyleafLibTests" "-f" "net10.0" "-p:LLPlayerPortableTests=true"',
@@ -409,7 +414,7 @@ function Assert-WindowsAvaloniaRunnerContract([string]$Text, [string]$Source) {
         $node.CommandElements.Count -gt 1 -and $node.CommandElements[1].Extent.Text -ceq "dotnet"
     }, $true))
     if ($commands.Count -ne $windowsAvaloniaDotnetCommands.Count) {
-        throw "$Source must contain exactly seven protected dotnet invocations including the portable YoutubeDL build and both unfiltered test suites."
+        throw "$Source must contain exactly $($windowsAvaloniaDotnetCommands.Count) protected dotnet invocations including the portable YoutubeDL and companion builds and both unfiltered test suites."
     }
     for ($index = 0; $index -lt $windowsAvaloniaDotnetCommands.Count; $index++) {
         $command = $commands[$index]
@@ -725,6 +730,7 @@ $linuxPortablePluginLoadStep = @'
         staged=("$GITHUB_WORKSPACE"/artifacts/ci-linux-online-package/LLPlayer-*-linux-x64)
         [[ ${#staged[@]} -eq 1 && -d "${staged[0]}" ]] || { echo 'Expected one staged Linux package.' >&2; exit 1; }
         LLPLAYER_PACKAGE_DIR="${staged[0]}" dotnet test FlyleafLibTests/FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
+        python3 scripts/codex/test-control-package.py "${staged[0]}"
         archives=("$RUNNER_TEMP"/linux-package/*.tar.gz)
         [[ ${#archives[@]} -eq 1 && -f "${archives[0]}" ]] || { echo 'Expected one Linux archive.' >&2; exit 1; }
         readback="$RUNNER_TEMP/linux-plugin-readback"
@@ -733,6 +739,7 @@ $linuxPortablePluginLoadStep = @'
         extracted=("$readback"/LLPlayer-*-linux-x64)
         [[ ${#extracted[@]} -eq 1 && -d "${extracted[0]}" ]] || { echo 'Expected one extracted Linux package.' >&2; exit 1; }
         LLPLAYER_PACKAGE_DIR="${extracted[0]}" dotnet test FlyleafLibTests/FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
+        python3 scripts/codex/test-control-package.py "${extracted[0]}"
 '@
 
 function Assert-LinuxBuildWorkflowContract([string]$Text, [string]$Source) {
@@ -1001,25 +1008,28 @@ $positiveWindowsRunner = '$ErrorActionPreference = "Stop"' + "`ntry {`n    " + $
     ($windowsAvaloniaDotnetCommands -join "`n    ") + "`n}`nfinally { Pop-Location }"
 Assert-WindowsAvaloniaRunnerContract $positiveWindowsRunner "positive Windows Avalonia runner"
 $portablePluginBuildCommand = $windowsAvaloniaDotnetCommands[2]
-$portableTestCommand = $windowsAvaloniaDotnetCommands[5]
-$uiTestCommand = $windowsAvaloniaDotnetCommands[6]
+$firstCompanionBuildCommand = $windowsAvaloniaDotnetCommands[3]
+$portableTestCommand = $windowsAvaloniaDotnetCommands[-2]
+$uiTestCommand = $windowsAvaloniaDotnetCommands[-1]
 $windowsRunnerMutations = @(
-    @{ Name = "missing portable plugin build"; Pattern = "exactly seven protected dotnet invocations"; Before = $portablePluginBuildCommand; After = "" },
-    @{ Name = "duplicate portable plugin build"; Pattern = "exactly seven protected dotnet invocations"; Before = $portablePluginBuildCommand; After = $portablePluginBuildCommand + "`n    " + $portablePluginBuildCommand },
+    @{ Name = "missing portable plugin build"; Pattern = "protected dotnet invocations"; Before = $portablePluginBuildCommand; After = "" },
+    @{ Name = "duplicate portable plugin build"; Pattern = "protected dotnet invocations"; Before = $portablePluginBuildCommand; After = $portablePluginBuildCommand + "`n    " + $portablePluginBuildCommand },
     @{ Name = "wrong portable plugin framework"; Pattern = "must run canonical command"; Before = $portablePluginBuildCommand; After = $portablePluginBuildCommand.Replace('"net10.0"', '"net10.0-windows10.0.18362.0"') },
     @{ Name = "portable plugin framework omitted"; Pattern = "must run canonical command"; Before = $portablePluginBuildCommand; After = $portablePluginBuildCommand.Replace(' "-f" "net10.0"', '') },
     @{ Name = "portable plugin warnings are non-fatal"; Pattern = "must run canonical command"; Before = $portablePluginBuildCommand; After = $portablePluginBuildCommand.Replace(' "-warnaserror"', '') },
     @{ Name = "portable plugin build behind false condition"; Pattern = "must run canonical command"; Before = $portablePluginBuildCommand; After = 'if ($false) {' + "`n    " + $portablePluginBuildCommand + "`n    }" },
-    @{ Name = "portable plugin build follows app build"; Pattern = "must run canonical command"; Before = $portablePluginBuildCommand + "`n    " + $windowsAvaloniaDotnetCommands[3]; After = $windowsAvaloniaDotnetCommands[3] + "`n    " + $portablePluginBuildCommand },
+    @{ Name = "portable plugin build follows companion build"; Pattern = "must run canonical command"; Before = $portablePluginBuildCommand + "`n    " + $firstCompanionBuildCommand; After = $firstCompanionBuildCommand + "`n    " + $portablePluginBuildCommand },
+    @{ Name = "missing companion build"; Pattern = "protected dotnet invocations"; Before = $firstCompanionBuildCommand; After = "" },
+    @{ Name = "companion build behind false condition"; Pattern = "must run canonical command"; Before = $firstCompanionBuildCommand; After = 'if ($false) {' + "`n    " + $firstCompanionBuildCommand + "`n    }" },
     @{ Name = "filtered portable suite"; Pattern = "must run canonical command"; Before = $portableTestCommand; After = $portableTestCommand + ' "--filter" "FullyQualifiedName=__NoSuchTest__"' },
     @{ Name = "filtered UI suite"; Pattern = "must run canonical command"; Before = $uiTestCommand; After = $uiTestCommand + ' "--filter" "FullyQualifiedName=__NoSuchTest__"' },
-    @{ Name = "missing portable suite"; Pattern = "exactly seven protected dotnet invocations"; Before = $portableTestCommand; After = "" },
-    @{ Name = "missing UI suite"; Pattern = "exactly seven protected dotnet invocations"; Before = $uiTestCommand; After = "" },
+    @{ Name = "missing portable suite"; Pattern = "protected dotnet invocations"; Before = $portableTestCommand; After = "" },
+    @{ Name = "missing UI suite"; Pattern = "protected dotnet invocations"; Before = $uiTestCommand; After = "" },
     @{ Name = "wrong portable framework"; Pattern = "must run canonical command"; Before = '"-f" "net10.0"'; After = '"-f" "net10.0-windows10.0.18362.0"' },
     @{ Name = "missing portable test opt-in"; Pattern = "must run canonical command"; Before = ' "-p:LLPlayerPortableTests=true"'; After = "" },
     @{ Name = "test warnings are non-fatal"; Pattern = "must run canonical command"; Before = ' "-warnaserror"'; After = "" },
     @{ Name = "test behind false condition"; Pattern = "must run canonical command"; Before = $uiTestCommand; After = 'if ($false) {' + "`n    " + $uiTestCommand + "`n    }" },
-    @{ Name = "tests hidden in block comment"; Pattern = "exactly seven protected dotnet invocations"; Before = $portableTestCommand; After = '<#' + $portableTestCommand + '#>' },
+    @{ Name = "tests hidden in block comment"; Pattern = "protected dotnet invocations"; Before = $portableTestCommand; After = '<#' + $portableTestCommand + '#>' },
     @{ Name = "runner does not execute"; Pattern = "canonical Invoke-Checked function"; Before = '& $FilePath @Arguments'; After = 'return' },
     @{ Name = "failures are non-terminating"; Pattern = "single ErrorActionPreference Stop"; Before = '$ErrorActionPreference = "Stop"'; After = '$ErrorActionPreference = "Continue"' },
     @{ Name = "returns before tests"; Pattern = "must not bypass required commands"; Before = $portableTestCommand; After = 'return' + "`n    " + $portableTestCommand },
@@ -1054,6 +1064,8 @@ $windowsAvaloniaMutations = @(
     @{ Description = "wrong packaged plugin test"; Before = 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'; After = 'FullyQualifiedName=__NoSuchTest__' },
     @{ Description = "staged plugin load omitted"; Before = '        Test-PluginLoad $staged[0].FullName'; After = "" },
     @{ Description = "archived plugin load omitted"; Before = '        Test-PluginLoad $extracted[0].FullName'; After = "" },
+    @{ Description = "companion execution omitted"; Before = '          python .\scripts\codex\test-control-package.py $PackageRoot'; After = "" },
+    @{ Description = "companion execution errors ignored"; Before = '          if ($LASTEXITCODE -ne 0) { throw "Packaged control transport failed: $PackageRoot" }'; After = "" },
     @{ Description = "archive extraction omitted"; Before = '        Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $readback'; After = "" },
     @{ Description = "publish command overridden"; Before = "    - name: Publish Windows Avalonia package"; After = "    - name: Publish Windows Avalonia package`n      run: exit 0" },
     @{ Description = "continued publish scalar"; Before = "    - name: Upload Windows Avalonia package"; After = "        ; exit 0`n    - name: Upload Windows Avalonia package" },
@@ -1229,6 +1241,8 @@ $linuxPluginLoadMutations = @(
     @{ Name = "wrong plugin load test"; Pattern = "canonical staged and archived portable plugin load step"; Before = 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'; After = 'FullyQualifiedName=__NoSuchTest__' },
     @{ Name = "staged plugin load omitted"; Pattern = "canonical staged and archived portable plugin load step"; Before = '        LLPLAYER_PACKAGE_DIR="${staged[0]}" dotnet test'; After = '        LLPLAYER_PACKAGE_DIR="${staged[0]}" echo' },
     @{ Name = "archived plugin load omitted"; Pattern = "canonical staged and archived portable plugin load step"; Before = '        LLPLAYER_PACKAGE_DIR="${extracted[0]}" dotnet test'; After = '        LLPLAYER_PACKAGE_DIR="${extracted[0]}" echo' },
+    @{ Name = "staged companion execution omitted"; Pattern = "canonical staged and archived portable plugin load step"; Before = '        python3 scripts/codex/test-control-package.py "${staged[0]}"'; After = "" },
+    @{ Name = "archived companion execution omitted"; Pattern = "canonical staged and archived portable plugin load step"; Before = '        python3 scripts/codex/test-control-package.py "${extracted[0]}"'; After = "" },
     @{ Name = "archive extraction omitted"; Pattern = "canonical staged and archived portable plugin load step"; Before = '        tar -xzf "${archives[0]}" -C "$readback"'; After = "" }
 )
 foreach ($mutation in $linuxPluginLoadMutations) {

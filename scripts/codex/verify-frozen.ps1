@@ -373,6 +373,11 @@ try {
 
     # Table-driven future-path coverage and exact-extension near misses. These inputs need not be tracked: the
     # router must remain safe for a newly-created file before its first commit.
+    $controlGates = @("verify", "linux verify", "windows avalonia verify", "control package protocol smoke")
+    $controlFixtureAgents = @("codex_infra_architect", "instruction_drift_auditor", "dotnet_quality_guardian",
+        "packaging_release_reviewer", "verification_reviewer")
+    $controlAgents = @("dotnet_quality_guardian", "media_runtime_mapper", "packaging_release_reviewer", "verification_reviewer")
+    $nativeControlAgents = $controlAgents + @("native_dependency_auditor")
     $positiveRouteFixtures = @(
         @{ Path = "Future/Thing.cs"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify") },
         @{ Path = "Future/Thing.CS"; Agents = @("dotnet_quality_guardian", "verification_reviewer"); Gates = @("verify") },
@@ -384,6 +389,13 @@ try {
         @{ Path = "LLPlayer.Avalonia/Views/Future.axaml"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
         @{ Path = "LLPlayer.Avalonia/Views/Future.axaml.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "wpf_xaml_reviewer", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
         @{ Path = "LLPlayer.Avalonia.Tests/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
+        @{ Path = "LLPlayer.Control/Contracts/Future.cs"; Agents = $controlAgents; Gates = $controlGates },
+        @{ Path = "LLPlayer.Control/Client/Future.cs"; Agents = $nativeControlAgents; Gates = $controlGates },
+        @{ Path = "LLPlayer.ControlHost/Future.cs"; Agents = $nativeControlAgents; Gates = $controlGates },
+        @{ Path = "LLPlayer.Mcp/Future.cs"; Agents = $controlAgents; Gates = $controlGates },
+        @{ Path = "scripts/codex/test-control-package.py"; Agents = $controlFixtureAgents; Gates = $controlGates },
+        @{ Path = "scripts/codex/f20_pipeline_fixture.py"; Agents = $controlFixtureAgents; Gates = $controlGates },
+        @{ Path = "scripts/codex/control-fixture/Future.cs"; Agents = $controlFixtureAgents; Gates = $controlGates },
         @{ Path = "LLPlayer.Core/Services/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
         @{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
         @{ Path = "LLPlayer.Core/Services/TranslationSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },

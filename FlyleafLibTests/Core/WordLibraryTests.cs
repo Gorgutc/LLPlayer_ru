@@ -54,6 +54,25 @@ public class WordLibraryTests
         finally { File.Delete(path); }
     }
     [Fact]
+    public void Stale_owner_addition_preserves_words_saved_by_another_owner()
+    {
+        string directory = Directory.CreateTempSubdirectory().FullName;
+        string path = Path.Combine(directory, "words.json");
+        try
+        {
+            var first = new WordLibrary(path);
+            var second = new WordLibrary(path);
+            Assert.True(first.TryAdd(Word("first")));
+            second.Load();
+            Assert.True(first.TryAdd(Word("second")));
+            Assert.True(second.TryAdd(Word("third")));
+            first.Load();
+            Assert.Equal(new[] { "first", "second", "third" }, first.GetAll().Select(word => word.Term));
+        }
+        finally { Directory.Delete(directory, recursive: true); }
+    }
+
+    [Fact]
     public void Existing_array_schema_metadata_and_trimmed_first_wins_survive_roundtrip()
     {
         string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");

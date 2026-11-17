@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using CliWrap.Builders;
 using CliWrap.EventStream;
+using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Dubbing;
 
 namespace FlyleafLib.Plugins;
@@ -13,14 +14,21 @@ public sealed partial class OnlineVideoProcess
 {
     private StreamWriter? engineControl;
     private string? engineExitPrefix;
+    private IEngineProcessOwner? engineOwner;
+    private EngineProcessIdentity? engineIdentity;
     private readonly SemaphoreSlim engineStopGate = new(1, 1);
 
     // The session leader remains alive until it signals its own group, so the host does not signal a
     // potentially reused PID after the leader exits. EOF on the control pipe also covers app death.
     private const string EngineSupervisor = """
         status_prefix=$1
-        shift
+        admission=$2
+        shift 2
         trap 'kill -KILL "-$$"' TERM HUP INT
+        if [ "$admission" = wait ]; then
+            IFS= read -r request || exit 125
+            [ "$request" = start ] || exit 125
+        fi
         exec 3<&0
         "$@" </dev/null 3<&- &
         worker=$!
@@ -44,8 +52,10 @@ public sealed partial class OnlineVideoProcess
             throw new FileNotFoundException("GPU engine coordination requires /usr/bin/setsid and /bin/sh.");
 
         string prefix = "LLPLAYER_ENGINE_EXIT_" + Guid.NewGuid().ToString("N") + "=";
+        IEngineProcessOwner? owner = EngineProcessOwnership.Current;
         ArgumentsBuilder args = new();
-        args.Add("--").Add("/bin/sh").Add("-c").Add(EngineSupervisor).Add("llplayer-engine").Add(prefix);
+        args.Add("--").Add("/bin/sh").Add("-c").Add(EngineSupervisor).Add("llplayer-engine").Add(prefix)
+            .Add(owner is null ? "immediate" : "wait");
         if (priority != ProcessPriorityClass.Normal)
         {
             string priorityValue = priority switch
@@ -69,11 +79,34 @@ public sealed partial class OnlineVideoProcess
         info.RedirectStandardInput = true;
 
         Process process = Process.Start(info) ?? throw new IOException("Could not launch the contained engine.");
-        return new(process, process.StandardOutput.BaseStream, process.StandardError.BaseStream)
+        var engine = new OnlineVideoProcess(process, process.StandardOutput.BaseStream, process.StandardError.BaseStream)
         {
             engineControl = process.StandardInput,
             engineExitPrefix = prefix
         };
+        if (owner is not null)
+        {
+            try
+            {
+                var identity = EngineProcessOwnership.IdentifyLinuxProcess(process.Id);
+                owner.Record(identity);
+                engine.engineOwner = owner;
+                engine.engineIdentity = identity;
+                // The supervisor waits before launching any workers. Loss of stdin during startup
+                // is safe both before and after the identity transaction commits.
+                engine.engineControl.WriteLine("start");
+                engine.engineControl.Flush();
+            }
+            catch
+            {
+                engine.engineControl.Dispose();
+                engine.Output.Dispose();
+                engine.Error.Dispose();
+                process.Dispose();
+                throw;
+            }
+        }
+        return engine;
     }
 
     internal Task WaitForEngineRootAsync(CancellationToken token) => root.WaitForExitAsync(token);
@@ -166,11 +199,13 @@ public sealed partial class OnlineVideoProcess
                         engineControl = null;
                     }
                     await root.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-                    while (LinuxSessionHasLiveMembers(root.Id))
+                    while (EngineProcessOwnership.LinuxSessionHasLiveMembers(root.Id))
                         await Task.Delay(25, timeout.Token).ConfigureAwait(false);
                 }
 
                 await root.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+                if (engineIdentity is { } identity)
+                    engineOwner?.Drained(identity.Id);
                 stopped = true;
             }
             catch (OperationCanceledException) when (timeout.IsCancellationRequested)
@@ -188,35 +223,6 @@ public sealed partial class OnlineVideoProcess
         Output.Dispose();
         Error.Dispose();
         root.Dispose();
-    }
-
-    private static bool LinuxSessionHasLiveMembers(int sessionId)
-    {
-        foreach (string path in Directory.EnumerateDirectories("/proc"))
-        {
-            // The supervisor has already stopped its own process group. A residual member in
-            // another group retains ownership until its exit can be observed. Do not signal
-            // numeric process or session IDs after the supervisor exits.
-            if (int.TryParse(Path.GetFileName(path), out _) && IsLiveMember(path, sessionId))
-                return true;
-        }
-        return false;
-    }
-
-    private static bool IsLiveMember(string path, int sessionId)
-    {
-        string stat;
-        try { stat = File.ReadAllText(Path.Combine(path, "stat")); }
-        catch (FileNotFoundException) { return false; }
-        catch (DirectoryNotFoundException) { return false; }
-        int nameEnd = stat.LastIndexOf(')');
-        if (nameEnd < 0)
-            throw new IOException("Cannot verify the engine process session identity.");
-        string[] fields = stat[(nameEnd + 1)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (fields.Length < 4 || !int.TryParse(fields[3], out int session))
-            throw new IOException("Cannot verify the engine process session identity.");
-        // Zombies no longer execute the engine or own GPU contexts, even if an external reaper is late.
-        return session == sessionId && fields[0] is not ("Z" or "X");
     }
 
 }

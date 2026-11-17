@@ -209,13 +209,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     void ShowSettings() => shell.ShowSettings(CreateSettings());
 
-    public SettingsViewModel CreateSettings() => new(prefs, CommitSettings,
-        new BitmapSubtitleRuntimeState(player.PrimaryBitmapScale, player.SecondaryBitmapScale, player.PrimaryBitmapPosition));
-
-    void CommitSettings(SettingsViewModel draft)
+    public SettingsViewModel CreateSettings()
     {
-        // Clone the fresh current record, including unrelated values changed while the modal draft was open.
-        AppPrefs candidate = JsonSerializer.Deserialize<AppPrefs>(JsonSerializer.Serialize(prefs, PrefsStore.JsonOptions), PrefsStore.JsonOptions)!;
+        AppPrefs baseline = prefs.Clone();
+        return new(baseline, draft => CommitSettings(draft, baseline),
+            new BitmapSubtitleRuntimeState(player.PrimaryBitmapScale, player.SecondaryBitmapScale, player.PrimaryBitmapPosition));
+    }
+
+    void CommitSettings(SettingsViewModel draft, AppPrefs baseline)
+    {
+        AppPrefs candidate = baseline.Clone();
         candidate.Theme = draft.Theme;
         MergePlayerUiSettings(candidate, draft);
         candidate.SubtitleFontFamily = draft.SubtitleFontFamily;
@@ -246,7 +249,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.SidebarFontFamily = draft.SidebarFontFamily;
         candidate.SidebarFontWeight = draft.SidebarFontWeight;
         candidate.SidebarFontSize = draft.SidebarFontSize;
-        draft.MergeToolsEditsInto(candidate);
         candidate.SubtitleWidthPercent = draft.SubtitleWidthPercent;
         candidate.SubtitleMaxWidth = draft.SubtitleMaxWidth;
         candidate.SubtitleIgnoreLineBreak = draft.SubtitleIgnoreLineBreak;
@@ -260,6 +262,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         candidate.AppKeyBindings = AppKeyBindings.NormalizePrefs(draft.AppKeyBindingPrefs);
         candidate.EngineKeysCustomized = draft.EngineKeysCustomized;
         candidate.EngineKeyBindings = draft.EngineKeysCustomized ? [.. draft.EngineKeyBindingPrefs] : [];
+        AppPrefs merged = AppPrefs.MergeEdits(baseline, candidate, prefs);
+        // The Tools draft knows when a reset was explicit even if its result matches the opening value.
+        draft.MergeToolsEditsInto(merged);
+        ApplyAppSettings(merged,
+            new(draft.PrimaryBitmapScale, draft.SecondaryBitmapScale, draft.PrimaryBitmapPosition),
+            persist: true);
+    }
+
+    internal void ApplyPersistedAppSettings(AppPrefs settings) => ApplyAppSettings(settings,
+        new(player.PrimaryBitmapScale, player.SecondaryBitmapScale, player.PrimaryBitmapPosition), persist: false);
+
+    void ApplyAppSettings(AppPrefs candidate, BitmapSubtitleRuntimeState bitmap, bool persist)
+    {
         // Resolve font resources and parse brushes before persistence, so live application only assigns prepared values.
         SubtitleFontSelection primaryFont = fonts.Resolve(candidate.SubtitleFontFamily, candidate.SubtitleFontWeight, candidate.SubtitleFontStyle);
         SubtitleFontSelection secondaryFont = candidate.SecondarySubtitleInheritsFont ? primaryFont
@@ -275,7 +290,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Color backgroundColor = Color.Parse(candidate.SubtitleBackgroundColor);
         ImmutableSolidColorBrush backgroundBrush = new(backgroundColor, candidate.SubtitleBackgroundOpacityPercent / 100d);
         ImmutableSolidColorBrush secondaryBackgroundBrush = new(backgroundColor, candidate.SecondarySubtitleBackgroundOpacityPercent / 100d);
-        savePrefs(candidate); // may throw; nothing live has changed yet
+        if (persist) savePrefs(candidate); // may throw; nothing live has changed yet
 
         ApplyPlayerUiPreferences(candidate);
         prefs.Theme = candidate.Theme;
@@ -354,9 +369,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SubtitlePositionAlignmentWhenDual = candidate.SubtitlePositionAlignmentWhenDual;
         // Bitmap scale/position are live session state (WPF Position / Size edits the same engine values); Save applies
         // them to the engine but never writes them to AppPrefs.
-        player.PrimaryBitmapScale = draft.PrimaryBitmapScale;
-        player.SecondaryBitmapScale = draft.SecondaryBitmapScale;
-        player.PrimaryBitmapPosition = draft.PrimaryBitmapPosition;
+        player.PrimaryBitmapScale = bitmap.PrimaryScale;
+        player.SecondaryBitmapScale = bitmap.SecondaryScale;
+        player.PrimaryBitmapPosition = bitmap.PrimaryPosition;
         SubtitleTextBrush = primaryBrush;
         SecondarySubtitleTextBrush = secondaryBrush;
         SubtitleOutlineBrush = outlineBrush;
@@ -468,6 +483,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty] public partial bool IsPlaying { get; private set; }
     [ObservableProperty] public partial bool IsOpening { get; private set; }
     [ObservableProperty] public partial string WindowTitle { get; private set; } = "LLPlayer";
+    [ObservableProperty] public partial string AutomationJobsStatus { get; set; } = "";
+    public ObservableCollection<AutomationJobRow> AutomationJobs { get; } = [];
     [ObservableProperty] public partial string MediaTitle { get; private set; } = "";
     [ObservableProperty] public partial string CurrentTimeText { get; private set; } = "0:00";
     [ObservableProperty] public partial string DurationText { get; private set; } = "0:00";
@@ -1033,11 +1050,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void OpenOnlineVideo(string request) => Open(request, null, onlineVideo: true);
 
-    void Open(string path, IEnumerable<string>? subtitles, bool onlineVideo)
+    internal async Task<bool> OpenForControlLaunchAsync(string path, IEnumerable<string>? subtitles)
+    {
+        var result = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Open(path, subtitles, onlineVideo: false, success => result.TrySetResult(success));
+        try { return await result.Task.WaitAsync(TimeSpan.FromSeconds(25)); }
+        catch (TimeoutException) { return false; }
+    }
+
+    void Open(string path, IEnumerable<string>? subtitles, bool onlineVideo, Action<bool>? reportOpen = null)
     {
         if (Utils.ExtensionsSubtitles.Contains(Utils.GetUrlExtention(path)))
         {
             OpenSubtitlesFile(path);
+            reportOpen?.Invoke(false);
             return;
         }
 
@@ -1051,7 +1077,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         player.Open(path, error =>
         {
             if (disposed || !ReferenceEquals(pendingMediaRequest, request))
+            {
+                reportOpen?.Invoke(false);
                 return;
+            }
             pendingMediaRequest = null;
             string[] subs = [.. pendingSubtitles];
             pendingSubtitles.Clear();
@@ -1061,6 +1090,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                     player.OpenSubtitles(subtitle);
                 RefreshPlaybackChoices();
             }
+            reportOpen?.Invoke(error == null && player.IsOpened);
         }, onlineVideo);
     }
 

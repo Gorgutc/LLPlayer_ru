@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds the Linux package LLPlayer-<version>-linux-x64.tar.gz from LLPlayer.Avalonia (F-13).
 # Linux counterpart of the Windows packaging in .github/actions/build-package/action.yml, which stays the source of
-# truth for the Windows release. Framework-dependent: end users need the .NET 10 runtime
-# (Ubuntu: sudo apt install dotnet-runtime-10.0) and OpenAL Soft (Ubuntu: sudo apt install libopenal1).
+# truth for the Windows release. Framework-dependent: ASP.NET Core 10 includes the .NET 10 runtime
+# (Ubuntu: sudo apt install aspnetcore-runtime-10.0) and OpenAL Soft is separate (sudo apt install libopenal1).
 #
 # Usage: scripts/linux/publish.sh [--out DIR] [--ffmpeg-dir DIR] [--staging DIR] [--force]
 #   --out DIR         where the archive (+ .sha256) is written (default: <repo>/artifacts/linux, gitignored)
@@ -44,7 +44,7 @@ validate_package() {
     pkg="$(readlink -f "$1")"
     [[ -d "$pkg" ]] || llp_die "package directory not found: $1"
     # ---- Positive content validation (mirrors "Release package is missing required file" on Windows) ----
-    local required diarization rel path resolved exe hits so_path name ok so link target allowed_natives
+    local required diarization app rel path resolved exe hits so_path name ok so link target allowed_natives
     diarization=(Assets/Diarization/{sidecar.py,requirements.txt,README.md,NOTICE.md})
     required=(
         "LLPlayer.Avalonia"
@@ -53,6 +53,11 @@ validate_package() {
         "LLPlayer.Avalonia.runtimeconfig.json"
         "FlyleafLib.dll"
         "LLPlayer.Core.dll"
+        "LLPlayer.Control.dll"
+        "mcp/LLPlayer.Control.dll"
+        "mcp/ModelContextProtocol.dll"
+        "mcp/ModelContextProtocol.Core.dll"
+        "licenses/ModelContextProtocol.LICENSE"
         "LibNMeCab.dll"
         "LibNMeCab.IpaDicBin.dll"
         "IpaDic/sys.dic"
@@ -87,6 +92,9 @@ validate_package() {
         "dub_sidecar/README.md"
         "${diarization[@]}"
     )
+    for app in LLPlayer.ControlHost mcp/LLPlayer.Mcp; do
+        required+=("$app" "$app.dll" "$app.deps.json" "$app.runtimeconfig.json")
+    done
     for so in "${LLP_FFMPEG_SONAMES[@]}"; do required+=("FFmpeg/$so"); done
     for rel in "${required[@]}"; do
         path="$pkg/$rel"
@@ -95,6 +103,35 @@ validate_package() {
         [[ "$resolved" == "$pkg/"* && -f "$resolved" && -s "$resolved" ]] ||
             llp_die "Linux package required file $rel must be a non-empty regular file inside the package."
     done
+    llp_require_cmd python3
+    python3 - "$pkg" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+for app in ("LLPlayer.ControlHost", "mcp/LLPlayer.Mcp"):
+    try:
+        deps = json.loads((root / f"{app}.deps.json").read_text(encoding="utf-8"))
+        runtime = json.loads((root / f"{app}.runtimeconfig.json").read_text(encoding="utf-8"))["runtimeOptions"]
+        target = deps["runtimeTarget"]["name"]
+        tfm = runtime["tfm"]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise SystemExit(f"Linux package companion runtime target metadata is invalid: {app}: {error}")
+    if target != ".NETCoreApp,Version=v10.0/linux-x64" or tfm != "net10.0":
+        raise SystemExit(f"Linux package companion runtime target must be portable net10.0/linux-x64: {app}")
+    frameworks = runtime.get("frameworks", [runtime.get("framework")])
+    expected = ["Microsoft.NETCore.App"]
+    if app == "LLPlayer.ControlHost":
+        expected.insert(0, "Microsoft.AspNetCore.App")
+    if not isinstance(frameworks, list) or len(frameworks) != len(expected):
+        raise SystemExit(f"Linux package companion framework references are incorrect: {app}")
+    actual = sorted(item["name"] for item in frameworks if isinstance(item, dict)
+                    and isinstance(item.get("name"), str) and re.fullmatch(r"10\.0\.\d+", str(item.get("version"))))
+    if actual != expected:
+        raise SystemExit(f"Linux package companion framework references are incorrect: {app}")
+PY
     # Offline structural screening; the .NET10 package-load test resolves types and checks the
     # actual TargetFrameworkAttribute against the shared portable engine after publish/extraction.
     local plugin="$pkg/Plugins/YoutubeDL/YoutubeDL.dll" pe magic directory cli
@@ -114,7 +151,7 @@ validate_package() {
         grep -aqE 'TargetPlatformAttribute|Version=v10.0-windows|PresentationFramework|PresentationCore|WindowsBase|Microsoft.WindowsDesktop.App' "$plugin"; then
         llp_die "YoutubeDL plugin must target portable net10.0 without WPF references."
     fi
-    for exe in LLPlayer.Avalonia llplayer; do
+    for exe in LLPlayer.Avalonia LLPlayer.ControlHost mcp/LLPlayer.Mcp llplayer; do
         [[ -x "$pkg/$exe" ]] || llp_die "Linux package file $exe must be executable."
     done
 
@@ -127,6 +164,9 @@ validate_package() {
         -o -iname 'LLPlayer.Dubbing.json' -o -iname 'LLPlayer.Dubbing.json.*' -o -iname '.LLPlayer.Dubbing.json' -o -iname '.LLPlayer.Dubbing.json.*' \
         -o -name '.env*' \) -print)"
     [[ -z "$hits" ]] || reject "runtime config / logs / dumps / secrets" "$hits"
+    hits="$(find "$pkg" \( -iname Automation -o -iname Control -o -iname jobs.sqlite -o -iname 'jobs.sqlite-*' \
+        -o -iname control.lock -o -iname host.json -o -iname 'host.json.*' \) -print)"
+    [[ -z "$hits" ]] || reject "control runtime state" "$hits"
     hits="$(find "$pkg" \( -iname 'yt-dlp' -o -iname 'yt-dlp.exe' -o -iname 'yt-dlp_linux*' -o -iname deno -o -iname deno.exe -o -iname pdic-pipe -o -iname pdic-pipe.exe \) -print)"
     [[ -z "$hits" ]] || reject "external extractor helpers or PDIC bridge" "$hits"
     hits="$(find "$pkg" -regextype posix-extended \( \
@@ -250,6 +290,26 @@ pkg="$staging/$pkg_name"
 
 llp_log "publishing $app_proj ($version) into $pkg"
 dotnet publish "$app_proj" -c Release -f net10.0 -r linux-x64 --self-contained false -warnaserror -o "$pkg"
+host_staging="$staging/LLPlayer.ControlHost"
+dotnet publish LLPlayer.ControlHost/LLPlayer.ControlHost.csproj -c Release -f net10.0 -r linux-x64 --self-contained false -warnaserror -o "$host_staging"
+[[ -z "$(find "$host_staging" ! -type d ! -type f -print -quit)" ]] || llp_die "Unexpected non-file in ControlHost publish output."
+while IFS= read -r -d '' file; do
+    relative="${file#"$host_staging"/}"
+    target="$pkg/$relative"
+    if [[ -e "$target" || -L "$target" ]]; then
+        if [[ ! -f "$target" || -L "$target" ]] || ! cmp -s "$file" "$target"; then
+            llp_die "ControlHost publish files disagree with the existing Avalonia payload: $relative."
+        fi
+    else
+        mkdir -p "$(dirname "$target")"
+        cp -p "$file" "$target"
+    fi
+done < <(find "$host_staging" -type f -print0)
+# Keep the MCP SDK's Microsoft.Extensions dependencies local to its own executable.
+[[ ! -e "$pkg/mcp" && ! -L "$pkg/mcp" ]] || llp_die "The MCP package directory already exists."
+dotnet publish LLPlayer.Mcp/LLPlayer.Mcp.csproj -c Release -f net10.0 -r linux-x64 --self-contained false -warnaserror -o "$pkg/mcp"
+mkdir -p "$pkg/licenses"
+cp LLPlayer.Avalonia/Licenses/ModelContextProtocol.LICENSE "$pkg/licenses/ModelContextProtocol.LICENSE"
 plugin_staging="$staging/portable-plugin"
 dotnet publish Plugins/YoutubeDL/YoutubeDL.csproj -c Release -f net10.0 -r linux-x64 --self-contained false -warnaserror -o "$plugin_staging"
 mkdir -p "$pkg/Plugins/YoutubeDL"
@@ -304,8 +364,8 @@ cp LLPlayer.Avalonia/Assets/llplayer.png "$pkg/llplayer.png"
 
 cat > "$pkg/llplayer" <<'LAUNCHER'
 #!/bin/sh
-# LLPlayer launcher (Linux). Needs the .NET 10 runtime (Ubuntu: apt install dotnet-runtime-10.0) and OpenAL Soft
-# (apt install libopenal1). FFmpeg is bundled in ./FFmpeg; LLPLAYER_FFMPEG_DIR or --ffmpeg-dir override it.
+# LLPlayer launcher (Linux). On Ubuntu install aspnetcore-runtime-10.0 and libopenal1.
+# FFmpeg is bundled in ./FFmpeg; LLPLAYER_FFMPEG_DIR or --ffmpeg-dir override it.
 here="$(dirname "$(readlink -f "$0")")"
 if [ -x "$here/LLPlayer.Avalonia" ]; then
     exec "$here/LLPlayer.Avalonia" "$@"

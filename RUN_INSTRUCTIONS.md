@@ -52,8 +52,10 @@ Before final handoff, run spawned `/review` with at least `verification_reviewer
 
 ## Windows Avalonia
 
-Use the .NET 10 SDK to build. The framework-dependent package needs the .NET 10 runtime and Microsoft Visual C++
-x64 Redistributable 2022 or newer. WSL is not needed to run the native Windows app.
+Use the .NET 10 SDK and Python 3 to build and verify. For the framework-dependent package, install x64
+ASP.NET Core 10 Runtime, .NET 10 Runtime, and Microsoft Visual C++ x64 Redistributable 2022 or newer.
+Check that `dotnet --list-runtimes` lists `Microsoft.NETCore.App 10.0.x` and `Microsoft.AspNetCore.App 10.0.x`
+in the same registered x64 installation. The app runs natively on Windows.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\verify-avalonia.ps1
@@ -73,17 +75,22 @@ dotnet LLPlayer.Avalonia/bin/Debug/net10.0/LLPlayer.Avalonia.dll --ffmpeg-dir ./
 ```
 
 Shared UI/Core/portable changes require both Windows Avalonia and Linux gates, plus WPF compatibility checks.
-The separate Windows Avalonia job in `build.yml` verifies and uploads its package; Linux uses `build-linux.yml`.
+The separate Windows Avalonia job in `build.yml` verifies and uploads its package. Linux uses `build-linux.yml`.
+Both jobs run `scripts/codex/test-control-package.py` against the staged and extracted packages.
+See [ControlHost and MCP setup](docs/control-api.md) for client configuration.
 
 ## Linux
 
 Prerequisites (Ubuntu 24.04, where `dotnet-sdk-10.0` comes from `noble-updates`; other distributions need the same pieces):
 
 ```bash
-sudo apt install dotnet-sdk-10.0 libopenal1 curl xz-utils   # SDK from the Ubuntu archive; end users need only dotnet-runtime-10.0 + libopenal1
+sudo apt install dotnet-sdk-10.0 libopenal1 curl xz-utils python3
 dotnet tool install -g PowerShell                           # pwsh for the scripts/codex validators (optional locally, required in CI)
 sudo apt install xvfb                                       # optional: headless runs of the app
 ```
+
+For the extracted package, install `aspnetcore-runtime-10.0` and `libopenal1`. The ASP.NET Core runtime package
+includes the .NET runtime on Ubuntu.
 
 Fetch FFmpeg, verify, run, and package:
 

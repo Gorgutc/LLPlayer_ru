@@ -19,12 +19,17 @@ acceptance and do not replace the shipped WPF package.
 
 - Produce `LLPlayer-Avalonia-<version>-win-x64.zip` plus SHA-256; keep this separate from WPF release assets.
 - Require the existing FFmpeg DLLs, explicit win-x64 native allowlists and app-local OpenAL Soft 1.23.1 through
-  pinned `Silk.NET.OpenAL.Soft.Native`, with its license/source notices. Require .NET 10 runtime and x64 Visual C++
-  2022 redistributable for users; bundled Whisper CPU files are not Windows ASR/OCR acceptance.
+  pinned `Silk.NET.OpenAL.Soft.Native`, with its license/source notices. Require x64 .NET 10 Runtime, ASP.NET Core
+  10 Runtime and the x64 Visual C++ 2022 redistributable. Track Windows ASR/OCR acceptance separately from
+  bundled Whisper CPU files.
 - Run `scripts/windows/test-package-avalonia.ps1` and `scripts/windows/publish-avalonia.ps1`, including archive
   verification. Reject foreign native payloads, models, runtime config/logs and reparse points.
 - A Windows Avalonia CI artifact is distinct from a public release and native GUI acceptance. Preserve the single
   shared Views/ViewModels/Themes tree and portable engine target for both OSes.
+
+Both Avalonia packages place `LLPlayer.ControlHost` beside the app and `LLPlayer.Mcp` plus its dependency closure
+under `mcp/`. Run `scripts/codex/test-control-package.py` on staged and extracted packages on each platform.
+The smoke uses a test recognizer and translation provider and proves packaged HTTP/MCP execution.
 
 ## Preserve Windows Flow
 

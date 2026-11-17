@@ -177,8 +177,10 @@ function Assert-Retained {
 function Check-GeneratedPaths($Files) {
     foreach ($file in $Files) {
         # Publisher products only. Settings, model downloads and arbitrary additions never gain ownership.
-        if ($file.path -match '(^|/)(models?|configs?|settings|userdata|cache|history|logs?|\.git)(/|\.|$)' -or
-            ($file.path -match '\.(gguf|safetensors|pt|pth|ckpt|db|sqlite|sqlite3)$') -or
+        if ($file.path -match '(^|/)(control|automation)(/|$)' -or
+            $file.path -match '(^|/)(models?|configs?|settings|userdata|cache|history|logs?|\.git)(/|\.|$)' -or
+            ($file.path -match '\.(gguf|safetensors|pt|pth|ckpt|db|sqlite(?:-(wal|shm|journal))?|sqlite3)$') -or
+            ($file.path -match '(^|/)(control\.lock$|host\.json($|\.))') -or
             ($file.path -match '\.onnx$' -and $file.path -notmatch '/Assets/silero_vad\.onnx$')) { throw "User data/model-like publish contents are protected: $($file.path)" }
         if ($file.path -match '\.json$' -and $file.path -notmatch '(\.deps|\.runtimeconfig|/native-dependencies)\.json$') { throw "Unknown JSON in publish workspace is protected: $($file.path)" }
     }
@@ -251,11 +253,16 @@ function Protected-Paths {
     foreach ($p in @($AdditionalProtectedPaths) + @($RunningPathsForTests)) { if ($p) { $paths.Add((Normal $p)) } }
     foreach ($process in @(Get-Process)) {
         try { Add-ProcessPath $paths $process.ProcessName $process.Path }
-        catch { if ($process.ProcessName -like 'LLPlayer*') { throw } }
+        catch { if ($process.ProcessName -like 'LLPlayer*' -and -not $process.HasExited) { throw } }
         if ($process.ProcessName -ieq 'dotnet') {
             try { $hosted = Get-CimInstance -ClassName Win32_Process -Filter ('ProcessId = '+$process.Id) -Property CommandLine -OperationTimeoutSec 3 -ErrorAction Stop }
-            catch { throw 'A running dotnet host command line cannot be inspected; preserving candidates.' }
-            Add-HostedPaths $paths ([string]$hosted.CommandLine)
+            catch {
+                if ($process.HasExited) { continue }
+                throw 'A running dotnet host command line cannot be inspected; preserving candidates.'
+            }
+            $commandLine = if ($hosted -and $hosted.PSObject.Properties['CommandLine']) { [string]$hosted.CommandLine } else { '' }
+            if ([string]::IsNullOrWhiteSpace($commandLine) -and $process.HasExited) { continue }
+            Add-HostedPaths $paths $commandLine
         }
     }
     foreach ($process in $ProcessDescriptorsForTests) {
@@ -308,7 +315,8 @@ function Protected-Paths {
 function Add-HostedPaths($Paths,[string]$CommandLine) {
     if ([string]::IsNullOrWhiteSpace($CommandLine)) { throw 'A running dotnet host command line is unknown; preserving candidates.' }
     foreach ($argument in @([LLPlayerRetention.Native]::Arguments($CommandLine))) {
-        if ([IO.Path]::GetFileName($argument) -ine 'LLPlayer.Avalonia.dll') { continue }
+        # Unrelated dotnet arguments need not be legal Windows paths.
+        if ($argument -notmatch '(?:^|[\\/])LLPlayer\.(Avalonia|ControlHost|Mcp)\.dll$') { continue }
         if ($argument -notmatch '^[A-Za-z]:[\\/]') { throw 'A relative dotnet-hosted LLPlayer assembly cannot be resolved safely; preserving candidates.' }
         $path = [IO.Path]::GetFullPath($argument)
         if (Test-Path -LiteralPath $path) { $path = [LLPlayerRetention.Native]::ResolveReference($path) }

@@ -215,16 +215,23 @@ public sealed class FlyleafWordTranslator : IWordTranslator, IAsyncDisposable
     }
     /// <summary>Persistence succeeds before live invalidation. No provider is initialized on save.</summary>
     public Task SaveAndApplyAsync(TranslationSettings draft, TranslationSettingsStore store, Action invalidateDisplay, Action<TranslationSettings> apply)
+        => QueueSettingsAsync(draft, value => { store.Save(value); return value; }, invalidateDisplay, apply);
+
+    internal Task ApplyPersistedAsync(TranslationSettings settings, Action invalidateDisplay, Action<TranslationSettings> apply)
+        => QueueSettingsAsync(settings, persist: null, invalidateDisplay, apply);
+
+    internal Task QueueSettingsAsync(TranslationSettings draft, Func<TranslationSettings, TranslationSettings>? persist,
+        Action invalidateDisplay, Action<TranslationSettings> apply)
     {
         lock (sync)
         {
             if (stopping) return Task.FromCanceled(new CancellationToken(true));
             var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             settingsOperations.Add(done.Task);
-            return ApplyAsync(draft, store, invalidateDisplay, apply, done);
+            return ApplyAsync(draft, persist, invalidateDisplay, apply, done);
         }
     }
-    async Task ApplyAsync(TranslationSettings draft, TranslationSettingsStore store, Action invalidateDisplay,
+    async Task ApplyAsync(TranslationSettings draft, Func<TranslationSettings, TranslationSettings>? persist, Action invalidateDisplay,
         Action<TranslationSettings> apply, TaskCompletionSource done)
     {
         try
@@ -234,7 +241,7 @@ public sealed class FlyleafWordTranslator : IWordTranslator, IAsyncDisposable
         lock (sync)
         {
             if (stopping) throw new OperationCanceledException();
-            store.Save(copy);
+            if (persist != null) copy = persist(copy);
             // Publish snapshot and generation under the admission lock. Lookups accepted while the old
             // provider drains must capture the persisted settings rather than old settings with a new epoch.
             settings = copy;

@@ -214,7 +214,7 @@ public sealed partial class OpenSubtitlesDownloadViewModel : ObservableObject, I
             mine.Dispose(); Busy = false;
         }
     }
-    internal static async Task SaveAsync(string path, byte[] bytes, bool bom, CancellationToken cancellation)
+    internal static async Task SaveAsync(string path, byte[] bytes, bool bom, CancellationToken cancellation, bool overwrite = true)
     {
         string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
@@ -225,7 +225,7 @@ public sealed partial class OpenSubtitlesDownloadViewModel : ObservableObject, I
                 await file.WriteAsync(bytes, cancellation);
             }
             cancellation.ThrowIfCancellationRequested();
-            File.Move(temporary, path, overwrite: true);
+            File.Move(temporary, path, overwrite);
         }
         finally
         {

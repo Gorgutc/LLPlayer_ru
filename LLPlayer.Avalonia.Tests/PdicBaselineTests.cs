@@ -16,7 +16,9 @@ public sealed class PdicBaselineTests
     [Fact]
     public void Pdic_HasAnExplicitPlatformAwareSettingsAndOwnedClientSurface()
     {
-        var assembly = typeof(AppPrefs).Assembly;
+        var assembly = typeof(WordClickedEventArgs).Assembly;
+        var core = typeof(LLPlayer.Core.Services.RecognitionSettings).Assembly;
+        Assert.Same(core, typeof(PdicSettingsStore).Assembly);
         Assert.NotNull(assembly.GetType("LLPlayer.Avalonia.Services.PdicClient"));
         Assert.NotNull(assembly.GetType("LLPlayer.Avalonia.ViewModels.PdicSettingsViewModel"));
         Assert.NotNull(assembly.GetType("LLPlayer.Avalonia.Views.PdicSettingsWindow"));

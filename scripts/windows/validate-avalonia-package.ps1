@@ -35,6 +35,9 @@ $windowsMediaAssemblies = @('Vortice.DXGI.dll','Vortice.MediaFoundation.dll','Vo
     'Vortice.Mathematics.dll','SharpGen.Runtime.dll','SharpGen.Runtime.COM.dll')
 $diarization = @('Assets/Diarization/sidecar.py','Assets/Diarization/requirements.txt',
     'Assets/Diarization/README.md','Assets/Diarization/NOTICE.md')
+$controlApps = @('LLPlayer.ControlHost','mcp/LLPlayer.Mcp')
+$control = @('LLPlayer.Control.dll','mcp/LLPlayer.Control.dll','mcp/ModelContextProtocol.dll','mcp/ModelContextProtocol.Core.dll','licenses/ModelContextProtocol.LICENSE') +
+    @($controlApps | ForEach-Object { "$_.exe", "$_.dll", "$_.deps.json", "$_.runtimeconfig.json" })
 $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
     'FlyleafLib.dll','LLPlayer.Core.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll',
     'licenses/Tesseract.LICENSE','licenses/Leptonica.LICENSE','licenses/SevenZip.LICENSE','licenses/SevenZipSharp.LICENSE',
@@ -42,11 +45,32 @@ $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia
     'Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
     'LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
     'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
-    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native + $windowsMediaAssemblies + $diarization
+    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native + $windowsMediaAssemblies + $diarization + $control
 foreach ($relative in $required) {
     $path = Join-Path $root $relative
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Windows Avalonia package is missing required file $relative." }
     if ((Get-Item -LiteralPath $path -Force).Length -le 0) { throw "Windows Avalonia package requires a non-empty regular file $relative." }
+}
+foreach ($app in $controlApps) {
+    try {
+        $deps = Get-Content -LiteralPath (Join-Path $root "$app.deps.json") -Raw | ConvertFrom-Json
+        $runtime = (Get-Content -LiteralPath (Join-Path $root "$app.runtimeconfig.json") -Raw | ConvertFrom-Json).runtimeOptions
+        $target = $deps.runtimeTarget.name
+        $tfm = $runtime.tfm
+    }
+    catch { throw "Windows Avalonia companion runtime target metadata is invalid: $app." }
+    if ($target -cne '.NETCoreApp,Version=v10.0/win-x64' -or $tfm -cne 'net10.0') {
+        throw "Windows Avalonia companion runtime target must be portable net10.0/win-x64: $app."
+    }
+    $frameworks = if ($runtime.PSObject.Properties['frameworks']) { @($runtime.frameworks) }
+        elseif ($runtime.PSObject.Properties['framework']) { @($runtime.framework) }
+        else { @() }
+    $expected = @('Microsoft.NETCore.App')
+    if ($app -ceq 'LLPlayer.ControlHost') { $expected += 'Microsoft.AspNetCore.App' }
+    $actual = @($frameworks | Where-Object { $_.version -cmatch '^10\.0\.\d+$' } | ForEach-Object { $_.name } | Sort-Object)
+    if (@($frameworks).Count -ne $expected.Count -or ($actual -join ',') -cne (($expected | Sort-Object) -join ',')) {
+        throw "Windows Avalonia companion framework references are incorrect: $app."
+    }
 }
 $pluginPath = Join-Path $root 'Plugins/YoutubeDL/YoutubeDL.dll'
 try { $pluginIdentity = [System.Reflection.AssemblyName]::GetAssemblyName($pluginPath) }
@@ -99,13 +123,14 @@ foreach ($item in $items) {
         throw "Windows Avalonia package contains unexpected diarization payload $relative."
     }
     if ($item.PSIsContainer) {
-        if ($name -match '^(DubEngine|dubmodels|\.venv|venv|__pycache__|whispermodels|Whisper|tesseractmodels|Recordings|Snapshots|x86|x64|cuda|vulkan|openvino|noavx|linux-x64|win-x86|win-arm64|osx-x64|osx-arm64)$') {
+        if ($name -match '^(Automation|Control|DubEngine|dubmodels|\.venv|venv|__pycache__|whispermodels|Whisper|tesseractmodels|Recordings|Snapshots|x86|x64|cuda|vulkan|openvino|noavx|linux-x64|win-x86|win-arm64|osx-x64|osx-arm64)$') {
             throw "Windows Avalonia package contains forbidden runtime directory $relative."
         }
         if ($relative -like 'runtimes/*' -and $relative -ne 'runtimes/win-x64') { throw "Windows Avalonia package contains an unexpected runtime directory $relative." }
         continue
     }
-    if ($name -match '^\.?LLPlayer\.(OnlineVideo|Avalonia|Translation|Recognition|WordList|Playback|Pdic|Batch|Dubbing|Config|Engine|PlayerConfig)\.json($|\.)' -or
+    if ($name -match '^host\.json($|\.)' -or $name -match '^(jobs\.sqlite(?:-(wal|shm|journal))?|control\.lock)$' -or
+        $name -match '^\.?LLPlayer\.(OnlineVideo|Avalonia|Translation|Recognition|WordList|Playback|Pdic|Batch|Dubbing|Config|Engine|PlayerConfig)\.json($|\.)' -or
         $name -match '^\.env|\.log$|\.dmp$|\.dump$|\.ru\.dub\.|\.ru\.voices\.json$|^ggml-.*\.bin$|\.traineddata$|^yt-dlp\.exe$') {
         throw "Windows Avalonia package contains forbidden runtime file $relative."
     }

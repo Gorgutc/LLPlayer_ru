@@ -27,8 +27,8 @@ Native Windows and Linux use the same Avalonia views, view models, themes and Co
 The Windows build/package baseline is implemented; fresh runtime acceptance is recorded separately. WPF remains
 supported until explicit replacement acceptance. Read `docs/agent/architecture.md` and `docs/agent/f13-status-2026-10-18.md`.
 
-If work touches app code, `.\scripts\codex\verify.ps1` remains mandatory for WPF. Shared Core, portable FlyleafLib
-or Avalonia changes also require `scripts/windows/verify-avalonia.ps1` and `scripts/linux/verify.sh`. Windows
+If work touches app code, `.\scripts\codex\verify.ps1` remains mandatory for WPF. Shared Core, portable FlyleafLib,
+Avalonia and its F-20 companion projects also require `scripts/windows/verify-avalonia.ps1` and `scripts/linux/verify.sh`. Windows
 Avalonia packaging uses `scripts/windows/publish-avalonia.ps1`; Linux uses `scripts/linux/publish.sh`.
 Use `llplayer-quality-gate` for scope and acceptance limits; Windows ASR/OCR and GPU are separate acceptance work.
 

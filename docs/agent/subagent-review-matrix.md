@@ -41,6 +41,13 @@ new files; narrower product/runtime rows add domain reviewers and never replace 
   `dotnet_quality_guardian`, `media_runtime_mapper`, `verification_reviewer`, plus `wpf_xaml_reviewer` for `*.axaml`;
   gates `verify`, `scripts/linux/verify.sh`, `scripts/windows/verify-avalonia.ps1`, and relevant manual smoke rows.
   Native Windows runtime evidence remains distinct from Linux/headless results.
+- `LLPlayer.Control/**`, `LLPlayer.ControlHost/**`, `LLPlayer.Mcp/**`: `dotnet_quality_guardian`,
+  `media_runtime_mapper`, `packaging_release_reviewer`, `verification_reviewer`, plus
+  `native_dependency_auditor` for `LLPlayer.ControlHost/**` and `LLPlayer.Control/Client/**`. Run WPF `verify`, Windows Avalonia
+  and Linux gates, and the package protocol smoke against staged and archived packages on both platforms.
+- `scripts/codex/test-control-package.py`, `scripts/codex/f20_pipeline_fixture.py`, `scripts/codex/control-fixture/**`:
+  `dotnet_quality_guardian`, `packaging_release_reviewer`, `verification_reviewer` in addition to the Codex tooling reviewers.
+  Verify the packaged protocol paths on both platforms, including the CPU test recognizer and test translation provider.
 - Avalonia Windows RID/native-runtime/package paths: `dotnet_quality_guardian`, `native_dependency_auditor`,
   `packaging_release_reviewer`, `media_runtime_mapper`, `verification_reviewer`; preserve the WPF full gate.
   Test the portable `net10.0` engine path explicitly; a successful WPF-target build is not Avalonia runtime proof.

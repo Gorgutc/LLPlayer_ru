@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace FlyleafLib;
 
@@ -41,14 +43,43 @@ public static class AtomicFile
         }
         finally
         {
-            // Best-effort cleanup of the temp if the write or move failed (or a stray temp lingers); never let a
-            // cleanup error mask the original exception.
-            if (File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); }
-                catch (IOException) { }
-                catch (UnauthorizedAccessException) { }
-            }
+            DeleteTemporaryFile(tempPath);
         }
+    }
+
+    /// <summary>Stages text beside the destination and checks cancellation before publishing with one rename.</summary>
+    public static async Task WriteAllTextAsync(string path, string contents, Encoding encoding, bool overwrite,
+        CancellationToken token = default)
+    {
+        token.ThrowIfCancellationRequested();
+        string fullPath = Path.GetFullPath(path);
+        string directory = Path.GetDirectoryName(fullPath)!;
+        string temporary = Path.Combine(directory, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        bool ownsTemporary = false;
+        try
+        {
+            await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                bufferSize: 4_096, useAsync: true))
+            {
+                ownsTemporary = true;
+                await using var writer = new StreamWriter(stream, encoding);
+                await writer.WriteAsync(contents.AsMemory(), token).ConfigureAwait(false);
+            }
+            token.ThrowIfCancellationRequested();
+            File.Move(temporary, fullPath, overwrite);
+            ownsTemporary = false;
+        }
+        finally
+        {
+            if (ownsTemporary) DeleteTemporaryFile(temporary);
+        }
+    }
+
+    private static void DeleteTemporaryFile(string path)
+    {
+        // Preserve the original error if cleanup is also blocked.
+        try { File.Delete(path); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
     }
 }

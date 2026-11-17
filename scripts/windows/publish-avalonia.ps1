@@ -87,6 +87,33 @@ Push-Location $repoRoot
 try {
     & dotnet publish 'LLPlayer.Avalonia/LLPlayer.Avalonia.csproj' -c Release -f net10.0 -r win-x64 --self-contained false -warnaserror -o $package | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Avalonia publish failed with exit code $LASTEXITCODE." }
+    $hostStaging = [IO.Path]::GetFullPath((Join-Path $staging 'LLPlayer.ControlHost'))
+    if (-not $hostStaging.StartsWith($staging + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe ControlHost staging target.' }
+    & dotnet publish 'LLPlayer.ControlHost/LLPlayer.ControlHost.csproj' -c Release -f net10.0 -r win-x64 --self-contained false -warnaserror -o $hostStaging | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "ControlHost publish failed with exit code $LASTEXITCODE." }
+    Assert-NormalPath $hostStaging
+    foreach ($item in Get-ChildItem -LiteralPath $hostStaging -Recurse -Force) {
+        Assert-NormalPath $item.FullName
+        if ($item.PSIsContainer) { continue }
+        $relative = $item.FullName.Substring($hostStaging.Length + 1)
+        $destination = Join-Path $package $relative
+        if (Test-Path -LiteralPath $destination) {
+            Assert-NormalPath $destination
+            if (-not (Test-Path -LiteralPath $destination -PathType Leaf) -or
+                (Get-FileHash -LiteralPath $item.FullName).Hash -cne (Get-FileHash -LiteralPath $destination).Hash) {
+                throw "ControlHost publish files disagree with the existing Avalonia payload: $relative."
+            }
+        }
+        else { Copy-RegularFile $item.FullName $destination }
+    }
+    Remove-Item -LiteralPath $hostStaging -Recurse -Force
+    # Keep the MCP SDK's Microsoft.Extensions dependencies local to its own executable.
+    $mcpPackage = Join-Path $package 'mcp'
+    Assert-NormalPath $mcpPackage
+    if (Test-Path -LiteralPath $mcpPackage) { throw 'The MCP package directory already exists.' }
+    & dotnet publish 'LLPlayer.Mcp/LLPlayer.Mcp.csproj' -c Release -f net10.0 -r win-x64 --self-contained false -warnaserror -o $mcpPackage | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "MCP publish failed with exit code $LASTEXITCODE." }
+    Copy-RegularFile (Join-Path $repoRoot 'LLPlayer.Avalonia/Licenses/ModelContextProtocol.LICENSE') (Join-Path $package 'licenses/ModelContextProtocol.LICENSE')
     $pluginStaging = Join-Path $staging 'portable-plugin'
     & dotnet publish 'Plugins/YoutubeDL/YoutubeDL.csproj' -c Release -f net10.0 -r win-x64 --self-contained false -warnaserror -o $pluginStaging | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Portable YoutubeDL publish failed with exit code $LASTEXITCODE." }

@@ -30,25 +30,7 @@ public sealed class SrtSubtitleWriter : IBatchSubtitleWriter
         // formatting) instead of a bespoke per-cue loop. For well-formed cues this is byte-identical on Windows.
         string content = BuildSrtContent(subtitles);
 
-        string tempPath = Path.Combine(
-            directory ?? Directory.GetCurrentDirectory(),
-            $".{Path.GetFileName(outputPath)}.{Guid.NewGuid():N}.tmp");
-
-        try
-        {
-            await using (FileStream stream = new(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            await using (StreamWriter writer = new(stream, _encoding))
-            {
-                await writer.WriteAsync(content.AsMemory(), token).ConfigureAwait(false);
-            }
-
-            File.Move(tempPath, outputPath, overwrite);
-        }
-        finally
-        {
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
-        }
+        await AtomicFile.WriteAllTextAsync(outputPath, content, _encoding, overwrite, token).ConfigureAwait(false);
     }
 
     // Map the batch cues onto the shared exporter. The batch path writes translated text, whose offsets no

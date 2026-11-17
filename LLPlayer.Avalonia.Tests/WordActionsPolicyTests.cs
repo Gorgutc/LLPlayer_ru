@@ -56,14 +56,14 @@ public class WordActionsPolicyTests
     [Fact]
     public void Search_encodes_each_substitution_as_a_value_without_changing_query_structure()
     {
-        Assert.True(WordActions.TryExpandSearch("https://example.test/find?word=%w&lower=%lw&sentence=%s", Selection(), out Uri? uri, out string error), error);
+        Assert.True(WordActionInput.TryExpandSearch("https://example.test/find?word=%w&lower=%lw&sentence=%s", Selection(), out Uri? uri, out string error), error);
         Assert.Equal("https://example.test/find?word=Caf%C3%A9%20%26%2F%E6%B5%B7&lower=caf%C3%A9%20%26%2F%E6%B5%B7&sentence=One%0D%0Atwo%20%26%20three", uri!.AbsoluteUri);
     }
 
     [Fact]
     public void Search_does_not_expand_tokens_inside_inserted_values()
     {
-        Assert.True(WordActions.TryExpandSearch("https://example.test/?w=%w&lw=%lw&s=%s", Selection("%s/%w/%lw", "%w"), out Uri? uri, out string error), error);
+        Assert.True(WordActionInput.TryExpandSearch("https://example.test/?w=%w&lw=%lw&s=%s", Selection("%s/%w/%lw", "%w"), out Uri? uri, out string error), error);
         Assert.Equal("https://example.test/?w=%25s%2F%25w%2F%25lw&lw=%25s%2F%25w%2F%25lw&s=%25w", uri!.AbsoluteUri);
     }
 
@@ -74,7 +74,7 @@ public class WordActionsPolicyTests
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("tr-TR");
-            Assert.True(WordActions.TryExpandSearch("https://example.test/?q=%lw", Selection("I"), out Uri? uri, out string error), error);
+            Assert.True(WordActionInput.TryExpandSearch("https://example.test/?q=%lw", Selection("I"), out Uri? uri, out string error), error);
             Assert.Equal("https://example.test/?q=%C4%B1", uri!.AbsoluteUri);
         }
         finally { CultureInfo.CurrentCulture = before; }
@@ -90,7 +90,7 @@ public class WordActionsPolicyTests
     [InlineData("https://example.test/%zz")]
     public void Unsafe_or_malformed_search_templates_are_refused(string template)
     {
-        Assert.False(WordActions.TryExpandSearch(template, Selection(), out Uri? uri, out string error));
+        Assert.False(WordActionInput.TryExpandSearch(template, Selection(), out Uri? uri, out string error));
         Assert.Null(uri);
         Assert.NotEmpty(error);
     }
@@ -157,7 +157,7 @@ public class WordActionsPolicyTests
     [InlineData(WordSearchModifier.Shift, KeyModifiers.Shift, true)]
     [InlineData((WordSearchModifier)999, KeyModifiers.None, false)]
     public void Last_search_requires_exact_modifier_equality(WordSearchModifier expected, KeyModifiers actual, bool matches)
-        => Assert.Equal(matches, WordActions.MatchesModifier(expected, actual));
+        => Assert.Equal(matches, WordActionInput.MatchesModifier(expected, actual));
 
     [Fact]
     public void Menu_invocation_captures_the_row_and_selection_independently()

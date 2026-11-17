@@ -201,6 +201,26 @@ try {
             $gates.Add("linux verify")
             $gates.Add("windows avalonia verify")
         }
+        $isControlCompanion = $normalized -match '^(LLPlayer\.Control(Host)?|LLPlayer\.Mcp)/'
+        $isControlFixture = $normalized -match '^scripts/codex/(test-control-package\.py$|f20_pipeline_fixture\.py$|control-fixture/)'
+        if ($isControlCompanion -or $isControlFixture) {
+            $contracts.Add("dependency-baseline.md")
+            $agents.Add("dotnet_quality_guardian")
+            $agents.Add("packaging_release_reviewer")
+            $agents.Add("verification_reviewer")
+            $gates.Add("verify")
+            $gates.Add("linux verify")
+            $gates.Add("windows avalonia verify")
+            $gates.Add("control package protocol smoke")
+        }
+        if ($isControlCompanion) {
+            $contracts.Add("config-data-contract.md")
+            $contracts.Add("media-runtime-contract.md")
+            $agents.Add("media_runtime_mapper")
+        }
+        if ($normalized -match '^LLPlayer\.(ControlHost/|Control/Client/)') {
+            $agents.Add("native_dependency_auditor")
+        }
         if ($normalized -match '^(scripts/windows/|\.github/workflows/build\.yml$)') {
             $contracts.Add("dependency-baseline.md")
             $contracts.Add("media-runtime-contract.md")

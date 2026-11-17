@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Avalonia.Services;
 
@@ -93,23 +94,8 @@ public sealed partial class SubtitlesExportViewModel : ObservableObject, IAsyncD
             Busy = false;
         }
     }
-    static async Task SaveAsync(string path, string content, bool bom, CancellationToken token)
-    {
-        // Stage beside the explicitly chosen output; a failed/cancelled write preserves an existing destination.
-        string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            await File.WriteAllTextAsync(temporary, content, new UTF8Encoding(bom), token);
-            token.ThrowIfCancellationRequested();
-            File.Move(temporary, path, overwrite: true);
-        }
-        finally
-        {
-            try { if (File.Exists(temporary)) File.Delete(temporary); }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-    }
+    static Task SaveAsync(string path, string content, bool bom, CancellationToken token) =>
+        AtomicFile.WriteAllTextAsync(path, content, new UTF8Encoding(bom), overwrite: true, token);
     async Task KnownErrorAsync(string error)
     {
         if (stopping) return;

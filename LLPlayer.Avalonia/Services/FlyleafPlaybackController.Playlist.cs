@@ -60,13 +60,28 @@ public sealed partial class FlyleafPlaybackController
             && token.DirectUrl == token.Target.DirectUrl
             && bridge.Snapshot(player.Playlist.Items).Any(item => ReferenceEquals(item, token.Target));
 
-    public async Task SelectPlaylistItemAsync(PlaybackPlaylistItem item)
+    public Task SelectPlaylistItemAsync(PlaybackPlaylistItem item)
+        => SelectPlaylistItemAsync(item, false, CancellationToken.None);
+
+    internal Task SelectControlPlaylistItemAsync(PlaybackPlaylistItem item, CancellationToken cancellationToken)
+        => SelectPlaylistItemAsync(item, true, cancellationToken);
+
+    async Task SelectPlaylistItemAsync(PlaybackPlaylistItem item, bool reportOutcome, CancellationToken cancellationToken)
     {
-        if (item.Token is not PlaylistChoiceToken token || !ReferenceEquals(token.Owner, this)) return;
+        cancellationToken.ThrowIfCancellationRequested();
+        if (item.Token is not PlaylistChoiceToken token || !ReferenceEquals(token.Owner, this))
+        {
+            if (reportOutcome) throw StaleControlMedia();
+            return;
+        }
         int epoch;
         lock (mediaOpenInterruption)
         {
-            if (cancelableAppEpoch != 0 || !IsCurrentPlaylistChoice(token, token.Epoch)) return;
+            if (cancelableAppEpoch != 0 || !IsCurrentPlaylistChoice(token, token.Epoch))
+            {
+                if (reportOutcome) throw StaleControlMedia();
+                return;
+            }
             cancelableAppEpoch = epoch = Interlocked.Increment(ref mediaOpenEpoch);
         }
         Raise(nameof(CanCancelOpen));
@@ -75,6 +90,7 @@ public sealed partial class FlyleafPlaybackController
         Post(() => { if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) ExternalMediaOpening?.Invoke(); });
         try
         {
+            using CancellationTokenRegistration cancelOpen = cancellationToken.Register(() => CancelOpen(epoch));
             await MutateWithTranslationAsync(cancellation =>
             {
                 string? error = null;
@@ -112,7 +128,11 @@ public sealed partial class FlyleafPlaybackController
                         }, cancellation);
                 }
                 finally { interruption.Dispose(); }
-                if (!changed) return;
+                if (!changed)
+                {
+                    if (reportOutcome) throw StaleControlMedia();
+                    return;
+                }
                 Post(() =>
                 {
                     if (disposed || epoch != Volatile.Read(ref mediaOpenEpoch)) return;
@@ -121,10 +141,13 @@ public sealed partial class FlyleafPlaybackController
                     OpenCompleted?.Invoke(player.Playlist.Url, false, error);
                     if (error != null) ErrorOccurred?.Invoke(error);
                 });
+                if (reportOutcome && error != null) throw new InvalidOperationException(error);
             }, mediaChange: true).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reportOutcome && epoch != Volatile.Read(ref mediaOpenEpoch)) throw StaleControlMedia();
         }
-        catch (OperationCanceledException) { }
-        catch (Exception error)
+        catch (OperationCanceledException) when (!reportOutcome) { }
+        catch (Exception error) when (!reportOutcome)
         {
             Post(() => { if (!disposed && epoch == Volatile.Read(ref mediaOpenEpoch)) ErrorOccurred?.Invoke(error.Message); });
         }

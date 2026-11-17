@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LLPlayer.Avalonia.Services.Automation;
 using LLPlayer.Core.Services.Models;
 using System.Net;
 
@@ -27,7 +28,8 @@ public partial class ModelManagerViewModel : ObservableObject, IAsyncDisposable
     public bool HasSource => SelectedKind == ModelKind.FasterWhisperEngine;
     public string ArtifactName => HasSource ? "Faster-Whisper-XXL_r245.4_windows.7z" : "";
     public Uri? SourceUri => HasSource ? new Uri("https://github.com/Purfview/whisper-standalone-win/releases/tag/Faster-Whisper-XXL") : null;
-    public string ProgressText => TotalBytes > 0 ? $"{DownloadedBytes:N0} / {TotalBytes:N0} bytes" : $"{DownloadedBytes:N0} bytes received (total unknown)";
+    public string ProgressText => TotalBytes > 0 ? $"{DownloadedBytes:N0} / {TotalBytes:N0} bytes"
+        : DownloadedBytes > 0 ? $"{DownloadedBytes:N0} bytes received (total unknown)" : "";
     public bool CanDownload => !disposed && !Busy && SelectedModel is { Available: true, Downloaded: false, Present: false };
     public bool CanDelete => !disposed && !Busy && SelectedModel is { Available: true } row && (row.Present || row.Downloaded);
 
@@ -169,6 +171,7 @@ public partial class ModelManagerViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Window/app shutdown must await this before releasing its service.</summary>
     public async Task CancelAndDrainAsync()
     {
+        if (service is ControlModelManagementService remote) remote.Detach();
         operation?.Cancel();
         if (DownloadCommand.ExecutionTask is { } download) await download;
         if (DeleteCommand.ExecutionTask is { } delete) await delete;

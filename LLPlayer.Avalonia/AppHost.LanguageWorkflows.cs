@@ -6,6 +6,7 @@ using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.AI;
 using FlyleafLib.MediaPlayer.Dubbing;
 using LLPlayer.Avalonia.Services;
+using LLPlayer.Avalonia.Services.Automation;
 using LLPlayer.Avalonia.ViewModels;
 using LLPlayer.Avalonia.Views;
 using LLPlayer.Core.Batch;
@@ -17,7 +18,7 @@ namespace LLPlayer.Avalonia;
 public sealed partial class AppHost
 {
     HttpClient? modelDownloads;
-    BatchWorkflow? languageBatch;
+    IBatchWorkspace? languageBatch;
     BatchSubtitlesViewModel? languageBatchModel;
     BatchTrayService? languageTray;
     DubbingSettings? dubbingSettings;
@@ -70,19 +71,31 @@ public sealed partial class AppHost
             InvokeUi(() => snapshot = controller.CaptureLanguageWorkflowConfig());
             return snapshot!;
         }
-        var factory = new BatchRunFactory(ConfigSnapshot, activity.IsUserActive,
-            snapshot => DubbingWorkflow.CreateRenderer(snapshot.Subtitles.DubbingConfig, confirmProcessExit: true),
-            () =>
-            {
-                IDubbingVoiceAssignmentProvider? assignments = null;
-                InvokeUi(() => assignments = controller.CaptureBatchVoiceAssignments());
-                return assignments;
-            },
-            controller.LanguageResources.AcquireUse,
-            getUtf8Bom: () => controller.GetPlaybackSettings().SubtitleExportUtf8Bom,
-            gpuCoordinator: gpuCoordinator);
-        languageBatch = new BatchWorkflow(batchSettings, factory, new BatchFolderWatcher(), InvokeUi,
-            new FlyleafBatchMediaCatalog(ConfigSnapshot), gpuCoordinator: gpuCoordinator);
+        bool useControlBatch = HasControlHost() && options.ScreenshotPath == null;
+        if (useControlBatch) languageBatch = new ControlBatchWorkspace(paths, batchStore, batchSettings,
+            controller.CaptureControlBatchVoiceAssignments);
+        else
+        {
+            var factory = new BatchRunFactory(ConfigSnapshot, activity.IsUserActive,
+                snapshot => DubbingWorkflow.CreateRenderer(snapshot.Subtitles.DubbingConfig, confirmProcessExit: true),
+                () =>
+                {
+                    IDubbingVoiceAssignmentProvider? assignments = null;
+                    InvokeUi(() => assignments = controller.CaptureBatchVoiceAssignments());
+                    return assignments;
+                },
+                controller.LanguageResources.AcquireUse,
+                getUtf8Bom: () => controller.GetPlaybackSettings().SubtitleExportUtf8Bom,
+                gpuCoordinator: gpuCoordinator);
+            languageBatch = new BatchWorkflow(batchSettings, factory, new BatchFolderWatcher(), InvokeUi,
+                new FlyleafBatchMediaCatalog(ConfigSnapshot), gpuCoordinator: gpuCoordinator);
+        }
+        reloadControlSettings["batch"] = () =>
+        {
+            if (languageBatch is ControlBatchWorkspace attached) attached.ReloadSavedSettings();
+            else if (languageBatch is BatchWorkflow local) local.ApplySettings(batchStore.Load());
+            return Task.CompletedTask;
+        };
         languageBatchModel = new BatchSubtitlesViewModel(languageBatch, batchStore, window.PickFolderAsync,
             path => { RestoreMain(); viewModel.Open(path); return Task.CompletedTask; }, window.RevealMediaAsync,
             () => viewModel.ShowDubbingSettingsCommand.Execute(null), Voices,
@@ -92,7 +105,7 @@ public sealed partial class AppHost
                 DubbingSettings edited = current.Clone();
                 edited.Engine.DefaultVoiceId = voice;
                 return edited;
-            }));
+            }), useControlBatch ? SaveControlBatchSettingsAsync : null);
         viewModel.BatchDialog = () => languageBatchModel;
         void RestoreMain()
         {
@@ -107,7 +120,7 @@ public sealed partial class AppHost
                 window.RequestApplicationExit();
                 return Task.CompletedTask;
             });
-        window.KeepAliveOnClose = () => !languageShuttingDown && languageBatch.KeepAlive;
+        window.KeepAliveOnClose = () => !useControlBatch && !languageShuttingDown && languageBatch.KeepAlive;
         window.DrainGpuWorkBeforeShutdown = DrainGpuWorkBeforeShutdownAsync;
         window.GpuShutdownFailed = ResumeAfterFailedGpuShutdown;
         window.ShutdownStarting = () =>
@@ -124,7 +137,7 @@ public sealed partial class AppHost
         };
         languageBatch.Changed += () =>
         {
-            languageBatchModel.ActivityStatus = activity.Status;
+            languageBatchModel.ActivityStatus = languageBatch is ControlBatchWorkspace attached ? attached.ActivityStatus : activity.Status;
             if (!languageShuttingDown && !languageBatch.KeepAlive
                 && (!window.IsVisible || window.WindowState == WindowState.Minimized)) RestoreMain();
         };
@@ -142,6 +155,8 @@ public sealed partial class AppHost
     Task SaveDubbingSettingsAsync(Func<DubbingSettings, DubbingSettings> edit)
     {
         if (controller == null || player == null || dubbingStore == null) return Task.CompletedTask;
+        if (CanCommitControlSettings)
+            return SaveControlDubbingSettingsAsync(edit);
         return SaveDubbingSettingsAsync(controller.Recognition, dubbingStore, () => dubbingSettings!, edit, detached =>
         {
             controller.ApplyDubbingSettings(detached);
@@ -163,8 +178,9 @@ public sealed partial class AppHost
     RecognitionViewModel CreateRecognitionDialog(MainWindow window, RecognitionSettingsStore store)
     {
         RecognitionViewModel? model = null;
-        model = new RecognitionViewModel(controller!.RecognitionSettings, controller.Recognition, store,
-            controller.RecognitionWarning, settings => controller.SaveRecognitionSettingsAsync(settings, store),
+        RecognitionSettings baseline = controller!.RecognitionSettings;
+        model = new RecognitionViewModel(baseline, controller.Recognition, store,
+            controller.RecognitionWarning, settings => SaveControlRecognitionSettingsAsync(baseline, settings, store),
             fallbackLanguagesEditable: false, copyText: window.SetClipboardText,
             microsoftLanguages: AvailableMicrosoftLanguages, tesseractDirectory: paths.TesseractModelsDirectory,
             manageResource: async kind =>
@@ -175,9 +191,10 @@ public sealed partial class AppHost
 #if LLPLAYER_WINDOWS_OCR
                 extractor = new WindowsEngineArchiveExtractor();
 #endif
-                var manager = new ModelManagementService(modelDownloads!,
+                IModelManagementService manager = new ModelManagementService(modelDownloads!,
                     new ModelStoragePaths(whisperDirectory, paths.TesseractModelsDirectory, paths.WhisperEngineDirectory),
                     controller.IsModelInUse, controller.MutateModelFilesAsync, extractor);
+                if (HasControlHost()) manager = new ControlModelManagementService(manager, paths, whisperDirectory);
                 var managerModel = new ModelManagerViewModel(manager, kind, directory => _ = RevealDirectoryAsync(directory), () =>
                 {
                     if (Directory.Exists(whisperDirectory) && Directory.EnumerateFiles(whisperDirectory, "ggml-*.bin").Any())

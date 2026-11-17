@@ -41,7 +41,7 @@ public sealed partial class MainWindowViewModel
             return;
         }
         if (action.Kind != WordMenuActionKind.Search
-            || !WordActions.TryExpandSearch(action.Url, selection, out Uri? uri, out _)
+            || !WordActionInput.TryExpandSearch(action.Url, selection, out Uri? uri, out _)
             || uri == null) return;
         if (WordActions.IsWordSearch(action)) lastWordSearch = action.Clone();
         bool opened;
@@ -81,7 +81,7 @@ public sealed partial class MainWindowViewModel
         popupSelection = selection;
         if (prefs.WordCopyOnSelected && !string.IsNullOrWhiteSpace(selection.Word)) shell.SetClipboardText(selection.Word);
         RefreshLastWordSearch();
-        if (prefs.WordLastSearchOnSelected && WordActions.MatchesModifier(prefs.WordLastSearchModifier, selection.Modifiers)
+        if (prefs.WordLastSearchOnSelected && WordActionInput.MatchesModifier(prefs.WordLastSearchModifier, selection.Modifiers)
             && lastWordSearch is { } search)
             TrackBrowserOperation(InvokeWordMenuAsync(new WordMenuInvocation(search, selection)));
         _ = WordPopup.OpenAsync(selection.Word, selection.Text, selection.Slot, x, y,

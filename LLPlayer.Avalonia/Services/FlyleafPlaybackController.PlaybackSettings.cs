@@ -83,6 +83,14 @@ public sealed partial class FlyleafPlaybackController : IPlaybackSettingsControl
 
     public Task SavePlaybackSettingsAndRememberAsync(PlaybackSettings edited, PlaybackSettings baseline,
         PlaybackRuntimeSettings runtime, bool defaultVolumeEdited, Action<int, bool>? rememberVolume)
+        => ApplyPlaybackSettingsAsync(edited, baseline, runtime, defaultVolumeEdited, rememberVolume, readPersisted: null);
+
+    internal Task ApplyPersistedPlaybackSettingsAsync(PlaybackSettings edited, PlaybackSettings baseline,
+        PlaybackRuntimeSettings runtime, bool defaultVolumeEdited, Func<CancellationToken, PlaybackSettings> readPersisted)
+        => ApplyPlaybackSettingsAsync(edited, baseline, runtime, defaultVolumeEdited, rememberVolume: null, readPersisted);
+
+    Task ApplyPlaybackSettingsAsync(PlaybackSettings edited, PlaybackSettings baseline, PlaybackRuntimeSettings runtime,
+        bool defaultVolumeEdited, Action<int, bool>? rememberVolume, Func<CancellationToken, PlaybackSettings>? readPersisted)
     {
         PlaybackSettings draft = edited.Clone(), original = baseline.Clone();
         return MutateWithTranslationAsync(token =>
@@ -90,6 +98,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackSettingsControl
             CheckPlaybackSettingsAdmission(token);
             ValidatePlaybackRuntime(runtime);
             PlaybackSettings merged = draft.MergeEdits(original, GetPlaybackSettings());
+            if (readPersisted != null) merged = readPersisted(token);
             PlaybackRuntimeSettings? previous = runtime.Baseline;
             bool sameSession = (previous ?? runtime).SessionIdentity is PlaybackSettingsSession session
                 && session.Epoch == Volatile.Read(ref mediaOpenEpoch) && session.Generation == player.MediaGeneration;
@@ -99,7 +108,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackSettingsControl
             bool desiredMute = defaultVolumeEdited ? desiredVolume == 0 : player.Audio.Mute;
             Action? persistVolume = rememberVolume != null && (defaultVolumeEdited || desiredVolume != currentVolume)
                 ? () => rememberVolume(desiredVolume, desiredMute) : null;
-            PersistPlaybackSettings(merged, persistVolume);
+            if (readPersisted == null) PersistPlaybackSettings(merged, persistVolume);
             PublishLanguageConfiguration(() => merged.ApplyTo(player.Config, includeAudio: false));
             PublishVideoBackendPreferences(merged);
             if (previous != null && (runtime.AudioDevice ?? "") != (previous.AudioDevice ?? ""))

@@ -769,6 +769,22 @@ public class Subtitle : NotifyPropertyChanged
     /// <summary>Exact attempt completion, including teardown of its audio reader and managed processes.</summary>
     public Task ASRCompletion { get; private set; } = Task.CompletedTask;
 
+#if !WINDOWS
+    /// <summary>Publishes completed recognition from the shared control host without starting a local ASR engine.</summary>
+    public void LoadControlRecognitionResult(IReadOnlyList<SubtitleData> cues, Language language)
+    {
+        if (Enabled) Disable();
+        else Reset();
+        SubManager manager = _player.SubtitlesManager[_subIndex];
+        _enabledASR = true;
+        manager.Load(cues);
+        manager.LanguageSource = language;
+        _player.SubtitlesManager.SetCurrentTime(TimeSpan.FromTicks(_player.CurTime));
+        RestorePersistedVoiceAssignments();
+        UpdateUI();
+    }
+#endif
+
     public void EnableASR(Config runConfig = null, bool attachOnly = false, bool confirmProcessExit = false,
         CancellationToken startCancellation = default)
     {

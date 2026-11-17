@@ -13,7 +13,7 @@ public sealed class TranslationSettings
     public FlyleafLib.MediaPlayer.AI.WordDefinitionServiceType DictionaryMode { get; set; } = FlyleafLib.MediaPlayer.AI.WordDefinitionServiceType.Off;
     public string SentenceProvider { get; set; } = "Off";
     public string WordProvider { get; set; } = nameof(TranslateServiceType.GoogleV1);
-    public TargetLanguage TargetLanguage { get; set; } = new Config(true).Subtitles.TranslateTargetLanguage;
+    public TargetLanguage TargetLanguage { get; set; } = new Config.SubtitlesConfig().TranslateTargetLanguage;
     public Dictionary<TranslateServiceType, ITranslateSettings> Providers { get; set; } = [];
     public TranslateChatConfig Chat { get; set; } = new();
     // WPF parity: translate-ahead window around the playhead and parallel subtitle requests.

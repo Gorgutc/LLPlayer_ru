@@ -2,10 +2,16 @@
   <Folder Name="/Plugins/">
     <Project Path="Plugins/YoutubeDL/YoutubeDL.csproj" />
   </Folder>
+  <Folder Name="/TestFixtures/">
+    <Project Path="scripts/codex/control-fixture/LLPlayer.FasterWhisperFixture.csproj" />
+  </Folder>
   <Project Path="FlyleafLib/FlyleafLib.csproj" />
   <Project Path="FlyleafLibTests/FlyleafLibTests.csproj" />
   <Project Path="LLPlayer/LLPlayer.csproj" />
   <Project Path="LLPlayer.Core/LLPlayer.Core.csproj" />
+  <Project Path="LLPlayer.Control/LLPlayer.Control.csproj" />
+  <Project Path="LLPlayer.ControlHost/LLPlayer.ControlHost.csproj" />
+  <Project Path="LLPlayer.Mcp/LLPlayer.Mcp.csproj" />
   <Project Path="LLPlayer.Avalonia/LLPlayer.Avalonia.csproj" />
   <Project Path="LLPlayer.Avalonia.Tests/LLPlayer.Avalonia.Tests.csproj" />
   <Project Path="WpfColorFontDialog/WpfColorFontDialog.csproj" />

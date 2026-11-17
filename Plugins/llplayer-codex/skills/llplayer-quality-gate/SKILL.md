@@ -11,13 +11,17 @@ Choose the smallest gate that proves the claim.
 
 - Codex docs/skills/hooks only: `.\scripts\codex\verify-fast.ps1`.
 - C#/XAML/AXAML/project files: `.\scripts\codex\verify.ps1` remains mandatory for the shipped Windows WPF product.
-- Shared Core, portable FlyleafLib or Avalonia changes: also run `scripts/windows/verify-avalonia.ps1` and the full
+- Shared Core, portable FlyleafLib, Avalonia, or the F-20 projects (`LLPlayer.Control`, `LLPlayer.ControlHost`,
+  `LLPlayer.Mcp`): also run `scripts/windows/verify-avalonia.ps1` and the full
   `scripts/linux/verify.sh` gate. Linux `--fast` mode skips the WPF/plugin compile check and does not replace the
   required Windows WPF gate. OS-specific runtime changes require the matching platform gate.
 - Windows release/package behavior: `.\scripts\codex\ship.ps1`; `.github/actions/build-package/action.yml` remains the Windows packaging source of truth.
 - Linux package behavior: `scripts/linux/publish.sh` for package-content validation alongside the Linux verification gate.
 - Windows Avalonia package behavior: `scripts/windows/test-package-avalonia.ps1` and
   `scripts/windows/publish-avalonia.ps1` for positive/negative content rules, ZIP integrity and checksum.
+- F-20 companion and protocol fixture changes: run `scripts/codex/test-control-package.py` against the staged
+  and extracted Windows and Linux packages. Report this test-engine evidence separately from real models,
+  GPU and native desktop results.
 
 Keep local runtime-asset checks offline unless explicitly shipping; report missing prerequisites. Always read command output and report failures directly. If sandbox blocks MSBuild access to Windows SDK paths, rerun with approved escalation.
 

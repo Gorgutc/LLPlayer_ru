@@ -1212,7 +1212,7 @@ Avalonia (`scripts/windows/verify-avalonia.ps1`) и Linux (`scripts/linux/verif
 voice-cloning). **Решение:** фазы 1-6 из [[2026-06-23-handoff-dubbing-mvp]] (мульти-голос, качество,
 diarization-aware). **Рассуждение:** крупно; держать как продолжение существующей фичи.
 
-### F-20 — Управление всеми функциями плеера через MCP / локальный API · ⓍⓁ · PLANNED
+### F-20 — Управление всеми функциями плеера через MCP / локальный API · ⓍⓁ · IMPLEMENTED
 
 **Последняя новая карточка, добавлена владельцем 2026-11-17.** Агент с любой облачной или локальной моделью
 в DSH, Codex или другом MCP/API-харнессе получает полный доступ к существующим функциям и настройкам
@@ -1234,6 +1234,7 @@ durable jobs, GUI/headless lifecycle, полный каталог, регрес�
 - [План реализации](plans/2026-11-17-f20-agent-control-plan.md).
 - [Матрица покрытия функций и настроек](plans/2026-11-17-f20-agent-control-capabilities.md).
 - [Промпт следующей сессии](plans/2026-11-17-f20-agent-control-next-session-prompt.md).
+- [Подключение Avalonia ControlHost и MCP](../control-api.md).
 
 ---
 
