@@ -34,6 +34,10 @@ function New-Fixture([string]$Name) {
         $path = Join-Path $root ('builds/'+$id); $payload = Join-Path $path 'payload'
         Write-Text (Join-Path $payload 'LLPlayer.Avalonia.exe') ('fixture-'+$id)
         Write-Text (Join-Path $payload 'LLPlayer.Avalonia.dll') ('fixture-assembly-'+$id)
+        foreach ($companion in @('LLPlayer.ControlHost','mcp/LLPlayer.Mcp')) {
+            Write-Text (Join-Path $payload ($companion+'.exe')) ('fixture-apphost-'+$id)
+            Write-Text (Join-Path $payload ($companion+'.dll')) ('fixture-companion-'+$id)
+        }
         Write-Text (Join-Path $payload 'lib/library.dll') ('library-'+$id)
         Write-Text (Join-Path $payload 'Plugins/YoutubeDL/YoutubeDL.dll') ('plugin-'+$id)
         Write-Text (Join-Path $payload 'Plugins/YoutubeDL/YoutubeDL.pdb') ('plugin-symbols-'+$id)
@@ -142,6 +146,9 @@ try {
     $f = New-Fixture 'hosted-process'
     $result = Invoke-Retention $f @{Apply=$true;ProcessDescriptorsForTests=@([pscustomobject]@{ProcessName='dotnet';Path='C:\fixture-host\dotnet.exe';CommandLine=('dotnet "'+(Join-Path $f.builds.a 'payload/LLPlayer.Avalonia.dll')+'"')})}
     Check ((Kept $f 'a') -and -not (Kept $f 'b')) 'A dotnet-hosted old assembly must be protected while an unrelated old build prunes.'
+    $f = New-Fixture 'unrelated-hosted-arguments'
+    $result = Invoke-Retention $f @{Apply=$true;ProcessDescriptorsForTests=@([pscustomobject]@{ProcessName='dotnet';Path='C:\fixture-host\dotnet.exe';CommandLine='dotnet exec other.dll "filter|value"'})}
+    Check (-not (Kept $f 'a') -and -not (Kept $f 'b')) 'Unrelated dotnet arguments must not be parsed as LLPlayer paths or prevent pruning.'
     $f = New-Fixture 'unknown-hosted-process'
     $result = Invoke-Retention $f @{Apply=$true;ProcessDescriptorsForTests=@([pscustomobject]@{ProcessName='dotnet';Path='C:\fixture-host\dotnet.exe';CommandLine=$null})}
     Check ((Kept $f 'a') -and (Kept $f 'b') -and $result.deletedBuilds.Count -eq 0) 'An unreadable dotnet command line must preserve candidates.'
@@ -212,7 +219,8 @@ try {
     }
 
     # A future fresh-publish workspace has its own ownership+complete tree manifest; arbitrary packages never do.
-    $jobCases=if($ReviewRegression -eq 'record-unknown'){@('record-unknown','adopt-fallback','reject-unselected')}else{@('clean','modified','dependency','record-unknown','adopt-fallback','reject-unselected')}
+    $companionCases = @('ControlHost-exe','ControlHost-dll','Mcp-exe','Mcp-dll')
+    $jobCases=if($ReviewRegression -eq 'record-unknown'){@('record-unknown','adopt-fallback','reject-unselected')}else{@('clean','modified','dependency','record-unknown','adopt-fallback','reject-unselected') + $companionCases}
     foreach ($jobCase in $jobCases) {
     $f = New-Fixture ('publish-job-'+$jobCase)
     Select-Build $f 'a'
@@ -265,6 +273,22 @@ try {
         $rPath=Join-Path $f.builds.d 'receipt.json'; $r=Read-Json $rPath; $r.packageSource=$package; $r.sourceArchive=$archive; $r.sourceArchiveSha256=Hash $archive; Write-Json $rPath $r
     }
     Select-Build $f 'c'
+    if ($jobCase -in $companionCases) {
+        $assembly,$kind = $jobCase.Split('-')
+        $companion = 'LLPlayer.' + $assembly
+        $relative = if ($assembly -eq 'Mcp') { 'mcp/' + $companion } else { $companion }
+        $runningFile = Join-Path $f.builds.a ('payload/' + $relative + '.' + $kind)
+        $process = if ($kind -eq 'exe') { [pscustomobject]@{ ProcessName=$companion; Path=$runningFile } }
+            else { [pscustomobject]@{ ProcessName='dotnet'; Path='C:\fixture-host\dotnet.exe'; CommandLine=('dotnet "' + $runningFile + '"') } }
+        $result = Invoke-Retention $f @{Apply=$true;PreviousBuildId='d';ProcessDescriptorsForTests=@($process)}
+        Check ((Kept $f 'a') -and (Test-Path -LiteralPath $archive) -and (Test-Path -LiteralPath $package)) "A live $jobCase must protect its older payload, archive and package source."
+        Select-Build $f 'd'
+        $result = Invoke-Retention $f @{Apply=$true;PreviousBuildId='c';ProcessDescriptorsForTests=@($process)}
+        Check ((Kept $f 'a') -and (Kept $f 'c') -and (Kept $f 'd') -and (Test-Path -LiteralPath $archive) -and (Test-Path -LiteralPath $package)) "A live $jobCase must protect its dependencies through a third selection."
+        $result = Invoke-Retention $f @{Apply=$true;PreviousBuildId='c'}
+        Check (-not (Kept $f 'a') -and -not (Test-Path -LiteralPath $job) -and $result.deletedJobs.Count -eq 1) "The former $jobCase payload and unreferenced publish workspace must prune once it exits."
+        continue
+    }
     $result=Invoke-Retention $f @{Apply=$true}
     Check (-not (Kept $f 'a')) 'Old verified build did not prune.'
     if ($jobCase -in @('clean','adopt-fallback')) {

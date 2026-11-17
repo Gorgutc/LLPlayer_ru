@@ -177,6 +177,44 @@ function Resolve-GlobalRuntime([version]$Minimum) {
     }
     throw "A globally installed x64 .NET 10 runtime compatible with $Minimum is required for direct launch. No runtime is installed or copied automatically."
 }
+function Resolve-CompanionRuntime([string]$Package, $Runtime) {
+    $controlHost = (Read-Json (Join-Path $Package 'LLPlayer.ControlHost.runtimeconfig.json')).runtimeOptions
+    $bridge = (Read-Json (Join-Path $Package 'mcp/LLPlayer.Mcp.runtimeconfig.json')).runtimeOptions
+    foreach ($options in @($controlHost,$bridge)) {
+        if ($options.PSObject.Properties['rollForward'] -or $options.PSObject.Properties['applyPatches']) {
+            throw 'Custom companion runtime roll-forward settings need a separate direct-launch compatibility decision.'
+        }
+        $frameworks = if ($options.PSObject.Properties['frameworks']) { @($options.frameworks) } else { @($options.framework) }
+        foreach ($framework in $frameworks) {
+            if ($framework.name -eq 'Microsoft.NETCore.App' -and [version]$Runtime.version -lt [version]$framework.version) {
+                throw "The companion requires Microsoft.NETCore.App $($framework.version) in the registered x64 .NET installation."
+            }
+        }
+    }
+    $minimum = [version](($controlHost.frameworks | Where-Object { $_.name -eq 'Microsoft.AspNetCore.App' }).version)
+    $shared = Join-Path $Runtime.root 'shared/Microsoft.AspNetCore.App'
+    $installed = if (Test-Path -LiteralPath $shared -PathType Container) {
+        Get-ChildItem -LiteralPath $shared -Directory | Where-Object { $_.Name -match '^10\.0\.\d+$' -and [version]$_.Name -ge $minimum } |
+            Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+    }
+    if (-not $installed) { throw "Install the x64 ASP.NET Core Runtime $minimum or later 10.0 patch in the registered .NET installation: $($Runtime.root)." }
+    $frameworkPath = Assert-PhysicalPath $installed.FullName
+    foreach ($relative in @('Microsoft.AspNetCore.dll','Microsoft.AspNetCore.App.deps.json','Microsoft.AspNetCore.App.runtimeconfig.json')) {
+        $file = Join-Path $frameworkPath $relative
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf) -or (Get-Item -LiteralPath $file).Length -eq 0) {
+            throw "The registered x64 ASP.NET Core Runtime $($installed.Name) is incomplete: $relative."
+        }
+        $null = Assert-PhysicalPath $file
+    }
+    $coreDependency = (Read-Json (Join-Path $frameworkPath 'Microsoft.AspNetCore.App.runtimeconfig.json')).runtimeOptions.framework
+    $coreVersion = [version]$Runtime.version
+    $requiredCore = [version]$coreDependency.version
+    if ($coreDependency.name -ne 'Microsoft.NETCore.App' -or $coreVersion.Major -ne $requiredCore.Major -or
+        $coreVersion.Minor -ne $requiredCore.Minor -or $coreVersion -lt $requiredCore) {
+        throw "The registered ASP.NET Core Runtime $($installed.Name) requires Microsoft.NETCore.App $($coreDependency.version)."
+    }
+    return $installed.Name
+}
 if (-not ('LLPlayerDesktopTest.NativeShortcutV2' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -474,6 +512,8 @@ try {
         if ($depsTarget -and $depsTarget -notmatch 'Version=v10\.0') { throw 'The package deps.json runtime target does not match the .NET 10 runtimeconfig.' }
     }
     $runtime = Resolve-GlobalRuntime ([version]$config.runtimeOptions.framework.version)
+    $aspNetRuntimeVersion = $null
+    if (-not $PackageDir) { $aspNetRuntimeVersion = Resolve-CompanionRuntime $package $runtime }
     $installRootExisted = Test-Path -LiteralPath $InstallRoot
     $build = $null; $buildId = $null; $ownerBytes = $null; $pointerBytes = $null; $newLinkHash = $null; $receiptPath = $null
     try {
@@ -547,7 +587,7 @@ try {
             sourceArchive=$sourceArchive; sourceArchiveSha256=$archiveHash
             payloadPath=$payload; executablePath=$exe; executableSha256=$exeHash
             workingDirectory=$payload; targetArguments=''
-            globalRuntimeRoot=$runtime.root; globalRuntimeVersion=$runtime.version
+            globalRuntimeRoot=$runtime.root; globalRuntimeVersion=$runtime.version; globalAspNetRuntimeVersion=$aspNetRuntimeVersion
             iconPath=$blue; iconSha256=$iconHash; shortcutPath=$shortcut; shortcutSha256=$newLinkHash
             shortcutDescription=$description; shortcutWindowStyle=1
             legacyMigration=$legacyMigration

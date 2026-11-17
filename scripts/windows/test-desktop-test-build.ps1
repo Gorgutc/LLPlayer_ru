@@ -176,17 +176,25 @@ function New-Package([string]$Name, [switch]$OmitCore) {
         'IpaDic/sys.dic', 'IpaDic/unk.dic', 'IpaDic/matrix.bin', 'IpaDic/char.bin', 'IpaDic/COPYING', 'IpaDic/AUTHORS',
         'FFmpeg/LICENSE.GPLv3.txt', 'FFmpeg/SOURCE.txt', 'licenses/OpenALSoft.LICENSE', 'licenses/OpenALSoft.SOURCE.txt',
         'licenses/Avalonia.ANGLE.LICENSE', 'licenses/OpenALSoft.BSD-3Clause.txt', 'dub_sidecar/server.py', 'dub_sidecar/pyproject.toml', 'dub_sidecar/uv.lock', 'dub_sidecar/README.md',
-        'Assets/Diarization/sidecar.py', 'Assets/Diarization/requirements.txt', 'Assets/Diarization/README.md', 'Assets/Diarization/NOTICE.md')
+        'Assets/Diarization/sidecar.py', 'Assets/Diarization/requirements.txt', 'Assets/Diarization/README.md', 'Assets/Diarization/NOTICE.md',
+        'LLPlayer.ControlHost.exe', 'mcp/LLPlayer.Mcp.exe', 'licenses/ModelContextProtocol.LICENSE')
     if (-not $OmitCore) { $required += 'LLPlayer.Core.dll' }
     foreach ($file in @($required) + @($native)) { Write-File $dir $file ($Name + ':' + $file) }
     Write-File $dir 'Plugins/YoutubeDL/YoutubeDL.pdb' 'synthetic symbols'
     Copy-Item -LiteralPath $fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
     foreach ($assembly in @('LibNMeCab.dll', 'LibNMeCab.IpaDicBin.dll', 'Microsoft.Windows.SDK.NET.dll', 'WinRT.Runtime.dll', 'SevenZipSharp.dll',
-        'Vortice.DXGI.dll', 'Vortice.MediaFoundation.dll', 'Vortice.DirectX.dll', 'Vortice.Mathematics.dll', 'SharpGen.Runtime.dll', 'SharpGen.Runtime.COM.dll')) {
+        'Vortice.DXGI.dll', 'Vortice.MediaFoundation.dll', 'Vortice.DirectX.dll', 'Vortice.Mathematics.dll', 'SharpGen.Runtime.dll', 'SharpGen.Runtime.COM.dll',
+        'LLPlayer.Control.dll', 'LLPlayer.ControlHost.dll', 'mcp/LLPlayer.Mcp.dll', 'mcp/LLPlayer.Control.dll',
+        'mcp/ModelContextProtocol.dll', 'mcp/ModelContextProtocol.Core.dll')) {
         Copy-Item -LiteralPath $fixturePlugin -Destination (Join-Path $dir $assembly)
     }
     Write-File $dir 'LLPlayer.Avalonia.deps.json' '{}'
     Write-File $dir 'LLPlayer.Avalonia.runtimeconfig.json' '{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}'
+    foreach ($app in @('LLPlayer.ControlHost', 'mcp/LLPlayer.Mcp')) {
+        Write-File $dir ($app + '.deps.json') '{"runtimeTarget":{"name":".NETCoreApp,Version=v10.0/win-x64"}}'
+    }
+    Write-File $dir 'LLPlayer.ControlHost.runtimeconfig.json' '{"runtimeOptions":{"tfm":"net10.0","frameworks":[{"name":"Microsoft.NETCore.App","version":"10.0.0"},{"name":"Microsoft.AspNetCore.App","version":"10.0.0"}]}}'
+    Write-File $dir 'mcp/LLPlayer.Mcp.runtimeconfig.json' '{"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}'
     $manifest = [ordered]@{
         schema = 1; runtime = 'win-x64'; components = @(
             @{ name = 'FFmpeg'; version = 'fixture'; license = 'GPL'; source = 'fixture'; provenance = 'Synthetic offline contract fixture' },
@@ -356,8 +364,28 @@ try {
     Assert-True ($updaterText -match [regex]::Escape('$savedRoot = $env:DOTNET_ROOT') -and
         $updaterText -match [regex]::Escape('finally { $env:DOTNET_ROOT = $savedRoot; $env:DOTNET_ROOT_X64 = $savedRootX64; $env:PATH = $savedPath }')) 'The fresh publish branch no longer saves/restores the process build environment.'
     Assert-True ($updaterText -match 'Get-CleanCommit' -and $updaterText -match 'sourceCommit = Get-CleanCommit') 'The fresh branch no longer binds the clean source HEAD.'
+    Assert-True ($updaterText.Contains('if (-not $PackageDir) { $aspNetRuntimeVersion = Resolve-CompanionRuntime $package $runtime }') -and
+        $updaterText.Contains('globalAspNetRuntimeVersion=$aspNetRuntimeVersion')) 'Fresh publication must validate companions in the registered launch runtime and bind the selected ASP.NET Core version in the receipt.'
     Assert-True ($updaterText -match [regex]::Escape('if ($DotNetRoot) { Get-NormalPath $DotNetRoot }') -and $updaterText -match 'DotNetRoot must contain the build SDK host') 'The fresh branch no longer validates -DotNetRoot as a build SDK only.'
     Assert-True ($updaterText -match '\$link\.TargetPath = \$exe; \$link\.Arguments = ''''') 'The new shortcut creation is no longer a direct argument-free executable target.'
+
+    # Exercise the fresh-only resolver with an isolated registered-root substitute and the real package fixture.
+    $companionResolver = $updaterAst.Find({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Resolve-CompanionRuntime' }, $true)
+    Assert-True ($null -ne $companionResolver) 'The updater must provide an ASP.NET Core runtime resolver.'
+    & {
+        function Assert-PhysicalPath([string]$Path) { Assert-Physical $Path 'Companion fixture path'; return $Path }
+        . ([scriptblock]::Create($companionResolver.Extent.Text))
+        $runtime = [pscustomobject]@{ root=(New-Desktop 'companion-registered-root'); version='10.0.7' }
+        Assert-Rejected { Resolve-CompanionRuntime $packageA $runtime } 'Install the x64 ASP.NET Core Runtime'
+        $aspNetPath = 'shared/Microsoft.AspNetCore.App/10.0.13/'
+        Write-File $runtime.root ($aspNetPath + 'Microsoft.AspNetCore.App.deps.json') '{}'
+        Assert-Rejected { Resolve-CompanionRuntime $packageA $runtime } 'registered x64 ASP.NET Core Runtime .* incomplete'
+        Write-File $runtime.root ($aspNetPath + 'Microsoft.AspNetCore.dll')
+        Write-File $runtime.root ($aspNetPath + 'Microsoft.AspNetCore.App.runtimeconfig.json') '{"runtimeOptions":{"framework":{"name":"Microsoft.NETCore.App","version":"10.0.13"}}}'
+        Assert-Rejected { Resolve-CompanionRuntime $packageA $runtime } 'requires Microsoft.NETCore.App 10.0.13'
+        $runtime.version = '10.0.13'
+        Assert-True ((Resolve-CompanionRuntime $packageA $runtime) -ceq '10.0.13') 'The valid registered companion runtime version was not selected.'
+    }
 
     # --- 2. First direct selection and independent readback ----------------------------------------------
     $first = & $updater @params -PackageDir $packageA
@@ -380,6 +408,7 @@ try {
     Assert-True ($receipt1.workingDirectory -ieq $receipt1.payloadPath -and $receipt1.targetArguments -ceq '') 'The receipt target contract is not an argument-free direct launch in the payload directory.'
     Assert-True ($receipt1.shortcutWindowStyle -eq 1 -and $receipt1.shortcutDescription -ceq $description) 'The receipt shortcut style/description contract is wrong.'
     Assert-True ($receipt1.globalRuntimeVersion -match '^10\.' -and $receipt1.globalRuntimeRoot) 'The receipt does not record the global x64 .NET 10 runtime used for direct launch.'
+    Assert-True ($null -ne $receipt1.PSObject.Properties['globalAspNetRuntimeVersion'] -and $null -eq $receipt1.globalAspNetRuntimeVersion) 'A prebuilt fixture receipt claimed that ASP.NET Core was verified.'
     Assert-True (Test-Path -LiteralPath (Join-Path $receipt1.globalRuntimeRoot ('shared/Microsoft.NETCore.App/' + $receipt1.globalRuntimeVersion + '/coreclr.dll')) -PathType Leaf) 'The recorded global runtime identity does not contain its coreclr host file.'
     $payloadFiles = @(Get-ChildItem -LiteralPath $receipt1.payloadPath -Recurse -File)
     Assert-True ($payloadFiles.Count -eq @($receipt1.files).Count -and $payloadFiles.Count -gt 0) 'The installed payload file manifest does not cover the payload.'

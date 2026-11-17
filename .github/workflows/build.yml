@@ -78,6 +78,8 @@ jobs:
           $env:LLPLAYER_PACKAGE_DIR = $PackageRoot
           dotnet test .\FlyleafLibTests\FlyleafLibTests.csproj --no-build --no-restore -warnaserror -f net10.0 -p:LLPlayerPortableTests=true --filter 'FullyQualifiedName~YoutubeDLPackageTests.PortablePluginLoadsAgainstSharedEngine'
           if ($LASTEXITCODE -ne 0) { throw "Portable packaged plugin load failed: $PackageRoot" }
+          python .\scripts\codex\test-control-package.py $PackageRoot
+          if ($LASTEXITCODE -ne 0) { throw "Packaged control transport failed: $PackageRoot" }
         }
         $staged = @(Get-ChildItem -LiteralPath "$env:GITHUB_WORKSPACE\artifacts\ci-windows-online-package" -Directory -Filter 'LLPlayer-Avalonia-*-win-x64')
         if ($staged.Count -ne 1) { throw 'Expected exactly one staged Windows package.' }

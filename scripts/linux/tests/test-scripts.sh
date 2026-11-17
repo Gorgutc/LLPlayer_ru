@@ -44,8 +44,8 @@ printf '%s' 'H4sIAAAAAAAEAO1VzWskRRR/3TMbJokbIsqSoMSOs4tBlqaXDK6CxkkyyW5k8kFmdtw
 
 # ---------------------------------------------------------------- publish.sh --check-package
 make_package() { # dir
-    local p="$1" so
-    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets/Diarization" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL" "$p/IpaDic"
+    local p="$1" so app f
+    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets/Diarization" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL" "$p/IpaDic" "$p/mcp"
     cp "$work/YoutubeDL.dll" "$p/Plugins/YoutubeDL/YoutubeDL.dll"
     printf 'symbols\n' > "$p/Plugins/YoutubeDL/YoutubeDL.pdb"
     for f in LLPlayer.Avalonia LLPlayer.Avalonia.dll LLPlayer.Avalonia.deps.json LLPlayer.Avalonia.runtimeconfig.json \
@@ -54,11 +54,20 @@ make_package() { # dir
         libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libe_sqlite3.so llplayer llplayer.desktop llplayer.png llplayer.sh LLPlayer.png \
         LICENSE THIRD-PARTY-NOTICES.md FFmpeg/LICENSE.txt FFmpeg/SOURCE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
         dub_sidecar/README.md Assets/silero_vad.onnx Assets/Diarization/{sidecar.py,requirements.txt,README.md,NOTICE.md} runtimes/linux-x64/libwhisper.so \
+        LLPlayer.Control.dll LLPlayer.ControlHost LLPlayer.ControlHost.dll mcp/LLPlayer.Mcp mcp/LLPlayer.Mcp.dll \
+        mcp/LLPlayer.Control.dll mcp/ModelContextProtocol.dll mcp/ModelContextProtocol.Core.dll \
         runtimes/linux-x64/libggml-whisper.so runtimes/linux-x64/libggml-base-whisper.so \
         runtimes/linux-x64/libggml-cpu-whisper.so; do
         printf 'x\n' > "$p/$f"
     done
-    chmod 755 "$p/LLPlayer.Avalonia" "$p/llplayer"
+    mkdir -p "$p/licenses"
+    printf 'x\n' > "$p/licenses/ModelContextProtocol.LICENSE"
+    for app in LLPlayer.ControlHost mcp/LLPlayer.Mcp; do
+        printf '%s\n' '{"runtimeTarget":{"name":".NETCoreApp,Version=v10.0/linux-x64"}}' > "$p/$app.deps.json"
+    done
+    printf '%s\n' '{"runtimeOptions":{"tfm":"net10.0","frameworks":[{"name":"Microsoft.NETCore.App","version":"10.0.0"},{"name":"Microsoft.AspNetCore.App","version":"10.0.0"}]}}' > "$p/LLPlayer.ControlHost.runtimeconfig.json"
+    printf '%s\n' '{"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}' > "$p/mcp/LLPlayer.Mcp.runtimeconfig.json"
+    chmod 755 "$p/LLPlayer.Avalonia" "$p/LLPlayer.ControlHost" "$p/mcp/LLPlayer.Mcp" "$p/llplayer"
     for so in "${sonames[@]}"; do
         printf 'x\n' > "$p/FFmpeg/$so.1.100"
         ln -s "$so.1.100" "$p/FFmpeg/$so"
@@ -77,6 +86,25 @@ mutate() { # name command-string -> fresh copy in $work/m-<name>, prints its pat
     (cd "$dir" && eval "$2")
     printf '%s\n' "$dir"
 }
+for asset in LLPlayer.Control.dll LLPlayer.ControlHost LLPlayer.ControlHost.dll mcp/LLPlayer.Mcp mcp/LLPlayer.Mcp.dll mcp/LLPlayer.Control.dll \
+    LLPlayer.ControlHost.deps.json LLPlayer.ControlHost.runtimeconfig.json mcp/LLPlayer.Mcp.deps.json mcp/LLPlayer.Mcp.runtimeconfig.json \
+    mcp/ModelContextProtocol.dll mcp/ModelContextProtocol.Core.dll licenses/ModelContextProtocol.LICENSE; do
+    expect_fail "missing control dependency $asset" "missing required file $asset" \
+        check_pkg "$(mutate "no-control-${asset//\//-}" "rm $asset")"
+    expect_fail "empty control dependency $asset" "must be a non-empty regular file" \
+        check_pkg "$(mutate "empty-control-${asset//\//-}" ": > $asset")"
+done
+expect_fail "wrong control host RID" "companion runtime target" \
+    check_pkg "$(mutate wrong-control-rid 'sed -i s@linux-x64@win-x64@ LLPlayer.ControlHost.deps.json')"
+expect_fail "wrong MCP TFM" "companion runtime target" \
+    check_pkg "$(mutate wrong-control-tfm 'sed -i s/net10.0/net9.0/ mcp/LLPlayer.Mcp.runtimeconfig.json')"
+expect_fail "missing companion ASP.NET runtime requirement" "companion framework" \
+    check_pkg "$(mutate no-aspnet 'sed -i '\''s/,{"name":"Microsoft.AspNetCore.App","version":"10.0.0"}//'\'' LLPlayer.ControlHost.runtimeconfig.json')"
+for state in Automation/jobs.sqlite jobs.sqlite-wal jobs.sqlite-shm Control/host.json nested/control.lock Automation/results/result.srt \
+    host.json nested/host.json cache/host.json.1234567890abcdef1234567890abcdef; do
+    expect_fail "packaged control state $state" "control runtime state" \
+        check_pkg "$(mutate "control-state-${state//\//-}" "mkdir -p \$(dirname $state); echo x > $state")"
+done
 for asset in LibNMeCab.dll LibNMeCab.IpaDicBin.dll IpaDic/sys.dic IpaDic/unk.dic \
     IpaDic/matrix.bin IpaDic/char.bin IpaDic/COPYING IpaDic/AUTHORS; do
     expect_fail "missing Japanese segmenter asset $asset" "missing required file $asset" \

@@ -36,6 +36,10 @@ $natives = @('av_libglesv2.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','onnxr
 $windowsMediaAssemblies = @('Vortice.DXGI.dll','Vortice.MediaFoundation.dll','Vortice.DirectX.dll',
     'Vortice.Mathematics.dll','SharpGen.Runtime.dll','SharpGen.Runtime.COM.dll')
 $windowsMediaLicenses = @('licenses/Vortice.Windows.LICENSE','licenses/Vortice.Mathematics.LICENSE','licenses/SharpGen.Runtime.LICENSE')
+$controlAssemblies = @('LLPlayer.Control.dll','LLPlayer.ControlHost.dll','mcp/LLPlayer.Mcp.dll','mcp/LLPlayer.Control.dll',
+    'mcp/ModelContextProtocol.dll','mcp/ModelContextProtocol.Core.dll')
+$controlFiles = $controlAssemblies + @('LLPlayer.ControlHost.exe','mcp/LLPlayer.Mcp.exe','LLPlayer.ControlHost.deps.json',
+    'LLPlayer.ControlHost.runtimeconfig.json','mcp/LLPlayer.Mcp.deps.json','mcp/LLPlayer.Mcp.runtimeconfig.json','licenses/ModelContextProtocol.LICENSE')
 function New-Fixture([string]$Name) {
     $dir = Join-Path $work $Name
     $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia.deps.json','LLPlayer.Avalonia.runtimeconfig.json',
@@ -46,12 +50,17 @@ function New-Fixture([string]$Name) {
         'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
         'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md',
         'Assets/Diarization/sidecar.py','Assets/Diarization/requirements.txt','Assets/Diarization/README.md','Assets/Diarization/NOTICE.md')
-    foreach ($path in @($required) + @($natives) + @($windowsMediaLicenses)) { Write-FixtureFile $dir $path }
+    foreach ($path in @($required) + @($natives) + @($windowsMediaLicenses) + $controlFiles) { Write-FixtureFile $dir $path }
     Write-FixtureFile $dir 'Plugins/YoutubeDL/YoutubeDL.pdb'
     Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
-    foreach ($assembly in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll') + $windowsMediaAssemblies) {
-        Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir $assembly)
+    foreach ($assembly in @('LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','Microsoft.Windows.SDK.NET.dll','WinRT.Runtime.dll','SevenZipSharp.dll') + $windowsMediaAssemblies + $controlAssemblies) {
+        Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir $assembly) -Force
     }
+    foreach ($app in @('LLPlayer.ControlHost','mcp/LLPlayer.Mcp')) {
+        Write-FixtureFile $dir ($app + '.deps.json') '{"runtimeTarget":{"name":".NETCoreApp,Version=v10.0/win-x64"}}'
+    }
+    Write-FixtureFile $dir 'LLPlayer.ControlHost.runtimeconfig.json' '{"runtimeOptions":{"tfm":"net10.0","frameworks":[{"name":"Microsoft.NETCore.App","version":"10.0.0"},{"name":"Microsoft.AspNetCore.App","version":"10.0.0"}]}}'
+    Write-FixtureFile $dir 'mcp/LLPlayer.Mcp.runtimeconfig.json' '{"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}'
     $files = @($natives | ForEach-Object { [ordered]@{ path=$_; sha256=(Get-FileHash -LiteralPath (Join-Path $dir $_) -Algorithm SHA256).Hash.ToLowerInvariant() } })
     $manifest = [ordered]@{ schema=1; runtime='win-x64'; components=@(
         [ordered]@{ name='FFmpeg'; version='n8.0-16-gd8605a6b55-20250925'; license='GPL'; source='https://git.ffmpeg.org/ffmpeg.git'; provenance='Tracked binaries; original build recipe and corresponding source offer remain unverified.' },
@@ -86,6 +95,25 @@ try {
     $validPackage = New-Fixture 'valid'
     Write-FixtureFile $validPackage 'project-notes.zip'
     Assert-Accepted 'valid synthetic package including unrelated archive' $validPackage
+    foreach ($relative in $controlFiles) {
+        $fixtureRelative = $relative
+        Assert-Rejected ("missing control dependency " + $relative) { param($d) Remove-Item -LiteralPath (Join-Path $d $fixtureRelative) } 'missing required file'
+        Assert-Rejected ("empty control dependency " + $relative) { param($d) Write-FixtureFile $d $fixtureRelative '' } 'non-empty regular file'
+    }
+    Assert-Rejected 'wrong control host RID' {
+        param($d) Write-FixtureFile $d 'LLPlayer.ControlHost.deps.json' '{"runtimeTarget":{"name":".NETCoreApp,Version=v10.0/linux-x64"}}'
+    } 'companion runtime target'
+    Assert-Rejected 'wrong MCP TFM' {
+        param($d) Write-FixtureFile $d 'mcp/LLPlayer.Mcp.runtimeconfig.json' '{"runtimeOptions":{"tfm":"net9.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}'
+    } 'companion runtime target'
+    Assert-Rejected 'missing companion ASP.NET runtime requirement' {
+        param($d) Write-FixtureFile $d 'LLPlayer.ControlHost.runtimeconfig.json' '{"runtimeOptions":{"tfm":"net10.0","framework":{"name":"Microsoft.NETCore.App","version":"10.0.0"}}}'
+    } 'companion framework'
+    foreach ($relative in @('Automation/jobs.sqlite','jobs.sqlite-wal','jobs.sqlite-shm','Control/host.json','nested/control.lock',
+        'Automation/results/result.srt','host.json','nested/host.json','cache/host.json.1234567890abcdef1234567890abcdef')) {
+        $fixtureRelative = $relative
+        Assert-Rejected ("packaged control state " + $relative) { param($d) Write-FixtureFile $d $fixtureRelative } 'forbidden runtime (directory|file)'
+    }
     foreach ($relative in @($windowsMediaAssemblies) + @($windowsMediaLicenses)) {
         $fixtureRelative = $relative
         Assert-Rejected ("missing Windows media dependency " + $relative) { param($d) Remove-Item -LiteralPath (Join-Path $d $fixtureRelative) } 'missing required file'

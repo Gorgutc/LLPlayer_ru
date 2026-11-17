@@ -1,5 +1,17 @@
 # Dependency Baseline
 
+## Avalonia control companions (F-20)
+
+`LLPlayer.ControlHost` targets portable `net10.0` and ships as a framework-dependent ASP.NET Core
+apphost. It requires the x64 ASP.NET Core 10 Runtime in addition to the Avalonia .NET runtime
+prerequisites. The host uses the existing Core SQLite pins for its per-user journal.
+
+`LLPlayer.Mcp` uses the official `ModelContextProtocol` 2.4.0 and
+`Microsoft.Extensions.Hosting` 10.0.13. The bridge targets `net10.0` with no Avalonia or Flyleaf
+dependency. Its closure goes under `mcp/` because the SDK and Avalonia bind different
+`Microsoft.Extensions.*` versions. Both packages ship the upstream SDK license from the pinned release.
+See [control setup](../control-api.md) for the startup and transport contract.
+
 This document freezes current dependency decisions from `main`.
 
 ## Project Targets
@@ -254,7 +266,9 @@ truth, and adding or upgrading any Linux package is the same focused dependency 
   unexpected runtime payloads. Linux host requirements for the cached native binaries: glibc 2.34+, `GLIBCXX_3.4.29`,
   `libgomp.so.1`, and AVX/AVX2/FMA/F16C CPU support. The Windows-only `x64/`/`x86/` Tesseract DLLs that the
   TesseractOCR build targets copy are removed from the Linux package.
-- **Prerequisites for end users:** .NET 10 runtime (Ubuntu: `apt install dotnet-runtime-10.0`), `libopenal1` for OpenAL output, and system Tesseract 5 plus traineddata for OCR; Whisper CPU host ABI and instruction-set requirements are listed above.
+- **Prerequisites for end users:** ASP.NET Core 10 Runtime for ControlHost and .NET 10 Runtime for the app and bridge
+  (Ubuntu: `apt install aspnetcore-runtime-10.0`), `libopenal1` for OpenAL output, and system Tesseract 5 plus
+  traineddata for OCR. Whisper CPU host ABI and instruction-set requirements are listed above.
 
 ### Linux package rules
 

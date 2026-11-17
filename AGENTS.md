@@ -164,7 +164,8 @@ Do not copy PL_RU/codex web gates as-is. The following are not LLPlayer quality 
 - Keep `.github/actions/build-package/action.yml` as the source of truth for release packaging.
 - Windows Avalonia is additive: `scripts/windows/publish-avalonia.ps1` produces a separate ZIP, validates its
   allowlisted native contents and notices, and leaves the WPF release action unchanged. Pin app-local OpenAL Soft
-  through `Silk.NET.OpenAL.Soft.Native` 1.23.1; require the x64 Visual C++ 2022 redistributable and .NET 10 runtime.
+  through `Silk.NET.OpenAL.Soft.Native` 1.23.1. Require the x64 Visual C++ 2022 redistributable and .NET 10 Runtime.
+  The ControlHost companion also requires ASP.NET Core 10 Runtime in the same registered x64 .NET installation.
 - Preserve the separate app publish and `Plugins/YoutubeDL` publish flow.
 - Keep tracked native/runtime assets intentional: `FFmpeg/*.dll`, `LLPlayer/lib/7z.dll`, and `LLPlayer/Assets/silero_vad.onnx`.
 - Linux: never commit the fetched FFmpeg `*.so*` libraries or the Linux package; `scripts/linux/publish.sh` (CI:
