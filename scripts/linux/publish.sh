@@ -297,8 +297,9 @@ while IFS= read -r -d '' file; do
     relative="${file#"$host_staging"/}"
     target="$pkg/$relative"
     if [[ -e "$target" || -L "$target" ]]; then
-        [[ -f "$target" && ! -L "$target" ]] && cmp -s "$file" "$target" ||
+        if [[ ! -f "$target" || -L "$target" ]] || ! cmp -s "$file" "$target"; then
             llp_die "ControlHost publish files disagree with the existing Avalonia payload: $relative."
+        fi
     else
         mkdir -p "$(dirname "$target")"
         cp -p "$file" "$target"
