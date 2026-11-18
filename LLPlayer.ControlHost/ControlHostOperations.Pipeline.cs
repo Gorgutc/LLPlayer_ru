@@ -21,7 +21,7 @@ internal sealed partial class ControlHostOperations
         {
             var source = PhysicalSourcePath(Absolute(file.MediaPath), file.RequirePhysicalSource);
             var output = file.OutputPath is { } path ? PhysicalFile(Absolute(path), output: true)
-                : InferPipelineSidecar(request, source);
+                : InferPipelineSidecar(request, source, file.RequirePhysicalSource);
             return new { MediaPath = source, OutputPath = output, file.StreamIndex, file.SourceRevision, file.RequirePhysicalSource,
                 FileIdentity = file.OutputPath is null ? $"sidecar_media:{index}" : null };
         }).ToArray();
@@ -88,10 +88,12 @@ internal sealed partial class ControlHostOperations
             {
                 var currentSource = PhysicalSourcePath(Absolute(request.Files[index].MediaPath), file.RequirePhysicalSource);
                 if (file.FileIdentity is not null)
-                    VerifySidecarPaths(context, index, currentSource, RussianSidecarPath(currentSource));
+                    VerifySidecarPaths(context, index, currentSource, RussianSidecarPath(currentSource, file.RequirePhysicalSource));
                 await context.VerifyInputAsync(currentSource, ct, file.SourceRevision, file.FileIdentity);
             }
-            await output.PublishAsync(context, file.OutputPath, request.Overwrite, ct, $"subtitle:{index}");
+            Action<string>? validatePublication = file.RequirePhysicalSource && file.FileIdentity is not null
+                ? stage => ValidateGuardedSidecar(file.MediaPath, file.OutputPath, stage) : null;
+            await output.PublishAsync(context, file.OutputPath, request.Overwrite, ct, $"subtitle:{index}", validatePublication);
             var outputs = checkpoint.Outputs.Append(new PipelineOutput(file.OutputPath, output.ComputeSha256(),
                 checkpoint.Translated.Cues.Length)).ToArray();
             checkpoint = new(index + 1, null, null, outputs);
@@ -103,17 +105,42 @@ internal sealed partial class ControlHostOperations
     private static ControlJobException ChangedOutput()
         => new("output_changed", "A completed output differs from its saved receipt.", ControlJobStatus.Interrupted);
 
-    private static string InferPipelineSidecar(PipelineRequest request, string source)
+    private static string InferPipelineSidecar(PipelineRequest request, string source, bool requirePhysicalSource)
     {
         if (request.TargetLanguage != TargetLanguage.Russian || request.Format != SubtitleExportFormat.Srt
             || request.Overwrite)
             throw new ControlJobException("invalid_arguments",
                 "Omit outputPath only for Russian SRT output with overwrite disabled.");
-        return RussianSidecarPath(source);
+        return RussianSidecarPath(source, requirePhysicalSource);
     }
 
-    private static string RussianSidecarPath(string source)
-        => PhysicalFile(SubtitleOutputPathBuilder.BuildRussianSrtPath(source), output: true);
+    private static string RussianSidecarPath(string source, bool requirePhysicalSource)
+    {
+        var sidecar = SubtitleOutputPathBuilder.BuildRussianSrtPath(source);
+        return requirePhysicalSource ? CheckedOutputPath(sidecar) : PhysicalFile(sidecar, output: true);
+    }
+
+    private static void ValidateGuardedSidecar(string source, string destination, string stage)
+    {
+        CheckedSourcePath(source, true);
+        if (!string.Equals(Path.GetDirectoryName(destination), Path.GetDirectoryName(stage), StringComparison.Ordinal))
+            throw new ControlJobException("file_effect_conflict", "The staging file left the physical output directory.");
+        CheckedOutputPath(destination);
+        CheckedOutputPath(stage);
+    }
+
+    private static string CheckedOutputPath(string path)
+    {
+        try
+        {
+            if (ControlPaths.IsPhysicalPath(path, allowMissingLeaf: true))
+                return path;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+        }
+        throw new ControlJobException("output_conflict", "The guarded subtitle output must use a physical path.");
+    }
 
     private static void VerifySidecarPaths(ControlJobContext context, int index, string source, string output)
     {

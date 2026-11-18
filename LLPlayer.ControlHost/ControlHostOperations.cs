@@ -267,13 +267,16 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
     private async Task<ControlJobOutcome> ExportAsync(ControlJobContext context, ExportRequest args, CancellationToken ct)
     {
         var document = await documents.GetDocumentAsync(context.Request.Scope, new(args.JobId, args.Revision), ct);
-        var path = args.Path is { } output ? Absolute(output) : await InferExportSidecarAsync(context, args, document, ct);
+        var (path, guardedSource) = args.Path is { } output
+            ? (Absolute(output), (string?)null) : await InferExportSidecarAsync(context, args, document, ct);
         var staged = ControlSubtitleExport.Prepare(document, args.Format, args.Text, args.Utf8Bom, args.SpeakerLabels);
-        await staged.PublishAsync(context, path, args.Overwrite, ct);
+        Action<string>? validatePublication = guardedSource is not null
+            ? stage => ValidateGuardedSidecar(guardedSource, path, stage) : null;
+        await staged.PublishAsync(context, path, args.Overwrite, ct, validatePublication: validatePublication);
         return Done(new { path, sha256 = staged.ComputeSha256() });
     }
 
-    private async Task<string> InferExportSidecarAsync(ControlJobContext context, ExportRequest args,
+    private async Task<(string Path, string? GuardedSource)> InferExportSidecarAsync(ControlJobContext context, ExportRequest args,
         ControlCueDocument document, CancellationToken ct)
     {
         if (args.Format != SubtitleExportFormat.Srt || args.Text != ControlSubtitleText.TranslatedOnly || args.Overwrite)
@@ -291,7 +294,7 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
         if (!string.Equals(source.Path, PhysicalSourcePath(source.Path, source.RequirePhysicalSource), StringComparison.Ordinal))
             throw new ControlJobException("stale_media", "The original recognition path no longer names the same physical file.");
         await context.VerifyInputAsync(source.Path, ct, source.Fingerprint);
-        return RussianSidecarPath(source.Path);
+        return (RussianSidecarPath(source.Path, source.RequirePhysicalSource), source.RequirePhysicalSource ? source.Path : null);
     }
 
     private void Read<TArgs, TResult>(string id, string family, string description,

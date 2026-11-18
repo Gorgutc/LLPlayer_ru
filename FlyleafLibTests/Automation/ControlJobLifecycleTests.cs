@@ -55,6 +55,44 @@ public sealed class ControlJobLifecycleTests : IDisposable
     }
 
     [Fact]
+    public async Task Guarded_subtitle_is_checked_after_staging_and_before_committing_the_move()
+    {
+        using var deadline = Deadline();
+        string output = Path.Combine(directory, "guarded.ru.srt");
+        var export = new ControlPreparedTextExport("fixture subtitle", includeUtf8Bom: false);
+        bool checkedBeforeStaging = false;
+        int checksWithIntent = 0;
+        string? stagedPath = null;
+        await using var service = NewService(async (context, token) =>
+        {
+            void Guard(string stage)
+            {
+                if (!File.Exists(stage))
+                    checkedBeforeStaging = true;
+                var journal = new ControlJobStore(directory).Get(context.JobId)?.Journal;
+                if (journal?.Effects.ContainsKey("subtitle") == true && ++checksWithIntent == 2)
+                {
+                    Assert.True(File.Exists(stage));
+                    stagedPath = stage;
+                    throw new ControlJobException("publication_denied", "The fixture precondition changed.");
+                }
+            }
+
+            await export.PublishAsync(context, output, overwrite: false, token, validatePublication: Guard);
+            return new(ControlJobStatus.Completed);
+        });
+
+        var accepted = await service.EnqueueAsync(MakeRequest("{}"), deadline.Token);
+        Guid id = Assert.IsType<Guid>(accepted.JobId);
+        var settled = await WaitForAsync(service, id, ControlJobStatus.Failed, deadline.Token);
+        Assert.Equal("publication_denied", settled.Error?.Code);
+        Assert.True(checkedBeforeStaging);
+        Assert.NotNull(stagedPath);
+        Assert.False(File.Exists(stagedPath));
+        Assert.False(File.Exists(output));
+    }
+
+    [Fact]
     public async Task Admission_persists_resolved_input_and_a_duplicate_does_not_recapture_it()
     {
         using var deadline = Deadline();

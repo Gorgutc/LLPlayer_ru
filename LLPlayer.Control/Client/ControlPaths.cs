@@ -35,13 +35,25 @@ public static class ControlPaths
     public static string ResolveDirectory(string directory)
         => Path.TrimEndingDirectorySeparator(Resolve(new DirectoryInfo(directory)).FullName);
 
-    public static bool IsPhysicalPath(string path)
+    public static bool IsPhysicalPath(string path, bool allowMissingLeaf = false)
     {
         var ancestors = new Stack<string>();
         for (string? segment = path; segment is not null; segment = Path.GetDirectoryName(segment))
             ancestors.Push(segment);
         // A directory must be checked before its children, so an alias is not followed.
-        return ancestors.All(segment => (File.GetAttributes(segment) & FileAttributes.ReparsePoint) == 0);
+        while (ancestors.TryPop(out var segment))
+        {
+            try
+            {
+                if ((File.GetAttributes(segment) & FileAttributes.ReparsePoint) != 0)
+                    return false;
+            }
+            catch (FileNotFoundException) when (allowMissingLeaf && ancestors.Count == 0)
+            {
+                return true;
+            }
+        }
+        return true;
     }
 
     public static bool SameDirectory(string left, string right)

@@ -1,5 +1,6 @@
 """Test the subtitle-only MCP catalog and refusals without a ControlHost."""
 
+import hashlib
 import importlib.util
 import os
 from pathlib import Path
@@ -9,7 +10,7 @@ import sys
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
-from f20_pipeline_fixture import RUSSIAN, SOURCE, check_srt, queue_job
+from f20_pipeline_fixture import RUSSIAN, SOURCE, TIMES, queue_job
 
 
 PREFIX = "llplayer_subtitle_"
@@ -125,6 +126,17 @@ def verify(executable, fixture, version, parent):
                "job_not_found")
 
 
+def check_scoped_srt(path, digest, check):
+    # The scoped bridge uses ControlHost's default UTF-8 BOM.
+    body = "\r\n\r\n".join(f"{index}\r\n{timestamp}\r\n{text}" for index, (timestamp, text) in
+                             enumerate(zip(TIMES, RUSSIAN, strict=True), 1))
+    expected = (body + "\r\n").encode("utf-8-sig")
+    content = path.read_bytes()
+    check(content == expected, f"{path.name}: wrong translated SRT cues, times, BOM or line endings")
+    check(hashlib.sha256(content).hexdigest() == digest.lower(),
+          f"{path.name}: the durable result does not match the exported bytes")
+
+
 def verify_with_host(api, source, executable, environment, run_companion, stdio_client, modern, wait_for_job, check):
     """Exercise the external-translator path on the caller's isolated package fixture."""
     verify_offline(executable, load_fixture())
@@ -176,7 +188,7 @@ def verify_with_host(api, source, executable, environment, run_companion, stdio_
         saved = invoke(client, "export_subtitles", dict(draft, revision=done["value"]["revision"]), writable=True)
         completed = wait_for_job(api, queue_job(saved, check), "completed")
         check(Path(completed["value"]["path"]) == output, "The approved export did not write beside the source")
-        check_srt(output, RUSSIAN, completed["value"]["sha256"], check)
+        check_scoped_srt(output, completed["value"]["sha256"], check)
     print("Scoped subtitle MCP passed: probe, job admission and replay, external translation and nearby SRT.")
 
 
