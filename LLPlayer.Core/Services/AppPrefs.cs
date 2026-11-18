@@ -15,9 +15,16 @@ namespace LLPlayer.Avalonia.Services;
 public sealed class AppPrefs
 {
     bool wordMenuResetRequested;
+    bool themeEditRequested;
+    bool alwaysOnTopEditRequested;
 
     // Save intent belongs to the detached edit and is never persisted with the preferences.
     public void MarkWordMenuReset() => wordMenuResetRequested = true;
+    public void MarkWindowPreferenceEdits(bool theme, bool alwaysOnTop)
+    {
+        themeEditRequested |= theme;
+        alwaysOnTopEditRequested |= alwaysOnTop;
+    }
 
     public AppPrefs Clone() => JsonSerializer.Deserialize<AppPrefs>(JsonSerializer.Serialize(this, PrefsStore.JsonOptions),
         PrefsStore.JsonOptions)!;
@@ -31,8 +38,14 @@ public sealed class AppPrefs
         var names = before.Select(field => field.Key).Union(wanted.Select(field => field.Key), StringComparer.Ordinal);
         foreach (string name in names)
         {
-            bool explicitWordMenuReset = name == nameof(WordMenuActions) && edited.wordMenuResetRequested;
-            if (!explicitWordMenuReset && JsonNode.DeepEquals(before[name], wanted[name])) continue;
+            bool explicitEdit = name switch
+            {
+                nameof(WordMenuActions) => edited.wordMenuResetRequested,
+                nameof(Theme) => edited.themeEditRequested,
+                nameof(AlwaysOnTop) => edited.alwaysOnTopEditRequested,
+                _ => false,
+            };
+            if (!explicitEdit && JsonNode.DeepEquals(before[name], wanted[name])) continue;
             if (wanted.TryGetPropertyValue(name, out var value)) current[name] = value?.DeepClone();
             else current.Remove(name);
         }

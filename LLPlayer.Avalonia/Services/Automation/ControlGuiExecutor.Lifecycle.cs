@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LLPlayer.Avalonia.ViewModels;
 using LLPlayer.ControlApi;
 
 namespace LLPlayer.Avalonia.Services.Automation;
@@ -35,13 +36,35 @@ internal sealed partial class ControlGuiExecutor
 
     static bool IsObservedCommand(string id)
         => id is "engine:TogglePlayPause" or "engine:ToggleMute" or "engine:ToggleFullScreen"
-            || id == "app:" + AppShortcutMap.ToggleSidebar;
+            || id == "app:" + AppShortcutMap.ToggleSidebar || id == "app:" + AppShortcutMap.ToggleTheme
+            || id == "app:" + AppShortcutMap.ToggleAlwaysOnTop || id == "app:" + AppShortcutMap.ActivateSubsSearch
+            || CommandSurface(id) != null;
+
+    static ControlUiSurface? CommandSurface(string id)
+    {
+        if (!id.StartsWith("app:", StringComparison.Ordinal)) return null;
+        ReadOnlySpan<char> name = id.AsSpan(4);
+        foreach (var operation in MainWindowViewModel.ControlSurfaceCommands)
+            if (name.SequenceEqual(operation.Value)) return operation.Key;
+        return null;
+    }
+
+    bool CommandAvailable(ExecutableCommand command)
+    {
+        if (!command.CanExecute) return false;
+        if (CommandSurface(command.Id) is { } surface) return window.GetControlSurfaceStatus(surface).Available;
+        if (command.Id == "app:" + AppShortcutMap.ActivateSubsSearch) return window.CanFocusControlSidebarSearch;
+        return command.Id != "engine:TogglePlayPause" || (player.IsOpened && !player.IsOpening);
+    }
 
     ControlExecutedCommand ExecuteObservedCommand(string id)
     {
-        if (!IsObservedCommand(id) || !model.BuildExecutableCommands().Any(command => command.Id == id && command.CanExecute))
+        if (string.IsNullOrEmpty(id) || !IsObservedCommand(id)
+            || !model.BuildExecutableCommands(forControl: true).Any(command => command.Id == id && CommandAvailable(command)))
             throw new ControlException(new("command_unavailable", "The selected palette command has no available observed execution."));
 
+        if (CommandSurface(id) is { } surface)
+            return new(id, Surface: window.OpenControlSurface(surface, toggle: surface == ControlUiSurface.DebugOverlay));
         switch (id)
         {
             case "engine:TogglePlayPause":
@@ -54,6 +77,13 @@ internal sealed partial class ControlGuiExecutor
                 return new(id, Playback: Playback());
             case "engine:ToggleFullScreen":
                 window.IsFullScreen = !window.IsFullScreen;
+                return new(id, Window: WindowState());
+            case "app:" + AppShortcutMap.ToggleTheme:
+                return new(id, Window: SetWindowState(new(Theme: model.IsDarkTheme ? ControlUiTheme.Light : ControlUiTheme.Dark)));
+            case "app:" + AppShortcutMap.ToggleAlwaysOnTop:
+                return new(id, Window: SetWindowState(new(AlwaysOnTop: !window.Topmost)));
+            case "app:" + AppShortcutMap.ActivateSubsSearch:
+                window.FocusControlSidebarSearch();
                 return new(id, Window: WindowState());
             default:
                 model.ToggleSidebar();

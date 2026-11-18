@@ -44,7 +44,8 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
                     context.RequireOriginalHost();
                     return FromResult(await broker.ExecuteAsync(context.Request, ct));
                 });
-                catalog.Add(operation, schema.Arguments, typeof(ControlResult),
+                Type result = operation.Id is "ui.surface.open" or "ui.sidebar.search.focus" ? schema.Result : typeof(ControlResult);
+                catalog.Add(operation, schema.Arguments, result,
                     (request, argument, ct) => request.Scope.SessionId is null
                         ? Task.FromResult(ControlResult.Fail("session_required", "Select an explicit GUI session for this mutation."))
                         : jobs.EnqueueAsync(Normalize(request, argument), ct), broker.GetUnavailableReason,

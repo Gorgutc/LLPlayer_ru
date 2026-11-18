@@ -19,7 +19,9 @@ public sealed record ControlSubtitlePageRequest(int Slot, int Cursor = 0, int Li
 public sealed record ControlSubtitleCueRequest(int Slot, Guid CueId, Guid Revision);
 public sealed record ControlSubtitleDelay(int Slot, long DelayTicks);
 public sealed record ControlSubtitleTranslation(int Slot, bool Enabled);
-public sealed record ControlGuiUiSet(bool? Fullscreen = null, bool? Sidebar = null);
+public enum ControlUiTheme { Dark, Light }
+public sealed record ControlGuiUiSet(bool? Fullscreen = null, bool? Sidebar = null, bool? AlwaysOnTop = null,
+    ControlUiTheme? Theme = null);
 public sealed record ControlClipboardText(string Text);
 public sealed record ControlOpenUri(string Uri);
 public sealed record ControlRevealPath(string Path);
@@ -46,7 +48,8 @@ public sealed record ControlGuiCue(Guid Id, long StartTicks, long EndTicks, stri
 public sealed record ControlGuiSubtitlePage(Guid Revision, int TotalCount, int? NextCursor, IReadOnlyList<ControlGuiCue> Cues);
 public sealed record ControlWaveformSnapshot(bool Enabled, bool Active, IReadOnlyList<float>? Peaks);
 public sealed record ControlAbLoopSnapshot(long? StartTicks, long? EndTicks, bool Enabled);
-public sealed record ControlGuiUiSnapshot(bool Fullscreen, bool Sidebar, bool AlwaysOnTop);
+public sealed record ControlGuiUiSnapshot(bool Fullscreen, bool Sidebar, bool AlwaysOnTop, ControlUiTheme? Theme = null,
+    bool SidebarSearchFocused = false);
 public sealed record ControlGuiDiagnostic(string Session, string Runtime, ControlPlaybackSnapshot Playback);
 public sealed record ControlCommandDescription(string Id, string Name, string Description,
     string Group, IReadOnlyList<string> Keys, bool Available, bool AutomationSupported = false);
@@ -113,7 +116,7 @@ public static class ControlGuiOperations
         Define<Empty, ControlGuiAbout>("app.about", "app", "Read the player version and runtime."),
         Define<Empty, ControlGuiDiagnostic>("app.diagnostics", "app", "Read detached player diagnostics."),
         Define<Empty, ControlGuiUiSnapshot>("ui.get", "ui", "Read the selected window's state."),
-        Define<ControlGuiUiSet, ControlGuiUiSnapshot>("ui.set", "ui", "Set fullscreen or sidebar visibility.", true),
+        Define<ControlGuiUiSet, ControlGuiUiSnapshot>("ui.set", "ui", "Set fullscreen, sidebar visibility, always-on-top or theme.", true),
         Define<ControlClipboardText, ControlGuiAction>("ui.clipboard.set", "ui", "Write text to the desktop clipboard.", true),
         Define<ControlOpenUri, ControlGuiAction>("ui.browser.open", "ui", "Open an HTTP or HTTPS URL on this desktop.", true),
         Define<ControlRevealPath, ControlGuiAction>("ui.path.reveal", "ui", "Reveal a local file or directory on this desktop.", true),

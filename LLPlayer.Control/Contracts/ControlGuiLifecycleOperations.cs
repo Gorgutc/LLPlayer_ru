@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LLPlayer.ControlApi;
 
 public sealed record ControlApplicationLaunchTicket(Guid LaunchId);
@@ -7,7 +9,17 @@ public sealed record ControlApplicationLifecycleResult(Guid SourceSessionId, boo
     ControlApplicationWindow? Replacement = null);
 public sealed record ControlExecuteCommand(string Id);
 public sealed record ControlExecutedCommand(string Id, ControlPlaybackSnapshot? Playback = null,
-    ControlGuiUiSnapshot? Window = null);
+    ControlGuiUiSnapshot? Window = null, ControlUiSurfaceStatus? Surface = null);
+
+public enum ControlUiSurface
+{
+    CommandPalette, DebugOverlay, CheatSheet, About, Settings, PlaybackSettings, PluginOptions, Playlist,
+    WordManager, SubtitleExport, SubtitleDownload, AiInsights, Batch, PdicSettings, OnlineVideo,
+    Translation, Recognition, Dubbing, AudioCapture, VideoCapture,
+}
+
+public sealed record ControlUiSurfaceRequest([property: JsonRequired] ControlUiSurface Surface);
+public sealed record ControlUiSurfaceStatus(ControlUiSurface Surface, bool Visible, bool Available);
 
 public static class ControlGuiLifecycleOperations
 {
@@ -20,6 +32,15 @@ public static class ControlGuiLifecycleOperations
         new(new("commands.execute", "commands", "Execute an explicitly supported palette command and read the resulting state.",
             true, ControlOperationCompletion.Job, ControlOperationContext.Gui),
             typeof(ControlExecuteCommand), typeof(ControlExecutedCommand)),
+        new(new("ui.surface.list", "ui", "Read the visible and available tools of the selected window.",
+            false, ControlOperationCompletion.Immediate, ControlOperationContext.Gui),
+            typeof(ControlGuiOperations.Empty), typeof(ControlUiSurfaceStatus[])),
+        new(new("ui.surface.open", "ui", "Open or restore a supported tool of the selected window and report its visibility.",
+            true, ControlOperationCompletion.Job, ControlOperationContext.Gui),
+            typeof(ControlUiSurfaceRequest), typeof(ControlUiSurfaceStatus)),
+        new(new("ui.sidebar.search.focus", "ui", "Show the selected window's sidebar and focus subtitle search.",
+            true, ControlOperationCompletion.Job, ControlOperationContext.Gui),
+            typeof(ControlGuiOperations.Empty), typeof(ControlGuiUiSnapshot)),
     ];
 
     public static bool IsApplicationLifecycle(string id)
