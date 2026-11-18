@@ -65,9 +65,21 @@ public sealed class ControlGuiAttachTests
             using var vm = new MainWindowViewModel(controller, new AppPrefs(), _ => { }, translation, window);
             var executor = new ControlGuiExecutor(controller, vm, window);
             ControlGuiChannel gui = new(executor.ExecuteAsync);
-            Guid firstSession = await AttachAsync(app, gui, client, scope, discovery.InstanceId, jobId, previousSession: null, token);
-            Guid secondSession = await AttachAsync(app, gui, client, scope, discovery.InstanceId, jobId, firstSession, token);
-            Assert.NotEqual(firstSession, secondSession);
+            window.Attach(vm, null);
+            window.Show();
+            try
+            {
+                Guid firstSession = await AttachAsync(app, gui, client, scope, discovery.InstanceId, jobId, previousSession: null, token);
+                Assert.True(Assert.Single(window.OwnedWindows.OfType<AboutWindow>()).IsVisible);
+                Guid secondSession = await AttachAsync(app, gui, client, scope, discovery.InstanceId, jobId, firstSession, token);
+                Assert.NotEqual(firstSession, secondSession);
+                Assert.True(Assert.Single(window.OwnedWindows.OfType<AboutWindow>()).IsVisible);
+            }
+            finally
+            {
+                foreach (var child in window.OwnedWindows.ToArray()) child.Close();
+                window.Close();
+            }
             ControlState after = await client.GetStateAsync(scope, token);
             Assert.Empty(after.Sessions);
             Assert.Contains(after.Jobs, item => item.JobId == jobId && item.Status == ControlJobStatus.Completed);
@@ -182,6 +194,23 @@ public sealed class ControlGuiAttachTests
             new ControlGuiOperations.Empty(), token);
         Assert.Null(result.Error);
         Assert.False(result.Value!.Value.GetProperty("fullscreen").GetBoolean());
+
+        ControlScope selected = scope with { SessionId = sessionId };
+        var capability = Assert.Single((await client.DescribeAsync(selected, token)).Operations,
+            entry => entry.Operation.Id == "ui.surface.open");
+        Assert.True(capability.Available);
+        Assert.True(capability.ResultSchema.GetProperty("properties").TryGetProperty("visible", out _));
+        var missingSession = await InvokeAsync(client, scope, "ui.surface.open", new { surface = "about" }, token);
+        Assert.Equal("session_required", missingSession.Error?.Code);
+        var admission = await InvokeAsync(client, selected, "ui.surface.open", new { surface = "about" }, token);
+        Assert.Null(admission.Error);
+        Guid surfaceJobId = Assert.IsType<Guid>(admission.JobId);
+        ControlJob? job;
+        while ((job = await client.GetAsync(selected, surfaceJobId, token))?.Status is null or ControlJobStatus.Accepted or ControlJobStatus.Running)
+            await Task.Delay(50, token);
+        Assert.Equal(ControlJobStatus.Completed, job.Status);
+        Assert.True(job.Value!.Value.GetProperty("visible").GetBoolean());
+        Assert.Equal(sessionId, job.Scope.SessionId);
         return sessionId;
     }
 

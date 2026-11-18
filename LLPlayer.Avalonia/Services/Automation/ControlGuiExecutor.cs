@@ -123,8 +123,8 @@ internal sealed partial class ControlGuiExecutor(FlyleafPlaybackController playe
                     result = Applied();
                     break;
                 case "commands.list":
-                    result = model.BuildExecutableCommands().Select(command => new ControlCommandDescription(command.Id,
-                        command.ActionName, command.Description, command.Group, command.Keys, command.CanExecute,
+                    result = model.BuildExecutableCommands(forControl: true).Select(command => new ControlCommandDescription(command.Id,
+                        command.ActionName, command.Description, command.Group, command.Keys, CommandAvailable(command),
                         IsObservedCommand(command.Id))).ToArray();
                     break;
                 case "devices.audio.list": result = AudioDevices(); break;
@@ -162,10 +162,15 @@ internal sealed partial class ControlGuiExecutor(FlyleafPlaybackController playe
                     result = new ControlGuiDiagnostic("Avalonia", Environment.Version.ToString(), Playback());
                     break;
                 case "ui.get": result = WindowState(); break;
-                case "ui.set":
-                    var setting = Arguments<ControlGuiUiSet>();
-                    if (setting.Fullscreen is { } fullscreen) window.IsFullScreen = fullscreen;
-                    if (setting.Sidebar is { } visible && model.SidebarVisible != visible) model.ToggleSidebar();
+                case "ui.set": result = SetWindowState(Arguments<ControlGuiUiSet>()); break;
+                case "ui.surface.list":
+                    result = Enum.GetValues<ControlUiSurface>().Select(window.GetControlSurfaceStatus).ToArray();
+                    break;
+                case "ui.surface.open":
+                    result = window.OpenControlSurface(Arguments<ControlUiSurfaceRequest>().Surface);
+                    break;
+                case "ui.sidebar.search.focus":
+                    window.FocusControlSidebarSearch();
                     result = WindowState();
                     break;
                 case "ui.clipboard.set":
@@ -269,7 +274,16 @@ internal sealed partial class ControlGuiExecutor(FlyleafPlaybackController playe
         => playlist.Snapshot(player.GetPlaylistItems()).Select(pair => new ControlPlaylistSnapshot(pair.Key, pair.Value.Index, pair.Value.Title, pair.Value.IsCurrent)).ToArray();
 
     ControlWaveformSnapshot Waveform() => new(player.WaveformEnabled, player.WaveformActive, player.WaveformPeaks);
-    ControlGuiUiSnapshot WindowState() => new(window.IsFullScreen, model.SidebarVisible, model.AlwaysOnTop);
+    ControlGuiUiSnapshot SetWindowState(ControlGuiUiSet setting)
+    {
+        model.ApplyControlWindowPreferences(setting);
+        if (setting.Fullscreen is { } fullscreen) window.IsFullScreen = fullscreen;
+        if (setting.Sidebar is { } visible && model.SidebarVisible != visible) model.ToggleSidebar();
+        return WindowState();
+    }
+
+    ControlGuiUiSnapshot WindowState() => new(window.IsFullScreen, model.SidebarVisible, window.Topmost,
+        model.IsDarkTheme ? ControlUiTheme.Dark : ControlUiTheme.Light, window.IsControlSidebarSearchFocused);
     void RequireMedia() { if (!player.IsOpened) throw Unavailable("Open media in this window first."); }
 
     static string ValidateMediaPath(string path)

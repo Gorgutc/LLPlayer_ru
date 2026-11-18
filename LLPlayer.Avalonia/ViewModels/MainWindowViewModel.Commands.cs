@@ -3,11 +3,60 @@ using CommunityToolkit.Mvvm.Input;
 using FlyleafLib.MediaFramework.MediaDevice;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Avalonia.Services;
+using LLPlayer.ControlApi;
 
 namespace LLPlayer.Avalonia.ViewModels;
 
 public sealed partial class MainWindowViewModel
 {
+    internal static IReadOnlyDictionary<ControlUiSurface, string> ControlSurfaceCommands { get; } =
+        new Dictionary<ControlUiSurface, string>
+        {
+            [ControlUiSurface.CommandPalette] = AppShortcutMap.OpenCommandPalette,
+            [ControlUiSurface.DebugOverlay] = AppShortcutMap.ToggleDebugOverlay,
+            [ControlUiSurface.CheatSheet] = AppShortcutMap.OpenWindowCheatSheet,
+            [ControlUiSurface.About] = AppShortcutMap.OpenWindowAbout,
+            [ControlUiSurface.Settings] = AppShortcutMap.OpenWindowSettings,
+            [ControlUiSurface.PlaybackSettings] = AppShortcutMap.OpenWindowPlaybackSettings,
+            [ControlUiSurface.PluginOptions] = AppShortcutMap.OpenWindowPluginOptions,
+            [ControlUiSurface.Playlist] = AppShortcutMap.OpenWindowPlaylist,
+            [ControlUiSurface.WordManager] = AppShortcutMap.OpenWindowWordManager,
+            [ControlUiSurface.SubtitleExport] = AppShortcutMap.OpenWindowSubsExporter,
+            [ControlUiSurface.SubtitleDownload] = AppShortcutMap.OpenWindowSubsDownloader,
+            [ControlUiSurface.AiInsights] = AppShortcutMap.OpenWindowAiInsights,
+            [ControlUiSurface.Batch] = AppShortcutMap.OpenWindowBatchSubtitles,
+            [ControlUiSurface.PdicSettings] = AppShortcutMap.OpenWindowPdicSettings,
+            [ControlUiSurface.OnlineVideo] = AppShortcutMap.OpenWindowOnlineVideo,
+            [ControlUiSurface.Translation] = AppShortcutMap.OpenWindowTranslation,
+            [ControlUiSurface.Recognition] = AppShortcutMap.OpenWindowRecognition,
+            [ControlUiSurface.Dubbing] = AppShortcutMap.OpenWindowDubbing,
+            [ControlUiSurface.AudioCapture] = "OpenAudioCaptureDevices",
+            [ControlUiSurface.VideoCapture] = "OpenVideoCaptureDevices",
+        };
+
+    internal bool IsControlSurfaceConfigured(ControlUiSurface surface)
+    {
+        if (disposed) return false;
+        return surface switch
+        {
+            ControlUiSurface.PlaybackSettings => PlaybackSettingsDialog != null,
+            ControlUiSurface.PluginOptions => PluginOptionsDialog != null,
+            ControlUiSurface.WordManager => WordLibrary != null,
+            ControlUiSurface.SubtitleExport => SubtitleExportSource != null,
+            ControlUiSurface.SubtitleDownload => SubtitleDownloadDialog != null,
+            ControlUiSurface.AiInsights => AiInsightsDialog != null,
+            ControlUiSurface.Batch => BatchDialog != null,
+            ControlUiSurface.PdicSettings => PdicSettingsDialog != null,
+            ControlUiSurface.OnlineVideo => OnlineVideoDialog != null,
+            ControlUiSurface.Translation => TranslationDialog != null,
+            ControlUiSurface.Recognition => RecognitionDialog != null || player is IRecognitionController { RecognitionStore: not null },
+            ControlUiSurface.Dubbing => DubbingDialog != null,
+            _ => true,
+        };
+    }
+
+    internal ICommand GetControlSurfaceCommand(ControlUiSurface surface) => AppCommandOwners()[ControlSurfaceCommands[surface]];
+
     public Func<ApplicationLaunchKind, Task<bool>>? LaunchApplication { get; set; }
 
     static IEnumerable<KeyBinding> EngineRows(IEnumerable<EngineKeyBindingInfo> bindings) => bindings.Select(row => new KeyBinding
@@ -75,7 +124,7 @@ public sealed partial class MainWindowViewModel
     Dictionary<string, Action> CreateAppActions() => AppCommandOwners().ToDictionary(pair => pair.Key,
         pair => (Action)(() => { if (!disposed && pair.Value.CanExecute(null)) pair.Value.Execute(null); }), StringComparer.Ordinal);
 
-    public IReadOnlyList<ExecutableCommand> BuildExecutableCommands()
+    public IReadOnlyList<ExecutableCommand> BuildExecutableCommands(bool forControl = false)
     {
         Dictionary<string, ICommand> owners = AppCommandOwners();
         return ExecutableCommandCatalog.Build(Shortcuts, EngineRows(player.GetEngineKeyBindings()),
@@ -83,7 +132,9 @@ public sealed partial class MainWindowViewModel
                 ? EngineCommandAvailable(descriptor.EngineAction!.Value) : owners.TryGetValue(descriptor.Name, out ICommand? command)
                     && command.CanExecute(null)),
             [new(ShortcutActionTarget.Application, "OpenAudioCaptureDevices", "Open Audio Capture Devices", "Audio"),
-             new(ShortcutActionTarget.Application, "OpenVideoCaptureDevices", "Open Video Capture Devices", "Video")]);
+             new(ShortcutActionTarget.Application, "OpenVideoCaptureDevices", "Open Video Capture Devices", "Video")],
+            forControl ? static action => action is KeyBindingAction.TogglePlayPause or KeyBindingAction.ToggleMute
+                or KeyBindingAction.ToggleFullScreen : null);
     }
 
     bool EngineCommandAvailable(KeyBindingAction action) => action switch
@@ -162,6 +213,26 @@ public sealed partial class MainWindowViewModel
         edit(draft);
         draft.SaveCommand.Execute(null);
         if (draft.Error != null) ShowToast("Could not apply setting", draft.Error, ToastVariant.Destructive);
+    }
+
+    internal void ApplyControlWindowPreferences(ControlGuiUiSet request)
+    {
+        if (request.AlwaysOnTop == null && request.Theme == null) return;
+        if (disposed) throw new InvalidOperationException("The selected player is closing.");
+        AppPrefs candidate = prefs.Clone();
+        if (request.AlwaysOnTop is { } topmost) candidate.AlwaysOnTop = topmost;
+        if (request.Theme is { } theme) candidate.Theme = theme.ToString();
+        candidate.MarkWindowPreferenceEdits(theme: request.Theme.HasValue, alwaysOnTop: request.AlwaysOnTop.HasValue);
+        savePrefs(candidate);
+
+        // Apply only explicit fields. A CLI theme override can differ from the stored theme for this window.
+        if (request.AlwaysOnTop.HasValue) prefs.AlwaysOnTop = AlwaysOnTop = candidate.AlwaysOnTop;
+        if (request.Theme.HasValue)
+        {
+            prefs.Theme = candidate.Theme;
+            IsDarkTheme = request.Theme == ControlUiTheme.Dark;
+            shell.ApplyTheme(candidate.Theme);
+        }
     }
     [RelayCommand] void ShowAudioCaptureDevices() => ShowCaptureDevices(CaptureDeviceKind.Audio);
     [RelayCommand] void ShowVideoCaptureDevices() => ShowCaptureDevices(CaptureDeviceKind.Video);

@@ -152,30 +152,33 @@ internal static class Program
 
     private static JsonElement ScopeInput(JsonElement? input = null, bool mutates = false)
     {
-        var fields = new JsonObject { ["sessionId"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" } };
+        var fields = new JsonObject { ["sessionId"] = Identifier("Attached window ID returned by llplayer_state.") };
         if (input is not { } schema)
             return ObjectSchema(fields);
-        fields["requestId"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" };
+        fields["requestId"] = Identifier("Use a fresh ID for a new command and reuse it when retrying the same command with identical arguments.");
         fields["expectedRevision"] = new JsonObject { ["type"] = "integer" };
-        fields["input"] = JsonNode.Parse(schema.GetRawText());
+        fields["input"] = McpInputSchema.Project(JsonNode.Parse(schema.GetRawText())!.AsObject());
         return mutates ? ObjectSchema(fields, "input", "requestId") : ObjectSchema(fields, "input");
     }
 
     private static JsonElement JobInput()
         => ObjectSchema(new JsonObject
         {
-            ["sessionId"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" },
-            ["jobId"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" },
+            ["sessionId"] = Identifier("Attached window ID returned by llplayer_state."),
+            ["jobId"] = Identifier("Job ID returned by a command or job listing."),
             ["acknowledgeUnknownEffect"] = new JsonObject { ["type"] = "boolean" }
         }, "jobId");
 
     private static JsonElement JobListInput()
         => ObjectSchema(new JsonObject
         {
-            ["sessionId"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" },
+            ["sessionId"] = Identifier("Attached window ID returned by llplayer_state."),
             ["cursor"] = new JsonObject { ["type"] = "string" },
-            ["limit"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = 100 }
+            ["limit"] = new JsonObject { ["type"] = "integer", ["description"] = "Page size from 1 to 100 jobs." }
         });
+
+    private static JsonObject Identifier(string description)
+        => new() { ["type"] = "string", ["description"] = $"{description} Use a UUID." };
 
     private static JsonElement ObjectSchema(JsonObject properties, params string[] required)
         => ControlProtocol.Encode(new JsonObject

@@ -61,7 +61,8 @@ public static class ExecutableCommandCatalog
         IEnumerable<KeyBinding> engineBindings, Func<KeyBindingAction, Action?> engineResolver,
         IReadOnlyDictionary<string, Action> appActions,
         Func<ShortcutActionDescriptor, bool>? availability = null,
-        IEnumerable<ShortcutActionDescriptor>? appDescriptors = null)
+        IEnumerable<ShortcutActionDescriptor>? appDescriptors = null,
+        Func<KeyBindingAction, bool>? includeUnboundEngine = null)
     {
         KeyBinding[] engine = engineBindings.ToArray();
         List<ExecutableCommand> rows = [];
@@ -71,7 +72,7 @@ public static class ExecutableCommandCatalog
             string[] keys = engine.Where(binding => binding.IsEnabled && binding.Action == action)
                 .Select(binding => string.Join("+", KeyMapper.ChordParts(binding.Key, binding.Ctrl, binding.Alt, binding.Shift)))
                 .Distinct(StringComparer.Ordinal).ToArray();
-            if (keys.Length == 0) continue;
+            if (keys.Length == 0 && includeUnboundEngine?.Invoke(action) != true) continue;
             rows.Add(new("engine:" + descriptor.Name, descriptor.Name, descriptor.Description, descriptor.Group,
                 keys, engineResolver(action), () => availability?.Invoke(descriptor) ?? true));
         }

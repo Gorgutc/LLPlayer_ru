@@ -1,6 +1,6 @@
 # F-20 — покрытие функций и настроек через MCP/API
 
-Статус — **PLANNED**, 2026-11-17. Реализация запланирована на следующую сессию.
+Исходный план составлен 2026-11-17. Фактические имена операций и известные ограничения указаны в [сверке реализации](#сверка-реализации-2026-11-18).
 Матрица описывает существующие функции Avalonia Windows/Linux и согласованные точки управления ими.
 Общая архитектура задана [дизайном](2026-11-17-f20-agent-control-design.md), порядок реализации —
 [планом](2026-11-17-f20-agent-control-plan.md). Имена операций ниже — предложение для единого
@@ -110,3 +110,34 @@ ID реплик, исходным текстом, языком и тайминг
 
 Матрица описывает F-20 одной крупной задачей. Последующие F-16, F-19 tier 3, F-02-full и финальная
 приёмка F-13 сохраняют согласованный владельцем порядок после неё.
+
+## Сверка реализации 2026-11-18
+
+В таблице указаны зарегистрированные семейства операций. Имена применяются к полю `operationId` HTTP API.
+MCP использует те же операции с префиксом `llplayer_` и заменяет точки на подчёркивания.
+
+| Группа | Фактические операции и условия |
+| --- | --- |
+| 1. Медиа и воспроизведение | `media.probe`, `media.open`, `media.cancel_open`, `media.recent.list/clear`, `media.neighbor.open`, `playback.*`. Состояние воспроизведения принадлежит выбранному окну. |
+| 2. Дорожки, главы, плейлисты | `streams.list/select`, `chapters.list/seek`, `playlist.list/select/next/previous/reopen`. Выбор нацелен на текущий источник и GUI-сеанс. |
+| 3. Субтитры и синхронизация | GUI `subtitles.load/list/read/search/set_visibility/set_delay/seek_to_cue/synchronize`, `waveform.*`, `ab_loop.*`. `subtitles.document.read` читает документ фонового задания. Для bitmap-реплик GUI выдаёт метаданные без изображения. |
+| 4. ASR и OCR | `recognition.start/pause/resume`, `ocr.start`. Статус и отмена фоновой обработки используют общие операции заданий. Возможность запуска зависит от движка, модели и ОС. |
+| 5. Перевод и словари | `translation.providers.list/check/models/hello`, `translation.start`, `translation.document.begin/read/apply/commit`, `translation.slot.set_enabled`, `dictionary.lookup`. Переключатель слота работает в GUI-сеансе. |
+| 6. Экспорт и скачивание субтитров | `export.subtitles` принимает `jobId` и ревизию документа фонового задания. Для загруженного GUI-слота доступен диалог экспорта, отдельная типизированная операция экспорта этого слота отсутствует. `subtitle_download.search/page/download/load` выполняют операции с OpenSubtitles. |
+| 7. Batch и Watch | `batch.scan/jobs/select_audio/set_included/start/status/cancel/retry/resume`, `watch.get/start/stop/process`, `workflow.create_subtitles`. |
+| 8. Модели и внешние ресурсы | Запланированное семейство `resources.*` представлено `models.list/directory/download/remove` и `resources.status`. Отмена скачивания использует общую команду отмены задания. Автоустановка архива Faster-Whisper-XXL относится к Windows. |
+| 9. Слова, PDIC и Anki | `words.lookup/save/list/update/remove/clear/export`, `anki.send`, `pdic.lookup`. Для PDIC нужны Windows и доступный bridge. |
+| 10. AI Insights | `insights.generate/save/copy`, `insights.vocabulary.merge`. Генерация использует настроенного провайдера. Для clipboard требуется GUI-сеанс. |
+| 11. Дубляж и диаризация | `dubbing.voices`, `dubbing.cue_voice.get/set/clear`, `dubbing.render/attach`, `diarization.start`. Для обработки нужны соответствующие движки и модели. |
+| 12. Медиабэкенды, устройства, запись | `backends.get/set_requested`, `devices.audio.list/refresh/select`, `capture.devices/formats/open`, `recording.start/stop/status`, `snapshot.take`, `viewport.*`. Нативные действия зависят от текущего сеанса и устройства. |
+| 13. UI, диагностика, жизненный цикл | `ui.get/set`, `ui.surface.list/open`, `ui.sidebar.search.focus`, `commands.list/execute`, `app.about/diagnostics/new/clone/restart/exit`, `ui.window.open`, `ui.clipboard.set`, `ui.browser.open`, `ui.path.reveal`. `ui.window.open` запускает основное окно. `app.about` возвращает метаданные. `ui.surface.open` открывает окно команды в выбранном сеансе и возвращает его фактическую видимость. |
+
+Все восемь семейств зарегистрированы в `settings.families` для portable ControlHost. Для `app`, `playback`,
+`recognition`, `translation`, `online_video`, `pdic`, `batch` и `dubbing` доступны `settings.schema/read/validate/apply`.
+Учётные данные меняются через `settings.credentials.set/clear`. Готовность конкретного ресурса и требования ОС
+проверяются по каталогу и состоянию клиента.
+
+Управление статусом, отменой, повтором и продолжением общих заданий выполняется через `/v1/jobs` в HTTP API
+и `llplayer_job_get/cancel/retry/resume` в MCP. HTTP `GET /v1/events` передаёт события по SSE с продолжением
+по `Last-Event-ID`. MCP-клиент проверяет статус опросом задания. Эта сверка фиксирует границы исходного кода.
+Приёмку на реальных движках и моделях подтверждают отдельные прогоны.
