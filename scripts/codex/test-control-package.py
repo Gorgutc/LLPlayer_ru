@@ -21,6 +21,7 @@ import wave
 
 sys.dont_write_bytecode = True
 import f20_pipeline_fixture
+import subtitle_mcp_fixture
 
 
 LEGACY = "2025-11-25"
@@ -833,6 +834,10 @@ def smoke(package):
                 verify_attach(api, state)
                 f20_pipeline_fixture.verify_pipeline(
                     api, fixture, media, mcp, environment, run_companion, StdioClient, MODERN, wait_for_job, check,
+                )
+                subtitle_mcp_fixture.verify_with_host(
+                    api, media.with_name("subtitle-workflow.wav"), mcp, environment, run_companion,
+                    StdioClient, MODERN, wait_for_job, check,
                 )
                 verify_active_state(api)
             check(not os.path.lexists(discovery), "ControlHost did not withdraw its discovery file")

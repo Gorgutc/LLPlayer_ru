@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FlyleafLib;
 using FlyleafLib.MediaFramework.MediaRenderer;
 using FlyleafLib.MediaPlayer;
@@ -141,11 +142,11 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
     private async Task<ProbeResult> ProbeAsync(ProbeRequest args, CancellationToken ct)
     {
         var path = Absolute(args.MediaPath);
-        if (!File.Exists(path))
+        if (!File.Exists(CheckedSourcePath(path, args.RequirePhysicalSource)))
             throw new ControlException(new("source_unavailable", "The source file is unavailable.", true));
-        var before = await ControlJobContext.FingerprintInputAsync(path, ct);
-        var result = await runtime.Workflows.ProbeAsync(path, args.StreamIndex, ct);
-        var after = await ControlJobContext.FingerprintInputAsync(path, ct);
+        var before = await ControlJobContext.FingerprintInputAsync(CheckedSourcePath(path, args.RequirePhysicalSource), ct);
+        var result = await runtime.Workflows.ProbeAsync(CheckedSourcePath(path, args.RequirePhysicalSource), args.StreamIndex, ct);
+        var after = await ControlJobContext.FingerprintInputAsync(CheckedSourcePath(path, args.RequirePhysicalSource), ct);
         if (before != after)
             throw new ControlException(new("stale_media", "The source changed while its streams were being probed.", true));
         return new(result.MediaPath, result.StreamIndex, result.MediaType, result.Language, result.Duration,
@@ -156,6 +157,7 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
     {
         var path = Absolute(args.MediaPath);
         context.Report("checking_input");
+        context.VerifyIdentity(ControlJobContext.RecognitionSourcePathIdentity, PhysicalSourcePath(path, args.RequirePhysicalSource));
         await context.VerifyInputAsync(path, ct, args.SourceRevision);
         var saved = settings.CaptureWorkflowSettings();
         context.VerifyIdentity("recognition_settings", saved.RecognitionIdentity);
@@ -196,12 +198,13 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
                 context.Report("recognizing", progress.Duration > TimeSpan.Zero
                     ? Math.Clamp(progress.Position.TotalSeconds / progress.Duration.TotalSeconds, 0, 1) : null);
             }
-            var result = await runtime.Workflows.TranscribeAsync(path, args.StreamIndex, args.Engine,
+            var result = await runtime.Workflows.TranscribeAsync(CheckedSourcePath(path, args.RequirePhysicalSource), args.StreamIndex, args.Engine,
                 TimeSpan.FromTicks(args.StartTicks), args.Slot, pause.Token,
                 new InlineProgress<BatchAsrProgress>(ReportAsr), ct,
                 waiting => context.Report(waiting ? "waiting_for_gpu" : "recognizing", status: waiting
                     ? ControlJobStatus.WaitingForResource : ControlJobStatus.Running), saved.Config, sourceLanguage);
-            await context.VerifyInputAsync(path, ct);
+            await context.VerifyInputAsync(CheckedSourcePath(path, args.RequirePhysicalSource), ct);
+            context.VerifyIdentity(ControlJobContext.RecognitionSourcePathIdentity, PhysicalSourcePath(path, args.RequirePhysicalSource));
             var document = ControlCueDocument.Capture(context.JobId, sourceStamp, result.SourceLanguage.ISO6391, result.Subtitles);
             return args.ExternalTargetLanguage is { } target
                 ? ControlTranslationOperations.AwaitHarnessTranslation(context, document, target)
@@ -264,10 +267,31 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
     private async Task<ControlJobOutcome> ExportAsync(ControlJobContext context, ExportRequest args, CancellationToken ct)
     {
         var document = await documents.GetDocumentAsync(context.Request.Scope, new(args.JobId, args.Revision), ct);
-        var path = Absolute(args.Path);
+        var path = args.Path is { } output ? Absolute(output) : await InferExportSidecarAsync(context, args, document, ct);
         var staged = ControlSubtitleExport.Prepare(document, args.Format, args.Text, args.Utf8Bom, args.SpeakerLabels);
         await staged.PublishAsync(context, path, args.Overwrite, ct);
         return Done(new { path, sha256 = staged.ComputeSha256() });
+    }
+
+    private async Task<string> InferExportSidecarAsync(ControlJobContext context, ExportRequest args,
+        ControlCueDocument document, CancellationToken ct)
+    {
+        if (args.Format != SubtitleExportFormat.Srt || args.Text != ControlSubtitleText.TranslatedOnly || args.Overwrite)
+            throw new ControlJobException("invalid_arguments",
+                "Omit path only for translated-only Russian SRT export with overwrite disabled.");
+        var scope = context.Request.Scope;
+        if (await jobs.GetAsync(scope, args.JobId, ct) is not { Status: ControlJobStatus.Completed }
+            || document.Cues.Any(cue => !string.IsNullOrWhiteSpace(cue.Text) && string.IsNullOrWhiteSpace(cue.TranslatedText)))
+            throw new ControlJobException("translation_incomplete", "An inferred sidecar requires a complete translation.");
+        if (document.TargetLanguage is not ("ru" or "russian"))
+            throw new ControlJobException("invalid_arguments", "The inferred SRT sidecar requires a Russian translation.");
+        var source = await jobs.ReadRecognitionSourceAsync(scope, document.DocumentId, ct)
+            ?? throw new ControlJobException("recognition_source_unavailable",
+                "The document has no verified media origin from recognition in this scope.");
+        if (!string.Equals(source.Path, PhysicalSourcePath(source.Path, source.RequirePhysicalSource), StringComparison.Ordinal))
+            throw new ControlJobException("stale_media", "The original recognition path no longer names the same physical file.");
+        await context.VerifyInputAsync(source.Path, ct, source.Fingerprint);
+        return RussianSidecarPath(source.Path);
     }
 
     private void Read<TArgs, TResult>(string id, string family, string description,
@@ -335,7 +359,7 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
 
     private static ControlJobOutcome Done<T>(T value) => new(ControlJobStatus.Completed, ControlProtocol.Encode(value));
 
-    internal sealed record ProbeRequest(string MediaPath, int? StreamIndex = null);
+    internal sealed record ProbeRequest(string MediaPath, int? StreamIndex = null, bool RequirePhysicalSource = false);
     internal sealed record BackendRequest(bool? HardwareEnabled = null, PortableVideoDecodeMode? Decode = null,
         string? Device = null, PortableVideoPresentationMode? Presentation = null);
     internal sealed record ProbeResult(string MediaPath, int StreamIndex, MediaType MediaType, Language Language,
@@ -343,13 +367,14 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
     internal sealed record NoArguments;
     internal sealed record RecognitionRequest(string MediaPath, int? StreamIndex = null,
         SubASREngineType? Engine = null, long StartTicks = 0, int? Slot = null, string? ExternalTargetLanguage = null,
-        string? SourceRevision = null, string? SourceLanguage = null);
+        string? SourceRevision = null, string? SourceLanguage = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool RequirePhysicalSource = false);
     internal sealed record JobIdRequest(Guid JobId);
     internal sealed record ProviderTranslationRequest(Guid JobId, string Revision, TargetLanguage TargetLanguage,
         string? SourceLanguage = null, int Start = 0, int? Count = null);
     internal sealed record BeginTranslationDraftRequest(Guid JobId, string Revision, string TargetLanguage,
         int Start = 0, int? Count = null);
-    internal sealed record ExportRequest(Guid JobId, string Revision, string Path, SubtitleExportFormat Format,
+    internal sealed record ExportRequest(Guid JobId, string Revision, SubtitleExportFormat Format, string? Path = null,
         ControlSubtitleText Text = ControlSubtitleText.Original, bool Overwrite = false, bool Utf8Bom = true,
         bool SpeakerLabels = false);
     internal sealed record ModelListRequest(ModelKind Kind, string? WhisperDirectory = null);

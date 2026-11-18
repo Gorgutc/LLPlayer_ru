@@ -8,6 +8,8 @@ namespace LLPlayer.Core.Automation;
 /// <summary>A handler may report progress and checkpoint effects while its attempt owns the job.</summary>
 public sealed class ControlJobContext : IEngineProcessOwner
 {
+    public const string RecognitionSourcePathIdentity = "recognition_source_path";
+
     private readonly ControlJobService service;
     private readonly bool acknowledgeUnknownEffect;
     private readonly SemaphoreSlim effects = new(1, 1);
@@ -54,7 +56,8 @@ public sealed class ControlJobContext : IEngineProcessOwner
     /// <summary>Use this for a command that relies on an open window or another transient input.</summary>
     public void RequireOriginalHost() => UpdateJournal(journal => journal with { DiscardOnRestart = true });
 
-    public async Task VerifyInputAsync(string path, CancellationToken token, string? expectedRevision = null)
+    public async Task VerifyInputAsync(string path, CancellationToken token, string? expectedRevision = null,
+        string? identityKey = null)
     {
         path = Path.GetFullPath(path);
         try
@@ -62,7 +65,7 @@ public sealed class ControlJobContext : IEngineProcessOwner
             var current = await FingerprintInputAsync(path, token).ConfigureAwait(false);
             if (expectedRevision is not null && !current.Equals(expectedRevision, StringComparison.OrdinalIgnoreCase))
                 throw new ControlJobException("stale_media", "The media differs from the previously probed source.");
-            VerifyIdentity("file:" + path, current);
+            VerifyIdentity(identityKey ?? "file:" + path, current);
         }
         catch (IOException error) when (error is FileNotFoundException or DirectoryNotFoundException)
         {

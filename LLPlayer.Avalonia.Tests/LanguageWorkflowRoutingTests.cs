@@ -272,6 +272,66 @@ public sealed class LanguageWorkflowRoutingTests
         finally { release.TrySetResult(); window.RequestApplicationExit(); vm.Dispose(); }
     }
 
+    [AvaloniaFact]
+    public async Task Idle_batch_updates_leave_an_ordinarily_minimized_window_in_the_background()
+    {
+        await using var batch = new BatchWorkflow(new(), new NoRuns(), new NoWatcher(), action => action(), new EmptyCatalog());
+        var window = new Window();
+        int restoreCount = 0;
+        using var tray = new BatchTrayService(Application.Current!, batch,
+            () => { restoreCount++; window.WindowState = WindowState.Normal; }, () => { }, () => Task.CompletedTask);
+        void RestoreWhenIdle() => tray.RestoreMainWhenIdle(window);
+        batch.Changed += RestoreWhenIdle;
+        try
+        {
+            window.Show();
+            window.WindowState = WindowState.Minimized;
+
+            batch.SetMessage("Queue status refreshed.");
+            batch.SetMessage("Queue status refreshed again.");
+
+            Assert.Equal(0, restoreCount);
+            Assert.Equal(WindowState.Minimized, window.WindowState);
+        }
+        finally { batch.Changed -= RestoreWhenIdle; window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_the_batch_workspace_restores_a_backgrounded_main_window_only_once()
+    {
+        await using var batch = new BatchWorkflow(new(), new NoRuns(), new NoWatcher(), action => action(), new EmptyCatalog());
+        var window = new Window();
+        int restoreCount = 0;
+        using var tray = new BatchTrayService(Application.Current!, batch,
+            () =>
+            {
+                restoreCount++;
+                if (!window.IsVisible) window.Show();
+                window.WindowState = WindowState.Normal;
+            }, () => { }, () => Task.CompletedTask);
+        void RestoreWhenIdle() => tray.RestoreMainWhenIdle(window);
+        batch.Changed += RestoreWhenIdle;
+        try
+        {
+            window.Show();
+            batch.Open();
+            tray.SendToBackground(window);
+            Assert.True(!window.IsVisible || window.WindowState == WindowState.Minimized);
+            Assert.Equal(0, restoreCount);
+
+            batch.Closed();
+
+            Assert.Equal(1, restoreCount);
+            Assert.True(window.IsVisible);
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            window.WindowState = WindowState.Minimized;
+            batch.SetMessage("Queue status refreshed.");
+            Assert.Equal(1, restoreCount);
+            Assert.Equal(WindowState.Minimized, window.WindowState);
+        }
+        finally { batch.Changed -= RestoreWhenIdle; window.Close(); }
+    }
+
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]

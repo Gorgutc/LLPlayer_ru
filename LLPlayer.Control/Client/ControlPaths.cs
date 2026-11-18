@@ -35,6 +35,15 @@ public static class ControlPaths
     public static string ResolveDirectory(string directory)
         => Path.TrimEndingDirectorySeparator(Resolve(new DirectoryInfo(directory)).FullName);
 
+    public static bool IsPhysicalPath(string path)
+    {
+        var ancestors = new Stack<string>();
+        for (string? segment = path; segment is not null; segment = Path.GetDirectoryName(segment))
+            ancestors.Push(segment);
+        // A directory must be checked before its children, so an alias is not followed.
+        return ancestors.All(segment => (File.GetAttributes(segment) & FileAttributes.ReparsePoint) == 0);
+    }
+
     public static bool SameDirectory(string left, string right)
         => string.Equals(ResolveDirectory(left), ResolveDirectory(right),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);

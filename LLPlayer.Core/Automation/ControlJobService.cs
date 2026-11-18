@@ -133,6 +133,27 @@ public sealed class ControlJobService : IControlJobService, IAsyncDisposable
         lock (gate) return Task.FromResult(store.Get(scope, jobId)?.State);
     }
 
+    // Only recognition can establish a physical media origin for a detached subtitle document.
+    public Task<(string Path, string Fingerprint, bool RequirePhysicalSource)?> ReadRecognitionSourceAsync(ControlScope scope, Guid jobId,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (gate)
+        {
+            var job = store.Get(scope, jobId);
+            (string Path, string Fingerprint, bool RequirePhysicalSource)? source = null;
+            if (job is { State: { OperationId: "recognition.start",
+                    Status: ControlJobStatus.Completed or ControlJobStatus.AwaitingTranslation } }
+                && job.State.Scope == scope
+                && job.Journal.Identities.TryGetValue(ControlJobContext.RecognitionSourcePathIdentity, out var physicalPath)
+                && job.Request.Arguments.GetProperty("mediaPath").GetString() is { } path
+                && job.Journal.Identities.TryGetValue("file:" + Path.GetFullPath(path), out var fingerprint))
+                source = (physicalPath, fingerprint, job.Request.Arguments.TryGetProperty("requirePhysicalSource", out var guard)
+                    && guard.ValueKind == JsonValueKind.True);
+            return Task.FromResult(source);
+        }
+    }
+
     public Task<ControlJobPage> ListAsync(ControlScope scope, string? cursor = null, int limit = 50,
         CancellationToken ct = default)
     {

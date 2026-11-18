@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Batch;
@@ -16,9 +17,14 @@ internal sealed partial class ControlHostOperations
     {
         if (request.Files.Count is < 1 or > 64 || request.Files.Any(file => file is null || file.StreamIndex is < 0))
             throw new ControlJobException("invalid_arguments", "Supply between 1 and 64 media files with valid stream indices.");
-        var files = request.Files.Select(file =>
-            new PipelineFile(PhysicalFile(Absolute(file.MediaPath)), PhysicalFile(Absolute(file.OutputPath), output: true),
-                file.StreamIndex, file.SourceRevision)).ToArray();
+        var files = request.Files.Select((file, index) =>
+        {
+            var source = PhysicalSourcePath(Absolute(file.MediaPath), file.RequirePhysicalSource);
+            var output = file.OutputPath is { } path ? PhysicalFile(Absolute(path), output: true)
+                : InferPipelineSidecar(request, source);
+            return new { MediaPath = source, OutputPath = output, file.StreamIndex, file.SourceRevision, file.RequirePhysicalSource,
+                FileIdentity = file.OutputPath is null ? $"sidecar_media:{index}" : null };
+        }).ToArray();
         var paths = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
         if (files.Select(file => file.OutputPath).Distinct(paths).Count() != files.Length ||
             files.Select(file => file.OutputPath).Intersect(files.Select(file => file.MediaPath), paths).Any())
@@ -27,8 +33,14 @@ internal sealed partial class ControlHostOperations
         context.VerifyIdentity("recognition_settings", saved.RecognitionIdentity);
         ValidateTranslationSettings(context, saved.TranslationEnabled, saved.TranslationIdentity);
         context.Report("checking_inputs");
-        foreach (var file in files)
-            await context.VerifyInputAsync(file.MediaPath, ct, file.SourceRevision);
+        for (var index = 0; index < files.Length; index++)
+        {
+            var file = files[index];
+            if (file.FileIdentity is not null)
+                VerifySidecarPaths(context, index, file.MediaPath, file.OutputPath);
+            await context.VerifyInputAsync(CheckedSourcePath(file.MediaPath, file.RequirePhysicalSource),
+                ct, file.SourceRevision, file.FileIdentity);
+        }
 
         var checkpoint = context.Checkpoint?.Deserialize<PipelineCheckpoint>(ControlProtocol.Json)
             ?? new PipelineCheckpoint(0, null, null, []);
@@ -46,12 +58,16 @@ internal sealed partial class ControlHostOperations
             var file = files[index];
             if (checkpoint.Original is null)
             {
+                if (file.FileIdentity is not null && File.Exists(file.OutputPath))
+                    throw new ControlJobException("output_exists", "The Russian SRT sidecar already exists.");
                 context.Report($"recognizing_file_{index + 1}", (double)index / files.Length);
-                var result = await runtime.Workflows.TranscribeAsync(file.MediaPath, file.StreamIndex, request.Engine,
+                var result = await runtime.Workflows.TranscribeAsync(CheckedSourcePath(file.MediaPath, file.RequirePhysicalSource),
+                    file.StreamIndex, request.Engine,
                     TimeSpan.Zero, null, default, null, ct,
                     waiting => context.Report(waiting ? "waiting_for_gpu" : "recognizing",
                         status: waiting ? ControlJobStatus.WaitingForResource : ControlJobStatus.Running), saved.Config);
-                await context.VerifyInputAsync(file.MediaPath, ct);
+                await context.VerifyInputAsync(CheckedSourcePath(file.MediaPath, file.RequirePhysicalSource),
+                    ct, identityKey: file.FileIdentity);
                 var original = ControlCueDocument.Capture(Guid.NewGuid(), $"{file.MediaPath}|{file.StreamIndex}|{saved.RecognitionIdentity}",
                     result.SourceLanguage.ISO6391, result.Subtitles);
                 checkpoint = checkpoint with { Original = original };
@@ -68,6 +84,13 @@ internal sealed partial class ControlHostOperations
             context.Report($"exporting_file_{index + 1}", (double)index / files.Length);
             var output = ControlSubtitleExport.Prepare(checkpoint.Translated, request.Format, ControlSubtitleText.TranslatedOnly,
                 request.Utf8Bom, request.SpeakerLabels);
+            if (file.FileIdentity is not null || file.RequirePhysicalSource)
+            {
+                var currentSource = PhysicalSourcePath(Absolute(request.Files[index].MediaPath), file.RequirePhysicalSource);
+                if (file.FileIdentity is not null)
+                    VerifySidecarPaths(context, index, currentSource, RussianSidecarPath(currentSource));
+                await context.VerifyInputAsync(currentSource, ct, file.SourceRevision, file.FileIdentity);
+            }
             await output.PublishAsync(context, file.OutputPath, request.Overwrite, ct, $"subtitle:{index}");
             var outputs = checkpoint.Outputs.Append(new PipelineOutput(file.OutputPath, output.ComputeSha256(),
                 checkpoint.Translated.Cues.Length)).ToArray();
@@ -80,6 +103,44 @@ internal sealed partial class ControlHostOperations
     private static ControlJobException ChangedOutput()
         => new("output_changed", "A completed output differs from its saved receipt.", ControlJobStatus.Interrupted);
 
+    private static string InferPipelineSidecar(PipelineRequest request, string source)
+    {
+        if (request.TargetLanguage != TargetLanguage.Russian || request.Format != SubtitleExportFormat.Srt
+            || request.Overwrite)
+            throw new ControlJobException("invalid_arguments",
+                "Omit outputPath only for Russian SRT output with overwrite disabled.");
+        return RussianSidecarPath(source);
+    }
+
+    private static string RussianSidecarPath(string source)
+        => PhysicalFile(SubtitleOutputPathBuilder.BuildRussianSrtPath(source), output: true);
+
+    private static void VerifySidecarPaths(ControlJobContext context, int index, string source, string output)
+    {
+        // A Windows directory can be case-sensitive. Retain the exact resolved names for each item.
+        context.VerifyIdentity($"sidecar_source:{index}", source);
+        context.VerifyIdentity($"sidecar_destination:{index}", output);
+    }
+
+    private static string PhysicalSourcePath(string path, bool requirePhysicalSource)
+        => requirePhysicalSource ? CheckedSourcePath(path, true) : PhysicalFile(path);
+
+    private static string CheckedSourcePath(string path, bool requirePhysicalSource)
+    {
+        if (!requirePhysicalSource)
+            return path;
+        try
+        {
+            if (ControlPaths.IsPhysicalPath(path) && string.Equals(path, PhysicalFile(path), StringComparison.Ordinal))
+                return path;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            throw new ControlException(new("source_unavailable", "The source file is unavailable.", true));
+        }
+        throw new ControlException(new("source_path_changed", "The source path contains a link or reparse point."));
+    }
+
     private static string PhysicalFile(string path, bool output = false)
     {
         var directory = Path.GetDirectoryName(path)
@@ -91,8 +152,9 @@ internal sealed partial class ControlHostOperations
             ? target.FullName : file.FullName;
     }
 
-    internal sealed record PipelineFile(string MediaPath, string OutputPath, int? StreamIndex = null,
-        string? SourceRevision = null);
+    internal sealed record PipelineFile(string MediaPath, string? OutputPath = null, int? StreamIndex = null,
+        string? SourceRevision = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool RequirePhysicalSource = false);
     internal sealed record PipelineRequest(IReadOnlyList<PipelineFile> Files, TargetLanguage TargetLanguage,
         SubtitleExportFormat Format = SubtitleExportFormat.Srt, SubASREngineType? Engine = null,
         string? SourceLanguage = null, bool Overwrite = false, bool Utf8Bom = true, bool SpeakerLabels = false);
