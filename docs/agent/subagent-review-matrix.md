@@ -45,7 +45,8 @@ new files; narrower product/runtime rows add domain reviewers and never replace 
   `media_runtime_mapper`, `packaging_release_reviewer`, `verification_reviewer`, plus
   `native_dependency_auditor` for `LLPlayer.ControlHost/**` and `LLPlayer.Control/Client/**`. Run WPF `verify`, Windows Avalonia
   and Linux gates, and the package protocol smoke against staged and archived packages on both platforms.
-- `scripts/codex/test-control-package.py`, `scripts/codex/f20_pipeline_fixture.py`, `scripts/codex/control-fixture/**`:
+- `scripts/codex/test-control-package.py`, `scripts/codex/f20_pipeline_fixture.py`, `scripts/codex/subtitle_mcp_fixture.py`,
+  `scripts/codex/control-fixture/**`:
   `dotnet_quality_guardian`, `packaging_release_reviewer`, `verification_reviewer` in addition to the Codex tooling reviewers.
   Verify the packaged protocol paths on both platforms, including the CPU test recognizer and test translation provider.
 - Avalonia Windows RID/native-runtime/package paths: `dotnet_quality_guardian`, `native_dependency_auditor`,

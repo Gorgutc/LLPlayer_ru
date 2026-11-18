@@ -202,7 +202,7 @@ try {
             $gates.Add("windows avalonia verify")
         }
         $isControlCompanion = $normalized -match '^(LLPlayer\.Control(Host)?|LLPlayer\.Mcp)/'
-        $isControlFixture = $normalized -match '^scripts/codex/(test-control-package\.py$|f20_pipeline_fixture\.py$|control-fixture/)'
+        $isControlFixture = $normalized -match '^scripts/codex/(test-control-package\.py$|f20_pipeline_fixture\.py$|subtitle_mcp_fixture\.py$|control-fixture/)'
         if ($isControlCompanion -or $isControlFixture) {
             $contracts.Add("dependency-baseline.md")
             $agents.Add("dotnet_quality_guardian")
