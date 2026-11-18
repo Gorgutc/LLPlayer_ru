@@ -8,6 +8,8 @@ namespace LLPlayer.Core.Automation;
 /// <summary>A handler may report progress and checkpoint effects while its attempt owns the job.</summary>
 public sealed class ControlJobContext : IEngineProcessOwner
 {
+    public const string RecognitionSourcePathIdentity = "recognition_source_path";
+
     private readonly ControlJobService service;
     private readonly bool acknowledgeUnknownEffect;
     private readonly SemaphoreSlim effects = new(1, 1);
@@ -54,7 +56,8 @@ public sealed class ControlJobContext : IEngineProcessOwner
     /// <summary>Use this for a command that relies on an open window or another transient input.</summary>
     public void RequireOriginalHost() => UpdateJournal(journal => journal with { DiscardOnRestart = true });
 
-    public async Task VerifyInputAsync(string path, CancellationToken token, string? expectedRevision = null)
+    public async Task VerifyInputAsync(string path, CancellationToken token, string? expectedRevision = null,
+        string? identityKey = null)
     {
         path = Path.GetFullPath(path);
         try
@@ -62,7 +65,7 @@ public sealed class ControlJobContext : IEngineProcessOwner
             var current = await FingerprintInputAsync(path, token).ConfigureAwait(false);
             if (expectedRevision is not null && !current.Equals(expectedRevision, StringComparison.OrdinalIgnoreCase))
                 throw new ControlJobException("stale_media", "The media differs from the previously probed source.");
-            VerifyIdentity("file:" + path, current);
+            VerifyIdentity(identityKey ?? "file:" + path, current);
         }
         catch (IOException error) when (error is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -97,7 +100,7 @@ public sealed class ControlJobContext : IEngineProcessOwner
     /// Publishes an already written staging file beside its destination. A crash after the rename can be recovered by hash.
     /// </summary>
     public async Task PublishFileAsync(string effectId, string stagedPath, string destination, bool overwrite,
-        CancellationToken token)
+        CancellationToken token, Action<string>? validatePublication = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(effectId);
         stagedPath = Path.GetFullPath(stagedPath);
@@ -105,7 +108,8 @@ public sealed class ControlJobContext : IEngineProcessOwner
         if (!IsSibling(stagedPath, destination))
             throw new ArgumentException("The staging file must be distinct and beside its destination.", nameof(stagedPath));
 
-        await PublishWithOwnershipAsync(effectId, stagedPath, destination, overwrite, token).ConfigureAwait(false);
+        await PublishWithOwnershipAsync(effectId, stagedPath, destination, overwrite, token, validatePublication)
+            .ConfigureAwait(false);
     }
 
     /// <summary>Writes a unique sibling, retaining it on failure only when the journal owns it for recovery.</summary>
@@ -154,7 +158,7 @@ public sealed class ControlJobContext : IEngineProcessOwner
     }
 
     private async Task<bool> PublishWithOwnershipAsync(string effectId, string? stagedPath, string destination, bool overwrite,
-        CancellationToken token)
+        CancellationToken token, Action<string>? validatePublication = null)
     {
         await effects.WaitAsync(token).ConfigureAwait(false);
         try
@@ -162,7 +166,8 @@ public sealed class ControlJobContext : IEngineProcessOwner
             await service.FilePublication.WaitAsync(token).ConfigureAwait(false);
             try
             {
-                return await PublishStagedFileAsync(effectId, stagedPath, destination, overwrite, token).ConfigureAwait(false);
+                return await PublishStagedFileAsync(effectId, stagedPath, destination, overwrite, token, validatePublication)
+                    .ConfigureAwait(false);
             }
             finally { service.FilePublication.Release(); }
         }
@@ -170,13 +175,20 @@ public sealed class ControlJobContext : IEngineProcessOwner
     }
 
     private async Task<bool> PublishStagedFileAsync(string effectId, string? stagedPath, string destination, bool overwrite,
-        CancellationToken token)
+        CancellationToken token, Action<string>? validatePublication)
     {
         var recorded = ReadEffect(effectId);
         bool recovering = stagedPath is null;
         if (recorded is null && recovering)
             return false;
+        void Validate()
+        {
+            if (stagedPath is not null)
+                validatePublication?.Invoke(stagedPath);
+        }
+        Validate();
         string? existingHash = await ReadFileHashAsync(destination, token).ConfigureAwait(false);
+        Validate();
         if (recorded is not null)
         {
             if (recorded.Kind != "file" || !FilePaths.Equals(recorded.Path, destination) || recorded.Overwrite != overwrite)
@@ -200,6 +212,7 @@ public sealed class ControlJobContext : IEngineProcessOwner
             stagedPath = savedStage;
         if (stagedPath is null || (recovering && !File.Exists(stagedPath)))
             return false;
+        Validate();
         string stagingHash = await FlushAndHashAsync(stagedPath, token).ConfigureAwait(false);
         if (recorded is not null && recorded.Hash != stagingHash)
             throw new ControlJobException("staging_changed", "The resumable staged output differs from the original.",
@@ -215,9 +228,11 @@ public sealed class ControlJobContext : IEngineProcessOwner
             SaveEffect(effectId, recorded);
         }
         token.ThrowIfCancellationRequested();
+        Validate();
         if (await ReadFileHashAsync(destination, token).ConfigureAwait(false) != existingHash)
             throw new ControlJobException("output_changed", "The destination changed before the file could be published.",
                 ControlJobStatus.Interrupted);
+        Validate();
         File.Move(stagedPath, destination, overwrite: overwrite && existingHash is not null);
         SaveEffect(effectId, recorded with { Completed = true });
         return true;

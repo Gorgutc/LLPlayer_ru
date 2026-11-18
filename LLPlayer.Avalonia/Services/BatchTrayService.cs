@@ -84,6 +84,16 @@ public sealed class BatchTrayService : IDisposable, IAsyncDisposable
         workflow.SetMessage(BackgroundDescription);
         Update();
     }
+    internal void RestoreMainWhenIdle(Window window)
+    {
+        if (workflow.KeepAlive || !backgroundWindows.Contains(window) ||
+            (window.IsVisible && window.WindowState != WindowState.Minimized))
+            return;
+
+        restoreMain();
+        if (window.IsVisible && window.WindowState != WindowState.Minimized)
+            RemoveBackground(window);
+    }
     void OnWindowActivated(object? sender, EventArgs args) { if (sender is Window window) RemoveBackground(window); }
     void OnWindowClosed(object? sender, EventArgs args) { if (sender is Window window) RemoveBackground(window); }
     void RemoveBackground(Window window)

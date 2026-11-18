@@ -15,6 +15,48 @@ command = "/absolute/path/to/LLPlayer/mcp/LLPlayer.Mcp"
 
 Мост использует C# SDK 2.4.0. Он принимает MCP 2026-07-28 через `server/discover` и прежний handshake `initialize`. LLPlayer предоставляет операции `llplayer_job_get`, `llplayer_job_cancel`, `llplayer_job_retry` и `llplayer_job_resume`. `llplayer_host_stop` и `llplayer_host_restart` управляют уже работающим хостом.
 
+## Русские субтитры рядом с видео из чата
+
+Для фоновой обработки задайте мосту `LLPLAYER_SUBTITLE_ROOT` с абсолютным путём к вашей папке видео. В задаче указывайте полный путь, сохраняя регистр имени разрешённой папки. Мост предоставит инструменты распознавания, перевода, экспорта и проверки связанных заданий. ControlHost сам сформирует имя `<имя видео>.ru.srt` рядом с исходным файлом. Существующая дорожка защищена от перезаписи.
+
+В проекте Codex, которому вы доверяете обработку этой папки, можно заранее разрешить четыре команды, которыми модель клиента запускает распознавание, применяет и фиксирует перевод, затем экспортирует SRT. Пути ниже приведены как пример для Windows. На Linux укажите путь к `LLPlayer.Mcp` и свой абсолютный путь к медиа.
+
+```toml
+[mcp_servers.llplayer_subtitles]
+command = "C:/Applications/LLPlayer/mcp/LLPlayer.Mcp.exe"
+enabled_tools = [
+  "llplayer_subtitle_media_probe",
+  "llplayer_subtitle_recognition_start",
+  "llplayer_subtitle_job_get",
+  "llplayer_subtitle_translation_document_read",
+  "llplayer_subtitle_translation_document_apply",
+  "llplayer_subtitle_translation_document_commit",
+  "llplayer_subtitle_export_subtitles",
+]
+default_tools_approval_mode = "writes"
+
+[mcp_servers.llplayer_subtitles.env]
+LLPLAYER_SUBTITLE_ROOT = "E:/Lessons"
+
+[mcp_servers.llplayer_subtitles.tools.llplayer_subtitle_recognition_start]
+approval_mode = "approve"
+
+[mcp_servers.llplayer_subtitles.tools.llplayer_subtitle_translation_document_apply]
+approval_mode = "approve"
+
+[mcp_servers.llplayer_subtitles.tools.llplayer_subtitle_translation_document_commit]
+approval_mode = "approve"
+
+[mcp_servers.llplayer_subtitles.tools.llplayer_subtitle_export_subtitles]
+approval_mode = "approve"
+```
+
+После подключения проекта достаточно задачи «Сделай русские субтитры к `E:/Lessons/урок.mp4` и сохрани рядом с видео через LLPlayer». Обработка проходит в ControlHost без открытия окна. Для перевода провайдером, выбранным в настройках LLPlayer, добавьте `llplayer_subtitle_workflow_create_subtitles` в `enabled_tools` и задайте ей отдельное одобрение. Результат проверяет `llplayer_subtitle_job_get`. Действующая политика клиента определяет, когда нужно дополнительное подтверждение. [Настройки MCP в Codex](https://learn.chatgpt.com/docs/extend/mcp?surface=cli#configtoml-examples)
+
+Плагин LLPlayer для Codex подключает скилл `llplayer-subtitles`. Он описывает работу с черновиком и вычитку технических субтитров с сохранением терминов, клавиш и таймингов. В других клиентах можно подключить тот же файл как инструкцию для перевода. [Скилл llplayer-subtitles](../Plugins/llplayer-codex/skills/llplayer-subtitles/SKILL.md)
+
+Если мост перезапущен между шагами, повторите исходный запрос с тем же `requestId` и теми же аргументами. Хост вернёт прежнее задание, и мост снова сможет читать его состояние.
+
 ## Локальный HTTP
 
 Для отдельного профиля Avalonia и MCP задайте в окружении клиентов один абсолютный `LLPLAYER_CONFIG_DIR`. Для состояния задайте абсолютный `XDG_STATE_HOME` на Linux или `LOCALAPPDATA` на Windows. Аргумент хоста `--state-dir` должен указывать на подкаталог `LLPlayer` в выбранном каталоге.
@@ -56,7 +98,7 @@ command = "/absolute/path/to/LLPlayer/mcp/LLPlayer.Mcp"
 1. Вызовите `media.probe` с абсолютным путём и выберите `streamIndex` из результата. Затем передайте путь, индекс и `sourceRevision` в `recognition.start`. Хост проверит, что исходный файл соответствует прочитанной ревизии. Выбор движка доступен через настройки распознавания или поле `engine`.
 2. Дождитесь завершения ASR. Сохраните `jobId` и `revision` документа из результата. Для перевода настроенным провайдером передайте их в `translation.start` вместе с `targetLanguage`. Параметры `start` и `count` выбирают диапазон реплик с индексами от нуля.
 3. Если модель клиента переводит сама, передайте `externalTargetLanguage` при запуске распознавания. Для готового документа вызовите `translation.document.begin` с его ревизией, целевым языком и нужным диапазоном. При статусе `awaitingTranslation` получите порции исходных реплик через `translation.document.read`, отправьте переводы с исходными `cueId` через `translation.document.apply` и опубликуйте их через `translation.document.commit`.
-4. Используйте `export.subtitles` с идентификатором задания, ревизией документа, абсолютным путём и форматом. Ожидайте завершения задания и сверяйте хеш с результатом операции. Для нескольких локальных файлов и настроенного провайдера используйте `workflow.create_subtitles`.
+4. Используйте `export.subtitles` с идентификатором задания, ревизией документа, абсолютным путём и форматом. Для полного русского перевода по результатам распознавания с проверенной ревизией можно опустить `path` и передать `format: "srt"`, `text: "translatedOnly"`, `overwrite: false`. Хост возьмёт путь из сохранённого задания и запишет `<имя видео>.ru.srt`. Для нескольких локальных файлов и настроенного провайдера используйте `workflow.create_subtitles`. Чтобы сохранить русские SRT рядом с видео, опустите `outputPath` у соответствующих элементов `files`. Ожидайте завершения задания и сверяйте хеш с результатом операции.
 
 При разрыве соединения работа продолжается в хосте. После сбоя проверьте статус и явно вызовите `resume` у прерванного задания. При несовпадении сохранённого входа или результата операция вернёт ошибку. Для внешнего действия с неопределённым исходом проверьте его на стороне сервиса перед явным подтверждением повтора.
 

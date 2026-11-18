@@ -4,6 +4,7 @@ using System.Text;
 using FlyleafLib;
 using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaPlayer;
+using LLPlayer.ControlApi;
 
 namespace LLPlayer.Core.Automation;
 
@@ -65,7 +66,7 @@ public sealed class ControlPreparedTextExport(string content, bool includeUtf8Bo
     }
 
     public async Task PublishAsync(ControlJobContext context, string path, bool overwrite, CancellationToken token,
-        string effectId = "subtitle")
+        string effectId = "subtitle", Action<string>? validatePublication = null)
     {
         string destination = Path.GetFullPath(path);
         string stage = Path.Combine(Path.GetDirectoryName(destination)!,
@@ -73,15 +74,21 @@ public sealed class ControlPreparedTextExport(string content, bool includeUtf8Bo
         bool ownsStage = false;
         try
         {
+            validatePublication?.Invoke(stage);
             await WriteAsync(stage, overwrite: false, token).ConfigureAwait(false);
             ownsStage = true;
-            await context.PublishFileAsync(effectId, stage, destination, overwrite, token).ConfigureAwait(false);
+            await context.PublishFileAsync(effectId, stage, destination, overwrite, token, validatePublication)
+                .ConfigureAwait(false);
         }
         finally
         {
             if (ownsStage)
             {
-                try { File.Delete(stage); }
+                try
+                {
+                    if (validatePublication is null || ControlPaths.IsPhysicalPath(stage, allowMissingLeaf: true))
+                        File.Delete(stage);
+                }
                 catch (IOException) { }
                 catch (UnauthorizedAccessException) { }
             }

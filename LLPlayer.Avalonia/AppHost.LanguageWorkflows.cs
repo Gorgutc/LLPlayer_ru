@@ -138,8 +138,7 @@ public sealed partial class AppHost
         languageBatch.Changed += () =>
         {
             languageBatchModel.ActivityStatus = languageBatch is ControlBatchWorkspace attached ? attached.ActivityStatus : activity.Status;
-            if (!languageShuttingDown && !languageBatch.KeepAlive
-                && (!window.IsVisible || window.WindowState == WindowState.Minimized)) RestoreMain();
+            if (!languageShuttingDown) languageTray.RestoreMainWhenIdle(window);
         };
         controller.OpenCompleted += (media, isSubtitle, error) =>
         {

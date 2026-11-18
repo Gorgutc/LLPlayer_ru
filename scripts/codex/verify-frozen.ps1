@@ -395,6 +395,7 @@ try {
         @{ Path = "LLPlayer.Mcp/Future.cs"; Agents = $controlAgents; Gates = $controlGates },
         @{ Path = "scripts/codex/test-control-package.py"; Agents = $controlFixtureAgents; Gates = $controlGates },
         @{ Path = "scripts/codex/f20_pipeline_fixture.py"; Agents = $controlFixtureAgents; Gates = $controlGates },
+        @{ Path = "scripts/codex/subtitle_mcp_fixture.py"; Agents = $controlFixtureAgents; Gates = $controlGates },
         @{ Path = "scripts/codex/control-fixture/Future.cs"; Agents = $controlFixtureAgents; Gates = $controlGates },
         @{ Path = "LLPlayer.Core/Services/Future.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },
         @{ Path = "LLPlayer.Core/Services/RecognitionSettings.cs"; Agents = @("dotnet_quality_guardian", "media_runtime_mapper", "instruction_drift_auditor", "verification_reviewer"); Gates = @("verify", "linux verify", "windows avalonia verify") },

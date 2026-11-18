@@ -18,12 +18,26 @@ internal static class Program
 
     public static async Task Main()
     {
+        SubtitleMcpProfile? subtitleProfile;
+        try
+        {
+            subtitleProfile = SubtitleMcpProfile.FromEnvironment();
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or ControlException)
+        {
+            Console.Error.WriteLine("LLPLAYER_SUBTITLE_ROOT must name an accessible absolute directory without links or reparse points.");
+            Environment.ExitCode = 2;
+            return;
+        }
         var builder = Host.CreateApplicationBuilder();
         builder.Logging.ClearProviders();
         builder.Services.AddMcpServer(options =>
         {
-            options.ServerInfo = new() { Name = "LLPlayer", Version = "1.0" };
-        }).WithStdioServerTransport().WithListToolsHandler(ListAsync).WithCallToolHandler(CallAsync);
+            options.ServerInfo = new() { Name = subtitleProfile is null ? "LLPlayer" : "LLPlayer subtitles", Version = "1.0" };
+        }).WithStdioServerTransport()
+            .WithListToolsHandler((request, ct) => subtitleProfile is null
+                ? ListAsync(request, ct) : ValueTask.FromResult(subtitleProfile.ListTools()))
+            .WithCallToolHandler((request, ct) => CallAsync(request, subtitleProfile, ct));
         using var host = builder.Build();
         await host.RunAsync();
     }
@@ -62,12 +76,15 @@ internal static class Program
     }
 
     private static async ValueTask<CallToolResult> CallAsync(
-        RequestContext<CallToolRequestParams> request, CancellationToken ct)
+        RequestContext<CallToolRequestParams> request, SubtitleMcpProfile? subtitleProfile, CancellationToken ct)
     {
         try
         {
             var call = request.Params ?? throw new JsonException();
             var arguments = ControlProtocol.Encode(call.Arguments ?? new Dictionary<string, JsonElement>());
+            if (subtitleProfile is not null)
+                return Reply(await subtitleProfile.CallAsync(call.Name, arguments, ConnectAsync, ct));
+
             using var client = call.Name is "llplayer_host_stop" or "llplayer_host_restart"
                 ? await ConnectExistingAsync(ct) : await ConnectAsync(ct);
             var scope = new ControlScope(ControlProtocol.DefaultProfileId, OptionalGuid(arguments, "sessionId"));
@@ -140,7 +157,7 @@ internal static class Program
 
     private static string Name(string operationId) => "llplayer_" + operationId.Replace('.', '_');
 
-    private static Tool CreateTool(string name, string description, JsonElement schema, bool mutates = false)
+    internal static Tool CreateTool(string name, string description, JsonElement schema, bool mutates = false)
         => new()
         {
             Name = name,
@@ -150,9 +167,11 @@ internal static class Program
             Annotations = new() { ReadOnlyHint = !mutates }
         };
 
-    private static JsonElement ScopeInput(JsonElement? input = null, bool mutates = false)
+    internal static JsonElement ScopeInput(JsonElement? input = null, bool mutates = false, bool includeSession = true)
     {
-        var fields = new JsonObject { ["sessionId"] = Identifier("Attached window ID returned by llplayer_state.") };
+        var fields = new JsonObject();
+        if (includeSession)
+            fields["sessionId"] = Identifier("Attached window ID returned by llplayer_state.");
         if (input is not { } schema)
             return ObjectSchema(fields);
         fields["requestId"] = Identifier("Use a fresh ID for a new command and reuse it when retrying the same command with identical arguments.");
