@@ -39,6 +39,18 @@ command = "/absolute/path/to/LLPlayer/mcp/LLPlayer.Mcp"
 - `POST /v1/stop` — остановка после отмены и подтверждённой очистки. При `cleanup_pending` хост остаётся доступен для проверки заданий.
 - `POST /v1/restart` — та же очистка с запуском нового экземпляра. Ответ `202` подтверждает принятие запроса. Сверьте новую квитанцию обнаружения и `instanceId` через `/v1/identity`.
 
+## Окна и команды Avalonia
+
+Выберите `sessionId` открытого окна из `llplayer_state` или `GET /v1/state`. Передайте его в MCP-вызове или в объекте `scope` для `POST /v1/operations`.
+
+- `ui.surface.list` (`llplayer_ui_surface_list`) возвращает список окон и состояние каждого из них. Поля результата — `surface`, `visible` и `available`.
+- `ui.surface.open` (`llplayer_ui_surface_open`) принимает `surface` и создаёт задание. Дождитесь `completed` и проверьте в результате `visible`. Повторный вызов для уже видимого окна возвращает `visible: true`. Открытие может быть недоступно, пока в сеансе открыт другой модальный диалог.
+- `ui.sidebar.search.focus` показывает боковую панель и ставит фокус в поле поиска субтитров. Результат задания сообщает `sidebarSearchFocused`. Та же операция доступна как команда `app:ActivateSubsSearch`.
+- `commands.list` показывает идентификаторы команд и отмечает поддержку автоматизации. `commands.execute` выполняет поддерживаемые команды. Для оконной команды результат может содержать `surface`. Например, `app:ToggleDebugOverlay` открывает или закрывает окно отладки, а `ui.surface.open` с `debugOverlay` открывает его.
+- `ui.get` возвращает состояние интерфейса. `ui.set` принимает `fullscreen`, `sidebar`, `alwaysOnTop` и `theme` (`dark` или `light`). Тема и режим поверх окон сохраняются в настройках приложения.
+
+Значения `surface` — `commandPalette`, `debugOverlay`, `cheatSheet`, `about`, `settings`, `playbackSettings`, `pluginOptions`, `playlist`, `wordManager`, `subtitleExport`, `subtitleDownload`, `aiInsights`, `batch`, `pdicSettings`, `onlineVideo`, `translation`, `recognition`, `dubbing`, `audioCapture`, `videoCapture`. Доступность зависит от ОС, состояния выбранного окна и ресурсов. Для открытия основного окна приложения служит `ui.window.open`. Сведения о приложении возвращает `app.about`.
+
 ## Субтитры и задания
 
 1. Вызовите `media.probe` с абсолютным путём и выберите `streamIndex` из результата. Затем передайте путь, индекс и `sourceRevision` в `recognition.start`. Хост проверит, что исходный файл соответствует прочитанной ревизии. Выбор движка доступен через настройки распознавания или поле `engine`.

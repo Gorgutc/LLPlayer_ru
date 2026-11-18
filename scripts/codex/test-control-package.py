@@ -413,6 +413,39 @@ class StdioClient:
         return result["structuredContent"]
 
 
+def verify_mcp_input_schema(schema, path):
+    """Check the structural JSON Schema subset accepted by the DSH MCP client."""
+    allowed = {"type", "oneOf", "properties", "required", "additionalProperties", "items",
+               "enum", "const", "description", "title", "default", "examples"}
+    check(isinstance(schema, dict), f"{path}: expected a schema object")
+    extra = schema.keys() - allowed
+    check(not extra, f"{path}: unsupported schema keywords: {', '.join(sorted(extra))}")
+    if "oneOf" in schema:
+        structural = {"type", "properties", "required", "additionalProperties", "items", "enum", "const"}
+        check(not schema.keys() & structural and len(schema["oneOf"]) >= 2, f"{path}: malformed oneOf")
+        for index, choice in enumerate(schema["oneOf"]):
+            verify_mcp_input_schema(choice, f"{path}.oneOf[{index}]")
+        return
+    kind = schema.get("type")
+    check(kind in (None, "object", "array", "string", "integer", "number", "boolean", "null"),
+          f"{path}: expected one scalar type, got {kind!r}")
+    scalar_types = {"string": (str,), "integer": (int,), "number": (int, float), "boolean": (bool,), "null": (type(None),)}
+    if "enum" in schema:
+        check(bool(schema["enum"]) and all(type(item) in scalar_types.get(kind, ()) for item in schema["enum"]),
+              f"{path}: enum values must match a declared scalar type")
+    if "const" in schema:
+        check(type(schema["const"]) in scalar_types.get(kind, ()), f"{path}: const must match a declared scalar type")
+    if "additionalProperties" in schema:
+        check(kind == "object" and isinstance(schema["additionalProperties"], bool),
+              f"{path}: additionalProperties must be boolean")
+    properties = schema.get("properties", {})
+    check(set(schema.get("required", [])) <= properties.keys(), f"{path}: required names must have property schemas")
+    for name, child in properties.items():
+        verify_mcp_input_schema(child, f"{path}.{name}")
+    if "items" in schema:
+        verify_mcp_input_schema(schema["items"], f"{path}.items")
+
+
 def verify_mcp(executable, environment, version, state, probe, media):
     with run_companion(executable, environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as process:
         client = StdioClient(process, version)
@@ -429,11 +462,33 @@ def verify_mcp(executable, environment, version, state, probe, media):
                   and result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "LLPlayer",
                   "Modern discovery did not advertise LLPlayer MCP 2026-07-28")
         check("tools" in result["capabilities"], f"MCP {version}: tool capability missing")
-        tools = {tool["name"] for tool in client.send("tools/list", {})["tools"]}
+        tools = {tool["name"]: tool["inputSchema"] for tool in client.send("tools/list", {})["tools"]}
         expected = {"llplayer_state", "llplayer_media_probe", "llplayer_settings_apply", "llplayer_host_restart"}
         expected.update("llplayer_" + operation.replace(".", "_") for operation in MATRIX_OPERATIONS)
-        check(expected <= tools,
+        expected.update(("llplayer_ui_surface_list", "llplayer_ui_surface_open", "llplayer_ui_sidebar_search_focus"))
+        check(expected <= tools.keys(),
               f"MCP {version}: tool discovery did not use the active host catalog")
+        for name, schema in tools.items():
+            check(schema.get("type") == "object", f"MCP {version}: {name} must have an object input root")
+            verify_mcp_input_schema(schema, name)
+        probe_input = tools["llplayer_media_probe"]["properties"]["input"]
+        stream = probe_input["properties"]["streamIndex"]
+        check({choice["type"] for choice in stream["oneOf"]} == {"integer", "null"},
+              "MCP probe must preserve the nullable stream index")
+        export_tool = tools["llplayer_export_subtitles"]
+        export_input = export_tool["properties"]["input"]
+        format_input = export_input["properties"]["format"]
+        check("requestId" in export_tool["required"] and "UUID" in export_tool["properties"]["requestId"]["description"]
+              and format_input["type"] == "string" and set(format_input["enum"]) == {"srt", "vtt", "txt"},
+              "MCP export must preserve its request ID requirement and format choices")
+        surface_open = tools["llplayer_ui_surface_open"]["properties"]["input"]
+        surface_input = surface_open["properties"]["surface"]
+        check("surface" in surface_open["required"] and surface_input["type"] == "string"
+              and {"commandPalette", "debugOverlay"} <= set(surface_input["enum"]),
+              "MCP must expose named window surface choices")
+        check(all("requestId" in tools[name]["required"] for name in (
+                  "llplayer_ui_surface_open", "llplayer_ui_sidebar_search_focus")),
+              "MCP window commands must retain the request ID requirement")
         check(client.tool("llplayer_state", {}) == state, f"MCP {version}: state differs from direct HTTP")
         check(client.tool("llplayer_media_probe", {"input": {"mediaPath": str(media)}}) == probe,
               f"MCP {version}: WAV probe differs from direct HTTP")
