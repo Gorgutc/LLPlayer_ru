@@ -1,9 +1,8 @@
 ﻿using System.Text;
 using Avalonia;
-using Avalonia.Headless.XUnit;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -246,9 +245,9 @@ public sealed class SubtitleExportTests
             window.Show(); Dispatcher.UIThread.RunJobs();
             Assert.True(window.FindControl<TextBlock>("ExportPartialWarning")!.IsVisible);
             Assert.True(window.FindControl<CheckBox>("ExportBom")!.IsChecked);
-            window.FindControl<ComboBox>("ExportSlot")!.SelectedIndex = 1;
-            window.FindControl<ComboBox>("ExportText")!.SelectedIndex = 2;
-            window.FindControl<ComboBox>("ExportFormat")!.SelectedIndex = 2;
+            window.FindControl<ListBox>("ExportSlot")!.SelectedIndex = 1;
+            window.FindControl<ListBox>("ExportText")!.SelectedIndex = 2;
+            window.FindControl<ListBox>("ExportFormat")!.SelectedIndex = 2;
             window.FindControl<CheckBox>("ExportBom")!.IsChecked = false;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, vm.SelectedSlot); Assert.Equal(SubtitleExportText.TranslatedWithFallback, vm.SelectedText);
@@ -264,7 +263,7 @@ public sealed class SubtitleExportTests
     [AvaloniaTheory]
     [InlineData(SubtitleExportFormat.Vtt, "movie.vtt", "WEBVTT\r\n\r\n00:00:01.234 --> 00:00:04.567\r\n<i>secondary</i>\r\n")]
     [InlineData(SubtitleExportFormat.Txt, "movie.txt", "secondary")]
-    public async Task Export_dialog_keeps_choices_in_its_window_and_saves_secondary(SubtitleExportFormat format, string filename, string expected)
+    public async Task Export_dialog_saves_secondary_with_direct_choice_selection(SubtitleExportFormat format, string filename, string expected)
     {
         using TempDir dir = new();
         string path = Path.Combine(dir.Path, filename);
@@ -281,6 +280,8 @@ public sealed class SubtitleExportTests
         {
             Dispatcher.UIThread.RunJobs();
             SelectExportChoice(window, "ExportSlot", 1);
+            SelectExportChoice(window, "ExportText", (int)SubtitleExportText.TranslatedOnly);
+            Assert.Equal(SubtitleExportText.TranslatedOnly, vm.SelectedText);
             SelectExportChoice(window, "ExportText", (int)SubtitleExportText.Original);
             SelectExportChoice(window, "ExportFormat", (int)format);
             Assert.Equal(1, vm.SelectedSlot);
@@ -304,22 +305,18 @@ public sealed class SubtitleExportTests
 
     static void SelectExportChoice(SubtitlesExportWindow window, string name, int index)
     {
-        var combo = Assert.IsType<ComboBox>(window.FindControl<ComboBox>(name));
-        ClickExportControl(window, combo);
-        Assert.True(combo.IsDropDownOpen);
-        var popup = Assert.Single(combo.GetVisualDescendants().OfType<Popup>(), p => p.Name == "PART_Popup");
-        Assert.True(popup.ShouldUseOverlayLayer);
-        Assert.True(popup.IsUsingOverlayLayer);
-        var item = Assert.IsType<ComboBoxItem>(combo.ContainerFromIndex(index));
+        var choices = Assert.IsType<ListBox>(window.FindControl<Control>(name));
+        var item = Assert.IsType<ListBoxItem>(choices.ContainerFromIndex(index));
         ClickExportControl(window, item);
-        Assert.Equal(index, combo.SelectedIndex);
-        Assert.False(combo.IsDropDownOpen);
+        Assert.Equal(index, choices.SelectedIndex);
+        Assert.True(item.IsSelected);
     }
 
     static void ClickExportControl(SubtitlesExportWindow window, Control control)
     {
         Assert.Same(window, TopLevel.GetTopLevel(control));
         Assert.True(control.IsEffectivelyVisible);
+        Assert.True(control.Bounds.Width > 0 && control.Bounds.Height > 0);
         var center = new Point(control.Bounds.Width / 2, control.Bounds.Height / 2);
         Point target = control.TranslatePoint(center, window)!.Value;
         window.MouseMove(target);
@@ -340,7 +337,7 @@ public sealed class SubtitleExportTests
             var speakers = Assert.IsType<CheckBox>(window.FindControl<CheckBox>("ExportSpeakerLabels"));
             Assert.Equal(false, speakers.IsChecked);
             Assert.True(speakers.IsEnabled);
-            window.FindControl<ComboBox>("ExportFormat")!.SelectedIndex = (int)SubtitleExportFormat.Vtt;
+            window.FindControl<ListBox>("ExportFormat")!.SelectedIndex = (int)SubtitleExportFormat.Vtt;
             Dispatcher.UIThread.RunJobs();
             Assert.False(speakers.IsEnabled);
         }

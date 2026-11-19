@@ -230,9 +230,9 @@ public class SearchExportWindowTests
         Assert.True(first.IsDialog);
         Assert.Same(model, fixture.Vm.SubtitlesExport);
         Assert.True(model.IsUtf8Bom);
-        first.FindControl<ComboBox>("ExportSlot")!.SelectedIndex = 1;
-        first.FindControl<ComboBox>("ExportText")!.SelectedIndex = 2;
-        first.FindControl<ComboBox>("ExportFormat")!.SelectedIndex = 1;
+        first.FindControl<SelectingItemsControl>("ExportSlot")!.SelectedIndex = 1;
+        first.FindControl<SelectingItemsControl>("ExportText")!.SelectedIndex = 2;
+        first.FindControl<SelectingItemsControl>("ExportFormat")!.SelectedIndex = 1;
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(1, model.SelectedSlot);
         Assert.Equal(SubtitleExportText.TranslatedWithFallback, model.SelectedText);
