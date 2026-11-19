@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -135,6 +136,38 @@ public sealed class CaptureDevicesViewModelTests
             Assert.NotNull(window.FindControl<ComboBox>("CaptureFormatEditor"));
             Assert.False(model.OpenCommand.CanExecute(null));
             Assert.False(window.FindControl<Button>("OpenCaptureDeviceButton")!.IsEffectivelyEnabled);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Long_DirectShow_identifier_keeps_the_capture_footer_inside_the_dialog()
+    {
+        string id = "dshow:Video:" + string.Concat(Enumerable.Repeat("%23USB%5CVID_0000%26PID_0000", 10));
+        var camera = new CaptureDeviceInfo(id, "USB camera", "dshow", "video=USB camera", CaptureDeviceKind.Video);
+        CaptureDeviceSnapshot snapshot = CaptureDeviceSnapshot.Initial;
+        var model = new CaptureDevicesViewModel(CaptureDeviceKind.Video, () => snapshot,
+            _ => { snapshot = Catalog(1, camera); return Task.CompletedTask; },
+            (device, epoch, _) => Task.FromResult(NoFormats(device, epoch)), (_, _, _, _) => Task.CompletedTask);
+        var window = new CaptureDevicesWindow(model) { Width = 520, Height = 420 };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            await model.RefreshCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(id, model.SelectedDevice?.Id);
+            Assert.InRange(window.Bounds.Width, 519, 521);
+            Assert.InRange(window.Bounds.Height, 419, 421);
+            foreach (string name in new[] { "CloseCaptureDevicesButton", "OpenCaptureDeviceButton" })
+            {
+                var button = window.FindControl<Button>(name)!;
+                Point origin = button.TranslatePoint(default, window)!.Value;
+                Assert.True(button.IsEffectivelyVisible && button.IsEffectivelyEnabled && button.Bounds.Width > 0 && button.Bounds.Height > 0, name);
+                Assert.True(origin.X >= 0 && origin.Y >= 0 && origin.X + button.Bounds.Width <= window.Bounds.Width + 1
+                    && origin.Y + button.Bounds.Height <= window.Bounds.Height + 1, name);
+            }
         }
         finally { window.Close(); }
     }

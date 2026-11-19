@@ -1050,7 +1050,15 @@ public class Config : NotifyPropertyChanged
         /// <summary>
         /// Uses FFmpeg filters instead of Swr (better speed quality and support for extra filters, requires avfilter-X.dll)
         /// </summary>
-        public bool             FiltersEnabled      { get => _FiltersEnabled; set { if (Set(ref _FiltersEnabled, value && Engine.Config.FFmpegLoadProfile != LoadProfile.Main)) player?.AudioDecoder.SetupFiltersOrSwr(); } }
+        public bool             FiltersEnabled
+        {
+            get => _FiltersEnabled;
+            set
+            {
+                if (Set(ref _FiltersEnabled, value && Engine.Config?.FFmpegLoadProfile != LoadProfile.Main))
+                    player?.AudioDecoder.SetupFiltersOrSwr();
+            }
+        }
         bool _FiltersEnabled = true;
 
         /// <summary>
