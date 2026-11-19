@@ -41,6 +41,128 @@ public class SearchExportWindowTests
         Assert.Equal(new[] { 0, 1 }, fixture.MatchIndices());
     }
 
+    [AvaloniaTheory]
+    [InlineData("MatchCaseButton", "cat", 1, 2)]
+    [InlineData("WholeWordButton", "cat", 0, 1)]
+    [InlineData("RegexButton", "^cat$", 0, 1)]
+    public void Space_on_a_focused_search_toggle_filters_without_dispatching_playback(string name, string pattern,
+        int firstMatch, int secondMatch)
+    {
+        using var fixture = new SearchWindow();
+        fixture.TypeFilter(pattern);
+        ToggleButton toggle = fixture.Window.FindControl<ToggleButton>(name)!;
+        Assert.True(toggle.Focus(NavigationMethod.Tab));
+        Assert.Same(toggle, fixture.Window.FocusManager!.GetFocusedElement());
+
+        PressKey(fixture.Window, Key.Space);
+
+        Assert.Empty(fixture.Player.KeysDown);
+        Assert.Empty(fixture.Player.KeysUp);
+        Assert.True(toggle.IsChecked);
+        Assert.Equal(new[] { firstMatch, secondMatch }, fixture.MatchIndices());
+
+        Assert.True(fixture.Window.VideoSurface.Focus());
+        PressKey(fixture.Window, Key.Space);
+
+        Assert.Equal([System.Windows.Input.Key.Space], fixture.Player.KeysDown);
+        Assert.Equal([System.Windows.Input.Key.Space], fixture.Player.KeysUp);
+        Assert.True(toggle.IsChecked);
+    }
+
+    [AvaloniaFact]
+    public void Held_space_does_not_create_a_new_action_when_search_toggle_focus_changes()
+    {
+        using var fixture = new SearchWindow();
+        fixture.TypeFilter("cat");
+        ToggleButton word = fixture.Window.FindControl<ToggleButton>("WholeWordButton")!;
+        ToggleButton matchCase = fixture.Window.FindControl<ToggleButton>("MatchCaseButton")!;
+        Assert.True(word.Focus(NavigationMethod.Tab));
+        fixture.Window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+        Assert.True(matchCase.Focus(NavigationMethod.Tab));
+        Assert.True(word.Focus(NavigationMethod.Tab));
+        PressKey(fixture.Window, Key.Space);
+
+        Assert.Empty(fixture.Player.KeysDown);
+        Assert.Empty(fixture.Player.KeysUp);
+        Assert.False(word.IsChecked);
+        Assert.False(matchCase.IsChecked);
+        Assert.Equal(new[] { 0, 1, 2 }, fixture.MatchIndices());
+
+        PressKey(fixture.Window, Key.Space);
+        Assert.True(word.IsChecked);
+        Assert.Equal(new[] { 0, 1 }, fixture.MatchIndices());
+    }
+
+    [AvaloniaFact]
+    public void Video_space_release_does_not_activate_a_newly_focused_search_toggle()
+    {
+        using var fixture = new SearchWindow();
+        ToggleButton word = fixture.Window.FindControl<ToggleButton>("WholeWordButton")!;
+        Assert.True(fixture.Window.VideoSurface.Focus());
+        fixture.Window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.Space, " ");
+        Assert.True(word.Focus(NavigationMethod.Tab));
+        PressKey(fixture.Window, Key.Space);
+
+        Assert.Equal([System.Windows.Input.Key.Space], fixture.Player.KeysDown);
+        Assert.Equal([System.Windows.Input.Key.Space], fixture.Player.KeysUp);
+        Assert.False(word.IsChecked);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(RawInputModifiers.Control)]
+    [InlineData(RawInputModifiers.Alt)]
+    [InlineData(RawInputModifiers.Shift)]
+    public void Modified_space_on_a_search_toggle_still_dispatches_the_engine_press(RawInputModifiers modifier)
+    {
+        using var fixture = new SearchWindow();
+        ToggleButton word = fixture.Window.FindControl<ToggleButton>("WholeWordButton")!;
+        Assert.True(word.Focus(NavigationMethod.Tab));
+        fixture.Window.KeyPress(Key.Space, modifier, PhysicalKey.Space, " ");
+
+        // Releasing a modifier first cannot turn an outstanding engine press into a native toggle.
+        PressKey(fixture.Window, Key.Space);
+
+        Assert.Equal([System.Windows.Input.Key.Space], fixture.Player.KeysDown);
+        Assert.Equal([System.Windows.Input.Key.Space], fixture.Player.KeysUp);
+        Assert.False(word.IsChecked);
+        Assert.False(word.IsPressed);
+    }
+
+    [AvaloniaFact]
+    public void Unbound_modified_space_does_not_leave_the_search_toggle_pressed()
+    {
+        using var fixture = new SearchWindow();
+        fixture.Player.HandleEngineKeys = false;
+        ToggleButton word = fixture.Window.FindControl<ToggleButton>("WholeWordButton")!;
+        Assert.True(word.Focus(NavigationMethod.Tab));
+
+        PressKey(fixture.Window, Key.Space, RawInputModifiers.Control);
+
+        Assert.Equal([System.Windows.Input.Key.Space], fixture.Player.KeysDown);
+        Assert.Empty(fixture.Player.KeysUp);
+        Assert.False(word.IsChecked);
+        Assert.False(word.IsPressed);
+    }
+
+    [AvaloniaFact]
+    public void Remapped_control_space_app_action_survives_focus_and_modifier_changes_until_release()
+    {
+        AppPrefs prefs = new() { SidebarVisible = true, AppKeyBindings =
+            [new() { ActionName = "ToggleTheme", Key = "Space", Ctrl = true, IsKeyUp = true }] };
+        using var fixture = new SearchWindow(prefs: prefs);
+        ToggleButton word = fixture.Window.FindControl<ToggleButton>("WholeWordButton")!;
+        Assert.True(word.Focus(NavigationMethod.Tab));
+        fixture.Window.KeyPress(Key.Space, RawInputModifiers.Control, PhysicalKey.Space, " ");
+        Assert.Equal(ThemeVariant.Dark, Application.Current!.ActualThemeVariant);
+        Assert.True(fixture.Window.VideoSurface.Focus());
+        PressKey(fixture.Window, Key.Space);
+
+        Assert.Equal(ThemeVariant.Light, Application.Current.ActualThemeVariant);
+        Assert.Empty(fixture.Player.KeysDown);
+        Assert.Empty(fixture.Player.KeysUp);
+        Assert.False(word.IsChecked);
+    }
+
     [AvaloniaFact]
     public void Enter_and_shift_enter_wrap_matches_keep_filter_focus_and_do_not_reach_playback_keys()
     {
@@ -212,9 +334,10 @@ public class SearchExportWindowTests
             Key.A => PhysicalKey.A,
             Key.Enter => PhysicalKey.Enter,
             Key.Escape => PhysicalKey.Escape,
+            Key.Space => PhysicalKey.Space,
             _ => throw new ArgumentOutOfRangeException(nameof(key))
         };
-        string? symbol = key == Key.A ? "a" : null;
+        string? symbol = key switch { Key.A => "a", Key.Space => " ", _ => null };
         window.KeyPress(key, modifiers, physical, symbol);
         window.KeyRelease(key, modifiers, physical, symbol);
         Dispatcher.UIThread.RunJobs();
@@ -246,7 +369,7 @@ public class SearchExportWindowTests
         public FakePlaybackController Player { get; }
         public TextBox Filter => Window.FindControl<TextBox>("FilterBox")!;
 
-        public SearchWindow(double width = 1100, double sidebarWidth = AppPrefs.DefaultSidebarWidth)
+        public SearchWindow(double width = 1100, double sidebarWidth = AppPrefs.DefaultSidebarWidth, AppPrefs? prefs = null)
         {
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
             Player = new FakePlaybackController { IsOpened = true, IsPlaying = true };
@@ -254,7 +377,8 @@ public class SearchExportWindowTests
             for (int i = 0; i < cues.Length; i++)
                 Player.Cues[0].Add(new CueInfo(i, TimeSpan.FromSeconds(i * 2 + 1), TimeSpan.FromSeconds(i * 2 + 2), cues[i]));
             Window = new MainWindow(new KeyMapper(), null) { Width = width, Height = 700 };
-            Vm = new MainWindowViewModel(Player, new AppPrefs { SidebarVisible = true, SidebarWidth = sidebarWidth }.Normalize(), _ => { }, new FakeTranslator(), Window)
+            prefs ??= new AppPrefs { SidebarVisible = true, SidebarWidth = sidebarWidth };
+            Vm = new MainWindowViewModel(Player, prefs.Normalize(), _ => { }, new FakeTranslator(), Window)
             { SubtitleExportSource = new ExportSource() };
             Window.Attach(Vm, renderer: null);
             Player.RaiseCuesChanged(0);
