@@ -77,6 +77,10 @@ public sealed class SubtitleText : Control
     public static readonly StyledProperty<double> OutlineThicknessProperty =
         AvaloniaProperty.Register<SubtitleText, double>(nameof(OutlineThickness), 3);
 
+    public static readonly StyledProperty<bool> ShowShadowProperty =
+        AvaloniaProperty.Register<SubtitleText, bool>(nameof(ShowShadow), true);
+    public bool ShowShadow { get => GetValue(ShowShadowProperty); set => SetValue(ShowShadowProperty, value); }
+
     public static readonly StyledProperty<int> SlotProperty =
         AvaloniaProperty.Register<SubtitleText, int>(nameof(Slot));
 
@@ -121,7 +125,7 @@ public sealed class SubtitleText : Control
     static SubtitleText()
     {
         AffectsMeasure<SubtitleText>(TextProperty, FontSizeProperty, FontFamilyProperty, FontWeightProperty, FontStyleProperty, OutlineThicknessProperty);
-        AffectsRender<SubtitleText>(FillProperty, OutlineProperty, BackgroundProperty, SelectionBrushProperty, SelectionOpacityProperty);
+        AffectsRender<SubtitleText>(FillProperty, OutlineProperty, BackgroundProperty, ShowShadowProperty, SelectionBrushProperty, SelectionOpacityProperty);
         FontWeightProperty.OverrideDefaultValue<SubtitleText>(FontWeight.SemiBold);
     }
 
@@ -279,8 +283,11 @@ public sealed class SubtitleText : Control
             }
         }
 
-        using (context.PushTransform(Matrix.CreateTranslation(pad + 2, pad + 2.5)))
-            context.DrawGeometry(ShadowBrush, new Pen(ShadowBrush, OutlineThickness * 2 + 2, lineJoin: PenLineJoin.Round), geometry);
+        if (ShowShadow)
+        {
+            using (context.PushTransform(Matrix.CreateTranslation(pad + 2, pad + 2.5)))
+                context.DrawGeometry(ShadowBrush, new Pen(ShadowBrush, OutlineThickness * 2 + 2, lineJoin: PenLineJoin.Round), geometry);
+        }
 
         using (context.PushTransform(Matrix.CreateTranslation(pad, pad)))
         {

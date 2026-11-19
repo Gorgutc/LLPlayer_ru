@@ -146,7 +146,7 @@ public class SubtitlePositionSettingsTests
                 Assert.Equal(80.5 + bar.Bounds.Height, overlay.Margin.Bottom);
                 Assert.Equal(80.5, Position(prefs)); Assert.Equal(80.5, Position(store.Load()));
                 time.Advance(MainWindowViewModel.IdleTimeout + TimeSpan.FromSeconds(1)); main.UpdateIdle(); Dispatcher.UIThread.RunJobs();
-                Assert.False(main.ControlsVisible); Assert.Equal(80.5, overlay.Margin.Bottom);
+                Assert.False(main.ControlsVisible); Assert.Equal(80.5 + bar.Bounds.Height, overlay.Margin.Bottom);
                 main.NotifyActivity(); Dispatcher.UIThread.RunJobs();
                 Assert.Equal(80.5 + bar.Bounds.Height, overlay.Margin.Bottom);
                 main.ToggleFullScreen(); Dispatcher.UIThread.RunJobs();

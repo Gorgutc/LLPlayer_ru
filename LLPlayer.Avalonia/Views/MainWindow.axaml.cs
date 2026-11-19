@@ -35,6 +35,7 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     TransportRevealPress? transportRevealPress;
     bool transportRevealSequence;
     Point? lastPointerPosition;
+    PixelPoint? lastMouseScreenPosition;
     bool transportPointerOver;
     MainWindowViewModel? vm;
     SubtitleText? sidebarSelectionControl;
@@ -535,7 +536,8 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
         if (vm == null)
             return;
 
-        double extra = IsFullScreen && vm.ControlsVisible ? TransportBar.Bounds.Height : 0;
+        // Reserve the bar's height for the whole fullscreen session so fading it cannot move the text.
+        double extra = IsFullScreen ? TransportBar.Bounds.Height : 0;
         // Center/Top reduce the margin by half/full height so that edge sits at the configured distance. WPF's
         // percentage geometry allows off-screen overflow (with FixOverflowSubsPosition); the DIP model instead clamps
         // the anchor, but never below the fullscreen transport clearance: exact while it fits, otherwise the block
@@ -572,7 +574,6 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             case nameof(MainWindowViewModel.SeekBarFadeInTimeMs):
             case nameof(MainWindowViewModel.SeekBarFadeOutTimeMs):
                 UpdateTransportVisibility();
-                UpdateSubtitleLayout();
                 break;
             case nameof(MainWindowViewModel.SeekBarHeight):
             case nameof(MainWindowViewModel.SeekBarThumbHeight):
@@ -894,8 +895,16 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     void OnAnyPointerMoved(object? sender, PointerEventArgs e)
     {
         keys.Update(e.KeyModifiers);
-        lastPointerPosition = e.GetPosition(this);
-        bool inRevealRegion = IsInTransportRevealRegion(lastPointerPosition.Value);
+        Point position = e.GetPosition(this);
+        lastPointerPosition = position;
+        bool stationaryMouseMove = false;
+        if (e.Pointer.Type == PointerType.Mouse)
+        {
+            PixelPoint screenPosition = this.PointToScreen(position);
+            stationaryMouseMove = e.RoutedEvent == PointerMovedEvent && lastMouseScreenPosition == screenPosition;
+            lastMouseScreenPosition = screenPosition;
+        }
+        bool inRevealRegion = IsInTransportRevealRegion(position);
         if (e is PointerPressedEventArgs revealPress
             && revealPress.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
@@ -909,7 +918,9 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             transportRevealPress = IsVideoBackground(e.Source) && transportRevealSequence
                 ? new TransportRevealPress(e.Pointer) : null;
         }
-        vm?.NotifyActivity();
+        // Windows can deliver a move event when the cursor stays at the same screen pixel.
+        if (!stationaryMouseMove)
+            vm?.NotifyActivity();
         UpdateTransportPointer();
         if (e is PointerPressedEventArgs press)
         {
@@ -981,11 +992,16 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
             return;
         }
 
+        DispatchWindowKeyDown(e, textFocused);
+    }
+
+    void DispatchWindowKeyDown(KeyEventArgs e, bool textFocused)
+    {
         var wpfKey = KeyMapper.ToWpf(e.Key);
         bool ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         bool alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
         bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        if (vm.HandleKeyDown(wpfKey, ctrl, alt, shift, textFocused))
+        if (vm?.HandleKeyDown(wpfKey, ctrl, alt, shift, textFocused) == true)
             e.Handled = true;
     }
 

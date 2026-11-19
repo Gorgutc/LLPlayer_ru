@@ -12,6 +12,19 @@
         WindowStartupLocation="CenterScreen"
         DragDrop.AllowDrop="True">
 
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <x:Boolean x:Key="SidebarSubtitleShowShadow">True</x:Boolean>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <x:Boolean x:Key="SidebarSubtitleShowShadow">False</x:Boolean>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
+
   <Window.Styles>
     <Style Selector="MenuItem">
       <Setter Property="v:MainWindow.KeepOpenGestures" Value="True" />
@@ -686,6 +699,7 @@
                       <c:SubtitleText Name="SidebarCueText" Grid.Column="1" IsVisible="{Binding ShowText}" Text="{Binding DisplayText}" IsTranslated="{Binding IsDisplayTranslated}" SourceLanguage="{Binding SourceLanguage}" TargetLanguage="{Binding TargetLanguage}" Slot="{Binding Slot}"
                                       SelectionBrush="{DynamicResource Shadcn.RingBrush}"
                                       FontFamily="{Binding RowFontFamily}" FontWeight="{Binding RowFontWeight}" FontSize="{Binding RowFontSize}"
+                                      ShowShadow="{DynamicResource SidebarSubtitleShowShadow}"
                                       OutlineThickness="0" Fill="{DynamicResource Shadcn.ForegroundBrush}" WordPressed="OnWordPressed" WordClicked="OnWordClicked" />
                       <c:BitmapCuePreview Grid.Column="1" Row="{Binding}" Player="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).Player}" IsVisible="{Binding ShowBitmap}" />
                       <Button Name="CueSyncButton" Grid.Column="2" Classes="ghost icon" Width="26" Height="26" MinWidth="0" Padding="0" Margin="4,0,0,0" VerticalAlignment="Top"

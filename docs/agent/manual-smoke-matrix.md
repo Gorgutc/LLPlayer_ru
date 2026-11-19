@@ -8,6 +8,9 @@ The owner resumed the complete Commands/service screens + Media backends deliver
 and native desktop acceptance now await separate agreement; this supersedes the older execution authorization
 below. No native row is accepted by a build, headless/fake test, catalog, package or prior screenshot.
 
+The owner authorized the 2026-11-19 Windows retest of fullscreen transport and subtitle position, sidebar
+search keyboard input, and Light sidebar text. Wider F-13 native acceptance and Linux remain pending.
+
 After separate approval, check the existing F-13 matrix plus: command palette/F1 current enabled bindings and
 close-before-activation; About/copy/debug current identity; New/Clone/Restart argument fidelity and failed-spawn
 survival; explicit quit with pending capture/adapter work; all documented mouse/menu gestures and legacy key
@@ -179,6 +182,12 @@ the [plan](plans/2026-11-02-f13-player-ui.md) maps the eleven controls. These ro
 - Open the sidebar "Subtitle tracks" quick switcher and confirm it lists embedded + external + ASR with language/source; assign ① primary / ② secondary and use per-slot Off; confirm the checked state follows the active selection.
 
 ## Sidebar And Word Actions
+
+- In the Avalonia sidebar, Tab from the search field to Match case, Match whole word and Use regular expression.
+  Space must operate the focused filter without pausing or resuming playback. With focus back on the video,
+  Space must toggle playback. Confirm a configured modified Space binding works while a filter has focus.
+- Compare the same cue with Light and Dark selected. Light sidebar text must be legible without a drop
+  shadow, including the active row. Check that both overlaid text tracks still draw their shadows.
 
 ### Primary/Secondary Sidebar and sync — owner-deferred native checks, 2026-11-01
 
@@ -352,6 +361,9 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   applying changes and preserve unrelated preferences. Reopen to verify the saved values.
 - Enter fullscreen with F and return with Esc; confirm normal-window restoration. Resize the window and
   inspect transport controls and sidebar bounds without hidden or overlapping controls.
+- With hover-only off, place the mouse over the fullscreen picture outside the transport strip. Once the
+  bar hides during playback, observe it for at least 60 seconds without input, including a cue change. The bar and cursor must
+  stay hidden. Move the mouse and verify that both reappear. Compare this sequence with WPF on the same clip.
 - **Persisted text-subtitle position, owner-approved 2026-10-18 slice — NOT_RUN / DEFERRED BY OWNER:** on each
   native Windows/Linux host, use an isolated profile and confirm a missing `SubtitleBottomOffset` starts at
   24 DIP. Edit the Settings text-subtitle bottom offset, Save & Close, reopen Settings and restart the app;
@@ -359,10 +371,10 @@ close these rows. The current rebuilt-package native recheck is deferred by owne
   clamping at 0 and 400, then restart and confirm the command-updated preference survives the normal save path.
   Close/Esc must discard draft edits. Invalid/out-of-range input must block Save; a persistence failure must
   retain live/persisted values and keep the dialog open for retry. Check fractional input under the host's
-  number format, minimum-window usability, and 100%/150%/200% DPI. Toggle fullscreen and transport controls;
-  confirm clearance is transient and reopening/restarting retains only the base offset. Confirm primary and
-  secondary text move together while bitmap positioning is unaffected. Native GUI/DPI/fullscreen checks remain
-  deferred under the owner's no-Computer-Use instruction; focused headless results do not close this row.
+  number format, minimum-window usability, and 100%/150%/200% DPI. In fullscreen, track the same long cue
+  before, during and after the bar fades in and out, in both classic and hover-only modes. The text keeps
+  the same vertical position and clears the bar when visible. Repeat with two text tracks and confirm bitmap positioning
+  is unaffected. Leave fullscreen and reopen/restart to confirm only the base offset is retained.
 - **Text-subtitle outline thickness, separate owner-approved 2026-10-18 slice — NOT_RUN / DEFERRED BY OWNER:**
   on each native Windows/Linux host, use the new package and an isolated profile. Missing primary/secondary
   keys must retain the existing 3/2.5-DIP widths. Edit each Settings outline value independently, Save & Close,

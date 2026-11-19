@@ -181,6 +181,33 @@ public class PlayerUiBehaviorTests
     }
 
     [AvaloniaFact]
+    public void Stationary_pointer_events_do_not_wake_classic_fullscreen_transport()
+    {
+        using var fixture = new PlayerWindow("{\"SeekBarFadeInTimeMs\":0,\"SeekBarFadeOutTimeMs\":0}");
+        fixture.Window.IsFullScreen = true; fixture.Pump();
+        var bar = fixture.Window.FindControl<Border>("TransportBar")!;
+        Point position = fixture.VideoPoint;
+        fixture.Window.MouseMove(position); fixture.Pump();
+        fixture.Time.Advance(MainWindowViewModel.IdleTimeout + TimeSpan.FromMilliseconds(1));
+        fixture.Vm.UpdateIdle(); fixture.Pump();
+        Assert.False(bar.IsHitTestVisible);
+        Assert.True(fixture.Vm.CursorHidden);
+
+        for (int i = 0; i < 3; i++)
+        {
+            fixture.Time.Advance(TimeSpan.FromSeconds(15));
+            fixture.Vm.UpdateIdle();
+            fixture.Window.MouseMove(position); fixture.Pump();
+            Assert.False(bar.IsHitTestVisible);
+            Assert.True(fixture.Vm.CursorHidden);
+        }
+
+        fixture.Window.MouseMove(position + new Vector(2, 0)); fixture.Pump();
+        Assert.True(bar.IsHitTestVisible);
+        Assert.False(fixture.Vm.CursorHidden);
+    }
+
+    [AvaloniaFact]
     public void Classic_idle_hidden_transport_preserves_the_existing_immediate_video_click()
     {
         using var fixture = new PlayerWindow("{\"SeekBarFadeInTimeMs\":0,\"SeekBarFadeOutTimeMs\":0}");

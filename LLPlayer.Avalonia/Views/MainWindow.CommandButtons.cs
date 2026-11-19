@@ -20,6 +20,7 @@ public partial class MainWindow
         public object? CurrentToken { get; init; }
         public object? TargetToken { get; init; }
         public int Direction { get; init; }
+        public KeyModifiers? SearchShortcutModifiers { get; init; }
         public bool Canceled { get; set; }
         public bool Retired { get; set; }
     }
@@ -28,10 +29,12 @@ public partial class MainWindow
     // press merely because focus moved before a repeat or release. Other controls retain their existing route.
     readonly Dictionary<Key, CommandButtonKeyPress> commandButtonKeys = [];
 
-    Button? FocusedParityCommandButton()
+    Button? FocusedParityCommandButton(Key key)
     {
         if (FocusManager?.GetFocusedElement() is not Button button) return null;
-        return button.Name is "CueVoiceButton" or "CancelAutomationJobButton"
+        bool searchToggle = key == Key.Space && (ReferenceEquals(button, MatchCaseButton)
+            || ReferenceEquals(button, WholeWordButton) || ReferenceEquals(button, RegexButton));
+        return searchToggle || button.Name is "CueVoiceButton" or "CancelAutomationJobButton"
             || ReferenceEquals(button, MediaTitleButton) || ReferenceEquals(button, PreviousPlaylistButton)
             || ReferenceEquals(button, NextPlaylistButton) || ReferenceEquals(button, AutomationJobsButton) ? button : null;
     }
@@ -39,10 +42,16 @@ public partial class MainWindow
     bool TryHandleCommandButtonKeyDown(KeyEventArgs e)
     {
         if (e.Key is not (Key.Space or Key.Enter)) return false;
-        Button? button = FocusedParityCommandButton();
+        Button? button = FocusedParityCommandButton(e.Key);
         if (commandButtonKeys.TryGetValue(e.Key, out CommandButtonKeyPress? held))
         {
-            if (held.Button == null && !held.Retired && button == null) return false;
+            if (held.SearchShortcutModifiers is { } modifiers)
+            {
+                // The original chord stays with the shortcut router. A changed chord during a repeat is no new press.
+                if (!held.Retired && e.KeyModifiers == modifiers && button is null or ToggleButton)
+                    DispatchWindowKeyDown(e, IsTextInputFocused());
+            }
+            else if (held.Button == null && !held.Retired && button == null) return false;
             e.Handled = true;
             return true;
         }
@@ -50,6 +59,16 @@ public partial class MainWindow
         {
             commandButtonKeys[e.Key] = new();
             return false;
+        }
+
+        bool nativeToggle = button is ToggleButton;
+        if (nativeToggle && e.KeyModifiers != KeyModifiers.None)
+        {
+            commandButtonKeys[e.Key] = new() { SearchShortcutModifiers = e.KeyModifiers };
+            DispatchWindowKeyDown(e, textFocused: false);
+            // An unbound chord must not start a native Space press either.
+            e.Handled = true;
+            return true;
         }
 
         int direction = ReferenceEquals(button, PreviousPlaylistButton) ? -1
@@ -60,12 +79,13 @@ public partial class MainWindow
         {
             Button = button, Command = button.Command, Flyout = button.Flyout, Parameter = button.CommandParameter,
             Playlist = playlist, Direction = direction, CurrentToken = current?.Token, TargetToken = target?.Token,
-            Canceled = e.KeyModifiers != KeyModifiers.None || (button.Command == null && button.Flyout == null)
+            Canceled = e.KeyModifiers != KeyModifiers.None || (!nativeToggle && button.Command == null && button.Flyout == null)
                 || direction != 0 && (current == null || target == null),
         };
         button.LostFocus += OnParityCommandButtonLostFocus;
         vm?.SuppressInputKeyDown(KeyMapper.ToWpf(e.Key));
-        e.Handled = true;
+        // Skip playback routing and let the search toggle handle an unmodified press with its native button state.
+        e.Handled = !nativeToggle;
         return true;
     }
 
@@ -74,7 +94,7 @@ public partial class MainWindow
         if (e.Key is not (Key.Space or Key.Enter)) return false;
         // A child owns its fresh input. Only a physical press already observed in this parent may be retired
         // by the child's tunnel; remembered parent focus must not swallow the child's native button release.
-        Button? focused = fromOwnedChild ? null : FocusedParityCommandButton();
+        Button? focused = fromOwnedChild ? null : FocusedParityCommandButton(e.Key);
         if (!commandButtonKeys.Remove(e.Key, out CommandButtonKeyPress? press))
         {
             if (fromOwnedChild || focused == null) return false;
@@ -83,16 +103,26 @@ public partial class MainWindow
             e.Handled = true;
             return true;
         }
-        if (press.Button == null && focused == null && !press.Retired && !fromOwnedChild) return false;
+        if (press.Button == null && press.SearchShortcutModifiers == null && focused == null && !press.Retired && !fromOwnedChild)
+            return false;
 
         if (fromOwnedChild) press.Canceled = press.Retired = true;
 
         if (press.Button is { } owner) owner.LostFocus -= OnParityCommandButtonLostFocus;
         ConsumeParityCommandButtonRelease(e.Key);
         e.Handled = true;
-        if (press.Canceled || press.Retired || press.Button == null || (press.Command == null && press.Flyout == null)
+        if (press.Canceled || press.Retired || press.Button == null
             || !ReferenceEquals(press.Button, focused) || !press.Button.IsEffectivelyEnabled
-            || !press.Button.IsEffectivelyVisible || e.KeyModifiers != KeyModifiers.None
+            || !press.Button.IsEffectivelyVisible) return true;
+
+        if (press.Button is ToggleButton)
+        {
+            // Only a matching physical press may reach the ToggleButton's native Space release.
+            e.Handled = false;
+            return true;
+        }
+
+        if ((press.Command == null && press.Flyout == null) || e.KeyModifiers != KeyModifiers.None
             || !ReferenceEquals(press.Button.Command, press.Command)
             || !ReferenceEquals(press.Button.Flyout, press.Flyout)
             || !Equals(press.Button.CommandParameter, press.Parameter)) return true;
