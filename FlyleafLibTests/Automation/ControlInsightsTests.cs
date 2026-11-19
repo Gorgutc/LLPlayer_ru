@@ -22,7 +22,7 @@ public sealed class ControlInsightsTests
         var document = ControlCueDocument.Capture(Guid.NewGuid(), "source", "en",
         [new SubtitleData { Text = "original cue", TranslatedText = "translated cue" }, new SubtitleData { Text = "untranslated cue" }], "fr");
         var request = new ControlInsightRequest(Guid.NewGuid(), document.Revision, AiInsightMode.Summary, UseTranslated: true);
-        var config = new Config(true).Subtitles;
+        var config = new Config.SubtitlesConfig();
         var cancellation = TestContext.Current.CancellationToken;
 
         Assert.Equal("revision_conflict", (await Assert.ThrowsAsync<ControlException>(() =>
@@ -42,7 +42,7 @@ public sealed class ControlInsightsTests
     {
         var result = new AiInsightResult("Summary", [new("term", "", "translation", "", "")], "raw reply", false);
         Assert.Equal("Summary\r\n\r\n" + VocabularyParser.ToTsv(result.Vocabulary), ControlInsightsOperations.FormatExport(result));
-        var config = new Config(true).Subtitles;
+        var config = new Config.SubtitlesConfig();
         config.WordDefinitionServiceType = WordDefinitionServiceType.DictionaryApi;
         var error = await Assert.ThrowsAsync<ControlException>(() => ControlInsightsOperations.LookupAsync(new("猫", "ja"),
             config, TestContext.Current.CancellationToken));

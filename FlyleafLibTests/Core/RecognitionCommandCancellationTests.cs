@@ -77,20 +77,22 @@ public class RecognitionCommandCancellationTests
     [Fact]
     public async Task Invalidation_during_command_admission_cancels_the_subsequent_wait()
     {
-        using ManualResetEventSlim admissionEntered = new(), releaseAdmission = new();
+        var admissionEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseAdmission = new ManualResetEventSlim();
+        CancellationToken testCancellation = TestContext.Current.CancellationToken;
         var backend = new HeldSubtitleBackend
         {
-            Admitted = _ => { admissionEntered.Set(); releaseAdmission.Wait(TestContext.Current.CancellationToken); }
+            Admitted = _ => { admissionEntered.SetResult(); releaseAdmission.Wait(testCancellation); }
         };
         var actions = new RecognitionActions(backend);
         Task pending = actions.OcrAsync(0);
         try
         {
-            Assert.True(admissionEntered.Wait(Limit, TestContext.Current.CancellationToken));
+            await admissionEntered.Task.WaitAsync(Limit, testCancellation);
             actions.Invalidate();
             releaseAdmission.Set();
-            await Assert.ThrowsAsync<RecognitionActionCanceledException>(() => pending.WaitAsync(Limit, TestContext.Current.CancellationToken));
-            await actions.MutateAsync(() => { }).WaitAsync(Limit, TestContext.Current.CancellationToken);
+            await Assert.ThrowsAsync<RecognitionActionCanceledException>(() => pending.WaitAsync(Limit, testCancellation));
+            await actions.MutateAsync(() => { }).WaitAsync(Limit, testCancellation);
         }
         finally
         {
