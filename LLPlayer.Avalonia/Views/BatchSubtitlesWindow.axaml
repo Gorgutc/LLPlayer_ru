@@ -1,45 +1,52 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:batch="using:FlyleafLib.MediaPlayer.Batch"
         x:Class="LLPlayer.Avalonia.Views.BatchSubtitlesWindow" x:DataType="vm:BatchSubtitlesViewModel"
-        Classes="dialog" Title="Batch Subtitles — LLPlayer" Width="1420" Height="860" MinWidth="820" MinHeight="600"
+        Classes="dialog" Title="Batch Subtitles — LLPlayer" Width="1420" Height="860" MinWidth="820" MinHeight="440"
+        SizeToContent="Manual" CanResize="True" WindowStartupLocation="CenterScreen"
         Icon="avares://LLPlayer.Avalonia/Assets/llplayer.png">
-  <DockPanel Margin="20">
-    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
-      <TextBlock Text="Batch Subtitles" Classes="dialog-title" />
-      <TextBlock Text="Transcribe video folders, translate to Russian and optionally generate local dubbing. Each run snapshots the saved ASR, translation and dubbing settings." TextWrapping="Wrap" Classes="dialog-description" />
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-        <TextBox Name="BatchFolderBox" Text="{Binding Draft.LastFolder}" PlaceholderText="Video folder" AutomationProperties.Name="Video folder" />
-        <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseCommand}" Classes="outline" />
-      </Grid>
-      <WrapPanel>
-        <CheckBox Content="Include subfolders" IsChecked="{Binding Draft.Recursive}" Margin="0,0,14,0" />
-        <CheckBox Content="Overwrite existing output" IsChecked="{Binding Draft.OverwriteExisting}" Margin="0,0,14,0" />
-        <CheckBox Content="Smooth: do not overlap ASR and translation" IsChecked="{Binding Draft.SerializeAsrAndTranslate}" Margin="0,0,14,0" />
-        <CheckBox Content="Prefer Russian audio" IsChecked="{Binding Draft.PreferRussianAudio}" Margin="0,0,14,0" />
-      </WrapPanel>
-      <WrapPanel>
-        <CheckBox Content="CPU while active (faster-whisper)" IsChecked="{Binding Draft.RunOnCpuWhenActive}" Margin="0,0,14,0" />
-        <TextBlock Text="Idle seconds" VerticalAlignment="Center" Margin="0,0,6,0" />
-        <NumericUpDown Name="BatchIdleThreshold" Value="{Binding Draft.ActiveIdleThresholdSeconds}" Minimum="5" Maximum="600" Increment="5" Width="110" Margin="0,0,14,0" />
-        <CheckBox Name="BatchWatchToggle" Content="Watch folder (saved option)" IsChecked="{Binding Draft.WatchFolder}" Margin="0,0,14,0" />
-        <Button Name="BatchWatchStartStop" Content="{Binding WatchButtonText}" Command="{Binding ToggleWatchCommand}" Classes="outline" Margin="0,0,14,0" />
-      </WrapPanel>
-      <WrapPanel>
-        <CheckBox Content="Generate Russian dub" IsChecked="{Binding Draft.GenerateDubbing}" Margin="0,0,14,0" />
-        <ComboBox ItemsSource="{Binding Voices}" SelectedItem="{Binding SelectedVoice}" IsVisible="{Binding HasVoicePicker}" Width="240" Margin="0,0,8,0" AutomationProperties.Name="Default dubbing voice">
-          <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{ReflectionBinding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
-        </ComboBox>
-        <Button Content="Dubbing settings…" Command="{Binding DubbingSettingsCommand}" Classes="outline" Margin="0,0,8,0" />
-        <Button Name="BatchSaveOptions" Content="Save options" Command="{Binding SaveOptionsCommand}" Classes="outline" />
-      </WrapPanel>
-      <TextBlock Text="Options take effect on Save options, Scan or Start. Active runs keep their original snapshot. Output uses the global subtitle export BOM preference at run start. Per-file audio selection is session-only." TextWrapping="Wrap" Classes="small muted" />
-      <TextBlock Text="{Binding ActivityStatus}" TextWrapping="Wrap" Classes="small muted" />
-    </StackPanel>
-    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,12,0,0">
-      <ProgressBar Name="BatchOverallProgress" Minimum="0" Maximum="1" Value="{Binding Workflow.OverallProgress}" IsVisible="{Binding Workflow.IsRunning}" />
-      <TextBlock Name="BatchSummary" Text="{Binding Workflow.Summary}" TextWrapping="Wrap" Classes="small muted" />
-      <TextBlock Name="BatchMessage" Text="{Binding Workflow.Message}" TextWrapping="Wrap" Classes="small muted" AutomationProperties.LiveSetting="Polite" />
-      <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+  <Grid Margin="20" RowDefinitions="2*,3*,Auto" RowSpacing="12">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Batch Subtitles" Classes="dialog-title" />
+        <TextBlock Text="Transcribe video folders, translate to Russian and optionally generate local dubbing. Each run snapshots the saved ASR, translation and dubbing settings." TextWrapping="Wrap" Classes="dialog-description" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <TextBox Name="BatchFolderBox" Text="{Binding Draft.LastFolder}" PlaceholderText="Video folder" AutomationProperties.Name="Video folder" />
+          <Button Grid.Column="1" Content="Browse…" Command="{Binding BrowseCommand}" Classes="outline" />
+        </Grid>
+        <WrapPanel>
+          <CheckBox Content="Include subfolders" IsChecked="{Binding Draft.Recursive}" Margin="0,0,14,0" />
+          <CheckBox Content="Overwrite existing output" IsChecked="{Binding Draft.OverwriteExisting}" Margin="0,0,14,0" />
+          <CheckBox Content="Smooth: do not overlap ASR and translation" IsChecked="{Binding Draft.SerializeAsrAndTranslate}" Margin="0,0,14,0" />
+          <CheckBox Content="Prefer Russian audio" IsChecked="{Binding Draft.PreferRussianAudio}" Margin="0,0,14,0" />
+        </WrapPanel>
+        <WrapPanel>
+          <CheckBox Content="CPU while active (faster-whisper)" IsChecked="{Binding Draft.RunOnCpuWhenActive}" Margin="0,0,14,0" />
+          <TextBlock Text="Idle seconds" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <NumericUpDown Name="BatchIdleThreshold" Value="{Binding Draft.ActiveIdleThresholdSeconds}" Minimum="5" Maximum="600" Increment="5" Width="110" Margin="0,0,14,0" />
+          <CheckBox Name="BatchWatchToggle" Content="Watch folder (saved option)" IsChecked="{Binding Draft.WatchFolder}" Margin="0,0,14,0" />
+          <Button Name="BatchWatchStartStop" Content="{Binding WatchButtonText}" Command="{Binding ToggleWatchCommand}" Classes="outline" Margin="0,0,14,0" />
+        </WrapPanel>
+        <WrapPanel>
+          <CheckBox Content="Generate Russian dub" IsChecked="{Binding Draft.GenerateDubbing}" Margin="0,0,14,0" />
+          <ComboBox ItemsSource="{Binding Voices}" SelectedItem="{Binding SelectedVoice}" IsVisible="{Binding HasVoicePicker}" Width="240" Margin="0,0,8,0" AutomationProperties.Name="Default dubbing voice">
+            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{ReflectionBinding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Content="Dubbing settings…" Command="{Binding DubbingSettingsCommand}" Classes="outline" Margin="0,0,8,0" />
+          <Button Name="BatchSaveOptions" Content="Save options" Command="{Binding SaveOptionsCommand}" Classes="outline" />
+        </WrapPanel>
+        <TextBlock Text="Options take effect on Save options, Scan or Start. Active runs keep their original snapshot. Output uses the global subtitle export BOM preference at run start. Per-file audio selection is session-only." TextWrapping="Wrap" Classes="small muted" />
+        <TextBlock Text="{Binding ActivityStatus}" TextWrapping="Wrap" Classes="small muted" />
+      </StackPanel>
+    </ScrollViewer>
+    <StackPanel Grid.Row="2" Spacing="8">
+      <ScrollViewer MaxHeight="96" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Spacing="8">
+          <ProgressBar Name="BatchOverallProgress" Minimum="0" Maximum="1" Value="{Binding Workflow.OverallProgress}" IsVisible="{Binding Workflow.IsRunning}" />
+          <TextBlock Name="BatchSummary" Text="{Binding Workflow.Summary}" TextWrapping="Wrap" Classes="small muted" />
+          <TextBlock Name="BatchMessage" Text="{Binding Workflow.Message}" TextWrapping="Wrap" Classes="small muted" AutomationProperties.LiveSetting="Polite" />
+          <TextBlock Text="{Binding Warning}" TextWrapping="Wrap" Classes="small muted" />
+        </StackPanel>
+      </ScrollViewer>
       <WrapPanel>
         <Button Name="BatchScan" Content="Scan" Command="{Binding ScanCommand}" IsEnabled="{Binding Workflow.IsIdle}" Classes="outline" Margin="0,0,8,6" />
         <Button Name="BatchStart" Content="Start selected" Command="{Binding StartCommand}" IsEnabled="{Binding Workflow.CanStart}" Margin="0,0,8,6" />
@@ -52,7 +59,7 @@
         <Button Content="Close" Click="OnClose" Classes="outline" Margin="0,0,8,6" />
       </WrapPanel>
     </StackPanel>
-    <Grid ColumnDefinitions="3*,2*" ColumnSpacing="12">
+    <Grid Grid.Row="1" ColumnDefinitions="3*,2*" ColumnSpacing="12">
       <DockPanel>
         <CheckBox DockPanel.Dock="Top" Content="Select all / none" IsChecked="{Binding AllIncluded}" Margin="0,0,0,8" />
         <ListBox Name="BatchJobs" ItemsSource="{Binding Rows}" SelectedItem="{Binding SelectedRow}" DoubleTapped="OnJobDoubleTapped">
@@ -86,5 +93,5 @@
         <ListBox ItemsSource="{Binding Workflow.ActiveJob.Transcript}" />
       </DockPanel>
     </Grid>
-  </DockPanel>
+  </Grid>
 </Window>

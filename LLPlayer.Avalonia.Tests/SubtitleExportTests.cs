@@ -1,7 +1,11 @@
 ﻿using System.Text;
-using Avalonia.Headless.XUnit;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Input;
 using LLPlayer.Avalonia.Views;
 using FlyleafLib;
@@ -241,9 +245,9 @@ public sealed class SubtitleExportTests
             window.Show(); Dispatcher.UIThread.RunJobs();
             Assert.True(window.FindControl<TextBlock>("ExportPartialWarning")!.IsVisible);
             Assert.True(window.FindControl<CheckBox>("ExportBom")!.IsChecked);
-            window.FindControl<ComboBox>("ExportSlot")!.SelectedIndex = 1;
-            window.FindControl<ComboBox>("ExportText")!.SelectedIndex = 2;
-            window.FindControl<ComboBox>("ExportFormat")!.SelectedIndex = 2;
+            window.FindControl<ListBox>("ExportSlot")!.SelectedIndex = 1;
+            window.FindControl<ListBox>("ExportText")!.SelectedIndex = 2;
+            window.FindControl<ListBox>("ExportFormat")!.SelectedIndex = 2;
             window.FindControl<CheckBox>("ExportBom")!.IsChecked = false;
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, vm.SelectedSlot); Assert.Equal(SubtitleExportText.TranslatedWithFallback, vm.SelectedText);
@@ -254,6 +258,71 @@ public sealed class SubtitleExportTests
             Assert.Contains("ASR/OCR", vm.Message);
         }
         finally { await vm.DisposeAsync(); window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(SubtitleExportFormat.Vtt, "movie.vtt", "WEBVTT\r\n\r\n00:00:01.234 --> 00:00:04.567\r\n<i>secondary</i>\r\n")]
+    [InlineData(SubtitleExportFormat.Txt, "movie.txt", "secondary")]
+    public async Task Export_dialog_saves_secondary_with_direct_choice_selection(SubtitleExportFormat format, string filename, string expected)
+    {
+        using TempDir dir = new();
+        string path = Path.Combine(dir.Path, filename);
+        await using var vm = new SubtitlesExportViewModel(new DistinctTrackSource());
+        var owner = new Window();
+        var window = new SubtitlesExportWindow(vm);
+        SubtitleExportRequest? request = null;
+        vm.PickExportPath = value => { request = value; return Task.FromResult<string?>(path); };
+        vm.RevealExport = _ => Task.CompletedTask;
+        vm.ShowKnownError = value => throw new Xunit.Sdk.XunitException(value);
+        owner.Show();
+        Task dialog = window.ShowDialog(owner);
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            SelectExportChoice(window, "ExportSlot", 1);
+            SelectExportChoice(window, "ExportText", (int)SubtitleExportText.TranslatedOnly);
+            Assert.Equal(SubtitleExportText.TranslatedOnly, vm.SelectedText);
+            SelectExportChoice(window, "ExportText", (int)SubtitleExportText.Original);
+            SelectExportChoice(window, "ExportFormat", (int)format);
+            Assert.Equal(1, vm.SelectedSlot);
+            Assert.Equal(format, vm.SelectedFormat);
+
+            var export = Assert.IsType<Button>(window.FindControl<Button>("ExportButton"));
+            ClickExportControl(window, export);
+            var command = Assert.IsAssignableFrom<IAsyncRelayCommand>(export.Command);
+            await Assert.IsAssignableFrom<Task>(command.ExecutionTask);
+            Assert.Equal(filename, request!.SuggestedFileName);
+            Assert.Equal(format, request.Format);
+            Assert.Equal(expected, File.ReadAllText(path));
+        }
+        finally
+        {
+            window.Close();
+            await dialog;
+            owner.Close();
+        }
+    }
+
+    static void SelectExportChoice(SubtitlesExportWindow window, string name, int index)
+    {
+        var choices = Assert.IsType<ListBox>(window.FindControl<Control>(name));
+        var item = Assert.IsType<ListBoxItem>(choices.ContainerFromIndex(index));
+        ClickExportControl(window, item);
+        Assert.Equal(index, choices.SelectedIndex);
+        Assert.True(item.IsSelected);
+    }
+
+    static void ClickExportControl(SubtitlesExportWindow window, Control control)
+    {
+        Assert.Same(window, TopLevel.GetTopLevel(control));
+        Assert.True(control.IsEffectivelyVisible);
+        Assert.True(control.Bounds.Width > 0 && control.Bounds.Height > 0);
+        var center = new Point(control.Bounds.Width / 2, control.Bounds.Height / 2);
+        Point target = control.TranslatePoint(center, window)!.Value;
+        window.MouseMove(target);
+        window.MouseDown(target, MouseButton.Left);
+        window.MouseUp(target, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
     }
 
     [AvaloniaFact]
@@ -268,7 +337,7 @@ public sealed class SubtitleExportTests
             var speakers = Assert.IsType<CheckBox>(window.FindControl<CheckBox>("ExportSpeakerLabels"));
             Assert.Equal(false, speakers.IsChecked);
             Assert.True(speakers.IsEnabled);
-            window.FindControl<ComboBox>("ExportFormat")!.SelectedIndex = (int)SubtitleExportFormat.Vtt;
+            window.FindControl<ListBox>("ExportFormat")!.SelectedIndex = (int)SubtitleExportFormat.Vtt;
             Dispatcher.UIThread.RunJobs();
             Assert.False(speakers.IsEnabled);
         }
@@ -301,5 +370,15 @@ public sealed class SubtitleExportTests
         public SubtitleExportSnapshot Capture(int slot, SubtitleExportText text) => new(
             Empty ? [] : [new(TimeSpan.FromMilliseconds(1234), TimeSpan.FromMilliseconds(4567), "Hello", [new(SubStyles.ITALIC, 0, 5)])],
             "movie", null, Loading);
+    }
+
+    sealed class DistinctTrackSource : ISubtitleExportSource
+    {
+        public SubtitleExportSnapshot Capture(int slot, SubtitleExportText text)
+        {
+            string line = slot == 0 ? "primary" : "secondary";
+            return new([new(TimeSpan.FromMilliseconds(1234), TimeSpan.FromMilliseconds(4567), line, [new(SubStyles.ITALIC, 0, line.Length)])],
+                "movie", null, false);
+        }
     }
 }
