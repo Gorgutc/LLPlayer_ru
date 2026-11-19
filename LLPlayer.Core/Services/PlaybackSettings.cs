@@ -263,7 +263,9 @@ public sealed class PlaybackSettings
             config.Audio.VolumeMax = AudioVolumeMax;
             config.Audio.VolumeDefault = AudioVolumeDefault;
             config.Audio.Languages = AudioLanguages.Select(Language.Get).ToList();
-            config.Audio.FiltersEnabled = AudioFiltersEnabled;
+            // A detached ControlHost snapshot can be captured before the engine has a startup profile.
+            var effectiveProfile = Engine.Config?.FFmpegLoadProfile ?? FFmpegLoadProfile;
+            config.Audio.FiltersEnabled = AudioFiltersEnabled && effectiveProfile != Flyleaf.FFmpeg.LoadProfile.Main;
             config.Audio.Enabled = AudioEnabled;
         }
         config.Video.AspectRatioCustom = new(AspectRatioCustom);

@@ -2,7 +2,7 @@
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:d="using:FlyleafLib.MediaFramework.MediaDevice"
         x:Class="LLPlayer.Avalonia.Views.CaptureDevicesWindow" x:DataType="vm:CaptureDevicesViewModel"
         Classes="dialog" Title="{Binding Title}" Width="740" Height="560" MinWidth="520" MinHeight="420"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+        SizeToContent="Manual" CanResize="True" WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
   <Window.Resources>
     <DataTemplate x:Key="CaptureDevice" x:DataType="d:CaptureDeviceInfo">
       <TextBlock Text="{Binding Label}" TextWrapping="Wrap" />
@@ -16,7 +16,7 @@
       <TextBlock Text="{Binding Heading}" Classes="dialog-title" />
       <TextBlock Text="Capture requires the FFmpeg All startup profile. If device support is unavailable, select All in Playback settings → Startup and restart LLPlayer." TextWrapping="Wrap" Classes="dialog-description" />
     </StackPanel>
-    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+    <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="12" Margin="0,0,8,8">
         <TextBlock Name="CaptureCatalogStatus" Text="{Binding Status}" TextWrapping="Wrap" />
         <Button Name="RefreshCaptureDevicesButton" Content="Refresh devices" Command="{Binding RefreshCommand}" Classes="outline" HorizontalAlignment="Left" />
