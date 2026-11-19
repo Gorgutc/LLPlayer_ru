@@ -118,6 +118,7 @@ public partial class MainWindow
         vm?.CancelAppShortcuts();
         if (batchWindow != null) { batchWindow.Restore(); return; }
         batchWindow = new BatchSubtitlesWindow(model);
+        batchWindow.FitInitialBoundsTo(this);
         OwnKeyboardSurface(batchWindow);
         batchWindow.BackgroundRequested = window => BackgroundRequested?.Invoke(window);
         batchWindow.Closed += (_, _) => batchWindow = null;

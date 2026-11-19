@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Dubbing;
 using LLPlayer.Avalonia.Services;
@@ -185,6 +188,57 @@ public sealed class BatchSubtitlesUiTests
         finally { File.Delete(path); }
     }
 
+    [AvaloniaTheory]
+    [InlineData(700, 400)]
+    [InlineData(820, 440)]
+    [InlineData(820, 600)]
+    [InlineData(1420, 860)]
+    public async Task Scanning_a_large_queue_keeps_batch_actions_inside_the_window(int width, int height)
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "llplayer-batch-layout-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        string[] paths = Enumerable.Range(1, 15).Select(index => $"{index}.mkv").ToArray();
+        var store = new BatchSettingsStore(Path.Combine(folder, "prefs.json"));
+        await using var workflow = new BatchWorkflow(new BatchSettings { LastFolder = folder }, new Runs(), new Watcher(),
+            a => a(), new Catalog(paths));
+        await using var model = new BatchSubtitlesViewModel(workflow, store, _ => Task.FromResult<string?>(null),
+            _ => Task.CompletedTask, _ => Task.FromResult(true));
+        var window = new BatchSubtitlesWindow(model) { Width = width, Height = height };
+        window.MinWidth = Math.Min(window.MinWidth, width);
+        window.MinHeight = Math.Min(window.MinHeight, height);
+        try
+        {
+            window.Show();
+            await model.ScanCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(paths.Length, model.Rows.Count);
+            Assert.InRange(window.Bounds.Width, width - 1, width + 1);
+            Assert.InRange(window.Bounds.Height, height - 1, height + 1);
+
+            var footer = (WrapPanel) window.FindControl<Button>("BatchScan")!.Parent!;
+            Assert.Equal(9, footer.Children.Count);
+            foreach (Button button in footer.Children.OfType<Button>())
+            {
+                Point origin = button.TranslatePoint(default, window)!.Value;
+                Assert.True(button.IsEffectivelyVisible && button.Bounds.Width > 0 && button.Bounds.Height > 0
+                    && origin.X >= 0 && origin.Y >= 0 && origin.X + button.Bounds.Width <= width
+                    && origin.Y + button.Bounds.Height <= height, button.Content as string);
+            }
+
+            var queue = window.FindControl<ListBox>("BatchJobs")!;
+            var scroll = queue.GetVisualDescendants().OfType<ScrollViewer>().First();
+            Assert.True(scroll.Viewport.Height > 0 && scroll.Extent.Height > scroll.Viewport.Height,
+                $"Queue bounds: {queue.Bounds}, viewport: {scroll.Viewport}, extent: {scroll.Extent}.");
+        }
+        finally
+        {
+            window.Close();
+            foreach (string file in Directory.GetFiles(folder)) File.Delete(file);
+            Directory.Delete(folder);
+        }
+    }
+
     sealed class Watcher : IBatchFolderWatcher
     {
         public event Action<BatchWatchReady>? FileReady { add { } remove { } }
@@ -198,12 +252,12 @@ public sealed class BatchSubtitlesUiTests
     {
         public IBatchRun Create(BatchSettings settings, IReadOnlyList<BatchSubtitleJob> jobs) => throw new InvalidOperationException("Test never starts inference.");
     }
-    sealed class Catalog : IBatchMediaCatalog
+    sealed class Catalog(params string[] paths) : IBatchMediaCatalog
     {
         public bool FolderExists(string path) => Directory.Exists(path);
         public bool TranslationExists(string path) => false;
         public bool DubExists(string path) => false;
-        public Task<IReadOnlyList<string>> ScanAsync(string folder, bool recursive, CancellationToken token) => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<IReadOnlyList<string>> ScanAsync(string folder, bool recursive, CancellationToken token) => Task.FromResult<IReadOnlyList<string>>(paths);
         public Task<IReadOnlyList<MediaAudioTrack>> ProbeAsync(string path, CancellationToken token) => Task.FromResult<IReadOnlyList<MediaAudioTrack>>([]);
     }
 }

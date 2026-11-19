@@ -2,6 +2,12 @@
         xmlns:vm="using:LLPlayer.Avalonia.ViewModels" x:Class="LLPlayer.Avalonia.Views.SubtitlesExportWindow"
         x:DataType="vm:SubtitlesExportViewModel" Classes="dialog" Title="Subtitle export - LLPlayer"
         Width="460" Height="460" MinWidth="360" MinHeight="400" CanResize="True" SizeToContent="Manual">
+  <Window.Styles>
+    <!-- Keep the choice lists inside the modal export window. -->
+    <Style Selector="ComboBox /template/ Popup#PART_Popup">
+      <Setter Property="ShouldUseOverlayLayer" Value="True" />
+    </Style>
+  </Window.Styles>
   <DockPanel>
     <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,16">
       <TextBlock Text="Subtitle export" Classes="dialog-title" />

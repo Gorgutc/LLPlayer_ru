@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -31,6 +32,24 @@ public partial class BatchSubtitlesWindow : Window
         };
         Closed += (_, _) => { heartbeat.Stop(); BatchDesktopFeedback.UpdateTaskbar(this, false, 0); model.Closed(); };
     }
+    internal void FitInitialBoundsTo(Window reference)
+    {
+        if ((reference.Screens.ScreenFromTopLevel(reference) ?? reference.Screens.Primary) is not { } screen)
+            return;
+
+        PixelRect workArea = screen.WorkingArea;
+        Position = workArea.Center;
+        Size frame = (reference.FrameSize ?? reference.ClientSize) - reference.ClientSize;
+        Size available = workArea.Size.ToSize(screen.Scaling) - frame;
+        if (available.Width < 1 || available.Height < 1)
+            return;
+
+        Width = Math.Min(Width, Math.Floor(available.Width));
+        Height = Math.Min(Height, Math.Floor(available.Height));
+        MinWidth = Math.Min(MinWidth, Width);
+        MinHeight = Math.Min(MinHeight, Height);
+    }
+
     public void Restore() { Show(); WindowState = WindowState.Normal; Activate(); }
     void SendToBackground()
     {
