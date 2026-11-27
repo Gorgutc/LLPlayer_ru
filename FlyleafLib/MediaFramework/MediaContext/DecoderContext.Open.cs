@@ -551,6 +551,7 @@ public partial class DecoderContext
             else
             {
                 int i = SubtitlesSelectedHelper.CurIndex;
+                SubtitlesManager[i].BeginSrtTimingNativeChange();
                 args = new OpenExternalSubtitlesStreamCompletedArgs((ExternalSubtitlesStream) extStream, Playlist.Selected.ExternalSubtitlesStreams[i]);
 
                 if (args.OldExtStream != null)
@@ -669,6 +670,9 @@ public partial class DecoderContext
                     {
                         oldStream = SubtitlesStreams[SubtitlesSelectedHelper.CurIndex];
                     }
+
+                    if (stream.Type == MediaType.Subs)
+                        SubtitlesManager[SubtitlesSelectedHelper.CurIndex].BeginSrtTimingNativeChange();
 
                     // Close external demuxers when opening embedded
                     if (stream.Demuxer.Type == MediaType.Video)
@@ -1033,6 +1037,7 @@ public partial class DecoderContext
     }
     public void CloseSubtitles(int subIndex)
     {
+        SubtitlesManager[subIndex].BeginSrtTimingNativeChange();
         if (Playlist.Selected.ExternalSubtitlesStreams[subIndex] != null)
         {
             Playlist.Selected.ExternalSubtitlesStreams[subIndex].Enabled = false;

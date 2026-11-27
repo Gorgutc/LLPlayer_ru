@@ -668,6 +668,9 @@
                       ToolTip.Tip="Show primary or secondary subtitles in the sidebar">
               <ComboBoxItem Content="Primary" /><ComboBoxItem Content="Secondary" />
             </ComboBox>
+            <Button Name="AlignSrtButton" Content="Align SRT to audio…" Classes="outline"
+                    Command="{Binding ShowSrtAlignmentCommand}" HorizontalAlignment="Stretch"
+                    ToolTip.Tip="Align the selected local SRT to the current audio track" />
             <TextBox Name="FilterBox" PlaceholderText="Search subtitles…" Text="{Binding Sidebar.FilterText}">
               <TextBox.InnerLeftContent>
                 <c:LucideIcon Data="{StaticResource Icon.Search}" Size="14" Margin="10,0,0,0"

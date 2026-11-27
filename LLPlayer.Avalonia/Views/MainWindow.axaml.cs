@@ -70,6 +70,22 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
     RecognitionWindow? recognitionWindow;
     WordManagerWindow? wordManagerWindow;
     SubtitlesExportWindow? subtitlesExportWindow;
+    SrtAlignmentWindow? srtAlignmentWindow;
+
+    public void ShowSrtAlignment(SrtAlignmentViewModel model)
+    {
+        vm?.CancelAppShortcuts();
+        if (srtAlignmentWindow != null) { srtAlignmentWindow.Activate(); return; }
+        var window = new SrtAlignmentWindow(model);
+        srtAlignmentWindow = window;
+        OwnKeyboardSurface(window);
+        window.Closed += (_, _) =>
+        {
+            srtAlignmentWindow = null;
+            vm?.SrtAlignmentClosed(model);
+        };
+        _ = window.ShowDialog(this);
+    }
 
     public void ShowSubtitlesExport(SubtitlesExportViewModel model)
     {
@@ -415,22 +431,23 @@ public partial class MainWindow : Window, IAppShell, IHostPlayer
 
     async Task DrainBeforeClosingAsync()
     {
-        if (DrainGpuWorkBeforeShutdown != null)
+        try
         {
-            try { await DrainGpuWorkBeforeShutdown(); }
-            catch (Exception exception)
-            {
-                // Keep process ownership and the Quit action available for another attempt.
-                await Task.Yield();
-                shutdownStarted = false;
-                explicitQuit = false;
-                GpuShutdownFailed?.Invoke();
-                IsEnabled = true;
-                EnableLanguageWindows(true);
-                CrashLog.Write("GPU engine shutdown", exception);
-                vm?.ShowToast("GPU work still stopping", "Quit again to retry. " + exception.Message, ToastVariant.Destructive);
-                return;
-            }
+            if (DrainGpuWorkBeforeShutdown != null) await DrainGpuWorkBeforeShutdown();
+            await DrainSrtAlignmentWindowAsync();
+        }
+        catch (Exception exception)
+        {
+            // Keep the windows and their operation ownership available for another attempt.
+            await Task.Yield();
+            shutdownStarted = false;
+            explicitQuit = false;
+            GpuShutdownFailed?.Invoke();
+            IsEnabled = true;
+            EnableLanguageWindows(true);
+            CrashLog.Write("Player shutdown drain", exception);
+            vm?.ShowToast("Player work still stopping", "Quit again to retry. " + exception.Message, ToastVariant.Destructive);
+            return;
         }
         try
         {

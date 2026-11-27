@@ -20,9 +20,28 @@ public sealed partial class OnlineVideoProcess : IDisposable
     OnlineVideoProcess(Process root, Stream output, Stream error, SafeFileHandle windowsJob = null)
         => (this.root, Output, Error, this.windowsJob) = (root, output, error, windowsJob);
 
+    internal static bool IsExecutablePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || !File.Exists(path))
+            return false;
+
+        if (OperatingSystem.IsWindows())
+            return Path.GetExtension(path).Equals(".exe", StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            return (File.GetUnixFileMode(path) &
+                (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     public static OnlineVideoProcess Start(ProcessStartInfo info)
     {
-        if (!OnlineVideoRequest.IsExecutablePath(info.FileName) || info.Arguments.Length != 0 || info.UseShellExecute)
+        if (!IsExecutablePath(info.FileName) || info.Arguments.Length != 0 || info.UseShellExecute)
             throw new ArgumentException("An absolute executable and individual arguments are required.");
         if (OperatingSystem.IsWindows())
             return StartWindows(info);
@@ -31,7 +50,7 @@ public sealed partial class OnlineVideoProcess : IDisposable
 
         // Without --fork the new session leader execs the configured helper under this PID.
         const string setsid = LinuxSessionLauncher;
-        if (!OnlineVideoRequest.IsExecutablePath(setsid))
+        if (!IsExecutablePath(setsid))
             throw new FileNotFoundException("Online video requires /usr/bin/setsid (util-linux).");
         info.ArgumentList.Insert(0, info.FileName);
         info.ArgumentList.Insert(0, "--");

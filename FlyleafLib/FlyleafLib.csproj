@@ -85,6 +85,8 @@
 
   <ItemGroup Condition="'$(TargetFramework)'=='net10.0-windows10.0.18362.0'">
     <Compile Remove="Platform\Portable\**" />
+    <!-- F-19 alignment opts into the contained ASR process on both targets. The portable playback seams remain excluded. -->
+    <Compile Include="Platform\Portable\OnlineVideoProcess.cs;Platform\Portable\OnlineVideoProcess.Engine.cs;Platform\Portable\OnlineVideoProcess.Windows.cs" />
   </ItemGroup>
 
   <!-- F-13 portable (Linux) TFM: Windows-only sources (WPF/WinForms host, Direct3D11 renderer, MediaFoundation

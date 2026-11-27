@@ -86,6 +86,7 @@ public class WhisperEngineDownloadDialogVM : ModelDownloadDialogVMBase
             // Delete engine if exists
             if (Directory.Exists(EnginePath))
             {
+                using IDisposable mutation = FL.LanguageResources.AcquireMutation();
                 await Task.Run(() =>
                 {
                     Directory.Delete(EnginePath, true);
@@ -112,6 +113,7 @@ public class WhisperEngineDownloadDialogVM : ModelDownloadDialogVMBase
 
     private async Task UnzipEngine(string zipPath)
     {
+        using IDisposable mutation = FL.LanguageResources.AcquireMutation();
         WhisperConfig.EnsureEnginesDirectory();
 
         // HC-11: resolve 7z.dll from the app install directory, not the process CWD. Launching via a file

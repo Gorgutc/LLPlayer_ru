@@ -130,6 +130,38 @@ public sealed class PortableFasterWhisperTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Align_UsesExactDelayedAudioStreamAndAddsItsMediaOffset()
+    {
+        Config config = CreateConfig("""
+            for wave do :; done
+            printf '%s\n' '{"segments":[{"start":0.1,"end":0.25,"text":" two words","words":[{"word":" two","start":0.1,"end":0.2},{"word":" words","start":0.21,"end":0.25}]}]}' > "${wave%.*}.json"
+            printf '[00:00.100 --> 00:00.250] two words\nOperation finished in: 1s\n'
+            """);
+        config.Subtitles.FasterWhisperConfig.UseManualModel = true;
+        config.Subtitles.FasterWhisperConfig.ManualModelDir = directory;
+        config.Subtitles.ASRChunkSeconds = 1;
+        config.Subtitles.ASRSplitOnSilence = false;
+        string model = Path.Combine(directory, "faster-whisper-tiny");
+        Directory.CreateDirectory(model);
+        foreach (string file in new[] { "model.bin", "config.json", "tokenizer.json", "vocabulary.json" })
+            File.WriteAllText(Path.Combine(model, file), "fixture");
+        PortableVideoTestMedia.RequireEngine();
+        var request = new SrtAlignmentAudioRequest(PortableVideoTestMedia.AlignmentTwoAudioTracks, 2, "en", SrtAlignmentDevice.Cpu);
+
+        var words = await SrtAlignmentAudioSource.ReadWordsAsync(config, request, TestContext.Current.CancellationToken);
+
+        Assert.Collection(words,
+            first => Assert.InRange(first.Start.TotalSeconds, 1.33, 1.37),
+            second => Assert.InRange(second.End.TotalSeconds, 1.48, 1.52),
+            third => Assert.InRange(third.Start.TotalSeconds, 2.35, 2.39),
+            fourth => Assert.InRange(fourth.End.TotalSeconds, 2.50, 2.54),
+            fifth => Assert.InRange(fifth.Start.TotalSeconds, 3.38, 3.42),
+            sixth => Assert.InRange(sixth.End.TotalSeconds, 3.53, 3.57));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => SrtAlignmentAudioSource.ReadWordsAsync(config,
+            request with { StreamIndex = 0 }, TestContext.Current.CancellationToken));
+    }
+
     static async Task<List<(string, TimeSpan, TimeSpan, string)>> Collect(
         FasterWhisperASRService service, MemoryStream wave, CancellationToken token)
     {

@@ -1,0 +1,78 @@
+﻿<UserControl x:Class="LLPlayer.Views.SrtAlignmentDialog"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    <UserControl.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding CmdClose}" />
+    </UserControl.InputBindings>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="{Binding SourcePath}" TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding SourcePath}" FontWeight="SemiBold" />
+            <TextBlock Margin="0 4 0 0" Text="{Binding AudioLabel}" TextTrimming="CharacterEllipsis" />
+            <DockPanel Margin="0 12 0 8" LastChildFill="False">
+                <Label x:Name="LanguageLabel" Content="_Spoken language" Target="{Binding ElementName=LanguageEntry}" />
+                <TextBox x:Name="LanguageEntry" Width="58" VerticalContentAlignment="Center"
+                         Text="{Binding Language, UpdateSourceTrigger=PropertyChanged}"
+                         IsEnabled="{Binding CanEditLanguage}"
+                         ToolTip="Enter a supported Whisper language code, such as en for English."
+                         MaxLength="3" AutomationProperties.LabeledBy="{Binding ElementName=LanguageLabel}" />
+                <TextBlock Margin="12 0" VerticalAlignment="Center" Text="Faster Whisper · CPU" />
+                <Button Style="{StaticResource MaterialDesignOutlinedButton}" Margin="0 0 8 0"
+                        Command="{Binding CmdPrepare}" Content="Prepare preview" />
+                <Button Style="{StaticResource MaterialDesignFlatButton}" Command="{Binding CmdStop}"
+                        Content="{Binding StopLabel}" />
+            </DockPanel>
+            <ProgressBar Height="3" IsIndeterminate="{Binding IsWorking}" />
+            <TextBlock Margin="0 10" Text="{Binding StatusText}" TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite" />
+        </StackPanel>
+
+        <DataGrid Grid.Row="1" ItemsSource="{Binding ReviewRows}" AutoGenerateColumns="False"
+                  IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False"
+                  EnableRowVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                  AutomationProperties.Name="Subtitle alignment preview">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Subtitle" Binding="{Binding Text}" Width="*" MinWidth="125">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextWrapping" Value="Wrap" />
+                            <Setter Property="Margin" Value="4 2" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+                <DataGridTextColumn Header="Original media time" Binding="{Binding OriginalInterval}" Width="183" />
+                <DataGridTextColumn Header="Proposed media time" Binding="{Binding ProposedInterval}" Width="183" />
+                <DataGridTextColumn Header="Match" Binding="{Binding Match}" Width="*" MinWidth="120">
+                    <DataGridTextColumn.ElementStyle>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="TextWrapping" Value="Wrap" />
+                            <Setter Property="Margin" Value="4 2" />
+                        </Style>
+                    </DataGridTextColumn.ElementStyle>
+                </DataGridTextColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <DockPanel Grid.Row="2" Margin="0 12 0 0" LastChildFill="False">
+            <CheckBox DockPanel.Dock="Top" Margin="0 0 0 8"
+                      Visibility="{Binding HasUnmatched, Converter={StaticResource BooleanToVisibilityConv}}"
+                      IsChecked="{Binding KeepUnmatched}" IsEnabled="{Binding CanEditLanguage}"
+                      Content="Keep original timings for unmatched subtitles" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Style="{StaticResource MaterialDesignFlatButton}" Command="{Binding CmdClose}" Content="Close" />
+                <Button Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8 0 0 0"
+                        Command="{Binding CmdSaveTranslation}" Content="Save linked translation"
+                        ToolTip="Available when translated text is linked to each original subtitle." />
+                <Button Style="{StaticResource MaterialDesignRaisedButton}" Margin="8 0 0 0"
+                        Command="{Binding CmdSaveOriginal}" Content="Save aligned SRT copy" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</UserControl>

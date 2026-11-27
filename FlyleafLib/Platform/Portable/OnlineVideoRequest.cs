@@ -33,24 +33,7 @@ public static class OnlineVideoRequest
     static bool IsPublicUrl(string url) => Utils.IsSafeProcessUrl(url) &&
         Uri.TryCreate(url, UriKind.Absolute, out var parsed) && parsed.UserInfo.Length == 0;
 
-    public static bool IsExecutablePath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || !File.Exists(path))
-            return false;
-
-        if (OperatingSystem.IsWindows())
-            return Path.GetExtension(path).Equals(".exe", StringComparison.OrdinalIgnoreCase);
-
-        try
-        {
-            return (File.GetUnixFileMode(path) &
-                (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
+    public static bool IsExecutablePath(string path) => OnlineVideoProcess.IsExecutablePath(path);
 
     public static CancellationToken CurrentCancellation => cancellation.Value;
 

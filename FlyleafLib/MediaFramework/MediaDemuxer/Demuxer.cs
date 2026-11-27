@@ -9,6 +9,9 @@ using FlyleafLib.MediaPlayer;
 
 namespace FlyleafLib.MediaFramework.MediaDemuxer;
 
+internal readonly record struct LocalMediaFileRevision(string Path, long Length, DateTime LastWriteTimeUtc,
+    DateTime CreationTimeUtc);
+
 public unsafe class Demuxer : RunThreadBase
 {
     /* TODO
@@ -50,6 +53,8 @@ public unsafe class Demuxer : RunThreadBase
 
     public AVFormatContext*         FormatContext   => fmtCtx;
     public CustomIOContext          CustomIOContext { get; private set; }
+    internal SrtTimingInput LoadedSrtInput { get; private set; }
+    internal LocalMediaFileRevision? LoadedLocalVideoFileRevision { get; private set; }
 
     // Media Programs
     public ObservableCollection<Program>
@@ -323,6 +328,8 @@ public unsafe class Demuxer : RunThreadBase
             Stop();
 
             Url                 = null;
+            LoadedSrtInput      = null;
+            LoadedLocalVideoFileRevision = null;
             hlsCtx              = null;
             analyzed            = false;
             IsReversePlayback   = false;
@@ -388,6 +395,37 @@ public unsafe class Demuxer : RunThreadBase
     #endregion
 
     #region Open / Seek / Run
+    internal static bool TryGetLocalMediaFileRevision(string url, out LocalMediaFileRevision revision)
+    {
+        revision = default;
+        if (string.IsNullOrWhiteSpace(url) || url.Contains('\0'))
+            return false;
+
+        string path = url;
+        if (!Path.IsPathFullyQualified(path))
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri) || !uri.IsFile || uri.IsUnc
+                || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+                return false;
+            path = uri.LocalPath;
+        }
+        if (!Path.IsPathFullyQualified(path) || path.StartsWith(@"\\", StringComparison.Ordinal))
+            return false;
+
+        try
+        {
+            FileInfo file = new(path);
+            if (!file.Exists)
+                return false;
+            revision = new(file.FullName, file.Length, file.LastWriteTimeUtc, file.CreationTimeUtc);
+            return true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
+        catch (ArgumentException) { return false; }
+        catch (NotSupportedException) { return false; }
+    }
+
     public string Open(string url)      => Open(url, null);
     public string Open(Stream stream)   => Open(null, stream);
     public string Open(string url, Stream stream)
@@ -512,6 +550,7 @@ public unsafe class Demuxer : RunThreadBase
                     queryParams = null;
             }
 
+            SrtTimingInput loadedSrt = null;
             if (Type == MediaType.Subs &&
                 ExtensionsSubtitlesText.Contains(GetUrlExtention(url)) &&
                 File.Exists(url))
@@ -520,30 +559,31 @@ public unsafe class Demuxer : RunThreadBase
                 // Because ffmpeg expects UTF8 text.
                 try
                 {
+                    const int maxSubtitleBytes = 10 * 1024 * 1024;
                     FileInfo file = new(url);
-                    if (file.Length >= 10 * 1024 * 1024)
+                    if (file.Length >= maxSubtitleBytes)
                     {
                         throw new InvalidOperationException($"TEXT subtitle is too big (>=10MB) to load: {file.Length}");
                     }
 
-                    // Detects character encoding, reads text and converts to UTF8
-                    Encoding encoding = Encoding.UTF8;
+                    if (GetUrlExtention(url) == "srt")
+                        loadedSrt = SrtTimingInput.TryRead(url, maxSubtitleBytes);
 
-                    Encoding detected = TextEncodings.DetectEncoding(url);
-                    if (detected != null)
+                    ReadOnlySpan<byte> contentBytes;
+                    if (loadedSrt != null)
+                        contentBytes = loadedSrt.DecoderBytes;
+                    else
                     {
-                        encoding = detected;
+                        // Preserve the original encoding fallback for other formats and legacy SRT files.
+                        Encoding encoding = TextEncodings.DetectEncoding(url) ?? Encoding.UTF8;
+                        contentBytes = Encoding.UTF8.GetBytes(File.ReadAllText(url, encoding));
                     }
-
-                    string content = File.ReadAllText(url, encoding);
-                    byte[] contentBytes = Encoding.UTF8.GetBytes(content);
 
                     inputDataSize = contentBytes.Length;
                     inputData = (byte*)av_malloc((nuint)inputDataSize);
 
-                    Span<byte> src = new(contentBytes);
                     Span<byte> dst = new(inputData, inputDataSize);
-                    src.CopyTo(dst);
+                    contentBytes.CopyTo(dst);
 
                     avioCtx = avio_alloc_context(inputData, inputDataSize, 0, null, null, null, null);
                     if (avioCtx == null)
@@ -557,9 +597,15 @@ public unsafe class Demuxer : RunThreadBase
                 }
                 catch (Exception ex)
                 {
+                    loadedSrt = null;
                     Log.Warn($"Could not load text subtitles to memory: {ex.Message}");
                 }
             }
+
+            LocalMediaFileRevision? revisionBeforeOpen = null;
+            if (Type == MediaType.Video && stream == null && url == Url
+                && TryGetLocalMediaFileRevision(url, out LocalMediaFileRevision localFile))
+                revisionBeforeOpen = localFile;
 
             // Some devices required to be opened from a UI or STA thread | after 20-40 sec. of demuxing -> [gdigrab @ 0000019affe3f2c0] Failed to capture image (error 6) or (error 8)
             bool isDevice = inFmt != null && inFmt->priv_class != null && (
@@ -654,6 +700,10 @@ public unsafe class Demuxer : RunThreadBase
             packet = av_packet_alloc();
             Status = Status.Stopped;
             allowReadInterrupts = Config.AllowReadInterrupts && !Config.ExcludeInterruptFmts.Contains(Name);
+            LoadedSrtInput = Name == "srt" ? loadedSrt : null;
+            if (revisionBeforeOpen is { } before && !IsLive && Duration > 0
+                && TryGetLocalMediaFileRevision(url, out LocalMediaFileRevision after) && before == after)
+                LoadedLocalVideoFileRevision = before;
 
             return error = null;
         }

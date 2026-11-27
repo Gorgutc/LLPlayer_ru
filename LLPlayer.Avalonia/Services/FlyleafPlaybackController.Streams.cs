@@ -312,6 +312,7 @@ public sealed partial class FlyleafPlaybackController
     {
         Recognition.CancelStaleStarts();
         QueueDiarizationValidation();
+        QueueSrtAlignmentValidation();
         QueuePlaybackChoices();
         if (args is FlyleafLib.MediaFramework.MediaContext.DecoderContext.OpenExternalVideoStreamCompletedArgs)
         {

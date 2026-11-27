@@ -51,13 +51,14 @@ public partial class MainWindow
         // existing close veto; a nested manager belongs to Recognition and keeps that owner's semantics.
         ClosingBehavior = owned.Length > 0 && owned.All(child => child is RecognitionWindow or ModelManagerWindow
             or AiInsightsWindow or DubbingWindow or VoicePickerWindow or CaptureDevicesWindow
-            or CommandPaletteWindow or AboutWindow or PlayerDebugWindow or CheatSheetWindow)
+            or CommandPaletteWindow or AboutWindow or PlayerDebugWindow or CheatSheetWindow
+            || child is SrtAlignmentWindow && ShutdownRequested != null)
             ? WindowClosingBehavior.OwnerWindowOnly : WindowClosingBehavior.OwnerAndChildWindows;
     }
 
     void EnableLanguageWindows(bool enabled)
     {
-        foreach (Window? child in new Window?[] { insightsWindow, dubbingWindow, voicePickerWindow, modelManagerWindow, batchWindow, recognitionWindow })
+        foreach (Window? child in new Window?[] { insightsWindow, dubbingWindow, voicePickerWindow, modelManagerWindow, batchWindow, recognitionWindow, srtAlignmentWindow })
             if (child != null) child.IsEnabled = enabled;
     }
 
@@ -132,6 +133,8 @@ public partial class MainWindow
         return folders.FirstOrDefault()?.TryGetLocalPath();
     }
 
+    Task DrainSrtAlignmentWindowAsync() => srtAlignmentWindow?.DrainForShutdownAsync() ?? Task.CompletedTask;
+
     async Task DrainLanguageWindowsAsync()
     {
         if (modelManagerWindow?.DataContext is ModelManagerViewModel models) await models.DisposeAsync();
@@ -147,6 +150,7 @@ public partial class MainWindow
     {
         if (batchWindow != null) { batchWindow.IsShuttingDown = true; batchWindow.Close(); }
         insightsWindow?.Close(); modelManagerWindow?.Close(); dubbingWindow?.Close(); voicePickerWindow?.Close();
+        srtAlignmentWindow?.Close();
     }
 
     void OnCueVoiceClick(object? sender, RoutedEventArgs args)

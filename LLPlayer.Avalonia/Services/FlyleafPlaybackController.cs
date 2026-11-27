@@ -137,6 +137,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
         diarization = new DiarizationWorkflow(diarizationCoordinator);
         diarizationCoordinator.Changed += OnDiarizationCoordinatorChanged;
         Recognition = new RecognitionActions(new PlayerRecognitionBackend(player), LanguageResources.AcquireUse, gpuCoordinator);
+        srtAlignment = new(gpuCoordinator, LanguageResources);
         Recognition.GpuWaitChanged += OnGpuWaitChanged;
 
         playerChanged = (_, e) => OnPlayerChanged(e.PropertyName);
@@ -147,6 +148,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
                 Interlocked.Increment(ref controlAudioRevision);
                 Recognition.CancelStaleStarts();
                 QueueDiarizationValidation();
+                QueueSrtAlignmentValidation();
             }
             if (e.PropertyName is nameof(FlyleafLib.MediaPlayer.Audio.Volume) or nameof(FlyleafLib.MediaPlayer.Audio.Mute))
                 Raise(e.PropertyName);
@@ -161,6 +163,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             {
                 Raise(nameof(RecognitionStatus));
                 QueueDiarizationValidation();
+                QueueSrtAlignmentValidation();
             }
             if (e.PropertyName == nameof(SubManager.Language)) Raise("SubtitleLanguage");
         };
@@ -172,6 +175,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             {
                 Raise(nameof(RecognitionStatus));
                 QueueDiarizationValidation();
+                QueueSrtAlignmentValidation();
             }
             if (e.PropertyName == nameof(SubManager.Language)) Raise("SubtitleLanguage");
         };
@@ -185,6 +189,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
                 Interlocked.Increment(ref controlSubtitleRevision[slot]);
                 Raise(slot == 0 ? nameof(PrimarySlotEnabled) : nameof(SecondarySlotEnabled));
                 QueueDiarizationValidation();
+                QueueSrtAlignmentValidation();
             }
         };
         subConfigChanged = (_, e) =>
@@ -243,6 +248,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             {
                 WatchCues(slot);
                 QueueDiarizationValidation();
+                QueueSrtAlignmentValidation();
                 QueueCueNotification(slot);
                 Raise(nameof(RecognitionStatus));
             });
@@ -700,7 +706,8 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     {
         Recognition.BeginShutdown();
         BeginDiarizationShutdown();
-        await DrainDiarizationAsync();
+        BeginSrtAlignmentShutdown();
+        await Task.WhenAll(DrainDiarizationAsync(), DrainSrtAlignmentAsync());
         await StopAudioRecoveryAsync();
         await Recognition.DisposeAsync();
         await Task.WhenAll(player.SubtitlesManager[0].Translator.DisposeAsync().AsTask(), player.SubtitlesManager[1].Translator.DisposeAsync().AsTask());
@@ -713,6 +720,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             return;
         CancelAudioRecovery();
         BeginDiarizationShutdown();
+        BeginSrtAlignmentShutdown();
         disposed = true;
         diarizationCoordinator.Changed -= OnDiarizationCoordinatorChanged;
         DisposePlaylistChoices();
@@ -784,6 +792,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
     {
         if (name is nameof(Player.CanPlay) or nameof(Player.Status)) Recognition.CancelStaleStarts();
         if (name is nameof(Player.CanPlay) or nameof(Player.Status) or nameof(Player.IsASRRunning)) QueueDiarizationValidation();
+        if (name is nameof(Player.CanPlay) or nameof(Player.Status)) QueueSrtAlignmentValidation();
         if (name is nameof(Player.CanPlay) or nameof(Player.Status) or nameof(Player.Chapters)) QueuePlaybackChoices();
         if (name is nameof(Player.IsASRRunning) or nameof(Player.IsASRPaused)) Raise(nameof(RecognitionStatus));
         switch (name)
@@ -880,6 +889,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             return;
 
         QueuePlaybackChoices();
+        QueueSrtAlignmentValidation();
         string? url = e.Url;
         bool isSubs = e.IsSubtitles;
         string? error = e.Error;
