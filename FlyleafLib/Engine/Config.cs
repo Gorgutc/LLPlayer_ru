@@ -1502,10 +1502,16 @@ public class Config : NotifyPropertyChanged
         /// managed high-pass (removes sub-bass rumble / hum / DC) and then an FFmpeg <c>afftdn</c> stationary-noise
         /// filter BEFORE it is handed to Whisper, so both ASR engines (whisper.cpp and faster-whisper) and batch see
         /// the cleaned audio. Off by default → byte-identical to before. This targets STATIONARY noise (hiss, hum,
-        /// fan, rumble); it is NOT speech/music separation (that is the full F-02 Demucs sidecar, out of scope). If the
+        /// fan, rumble). Speech separation is configured independently by <see cref="ASRSpeechSeparation"/>. If the
         /// native <c>afftdn</c> filter is unavailable in the shipped FFmpeg it degrades to the managed high-pass alone.
         /// </summary>
         public bool ASRDenoise { get; set => Set(ref field, value); } = false;
+
+        /// <summary>
+        /// Prefer HTDemucs FT speech separation for eligible local file recognition and batch jobs
+        /// when its CUDA runtime is available. This does not change the recognizer's VAD settings.
+        /// </summary>
+        public bool ASRSpeechSeparation { get; set => Set(ref field, value); } = true;
 
         /// <summary>
         /// Detect the spoken language per ASR segment instead of pinning the whole transcript to the first detected

@@ -20,7 +20,7 @@
           <CheckBox Content="Prefer Russian audio" IsChecked="{Binding Draft.PreferRussianAudio}" Margin="0,0,14,0" />
         </WrapPanel>
         <WrapPanel>
-          <CheckBox Content="CPU while active (faster-whisper)" IsChecked="{Binding Draft.RunOnCpuWhenActive}" Margin="0,0,14,0" />
+          <CheckBox Content="Use CPU while active" ToolTip.Tip="Runs Faster Whisper on CPU and skips the CUDA speech prepass while active." IsChecked="{Binding Draft.RunOnCpuWhenActive}" Margin="0,0,14,0" />
           <TextBlock Text="Idle seconds" VerticalAlignment="Center" Margin="0,0,6,0" />
           <NumericUpDown Name="BatchIdleThreshold" Value="{Binding Draft.ActiveIdleThresholdSeconds}" Minimum="5" Maximum="600" Increment="5" Width="110" Margin="0,0,14,0" />
           <CheckBox Name="BatchWatchToggle" Content="Watch folder (saved option)" IsChecked="{Binding Draft.WatchFolder}" Margin="0,0,14,0" />

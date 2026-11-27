@@ -12,6 +12,7 @@ public sealed partial class ControlSettingsService
         fields.Add("asrEngine", s => s.ASREngine, (s, value) => s.ASREngine = value);
         fields.Add("asrChunkSizeMB", s => s.ASRChunkSizeMB, (s, value) => s.ASRChunkSizeMB = value);
         fields.Add("asrChunkSeconds", s => s.ASRChunkSeconds, (s, value) => s.ASRChunkSeconds = value);
+        fields.Add("asrSpeechSeparation", s => s.ASRSpeechSeparation, (s, value) => s.ASRSpeechSeparation = value);
         fields.Add("ocrPrimaryEngine", s => s.OcrPrimaryEngine, (s, value) => s.OcrPrimaryEngine = value);
         fields.Add("ocrSecondaryEngine", s => s.OcrSecondaryEngine, (s, value) => s.OcrSecondaryEngine = value);
         fields.Add("tesseractOcrRegions", s => s.TesseractOcrRegions, (s, value) => s.TesseractOcrRegions = value);

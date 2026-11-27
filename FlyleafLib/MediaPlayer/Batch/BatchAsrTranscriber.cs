@@ -1,4 +1,5 @@
 using System.Linq;
+using FlyleafLib.MediaPlayer.SpeechSeparation;
 
 namespace FlyleafLib.MediaPlayer.Batch;
 
@@ -13,6 +14,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     private readonly bool _confirmProcessExit;
     private readonly bool _forRecognition;
     private readonly bool _strictExplicitStream;
+    private readonly HtDemucsSpeechSeparator? _speechSeparator;
 
     /// <param name="preferCpu">Optional per-chunk device policy for faster-whisper: when it returns true the
     /// NEXT audio chunk is transcribed on CPU instead of GPU (the chunk in flight finishes on its current
@@ -25,6 +27,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     /// <param name="confirmProcessExit">Verify the external engine's process lifetime for GPU-coordinated runs.</param>
     /// <param name="forRecognition">Preserve interactive ASR settings instead of applying batch defaults.</param>
     /// <param name="strictExplicitStream">Use only the requested audio stream and a finite local source.</param>
+    /// <param name="speechSeparator">A configured separator supplied by a host that owns GPU admission.</param>
     public BatchAsrTranscriber(
         Config sourceConfig,
         Func<bool>? preferCpu = null,
@@ -32,7 +35,8 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         Func<string, int?>? forcedStreamIndexResolver = null,
         bool confirmProcessExit = false,
         bool forRecognition = false,
-        bool strictExplicitStream = false)
+        bool strictExplicitStream = false,
+        HtDemucsSpeechSeparator? speechSeparator = null)
     {
         _batchConfig = forRecognition
             ? BatchSubtitleConfigSnapshot.CreateForRecognition(sourceConfig)
@@ -43,6 +47,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         _confirmProcessExit = confirmProcessExit;
         _forRecognition = forRecognition;
         _strictExplicitStream = strictExplicitStream;
+        _speechSeparator = _batchConfig.Subtitles.ASRSpeechSeparation ? speechSeparator : null;
         ValidateAsrConfig(_batchConfig);
     }
 
@@ -86,8 +91,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
             MediaAudioProbeResult audio = new MediaAudioProbe(localConfig).Probe(mediaPath, token, streamIndex, strictSource: true);
             if (sourceLanguage != null)
                 audio = audio with { Language = sourceLanguage, LanguageTagged = true };
-            return TranscribeInternal(localConfig, audio, token, asrProgress, _preferCpu, _confirmProcessExit,
-                startTime, slot, pause);
+            return TranscribeInternal(localConfig, audio, token, asrProgress, startTime, slot, pause);
         }, token);
     }
 
@@ -97,16 +101,14 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         MediaAudioProbeResult audio = new MediaAudioProbe(_batchConfig)
             .Probe(mediaPath, token, forced, _preferRussianAudio, strictSource: _strictExplicitStream);
 
-        return TranscribeInternal(_batchConfig, audio, token, asrProgress, _preferCpu, _confirmProcessExit);
+        return TranscribeInternal(_batchConfig, audio, token, asrProgress);
     }
 
-    private static BatchAsrResult TranscribeInternal(
+    private BatchAsrResult TranscribeInternal(
         Config batchConfig,
         MediaAudioProbeResult audio,
         CancellationToken token,
         IProgress<BatchAsrProgress>? asrProgress,
-        Func<bool>? preferCpu,
-        bool confirmProcessExit,
         TimeSpan startTime = default,
         int? slot = null,
         PauseToken pause = default)
@@ -115,10 +117,19 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         Language sourceLanguage = ResolveInitialSourceLanguage(batchConfig, audio);
         Language selectedAudioLanguage = GetKnownLanguage(audio.Language?.ISO6391);
 
+        using var separated = _speechSeparator is not null && _preferCpu?.Invoke() != true
+            ? _speechSeparator.TrySeparateAsync(audio.MediaPath, audio.StreamIndex, audio.Duration, token)
+                .GetAwaiter().GetResult()
+            : null;
+        token.ThrowIfCancellationRequested();
+
         bool interactive = slot.HasValue;
-        using AudioReader reader = new(batchConfig, slot.GetValueOrDefault(), preferCpu,
-            enableVadSnapping: interactive && batchConfig.Subtitles.VadCueSnapping, confirmProcessExit: confirmProcessExit);
-        reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
+        using AudioReader reader = new(batchConfig, slot.GetValueOrDefault(), _preferCpu,
+            enableVadSnapping: interactive && batchConfig.Subtitles.VadCueSnapping, confirmProcessExit: _confirmProcessExit);
+        if (separated is null)
+            reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
+        else
+            reader.Open(separated.WavePath, 0, MediaType.Audio, token);
         token.ThrowIfCancellationRequested();
 
         reader.ReadAll(startTime, data =>

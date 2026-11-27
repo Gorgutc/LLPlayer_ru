@@ -35,6 +35,7 @@ $windowsMediaAssemblies = @('Vortice.DXGI.dll','Vortice.MediaFoundation.dll','Vo
     'Vortice.Mathematics.dll','SharpGen.Runtime.dll','SharpGen.Runtime.COM.dll')
 $diarization = @('Assets/Diarization/sidecar.py','Assets/Diarization/requirements.txt',
     'Assets/Diarization/README.md','Assets/Diarization/NOTICE.md')
+$speechSeparation = 'Assets/SpeechSeparation/sidecar.py'
 $controlApps = @('LLPlayer.ControlHost','mcp/LLPlayer.Mcp')
 $control = @('LLPlayer.Control.dll','mcp/LLPlayer.Control.dll','mcp/ModelContextProtocol.dll','mcp/ModelContextProtocol.Core.dll','licenses/ModelContextProtocol.LICENSE') +
     @($controlApps | ForEach-Object { "$_.exe", "$_.dll", "$_.deps.json", "$_.runtimeconfig.json" })
@@ -45,7 +46,8 @@ $required = @('LLPlayer.Avalonia.exe','LLPlayer.Avalonia.dll','LLPlayer.Avalonia
     'Plugins/YoutubeDL/YoutubeDL.dll','Plugins/YoutubeDL/YoutubeDL.pdb','Assets/silero_vad.onnx','LICENSE','THIRD-PARTY-NOTICES.md','native-dependencies.json',
     'LibNMeCab.dll','LibNMeCab.IpaDicBin.dll','IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
     'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
-    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md') + $native + $windowsMediaAssemblies + $diarization + $control
+    'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md', $speechSeparation) +
+    $native + $windowsMediaAssemblies + $diarization + $control
 foreach ($relative in $required) {
     $path = Join-Path $root $relative
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Windows Avalonia package is missing required file $relative." }
@@ -121,6 +123,9 @@ foreach ($item in $items) {
     }
     if ($relative -like 'Assets/Diarization/*' -and ($item.PSIsContainer -or $relative -notin $diarization)) {
         throw "Windows Avalonia package contains unexpected diarization payload $relative."
+    }
+    if ($relative -like 'Assets/SpeechSeparation/*' -and ($item.PSIsContainer -or $relative -cne $speechSeparation)) {
+        throw "Windows Avalonia package contains unexpected speech-separation payload $relative."
     }
     if ($item.PSIsContainer) {
         if ($name -match '^(Automation|Control|DubEngine|dubmodels|\.venv|venv|__pycache__|whispermodels|Whisper|tesseractmodels|Recordings|Snapshots|x86|x64|cuda|vulkan|openvino|noavx|linux-x64|win-x86|win-arm64|osx-x64|osx-arm64)$') {

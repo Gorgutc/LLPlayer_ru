@@ -66,6 +66,7 @@ try {
         "lib\7z.dll"
         "lib\license.7z.txt"
         "Assets\silero_vad.onnx"
+        "Assets\SpeechSeparation\sidecar.py"
         "onnxruntime.dll"
         "onnxruntime_providers_shared.dll"
         "e_sqlite3.dll"
@@ -99,6 +100,11 @@ try {
         "dub_sidecar\README.md"
     )) {
         Assert-RegularPublishFile -Root $appPublish -RelativePath $requiredFile
+    }
+    $speechSeparation = Get-Item -LiteralPath (Join-Path $appPublish 'Assets\SpeechSeparation') -Force
+    if (($speechSeparation.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or
+        @(Get-ChildItem -LiteralPath $speechSeparation.FullName -Force).Count -ne 1) {
+        throw 'Publish speech-separation payload must contain only the bundled sidecar.py.'
     }
     $forbiddenDubRuntimeDirs = @(Get-ChildItem $appPublish -Directory -Recurse -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -in @("DubEngine", "dubmodels") })
@@ -171,6 +177,7 @@ try {
         "release required content check" = "Release package is missing required file"
         "release recursive dub runtime rejection" = "Get-ChildItem `$pub -Directory -Recurse"
         "release Silero VAD model check" = "Assets\silero_vad.onnx"
+        "release speech-separation source check" = "Assets\SpeechSeparation\sidecar.py"
         "release ONNX Runtime native check" = "onnxruntime.dll"
         "release ONNX provider native check" = "onnxruntime_providers_shared.dll"
         "release SQLite native check" = "e_sqlite3.dll"

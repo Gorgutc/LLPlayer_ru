@@ -84,6 +84,7 @@ eleven existing generation-policy/length-limit fields; and next-start logging/FF
 the current effective startup configuration, including remembered volume `100`, rather than applying the stored
 policy's default-volume field `75` to every startup or unrelated Save. Engine max volume `150`, buffer `500/30000` ms,
 frame limits `5/4`, timeouts `300000/10000/20000/8000` ms, logging Warn/Warn and FFmpeg Filters remain unchanged.
+The F-02-full ASRSpeechSeparation recognition preference defaults on (also for saved settings that omit it); explicit off persists. Supported local-file recognition uses it only when the external HTDemucs FT runtime is configured. See [Speech separation](asr-speech-separation.md).
 Resegment/WordTimestamps/VadCueSnapping/FixAllCaps default on; ASRDenoise/ASRPerSegmentLanguage default off; cue
 limits remain `3/48/24` and `7/1` seconds; BOM defaults on. Ordered language lists use canonical known unique languages.
 

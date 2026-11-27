@@ -13,6 +13,7 @@ public sealed class RecognitionSettings
     public FasterWhisperConfig FasterWhisper { get; set; } = new();
     public int ASRChunkSizeMB { get; set; } = 20;
     public int ASRChunkSeconds { get; set; } = 20;
+    public bool ASRSpeechSeparation { get; set; } = true;
     public SubOCREngineType OcrPrimaryEngine { get; set; } = SubOCREngineType.Tesseract;
     public SubOCREngineType OcrSecondaryEngine { get; set; } = SubOCREngineType.Tesseract;
     public Dictionary<string, string> TesseractOcrRegions { get; set; } = new();
@@ -39,6 +40,7 @@ public sealed class RecognitionSettings
         FasterWhisper = JsonSerializer.Deserialize<FasterWhisperConfig>(JsonSerializer.Serialize(source.FasterWhisperConfig, JsonOptions), JsonOptions)!,
         ASRChunkSizeMB = source.ASRChunkSizeMB,
         ASRChunkSeconds = source.ASRChunkSeconds,
+        ASRSpeechSeparation = source.ASRSpeechSeparation,
         OcrPrimaryEngine = source[0].OCREngine,
         OcrSecondaryEngine = source[1].OCREngine,
         TesseractOcrRegions = new(source.TesseractOcrRegions),
@@ -118,6 +120,7 @@ public sealed class RecognitionSettings
         target.FasterWhisperConfig = copy.FasterWhisper;
         target.ASRChunkSizeMB = copy.ASRChunkSizeMB;
         target.ASRChunkSeconds = copy.ASRChunkSeconds;
+        target.ASRSpeechSeparation = copy.ASRSpeechSeparation;
         target[0].OCREngine = copy.OcrPrimaryEngine;
         target[1].OCREngine = copy.OcrSecondaryEngine;
         target.TesseractOcrRegions = copy.TesseractOcrRegions;

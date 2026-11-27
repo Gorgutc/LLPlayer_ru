@@ -1,5 +1,6 @@
 ﻿using FlyleafLib;
 using FlyleafLib.MediaPlayer.Batch;
+using LLPlayer.Core.Automation;
 using LLPlayer.Core.Services;
 using Whisper.net.Ggml;
 
@@ -9,6 +10,32 @@ namespace FlyleafLibTests.Core;
 public class RecognitionSettingsTests
 {
     static readonly TimeSpan Limit = TimeSpan.FromSeconds(5);
+
+    [Fact]
+    public void Speech_separation_defaults_on_and_saved_off_reaches_recognition_and_batch()
+    {
+        string path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            RecognitionSettingsStore store = new(path);
+            File.WriteAllText(path, "{}");
+            RecognitionSettings settings = Assert.IsType<RecognitionSettings>(store.Load());
+            Assert.True(settings.ASRSpeechSeparation);
+
+            RecognitionSettings baseline = settings.Clone();
+            settings.ASRSpeechSeparation = false;
+            Assert.False(ControlSettingsService.CreateDraft(baseline, settings)
+                .Patch.Fields["asrSpeechSeparation"].GetBoolean());
+            store.Save(settings);
+            RecognitionSettings saved = Assert.IsType<RecognitionSettings>(store.Load());
+            var config = new Config.SubtitlesConfig { Languages = [Language.English] };
+            Assert.True(config.ASRSpeechSeparation);
+            saved.Apply(config);
+            Assert.False(RecognitionSettings.FromConfig(config).ASRSpeechSeparation);
+            Assert.False(BatchSubtitleConfigSnapshot.CreateSubtitlesConfig(config).ASRSpeechSeparation);
+        }
+        finally { File.Delete(path); }
+    }
 
     [Fact]
     public void Explicit_directory_resolver_and_snapshot_preserve_legacy_default()

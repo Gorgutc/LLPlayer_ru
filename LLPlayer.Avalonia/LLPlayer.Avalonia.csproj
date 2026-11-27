@@ -33,6 +33,8 @@
     <None Include="../diarization_sidecar/sidecar.py;../diarization_sidecar/requirements.txt;../diarization_sidecar/README.md;../diarization_sidecar/NOTICE.md"
           Link="Assets/Diarization/%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../FlyleafLib/Assets/SpeechSeparation/sidecar.py" Link="Assets/SpeechSeparation/sidecar.py"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 
   <ItemGroup>

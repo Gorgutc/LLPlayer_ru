@@ -3,6 +3,7 @@ using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Dubbing;
+using FlyleafLib.MediaPlayer.SpeechSeparation;
 
 namespace LLPlayer.Core.Batch;
 
@@ -25,11 +26,15 @@ public sealed class BatchRunFactory(Func<Config> getConfig, Func<int, bool>? isU
             var options = CaptureOptions(settings, snapshot.Subtitles.DubbingConfig.OutputFormat);
             var overrides = jobs.ToDictionary(j => j.MediaPath, j => j.AudioStreamIndexOverride, BatchWorkflow.PathComparer);
             Func<bool> preferCpu = () => settings.RunOnCpuWhenActive && isUserActive?.Invoke(settings.ActiveIdleThresholdSeconds) == true;
+            HtDemucsSpeechSeparator? separator = gpuCoordinator != null &&
+                snapshot.Subtitles.ASRSpeechSeparation
+                ? HtDemucsSpeechSeparator.TryCreate()
+                : null;
             bool coordinateGpu = gpuCoordinator != null &&
-                (settings.GenerateDubbing || FasterWhisperDevicePolicy.RequiresGpuAdmission(snapshot));
+                (settings.GenerateDubbing || separator != null || FasterWhisperDevicePolicy.RequiresGpuAdmission(snapshot));
             IBatchAsrTranscriber CreateTranscriber() => new BatchAsrTranscriber(snapshot, preferCpu,
                 settings.PreferRussianAudio, path => overrides.GetValueOrDefault(path), confirmProcessExit: coordinateGpu || outputOwnership != null,
-                strictExplicitStream: outputOwnership != null);
+                strictExplicitStream: outputOwnership != null, speechSeparator: separator);
             IBatchAsrTranscriber? transcriber = gpuCoordinator == null ? CreateTranscriber() : null;
             var translator = new BatchSubtitleTranslator(snapshot.Subtitles);
             var assignments = settings.GenerateDubbing ? snapshotVoiceAssignments?.Invoke() : null;

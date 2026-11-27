@@ -30,7 +30,7 @@ public partial class BatchSubtitlesViewModel : ObservableObject, IAsyncDisposabl
     [ObservableProperty] BatchJobRow? selectedRow;
     [ObservableProperty] TtsVoice? selectedVoice;
     [ObservableProperty] string warning = "";
-    [ObservableProperty] string activityStatus = "CPU while active applies to faster-whisper only.";
+    [ObservableProperty] string activityStatus = "CPU while active switches Faster Whisper to CPU and skips HTDemucs FT.";
     public ObservableCollection<TtsVoice> Voices { get; } = [];
     public bool HasVoicePicker => saveDefaultVoiceId != null;
     public string WatchButtonText => Workflow.WatchFolder ? "Stop watching" : "Start watching";

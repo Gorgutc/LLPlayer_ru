@@ -8,5 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="../LLPlayer.Control/LLPlayer.Control.csproj" />
     <ProjectReference Include="../LLPlayer.Core/LLPlayer.Core.csproj" />
+    <None Include="../FlyleafLib/Assets/SpeechSeparation/sidecar.py" Link="Assets/SpeechSeparation/sidecar.py"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
   </ItemGroup>
 </Project>
