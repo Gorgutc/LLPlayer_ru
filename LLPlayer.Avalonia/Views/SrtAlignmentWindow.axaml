@@ -49,8 +49,8 @@
     </ListBox>
 
     <StackPanel Grid.Row="3" Spacing="8" Margin="0,12,0,0">
-      <CheckBox Name="AlignmentKeepUnmatched" IsVisible="{Binding NeedsAcknowledgment}" IsChecked="{Binding KeepUnmatched}"
-                IsEnabled="{Binding CanEditOptions}" Content="Keep original timings for unmatched cues" />
+      <CheckBox Name="AlignmentKeepUnmatched" IsVisible="{Binding NeedsAcknowledgment}" IsChecked="{Binding TimingAcknowledged}"
+                IsEnabled="{Binding CanEditOptions}" Content="{Binding TimingAcknowledgmentText}" />
       <TextBlock IsVisible="{Binding LacksLinkedTranslation}" Classes="small muted" TextWrapping="Wrap"
                  Text="A complete linked translation is required to export translated cues." />
       <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="6">

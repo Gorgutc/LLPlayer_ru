@@ -30,8 +30,12 @@ public sealed class SrtAlignmentDraft(IReadOnlyList<SrtAlignmentRow> rows, bool 
     public bool CanSaveOriginal { get; } = canSaveOriginal;
     public bool CanSaveTranslated { get; } = canSaveTranslated;
     public bool HasTimingConflicts { get; init; }
-    public int MatchedCount { get; } = rows.Count(row => row.ProposedStart.HasValue);
+    public SrtClockCorrection? ClockCorrection { get; init; }
+    public int MatchedCount => ClockCorrection?.AnchorCount ?? matchedCount;
+    private readonly int matchedCount = rows.Count(row => row.ProposedStart.HasValue);
     public int TotalCount => Rows.Count;
+    public bool NeedsTimingAcknowledgment =>
+        (CanSaveOriginal || CanSaveTranslated) && (ClockCorrection != null || MatchedCount < TotalCount);
 }
 
 internal sealed record SrtAlignmentInput(string SourcePath, SrtTimingDocument Document, string MediaPath,
@@ -196,6 +200,18 @@ public sealed class SrtAlignmentWorkflow
             var request = new SrtAlignmentAudioRequest(input.MediaPath, input.StreamIndex, language, device);
             IReadOnlyList<WordTiming> words = await readWords(config, request, runToken).ConfigureAwait(false);
             var firstPass = SrtAudioAlignment.Align(input.Document.Cues, words, input.Duration, runToken);
+            if (firstPass.Any(proposal => !proposal.Start.HasValue) && !HasValidOrder(BuildRows(firstPass)) &&
+                SrtSubtitleClock.TryCreate(firstPass, input.Duration, runToken) is { } clock)
+            {
+                var projected = firstPass.Select((proposal, index) => proposal with
+                {
+                    Start = clock.Intervals[index].Start,
+                    End = clock.Intervals[index].End,
+                    IsExactAnchor = SrtSubtitleClock.IsSupported(proposal, clock.Intervals[index])
+                }).ToArray();
+                return await owner.PrepareResultAsync(firstPass, projected, runToken, clock.Summary).ConfigureAwait(false);
+            }
+
             var proposals = await SrtAlignmentSpeechRetry.RetryAsync(firstPass, input.Duration, window =>
             {
                 owner.EnsureCurrent();
@@ -268,13 +284,13 @@ public sealed class SrtAlignmentWorkflow
         }
 
         public async Task<SrtAlignmentDraft> PrepareResultAsync(IReadOnlyList<SrtAlignmentProposal> firstPass,
-            IReadOnlyList<SrtAlignmentProposal> proposals, CancellationToken token)
+            IReadOnlyList<SrtAlignmentProposal> proposals, CancellationToken token, SrtClockCorrection? clock = null)
         {
             token.ThrowIfCancellationRequested();
             EnsureCurrent();
             await VerifySelectedFileAsync(token).ConfigureAwait(false);
 
-            var rows = BuildRows(proposals);
+            var rows = BuildRows(proposals, clock != null);
             metadata = input.CaptureMetadata();
             bool hasProposals = rows.Any(row => row.ProposedStart.HasValue);
             bool timingConflicts = hasProposals && !HasValidOrder(rows);
@@ -286,6 +302,7 @@ public sealed class SrtAlignmentWorkflow
                 {
                     rows = original;
                     timingConflicts = false;
+                    clock = null;
                 }
             }
             bool canSave = hasProposals && !timingConflicts;
@@ -294,13 +311,12 @@ public sealed class SrtAlignmentWorkflow
             token.ThrowIfCancellationRequested();
             EnsureCurrent();
             return prepared = new SrtAlignmentDraft(rows, canSave,
-                canSave && rows.All(row => translations.Contains(row.Id))) { HasTimingConflicts = timingConflicts };
+                canSave && rows.All(row => translations.Contains(row.Id)))
+            {
+                HasTimingConflicts = timingConflicts,
+                ClockCorrection = canSave ? clock : null
+            };
         }
-
-        private static SrtAlignmentRow[] BuildRows(IReadOnlyList<SrtAlignmentProposal> proposals) =>
-            proposals.Select(proposal => new SrtAlignmentRow(proposal.Cue.Id, proposal.Cue.Text,
-                proposal.Cue.Start, proposal.Cue.End, proposal.Start, proposal.End, proposal.Coverage,
-                Explain(proposal.Rejection))).ToArray();
 
         public async Task SaveAsync(SrtAlignmentDraft draft, string path, bool translated, bool acceptUnmatched, CancellationToken token)
         {
@@ -315,8 +331,10 @@ public sealed class SrtAlignmentWorkflow
                 if (!ReferenceEquals(prepared, draft)) throw new InvalidOperationException("Prepare a new alignment first.");
                 if (!(translated ? draft.CanSaveTranslated : draft.CanSaveOriginal))
                     throw new InvalidOperationException("This result cannot be exported. Check the highlighted cues and translation availability.");
-                if (draft.MatchedCount != draft.TotalCount && !acceptUnmatched)
-                    throw new InvalidOperationException("Confirm keeping the unresolved cues at their original times.");
+                if (draft.NeedsTimingAcknowledgment && !acceptUnmatched)
+                    throw new InvalidOperationException(draft.ClockCorrection != null
+                        ? "Confirm applying the inferred timing correction to all cues."
+                        : "Confirm keeping the unresolved cues at their original times.");
 
                 string destination = Path.GetFullPath(path);
                 var pathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -408,6 +426,12 @@ public sealed class SrtAlignmentWorkflow
         static OperationCanceledException Stale() =>
             new("The media, selected track or loaded subtitle file changed. Reopen the file and prepare a new alignment.");
     }
+
+    private static SrtAlignmentRow[] BuildRows(IReadOnlyList<SrtAlignmentProposal> proposals, bool usesClock = false) =>
+        proposals.Select(proposal => new SrtAlignmentRow(proposal.Cue.Id, proposal.Cue.Text,
+            proposal.Cue.Start, proposal.Cue.End, proposal.Start, proposal.End, proposal.Coverage,
+            usesClock ? proposal.IsExactAnchor ? "Speech anchor for track correction" : "Timing inferred from track correction"
+                : Explain(proposal.Rejection))).ToArray();
 
     internal static bool HasValidOrder(IReadOnlyList<SrtAlignmentRow> rows)
     {

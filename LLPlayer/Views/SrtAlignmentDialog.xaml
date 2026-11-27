@@ -62,9 +62,9 @@
 
         <DockPanel Grid.Row="2" Margin="0 12 0 0" LastChildFill="False">
             <CheckBox DockPanel.Dock="Top" Margin="0 0 0 8"
-                      Visibility="{Binding HasUnmatched, Converter={StaticResource BooleanToVisibilityConv}}"
-                      IsChecked="{Binding KeepUnmatched}" IsEnabled="{Binding CanEditLanguage}"
-                      Content="Keep original timings for unmatched subtitles" />
+                      Visibility="{Binding NeedsTimingAcknowledgment, Converter={StaticResource BooleanToVisibilityConv}}"
+                      IsChecked="{Binding TimingAcknowledged}" IsEnabled="{Binding CanEditLanguage}"
+                      Content="{Binding TimingAcknowledgmentText}" />
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Style="{StaticResource MaterialDesignFlatButton}" Command="{Binding CmdClose}" Content="Close" />
                 <Button Style="{StaticResource MaterialDesignOutlinedButton}" Margin="8 0 0 0"

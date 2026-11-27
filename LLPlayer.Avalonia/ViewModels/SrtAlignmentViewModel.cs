@@ -30,7 +30,7 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
 
     [ObservableProperty] string language;
     [ObservableProperty] bool useCpu;
-    [ObservableProperty] bool keepUnmatched;
+    [ObservableProperty] bool timingAcknowledged;
     [ObservableProperty] bool busy;
     [ObservableProperty] bool draining;
     [ObservableProperty] string message = "";
@@ -49,11 +49,18 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
     public string SubtitleName => Path.GetFileName(session.SourcePath);
     public string AudioLabel => session.AudioLabel;
     public bool CanUseCuda => session.CanUseCuda;
-    public bool NeedsAcknowledgment => Draft is { } result && (result.CanSaveOriginal || result.CanSaveTranslated)
-        && result.MatchedCount < result.TotalCount;
+    public bool NeedsAcknowledgment => Draft?.NeedsTimingAcknowledgment == true;
+    public string TimingAcknowledgmentText => Draft?.ClockCorrection != null
+        ? "Accept inferred timings for this subtitle track"
+        : "Keep original timings for unmatched cues";
     public bool HasPreview => Draft != null;
     public bool LacksLinkedTranslation => Draft is { CanSaveOriginal: true, CanSaveTranslated: false };
-    public string CoverageText => Draft is { } result ? $"{result.MatchedCount} of {result.TotalCount} cues matched" : "";
+    public string CoverageText => Draft switch
+    {
+        { ClockCorrection: { } correction } result => $"Speech anchors: {correction.AnchorCount} of {result.TotalCount} cues",
+        { } result => $"{result.MatchedCount} of {result.TotalCount} cues matched",
+        _ => ""
+    };
     public bool CanEditOptions => !Busy && !Draining && !closing && !stale && !cleanupRequired;
     public Func<string, string?, Task<string?>>? PickOutputPath { get; set; }
 
@@ -68,8 +75,8 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
     }
 
     bool CanPrepare() => CanEditOptions && WhisperLanguage.LanguageToCode.ContainsValue(Language.Trim().ToLowerInvariant());
-    bool CanSaveOriginal() => CanEditOptions && Draft is { CanSaveOriginal: true } && (!NeedsAcknowledgment || KeepUnmatched);
-    bool CanSaveTranslation() => CanEditOptions && Draft is { CanSaveTranslated: true } && (!NeedsAcknowledgment || KeepUnmatched);
+    bool CanSaveOriginal() => CanEditOptions && Draft is { CanSaveOriginal: true } && (!NeedsAcknowledgment || TimingAcknowledged);
+    bool CanSaveTranslation() => CanEditOptions && Draft is { CanSaveTranslated: true } && (!NeedsAcknowledgment || TimingAcknowledged);
     bool CanCancel() => !Draining && (Busy || cleanupRequired);
 
     [RelayCommand(CanExecute = nameof(CanPrepare))]
@@ -91,6 +98,9 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
             Draft = result;
             Message = result switch
             {
+                { ClockCorrection: { } correction } => "Whole-track correction uses speech anchors and assumes the same cut of the video. " +
+                    "Review the proposed intervals before saving." +
+                    (correction.ClippedBoundaryCount > 0 ? " Timing at a playback edge was trimmed." : ""),
                 { HasTimingConflicts: true } => "Export is blocked because proposed and retained timings overlap or are out of order. Review the intervals, then reload a corrected SRT and try again.",
                 { CanSaveOriginal: true } => "Review the proposed times on the media clock before saving a separate SRT.",
                 _ => "The proposals could not be saved. Review the timing and match details below."
@@ -110,7 +120,7 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
         if (!(translated ? CanSaveTranslation() : CanSaveOriginal()) || Draft is not { } result)
             return Task.CompletedTask;
 
-        bool keep = KeepUnmatched;
+        bool acknowledged = TimingAcknowledged;
         string name = Path.GetFileNameWithoutExtension(session.SourcePath) + (translated ? ".aligned.translated.srt" : ".aligned.srt");
         return RunAsync(async token =>
         {
@@ -124,7 +134,7 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
             RefreshSource();
             if (stale) return;
 
-            await session.SaveAsync(result, path, translated, keep, token);
+            await session.SaveAsync(result, path, translated, acknowledged, token);
             Message = $"Saved {Path.GetFileName(path)}.";
         }, "Subtitle save");
     }
@@ -228,17 +238,18 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
     {
         Draft = null;
         Rows = Array.Empty<SrtAlignmentPreviewRow>();
-        KeepUnmatched = false;
+        TimingAcknowledged = false;
     }
 
     partial void OnLanguageChanged(string value) { ClearDraft(); RefreshCommands(); }
     partial void OnUseCpuChanged(bool value) => ClearDraft();
-    partial void OnKeepUnmatchedChanged(bool value) => RefreshCommands();
+    partial void OnTimingAcknowledgedChanged(bool value) => RefreshCommands();
     partial void OnBusyChanged(bool value) => RefreshCommands();
     partial void OnDrainingChanged(bool value) => RefreshCommands();
     partial void OnDraftChanged(SrtAlignmentDraft? value)
     {
         OnPropertyChanged(nameof(NeedsAcknowledgment));
+        OnPropertyChanged(nameof(TimingAcknowledgmentText));
         OnPropertyChanged(nameof(HasPreview));
         OnPropertyChanged(nameof(LacksLinkedTranslation));
         OnPropertyChanged(nameof(CoverageText));

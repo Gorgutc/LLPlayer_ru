@@ -255,6 +255,91 @@ public sealed class SrtAlignmentWorkflowTests
             TimeSpan.FromSeconds(start + index * .2), TimeSpan.FromSeconds(start + (index + 1) * .2)));
 
     [Fact]
+    public async Task CoherentDriftProducesCompleteOriginalAndLinkedTranslation()
+    {
+        int[] missing = [2, 5, 8];
+        var authored = new StringBuilder();
+        List<WordTiming> words = [];
+        for (int i = 0; i < 12; i++)
+        {
+            double at = 2 + i * 3;
+            string phrase = $"turn the object number {i}";
+            if (!missing.Contains(i)) words.AddRange(Spoken(at, phrase));
+            authored.AppendLine((i + 1).ToString()).AppendLine(
+                $"{Stamp(2.8 + 1.05 * at)} --> {Stamp(2.8 + 1.05 * (at + 1))}").AppendLine(phrase).AppendLine();
+        }
+        string source = authored.ToString();
+        using Fixture fixture = new(source, 60);
+        fixture.Metadata = SrtTimingDocument.Parse(Encoding.UTF8.GetBytes(source)).Cues
+            .Select(cue => new SrtTimingCueMetadata(cue.Id, cue.Text, $"Перевод {cue.Id}", null, null, null, []))
+            .ToImmutableArray();
+        int reads = 0;
+        fixture.Reader = (_, request, _) =>
+        {
+            reads++;
+            return Task.FromResult<IReadOnlyList<WordTiming>>(request.Window.HasValue ? [] : words);
+        };
+
+        var draft = await fixture.Session.PrepareAsync("en", SrtAlignmentDevice.Cpu, Token);
+
+        Assert.True(draft.CanSaveOriginal);
+        Assert.True(draft.CanSaveTranslated);
+        Assert.Equal(1, reads);
+        Assert.Equal(9, Assert.IsType<SrtClockCorrection>(draft.ClockCorrection).AnchorCount);
+        Assert.Equal(9, draft.MatchedCount);
+        Assert.True(draft.NeedsTimingAcknowledgment);
+        Assert.Contains(draft.Rows, row => row.Reason == "Timing inferred from track correction");
+        Assert.All(draft.Rows, row => Assert.NotNull(row.ProposedStart));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Session.SaveAsync(draft, fixture.Output, translated: false, acceptUnmatched: false, Token));
+        Assert.False(File.Exists(fixture.Output));
+        await fixture.Session.SaveAsync(draft, fixture.Output, translated: false, acceptUnmatched: true, Token);
+        string translated = Path.Combine(fixture.Root, "translated.aligned.srt");
+        await fixture.Session.SaveAsync(draft, translated, translated: true, acceptUnmatched: true, Token);
+        var originalCues = SrtTimingDocument.Parse(await File.ReadAllBytesAsync(fixture.Output, Token)).Cues;
+        var translatedCues = SrtTimingDocument.Parse(await File.ReadAllBytesAsync(translated, Token)).Cues;
+        Assert.Equal(12, originalCues.Length);
+        Assert.Equal(originalCues.Select(cue => (cue.Start, cue.End)), translatedCues.Select(cue => (cue.Start, cue.End)));
+        Assert.Equal(fixture.Metadata.Select(row => row.TranslatedText), translatedCues.Select(cue => cue.Text));
+        Assert.Equal(fixture.Metadata.Select(row => row.Text), originalCues.Select(cue => cue.Text));
+        Assert.All(originalCues.Select((cue, i) => (cue, at: TimeSpan.FromSeconds(2 + i * 3))), item =>
+        {
+            Assert.Equal(item.at, item.cue.Start);
+            Assert.Equal(item.at + TimeSpan.FromSeconds(1), item.cue.End);
+        });
+        Assert.Equal(source, await File.ReadAllTextAsync(fixture.SourcePath, Token));
+
+        static string Stamp(double seconds) => TimeSpan.FromMilliseconds(Math.Round(seconds * 1000)).ToString(@"hh\:mm\:ss\,fff");
+    }
+
+    [Fact]
+    public async Task ExistingExportableSpeechDraftRemainsAvailableWhenClockCouldAlsoBeInferred()
+    {
+        var authored = new StringBuilder();
+        List<WordTiming> words = [];
+        for (int i = 0; i < 12; i++)
+        {
+            double at = 1 + i * 4;
+            string phrase = $"take the large shape number {i}";
+            if (i != 5) words.AddRange(Spoken(at, phrase));
+            authored.AppendLine((i + 1).ToString()).AppendLine(
+                $"{Stamp(at + 2)} --> {Stamp(at + 3.2)}").AppendLine(phrase).AppendLine();
+        }
+        using Fixture fixture = new(authored.ToString(), 60);
+        fixture.Reader = (_, request, _) =>
+            Task.FromResult<IReadOnlyList<WordTiming>>(request.Window.HasValue ? [] : words);
+
+        var draft = await fixture.Session.PrepareAsync("en", SrtAlignmentDevice.Cpu, Token);
+
+        Assert.Null(draft.ClockCorrection);
+        Assert.True(draft.CanSaveOriginal);
+        Assert.Equal(11, draft.MatchedCount);
+        Assert.Null(draft.Rows[5].ProposedStart);
+
+        static string Stamp(double seconds) => TimeSpan.FromMilliseconds(Math.Round(seconds * 1000)).ToString(@"hh\:mm\:ss\,fff");
+    }
+
+    [Fact]
     public async Task RetryDoesNotBlockAnOriginallyExportableDraft()
     {
         using Fixture fixture = new("""
@@ -351,7 +436,7 @@ public sealed class SrtAlignmentWorkflowTests
         public LanguageResourceCoordinator Resources { get; } = new();
         public Func<Config, SrtAlignmentAudioRequest, CancellationToken, Task<IReadOnlyList<WordTiming>>>? Reader { get; set; }
 
-        public Fixture(string source = Original)
+        public Fixture(string source = Original, double mediaSeconds = 10)
         {
             FlyleafLib.Utils.IsTesting = true;
             File.WriteAllText(SourcePath, source);
@@ -362,7 +447,7 @@ public sealed class SrtAlignmentWorkflowTests
                     new("brick", TimeSpan.FromSeconds(3.6), TimeSpan.FromSeconds(4)),
                     new("wall", TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(4.3))
                 ]));
-            Session = Workflow.CreateSession(new(SourcePath, document, "media.mp4", 1, TimeSpan.FromSeconds(10),
+            Session = Workflow.CreateSession(new(SourcePath, document, "media.mp4", 1, TimeSpan.FromSeconds(mediaSeconds),
                 "English", "en", () => new FlyleafLib.Config(test: true), () => Current,
                 () => Metadata,
                 (owns, publish) =>

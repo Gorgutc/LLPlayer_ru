@@ -44,13 +44,13 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
                     StatusText = "Prepare a new preview for the selected language.";
                 _draft = null;
                 ReviewRows = [];
-                KeepUnmatched = false;
+                TimingAcknowledged = false;
                 UpdateState();
             }
         }
     } = "en";
 
-    public bool KeepUnmatched
+    public bool TimingAcknowledged
     {
         get => field;
         set
@@ -61,8 +61,10 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
     }
 
     public IReadOnlyList<ReviewRow> ReviewRows { get; private set => Set(ref field, value); } = [];
-    public bool HasUnmatched => _draft is { } draft && (draft.CanSaveOriginal || draft.CanSaveTranslated)
-        && draft.MatchedCount < draft.TotalCount;
+    public bool NeedsTimingAcknowledgment => _draft?.NeedsTimingAcknowledgment == true;
+    public string TimingAcknowledgmentText => _draft?.ClockCorrection != null
+        ? "Accept inferred timings for this subtitle track"
+        : "Keep original timings for unmatched subtitles";
     public bool IsWorking => _operation != null || _stopping;
     public bool CanEditLanguage => !IsWorking && !_needsCleanup && !_sourceStale && _session?.IsCurrent == true;
     public bool CanPrepare => CanEditLanguage && IsLanguageCode(Language);
@@ -72,7 +74,7 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
     public bool CanSaveTranslation => CanSave && _draft?.CanSaveTranslated == true;
 
     private bool CanSave => !IsWorking && !_needsCleanup && !_sourceStale && _session?.IsCurrent == true &&
-        (!HasUnmatched || KeepUnmatched);
+        (!NeedsTimingAcknowledgment || TimingAcknowledged);
 
     public AsyncDelegateCommand CmdPrepare => field ??= new AsyncDelegateCommand(PrepareAsync)
         .ObservesCanExecute(() => CanPrepare);
@@ -97,7 +99,7 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
         string language = Language.Trim().ToLowerInvariant();
         _draft = null;
         ReviewRows = [];
-        KeepUnmatched = false;
+        TimingAcknowledged = false;
         await RunOperationAsync("Matching subtitle text to speech…", async token =>
         {
             SrtAlignmentDraft draft = await session.PrepareAsync(language, SrtAlignmentDevice.Cpu, token);
@@ -111,6 +113,9 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
             string matchSummary = $"Matched {draft.MatchedCount} of {draft.TotalCount} cues.";
             StatusText = draft switch
             {
+                { ClockCorrection: { } correction } => "Whole-track correction uses speech anchors and assumes the same cut of the video. " +
+                    $"Speech anchors: {correction.AnchorCount} of {draft.TotalCount} cues. Review the proposed intervals before saving." +
+                    (correction.ClippedBoundaryCount > 0 ? " Timing at a playback edge was trimmed." : ""),
                 { HasTimingConflicts: true } => matchSummary + " Export is blocked because proposed and retained timings overlap or are out of order. Review the intervals, then reload a corrected SRT and try again.",
                 { CanSaveOriginal: true } => matchSummary,
                 _ => matchSummary + " No valid SRT can be saved."
@@ -141,10 +146,10 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
         if (_sourceStale)
             return;
 
-        bool keepUnmatched = KeepUnmatched;
+        bool acknowledged = TimingAcknowledged;
         await RunOperationAsync("Saving aligned SRT…", async token =>
         {
-            await session.SaveAsync(draft, picker.FileName, translated, keepUnmatched, token);
+            await session.SaveAsync(draft, picker.FileName, translated, acknowledged, token);
             RefreshSource();
             if (!_sourceStale)
                 StatusText = $"Saved {Path.GetFileName(picker.FileName)}.";
@@ -226,7 +231,8 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
 
     private void UpdateState()
     {
-        OnPropertyChanged(nameof(HasUnmatched));
+        OnPropertyChanged(nameof(NeedsTimingAcknowledgment));
+        OnPropertyChanged(nameof(TimingAcknowledgmentText));
         OnPropertyChanged(nameof(IsWorking));
         OnPropertyChanged(nameof(CanEditLanguage));
         OnPropertyChanged(nameof(CanPrepare));
@@ -247,7 +253,7 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
         _sourceStale = true;
         _draft = null;
         ReviewRows = [];
-        KeepUnmatched = false;
+        TimingAcknowledged = false;
         StatusText = SourceChangedMessage;
         _operation?.Cancellation.Cancel();
         UpdateState();

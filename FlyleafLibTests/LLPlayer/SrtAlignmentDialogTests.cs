@@ -24,14 +24,14 @@ public sealed class SrtAlignmentDialogTests
         Assert.False(model.CanSaveOriginal);
         Assert.False(model.CanSaveTranslation);
 
-        model.KeepUnmatched = true;
+        model.TimingAcknowledged = true;
 
         Assert.True(model.CanSaveOriginal);
         Assert.True(model.CanSaveTranslation);
         session.IsCurrent = false;
         model.RefreshSource();
         Assert.Empty(model.ReviewRows);
-        Assert.False(model.KeepUnmatched);
+        Assert.False(model.TimingAcknowledged);
         Assert.Contains("source changed", model.StatusText);
         Assert.False(model.CanPrepare);
         Assert.False(model.CanSaveOriginal);
@@ -39,6 +39,41 @@ public sealed class SrtAlignmentDialogTests
         session.IsCurrent = true;
         model.RefreshSource();
         Assert.False(model.CanPrepare);
+    }
+
+    [Fact]
+    public async Task Track_correction_reports_speech_anchors_and_requires_consent_even_with_a_complete_preview()
+    {
+        var rows = Draft().Rows.ToArray();
+        rows[0] = rows[0] with { Reason = "Speech anchor for track correction" };
+        rows[1] = rows[1] with
+        {
+            ProposedStart = TimeSpan.FromSeconds(9),
+            ProposedEnd = TimeSpan.FromSeconds(10),
+            Reason = "Inferred from track correction"
+        };
+        SrtAlignmentDraft projection = new(rows, canSaveOriginal: true, canSaveTranslated: true)
+        {
+            ClockCorrection = new SrtClockCorrection(1, 1.05, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2))
+        };
+        var model = Open(new Session { Prepare = _ => Task.FromResult(projection) });
+
+        await model.PrepareAsync();
+
+        Assert.Contains("Whole-track correction", model.StatusText);
+        Assert.Contains("Speech anchors: 1 of 2 cues", model.StatusText);
+        Assert.True(model.NeedsTimingAcknowledgment);
+        Assert.Equal("Accept inferred timings for this subtitle track", model.TimingAcknowledgmentText);
+        Assert.Equal("Speech anchor for track correction", model.ReviewRows[0].Match);
+        Assert.Equal("Inferred from track correction", model.ReviewRows[1].Match);
+        Assert.False(model.CanSaveOriginal);
+        Assert.False(model.CanSaveTranslation);
+
+        model.TimingAcknowledged = true;
+        Assert.True(model.CanSaveOriginal);
+        Assert.True(model.CanSaveTranslation);
+        await model.PrepareAsync();
+        Assert.False(model.CanSaveOriginal);
     }
 
     [Fact]
@@ -55,7 +90,7 @@ public sealed class SrtAlignmentDialogTests
         await model.PrepareAsync();
 
         Assert.Contains("overlap or are out of order", model.StatusText);
-        Assert.False(model.HasUnmatched);
+        Assert.False(model.NeedsTimingAcknowledgment);
         Assert.False(model.CanSaveOriginal);
         Assert.False(model.CanSaveTranslation);
     }

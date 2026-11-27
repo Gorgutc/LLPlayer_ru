@@ -83,13 +83,68 @@ public sealed class SrtAlignmentSidebarTests
         Assert.False(model.SaveOriginalCommand.CanExecute(null));
         Assert.False(model.SaveTranslationCommand.CanExecute(null));
 
-        model.KeepUnmatched = true;
+        model.TimingAcknowledged = true;
         Assert.True(model.SaveOriginalCommand.CanExecute(null));
         Assert.True(model.SaveTranslationCommand.CanExecute(null));
         await model.SaveTranslationCommand.ExecuteAsync(null);
 
         var saved = Assert.Single(session.Saves);
         Assert.Equal(("source.aligned.translated.srt", true, true), saved);
+    }
+
+    [AvaloniaFact]
+    public async Task Track_correction_distinguishes_anchors_and_requires_consent_to_estimated_timings()
+    {
+        var rows = MakeDraft(partial: true).Rows.ToArray();
+        rows[0] = rows[0] with { Reason = "Speech anchor for track correction" };
+        rows[1] = rows[1] with
+        {
+            ProposedStart = TimeSpan.FromSeconds(5),
+            ProposedEnd = TimeSpan.FromSeconds(6),
+            Reason = "Inferred from track correction"
+        };
+        var session = new AlignmentSession
+        {
+            Result = new(rows, canSaveOriginal: true, canSaveTranslated: true)
+            {
+                ClockCorrection = new SrtClockCorrection(1, 1.05, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2))
+            }
+        };
+        var model = new SrtAlignmentViewModel(session, 0);
+        var window = new SrtAlignmentWindow(model);
+        model.PickOutputPath = (name, _) => Task.FromResult<string?>(name);
+
+        try
+        {
+            window.Show();
+            await model.PrepareCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Contains("Whole-track correction", model.Message);
+            Assert.Equal("Speech anchors: 1 of 2 cues", model.CoverageText);
+            var acknowledgment = Assert.IsType<CheckBox>(window.FindControl<CheckBox>("AlignmentKeepUnmatched"));
+            Assert.True(acknowledgment.IsVisible);
+            Assert.Equal("Accept inferred timings for this subtitle track", acknowledgment.Content);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Speech anchor for track correction");
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Inferred from track correction");
+            Assert.False(model.SaveOriginalCommand.CanExecute(null));
+            Assert.False(model.SaveTranslationCommand.CanExecute(null));
+
+            acknowledgment.IsChecked = true;
+            Assert.True(model.SaveOriginalCommand.CanExecute(null));
+            Assert.True(model.SaveTranslationCommand.CanExecute(null));
+            await model.SaveOriginalCommand.ExecuteAsync(null);
+            Assert.Equal(("source.aligned.srt", false, true), Assert.Single(session.Saves));
+
+            await model.PrepareCommand.ExecuteAsync(null);
+            Assert.False(model.SaveOriginalCommand.CanExecute(null));
+            Assert.False(acknowledgment.IsChecked);
+        }
+        finally
+        {
+            await window.DrainForShutdownAsync();
+            window.Close();
+        }
     }
 
     [AvaloniaFact]
