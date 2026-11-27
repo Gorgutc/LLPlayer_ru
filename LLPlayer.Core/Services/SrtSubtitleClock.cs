@@ -6,6 +6,7 @@ namespace LLPlayer.Core.Services;
 public sealed record SrtClockCorrection(int AnchorCount, double Scale, TimeSpan FirstAdjustment, TimeSpan LastAdjustment)
 {
     public int ClippedBoundaryCount { get; init; }
+    public bool UsesSpeechEnds { get; init; }
 }
 
 internal static class SrtSubtitleClock

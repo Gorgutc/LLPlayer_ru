@@ -14,7 +14,8 @@ public enum SrtAlignmentRejection
     Unmatched,
     Ambiguous,
     InvalidTiming,
-    ConflictingOrder
+    ConflictingOrder,
+    UnverifiedUniqueness
 }
 
 public sealed record SrtAlignmentProposal(
@@ -68,15 +69,7 @@ public static partial class SrtAudioAlignment
             return unavailable;
         }
 
-        var index = new Dictionary<string, List<int>>(StringComparer.Ordinal);
-        for (int i = 0; i < speech.Count; i++)
-        {
-            if ((i & 255) == 0)
-                token.ThrowIfCancellationRequested();
-            if (!index.TryGetValue(speech[i].Text, out var positions))
-                index.Add(speech[i].Text, positions = []);
-            positions.Add(i);
-        }
+        var index = IndexSpeech(speech, token);
 
         var texts = new string[cues.Count][];
         var matches = new SearchResult[cues.Count];
@@ -160,6 +153,20 @@ public static partial class SrtAudioAlignment
                 next = matches[i].Match ?? next;
             }
         }
+    }
+
+    private static Dictionary<string, List<int>> IndexSpeech(List<SpeechToken> speech, CancellationToken token)
+    {
+        var index = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        for (int i = 0; i < speech.Count; i++)
+        {
+            if ((i & 255) == 0)
+                token.ThrowIfCancellationRequested();
+            if (!index.TryGetValue(speech[i].Text, out var positions))
+                index.Add(speech[i].Text, positions = []);
+            positions.Add(i);
+        }
+        return index;
     }
 
     private static bool[]? AddElidedRepeatAnchors(string[][] texts, SearchResult[] matches, List<SpeechToken> speech,
@@ -431,7 +438,7 @@ public static partial class SrtAudioAlignment
             && (last == speech.Count - 1 || speech[last + 1].Word != speech[last].Word)
             && Milliseconds(speech[last].End) > Milliseconds(speech[first].Start);
 
-    private static bool EqualsWords(string[] cue, List<SpeechToken> speech, int start)
+    private static bool EqualsWords(ReadOnlySpan<string> cue, List<SpeechToken> speech, int start)
     {
         for (int i = 0; i < cue.Length; i++)
             if (cue[i] != speech[start + i].Text)

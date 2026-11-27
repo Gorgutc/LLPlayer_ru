@@ -221,13 +221,39 @@ public sealed class SrtAlignmentWorkflow
                     }).ToArray();
                     return await owner.PrepareResultAsync(firstPass, projected, runToken, clock.Summary).ConfigureAwait(false);
                 }
+
+                var speechEnds = SrtAudioAlignment.ReadSpeechEnds(firstPass, words, input.Duration, runToken);
+                if (speechEnds != null && SrtSubtitleEndClock.TryCreate(firstPass, speechEnds.Anchors, (first, last, intervals) =>
+                    speechEnds.CorroboratesEdge(first, last, intervals, runToken), input.Duration, runToken) is { } endClock)
+                {
+                    var projected = firstPass.Select((proposal, index) => proposal with
+                    {
+                        Start = endClock.Intervals[index].Start,
+                        End = endClock.Intervals[index].End,
+                        IsExactAnchor = endClock.AnchorIndices.Contains(index)
+                    }).ToArray();
+                    return await owner.PrepareResultAsync(firstPass, projected, runToken,
+                        endClock.Summary with { UsesSpeechEnds = true }).ConfigureAwait(false);
+                }
             }
 
-            var proposals = await SrtAlignmentSpeechRetry.RetryAsync(firstPass, input.Duration, window =>
+            Task<IReadOnlyList<WordTiming>> ReadWindow(SrtAlignmentAudioWindow window)
             {
                 owner.EnsureCurrent();
                 return readWords(config, request with { Window = window }, runToken);
-            }, runToken).ConfigureAwait(false);
+            }
+
+            var proposals = await SrtAlignmentSpeechRetry.RetryAsync(firstPass, input.Duration, ReadWindow, runToken)
+                .ConfigureAwait(false);
+            if (proposals.Count == 1 && proposals[0].Start.HasValue)
+            {
+                var match = proposals[0];
+                var uniqueness = await SrtAlignmentUniqueness.VerifyAsync(match, input.Duration, ReadWindow, runToken)
+                    .ConfigureAwait(false);
+                if (uniqueness != SrtAlignmentRejection.None)
+                    proposals = firstPass = [new(match.Cue, null, null, 0, uniqueness == SrtAlignmentRejection.InvalidTiming
+                        ? SrtAlignmentRejection.UnverifiedUniqueness : uniqueness)];
+            }
             return await owner.PrepareResultAsync(firstPass, proposals, runToken).ConfigureAwait(false);
         }
         catch (EngineProcessDrainException error)
@@ -301,7 +327,7 @@ public sealed class SrtAlignmentWorkflow
             EnsureCurrent();
             await VerifySelectedFileAsync(token).ConfigureAwait(false);
 
-            var rows = BuildRows(proposals, clock != null);
+            var rows = BuildRows(proposals, clock);
             metadata = input.CaptureMetadata();
             bool hasProposals = rows.Any(row => row.ProposedStart.HasValue);
             bool timingConflicts = hasProposals && !HasValidOrder(rows);
@@ -438,13 +464,14 @@ public sealed class SrtAlignmentWorkflow
             new("The media, selected track or loaded subtitle file changed. Reopen the file and prepare a new alignment.");
     }
 
-    private static SrtAlignmentRow[] BuildRows(IReadOnlyList<SrtAlignmentProposal> proposals, bool usesClock = false) =>
+    private static SrtAlignmentRow[] BuildRows(IReadOnlyList<SrtAlignmentProposal> proposals, SrtClockCorrection? clock = null) =>
         proposals.Select(proposal => new SrtAlignmentRow(proposal.Cue.Id, proposal.Cue.Text,
             proposal.Cue.Start, proposal.Cue.End, proposal.Start, proposal.End, proposal.Coverage,
-            usesClock ? ExplainClockEvidence(proposal) : Explain(proposal.Rejection))).ToArray();
+            clock == null ? Explain(proposal.Rejection) : ExplainClockEvidence(proposal, clock.UsesSpeechEnds))).ToArray();
 
-    private static string ExplainClockEvidence(SrtAlignmentProposal proposal) => proposal switch
+    private static string ExplainClockEvidence(SrtAlignmentProposal proposal, bool usesSpeechEnds) => proposal switch
     {
+        { IsExactAnchor: true } when usesSpeechEnds => "Speech end anchor for track correction",
         { IsExactAnchor: true, OneRepeatedWordElided: true } => "Speech anchor (repeated word omitted)",
         { IsExactAnchor: true } => "Speech anchor for track correction",
         _ => "Timing inferred from track correction"
@@ -491,6 +518,7 @@ public sealed class SrtAlignmentWorkflow
         SrtAlignmentRejection.Ambiguous => "Several speech matches",
         SrtAlignmentRejection.InvalidTiming => "Invalid speech interval",
         SrtAlignmentRejection.ConflictingOrder => "Conflicting cue order",
+        SrtAlignmentRejection.UnverifiedUniqueness => "Could not check for repeated speech",
         _ => "Insufficient speech match"
     };
 }

@@ -382,6 +382,32 @@ public sealed class SrtAlignmentWorkflowTests
     }
 
     [Fact]
+    public async Task SingleCueWithDisjointCompetingSpeechCannotBeSaved()
+    {
+        using Fixture fixture = new("1\n00:00:01,500 --> 00:00:03,230\nThe man took the dress off.\n");
+        List<SrtAlignmentAudioWindow> probes = [];
+        fixture.Reader = (_, request, _) =>
+        {
+            if (request.Window is not { } window)
+                return Task.FromResult<IReadOnlyList<WordTiming>>([.. Spoken(.64, "The man took the dress off")]);
+            probes.Add(window);
+            return Task.FromResult<IReadOnlyList<WordTiming>>(window.Start > TimeSpan.Zero
+                ? [.. Spoken(5.69, "The man took the dresser")] : []);
+        };
+
+        var draft = await fixture.Session.PrepareAsync("en", SrtAlignmentDevice.Cpu, Token);
+
+        Assert.Equal(2, probes.Count);
+        Assert.Equal("Several speech matches", Assert.Single(draft.Rows).Reason);
+        Assert.Null(draft.Rows[0].ProposedStart);
+        Assert.False(draft.CanSaveOriginal);
+        Assert.False(draft.CanSaveTranslated);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            fixture.Session.SaveAsync(draft, fixture.Output, translated: false, acceptUnmatched: true, Token));
+        Assert.False(File.Exists(fixture.Output));
+    }
+
+    [Fact]
     public async Task RetryDoesNotAcceptOneOccurrenceWhenAnotherWindowHeardThePhraseTwice()
     {
         var cues = new[]
