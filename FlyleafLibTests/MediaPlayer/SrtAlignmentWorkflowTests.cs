@@ -254,10 +254,13 @@ public sealed class SrtAlignmentWorkflowTests
         phrase.Split(' ').Select((word, index) => new WordTiming(word,
             TimeSpan.FromSeconds(start + index * .2), TimeSpan.FromSeconds(start + (index + 1) * .2)));
 
-    [Fact]
-    public async Task CoherentDriftProducesCompleteOriginalAndLinkedTranslation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CoherentDriftProducesCompleteOriginalAndLinkedTranslation(bool elidedRepeats)
     {
         int[] missing = [2, 5, 8];
+        int[] repeated = [1, 4, 7, 10];
         var authored = new StringBuilder();
         List<WordTiming> words = [];
         for (int i = 0; i < 12; i++)
@@ -265,8 +268,9 @@ public sealed class SrtAlignmentWorkflowTests
             double at = 2 + i * 3;
             string phrase = $"turn the object number {i}";
             if (!missing.Contains(i)) words.AddRange(Spoken(at, phrase));
+            string cueText = elidedRepeats && repeated.Contains(i) ? $"turn the the object number {i}" : phrase;
             authored.AppendLine((i + 1).ToString()).AppendLine(
-                $"{Stamp(2.8 + 1.05 * at)} --> {Stamp(2.8 + 1.05 * (at + 1))}").AppendLine(phrase).AppendLine();
+                $"{Stamp(2.8 + 1.05 * at)} --> {Stamp(2.8 + 1.05 * (at + 1))}").AppendLine(cueText).AppendLine();
         }
         string source = authored.ToString();
         using Fixture fixture = new(source, 60);
@@ -289,6 +293,8 @@ public sealed class SrtAlignmentWorkflowTests
         Assert.Equal(9, draft.MatchedCount);
         Assert.True(draft.NeedsTimingAcknowledgment);
         Assert.Contains(draft.Rows, row => row.Reason == "Timing inferred from track correction");
+        Assert.Equal(elidedRepeats ? 4 : 0,
+            draft.Rows.Count(row => row.Reason == "Speech anchor (repeated word omitted)"));
         Assert.All(draft.Rows, row => Assert.NotNull(row.ProposedStart));
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             fixture.Session.SaveAsync(draft, fixture.Output, translated: false, acceptUnmatched: false, Token));

@@ -200,16 +200,27 @@ public sealed class SrtAlignmentWorkflow
             var request = new SrtAlignmentAudioRequest(input.MediaPath, input.StreamIndex, language, device);
             IReadOnlyList<WordTiming> words = await readWords(config, request, runToken).ConfigureAwait(false);
             var firstPass = SrtAudioAlignment.Align(input.Document.Cues, words, input.Duration, runToken);
-            if (firstPass.Any(proposal => !proposal.Start.HasValue) && !HasValidOrder(BuildRows(firstPass)) &&
-                SrtSubtitleClock.TryCreate(firstPass, input.Duration, runToken) is { } clock)
+            if (firstPass.Any(proposal => !proposal.Start.HasValue) && !HasValidOrder(BuildRows(firstPass)))
             {
-                var projected = firstPass.Select((proposal, index) => proposal with
+                var evidence = firstPass;
+                var fit = SrtSubtitleClock.TryCreate(evidence, input.Duration, runToken);
+                if (fit == null)
                 {
-                    Start = clock.Intervals[index].Start,
-                    End = clock.Intervals[index].End,
-                    IsExactAnchor = SrtSubtitleClock.IsSupported(proposal, clock.Intervals[index])
-                }).ToArray();
-                return await owner.PrepareResultAsync(firstPass, projected, runToken, clock.Summary).ConfigureAwait(false);
+                    evidence = SrtAudioAlignment.Align(input.Document.Cues, words, input.Duration, runToken, allowElidedRepeat: true);
+                    if (evidence.Any(proposal => proposal.OneRepeatedWordElided))
+                        fit = SrtSubtitleClock.TryCreate(evidence, input.Duration, runToken);
+                }
+
+                if (fit is { } clock)
+                {
+                    var projected = evidence.Select((proposal, index) => proposal with
+                    {
+                        Start = clock.Intervals[index].Start,
+                        End = clock.Intervals[index].End,
+                        IsExactAnchor = SrtSubtitleClock.IsSupported(proposal, clock.Intervals[index])
+                    }).ToArray();
+                    return await owner.PrepareResultAsync(firstPass, projected, runToken, clock.Summary).ConfigureAwait(false);
+                }
             }
 
             var proposals = await SrtAlignmentSpeechRetry.RetryAsync(firstPass, input.Duration, window =>
@@ -430,8 +441,14 @@ public sealed class SrtAlignmentWorkflow
     private static SrtAlignmentRow[] BuildRows(IReadOnlyList<SrtAlignmentProposal> proposals, bool usesClock = false) =>
         proposals.Select(proposal => new SrtAlignmentRow(proposal.Cue.Id, proposal.Cue.Text,
             proposal.Cue.Start, proposal.Cue.End, proposal.Start, proposal.End, proposal.Coverage,
-            usesClock ? proposal.IsExactAnchor ? "Speech anchor for track correction" : "Timing inferred from track correction"
-                : Explain(proposal.Rejection))).ToArray();
+            usesClock ? ExplainClockEvidence(proposal) : Explain(proposal.Rejection))).ToArray();
+
+    private static string ExplainClockEvidence(SrtAlignmentProposal proposal) => proposal switch
+    {
+        { IsExactAnchor: true, OneRepeatedWordElided: true } => "Speech anchor (repeated word omitted)",
+        { IsExactAnchor: true } => "Speech anchor for track correction",
+        _ => "Timing inferred from track correction"
+    };
 
     internal static bool HasValidOrder(IReadOnlyList<SrtAlignmentRow> rows)
     {

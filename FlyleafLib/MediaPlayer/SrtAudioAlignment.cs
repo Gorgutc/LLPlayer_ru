@@ -21,6 +21,9 @@ public sealed record SrtAlignmentProposal(
     SrtTimingCue Cue, TimeSpan? Start, TimeSpan? End, double Coverage, SrtAlignmentRejection Rejection)
 {
     public bool IsExactAnchor { get; init; }
+
+    /// <summary>The unique speech match omitted one adjacent repetition. Coverage still counts the authored tokens.</summary>
+    public bool OneRepeatedWordElided { get; init; }
 }
 
 /// <summary>Matches authored subtitle text to timed speech words without modifying the original cues.</summary>
@@ -41,6 +44,10 @@ public static partial class SrtAudioAlignment
 
     public static IReadOnlyList<SrtAlignmentProposal> Align(IReadOnlyList<SrtTimingCue> cues,
         IReadOnlyList<WordTiming> words, TimeSpan duration, CancellationToken token)
+        => Align(cues, words, duration, token, allowElidedRepeat: false);
+
+    public static IReadOnlyList<SrtAlignmentProposal> Align(IReadOnlyList<SrtTimingCue> cues,
+        IReadOnlyList<WordTiming> words, TimeSpan duration, CancellationToken token, bool allowElidedRepeat)
     {
         ArgumentNullException.ThrowIfNull(cues);
         ArgumentNullException.ThrowIfNull(words);
@@ -89,13 +96,16 @@ public static partial class SrtAudioAlignment
         // Anchor only at unique whole-phrase matches. New proposals can never enlarge a later search window.
         var nextAnchors = new Match?[cues.Count];
         var exactAnchors = new bool[cues.Count];
-        Match? next = null;
-        for (int i = matches.Length - 1; i >= 0; i--)
+        FindNextAnchors();
+        bool[]? elidedAnchors = allowElidedRepeat
+            ? AddElidedRepeatAnchors(texts, matches, speech, index, nextAnchors, token)
+            : null;
+        if (elidedAnchors != null)
         {
-            nextAnchors[i] = next;
-            exactAnchors[i] = matches[i].Match.HasValue;
-            next = matches[i].Match ?? next;
+            RemoveConflicts(matches, speech, token);
+            FindNextAnchors();
         }
+
         Match? previous = null;
         for (int i = 0; i < matches.Length; i++)
         {
@@ -131,11 +141,75 @@ public static partial class SrtAudioAlignment
             SearchResult result = matches[i];
             proposals[i] = result.Match is { } match
                 ? new(cues[i], Milliseconds(speech[match.First].Start), Milliseconds(speech[match.Last].End),
-                    (double)match.Matched / texts[i].Length, SrtAlignmentRejection.None) { IsExactAnchor = exactAnchors[i] }
+                    (double)match.Matched / texts[i].Length, SrtAlignmentRejection.None)
+                {
+                    IsExactAnchor = exactAnchors[i],
+                    OneRepeatedWordElided = elidedAnchors?[i] == true
+                }
                 : new(cues[i], null, null, 0, result.Rejection);
         }
         return proposals;
+
+        void FindNextAnchors()
+        {
+            Match? next = null;
+            for (int i = matches.Length - 1; i >= 0; i--)
+            {
+                nextAnchors[i] = next;
+                exactAnchors[i] = matches[i].Match.HasValue;
+                next = matches[i].Match ?? next;
+            }
+        }
     }
+
+    private static bool[]? AddElidedRepeatAnchors(string[][] texts, SearchResult[] matches, List<SpeechToken> speech,
+        Dictionary<string, List<int>> index, Match?[] nextLiteralAnchors, CancellationToken token)
+    {
+        Match? previousLiteral = null;
+        bool[]? elided = null;
+        for (int i = 0; i < matches.Length; i++)
+        {
+            token.ThrowIfCancellationRequested();
+            if (matches[i].Match is { } literal)
+                previousLiteral = literal;
+            if (matches[i].Rejection != SrtAlignmentRejection.Unmatched ||
+                WithoutOneRepeatedWord(texts[i]) is not { } reduced)
+                continue;
+
+            // Search the full recording for uniqueness before checking the neighboring literal anchors.
+            SearchResult candidate = FindExact(reduced, speech, index, 0, speech.Count, token);
+            if (candidate.Match is not { } match ||
+                (previousLiteral is { } left && !ComesBefore(left, match, speech)) ||
+                (nextLiteralAnchors[i] is { } right && !ComesBefore(match, right, speech)))
+                continue;
+
+            matches[i] = candidate;
+            elided ??= new bool[matches.Length];
+            elided[i] = true;
+        }
+        return elided;
+    }
+
+    private static string[]? WithoutOneRepeatedWord(string[] cue)
+    {
+        if (cue.Length < 5)
+            return null;
+
+        int repeated = -1;
+        for (int i = 1; i < cue.Length; i++)
+        {
+            if (cue[i] != cue[i - 1])
+                continue;
+            if (repeated != -1)
+                return null;
+            repeated = i;
+        }
+
+        return repeated == -1 ? null : [..cue.AsSpan(0, repeated), ..cue.AsSpan(repeated + 1)];
+    }
+
+    private static bool ComesBefore(Match earlier, Match later, List<SpeechToken> speech)
+        => earlier.Last < later.First && speech[earlier.Last].End <= speech[later.First].Start;
 
     private static List<SpeechToken>? BuildSpeech(IReadOnlyList<WordTiming> words, TimeSpan duration,
         CancellationToken token)

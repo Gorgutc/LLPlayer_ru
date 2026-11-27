@@ -43,6 +43,80 @@ public class SrtAudioAlignmentTests
         Assert.Null(result[1].End);
     }
 
+    [Theory]
+    [InlineData("and two two people one", "and two people one")]
+    [InlineData("the the bag his bag", "the bag his bag")]
+    [InlineData("we put it back back", "we put it back")]
+    public void Align_AnchorsOneOmittedAdjacentRepetition(string authored, string spoken)
+    {
+        SrtTimingCue cue = Cue(7, 3, authored);
+
+        var proposal = Assert.Single(Align([cue], Spoken(8, spoken), allowElidedRepeat: true));
+
+        Assert.Same(cue, proposal.Cue);
+        Assert.Equal(Seconds(8), proposal.Start);
+        Assert.Equal(Seconds(9), proposal.End);
+        Assert.Equal(SrtAlignmentRejection.None, proposal.Rejection);
+        Assert.True(proposal.IsExactAnchor);
+        Assert.True(proposal.OneRepeatedWordElided);
+        Assert.Equal(0.8, proposal.Coverage, precision: 6);
+
+        var direct = Assert.Single(Align([cue], Spoken(8, spoken)));
+        Assert.False(direct.IsExactAnchor);
+        Assert.False(direct.OneRepeatedWordElided);
+    }
+
+    [Fact]
+    public void Align_PrefersTheLiteralPhraseOverAnOmittedRepetition()
+    {
+        SrtTimingCue cue = Cue(1, 1, "the the bag his bag");
+        WordTiming[] words = [.. Spoken(3, "the bag his bag"), .. Spoken(20, "the the bag his bag")];
+
+        var proposal = Assert.Single(Align([cue], words, allowElidedRepeat: true));
+
+        Assert.True(proposal.IsExactAnchor);
+        Assert.False(proposal.OneRepeatedWordElided);
+        Assert.Equal(Seconds(20), proposal.Start);
+        Assert.Equal(1, proposal.Coverage);
+    }
+
+    [Theory]
+    [InlineData("go go back", "go back")]
+    [InlineData("and and two two people one", "and two people one")]
+    [InlineData("and two two people one", "and two other one")]
+    public void Align_DoesNotAnchorBroaderChanges(string authored, string spoken)
+    {
+        var proposal = Assert.Single(Align([Cue(1, 1, authored)], Spoken(8, spoken), allowElidedRepeat: true));
+
+        Assert.False(proposal.IsExactAnchor);
+    }
+
+    [Fact]
+    public void Align_DoesNotAnchorAnOmittedRepetitionAcrossARecordingWithTwoOccurrences()
+    {
+        SrtTimingCue cue = Cue(1, 1, "and two two people one");
+        WordTiming[] words = [.. Spoken(3, "and two people one"), .. Spoken(20, "and two people one")];
+
+        var proposal = Assert.Single(Align([cue], words, allowElidedRepeat: true));
+
+        Assert.Equal(SrtAlignmentRejection.Ambiguous, proposal.Rejection);
+        Assert.Null(proposal.Start);
+        Assert.False(proposal.IsExactAnchor);
+    }
+
+    [Fact]
+    public void Align_OmittedRepetitionCannotDisplaceLiteralAnchor()
+    {
+        SrtTimingCue[] cues = [Cue(0, 1, "and two two people one"), Cue(1, 3, "start with the house")];
+        WordTiming[] words = [.. Spoken(8, "start with the house"), .. Spoken(10, "and two people one")];
+
+        var proposals = Align(cues, words, allowElidedRepeat: true);
+
+        Assert.Null(proposals[0].Start);
+        Assert.Equal(Seconds(8), proposals[1].Start);
+        Assert.True(proposals[1].IsExactAnchor);
+    }
+
     [Fact]
     public void Align_MatchesInteriorVariationWithoutMovingBoundaries()
     {
@@ -186,8 +260,11 @@ public class SrtAudioAlignmentTests
             SrtAudioAlignment.Align([Cue(0, 15, "some text")], Spoken(18, "some text"), Seconds(28), new(true)));
     }
 
-    private static IReadOnlyList<SrtAlignmentProposal> Align(SrtTimingCue[] cues, WordTiming[] words)
-        => SrtAudioAlignment.Align(cues, words, Seconds(60), TestContext.Current.CancellationToken);
+    private static IReadOnlyList<SrtAlignmentProposal> Align(SrtTimingCue[] cues, WordTiming[] words,
+        bool allowElidedRepeat = false)
+        => allowElidedRepeat
+            ? SrtAudioAlignment.Align(cues, words, Seconds(60), TestContext.Current.CancellationToken, allowElidedRepeat)
+            : SrtAudioAlignment.Align(cues, words, Seconds(60), TestContext.Current.CancellationToken);
 
     private static SrtTimingCue Cue(int id, double start, string text) => new(id, Seconds(start), Seconds(start + 1), text);
 

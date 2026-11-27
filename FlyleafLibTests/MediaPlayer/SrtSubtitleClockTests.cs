@@ -166,6 +166,39 @@ public sealed class SrtSubtitleClockTests
     }
 
     [Fact]
+    public void AMinorUnanchoredLeadingOvershootCanUseOnePlayableMapWithoutTrimming()
+    {
+        SrtAlignmentProposal[] proposals = MakeProposals((_, time) => time - 6180);
+        proposals[0] = Unmatched(proposals[0]) with
+        {
+            Cue = proposals[0].Cue with { Start = TimeSpan.FromSeconds(6), End = TimeSpan.FromMilliseconds(6500) }
+        };
+        TimeSpan duration = TimeSpan.FromSeconds(60);
+
+        var fit = SrtSubtitleClock.TryCreate(proposals, duration, Token);
+
+        Assert.NotNull(fit);
+        var (summary, intervals) = fit.Value;
+        Assert.Equal(0, summary.ClippedBoundaryCount);
+        Assert.InRange(intervals[0].Start, TimeSpan.Zero, duration);
+        TimeSpan previousEnd = TimeSpan.Zero;
+        for (int i = 0; i < proposals.Length; i++)
+        {
+            var cue = proposals[i].Cue;
+            var (start, end) = intervals[i];
+            Assert.InRange(start, previousEnd, duration);
+            Assert.True(end > start);
+            Assert.True(end <= duration);
+            Assert.InRange(Math.Abs(start.TotalMilliseconds - Project(cue.Start)), 0, 1);
+            Assert.InRange(Math.Abs(end.TotalMilliseconds - Project(cue.End)), 0, 1);
+            previousEnd = end;
+        }
+
+        double Project(TimeSpan time) =>
+            intervals[0].Start.TotalMilliseconds + summary.Scale * (time - proposals[0].Cue.Start).TotalMilliseconds;
+    }
+
+    [Fact]
     public void AnUnobservedLeadingCueBeyondTheSupportMarginIsNotProjected()
     {
         SrtAlignmentProposal[] proposals = MakeProposals((_, time) => time + 2800);

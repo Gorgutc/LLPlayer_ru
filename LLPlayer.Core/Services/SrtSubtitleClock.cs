@@ -19,6 +19,8 @@ internal static class SrtSubtitleClock
     private const double QuartileBiasToleranceMs = 400;
     private const double MaximumUnsupportedGapMs = 32_000;
     private const int PlaybackEdgeToleranceMs = 300;
+    private const double MinimumScale = .8;
+    private const double MaximumScale = 1.25;
 
     public static (SrtClockCorrection Summary, IReadOnlyList<(TimeSpan Start, TimeSpan End)> Intervals)? TryCreate(
         IReadOnlyList<SrtAlignmentProposal> firstPass, TimeSpan duration, CancellationToken token)
@@ -66,17 +68,19 @@ internal static class SrtSubtitleClock
         if (!HasTrackSupport(anchors, firstPass.Count, first, last, token))
             return null;
 
+        long mediaMilliseconds = duration.Ticks / TimeSpan.TicksPerMillisecond;
+        var playback = new PlaybackBounds(first, last, mediaMilliseconds, firstPass[0].IsExactAnchor,
+            firstPass[^1].IsExactAnchor);
         double minimumPairSeparation = Math.Min(15_000, span / 4);
-        if (Fit(anchors, 0, 2, minimumPairSeparation) is not { } even ||
-            Fit(anchors, 1, 2, minimumPairSeparation) is not { } odd ||
+        if (Fit(anchors, 0, 2, minimumPairSeparation, playback) is not { } even ||
+            Fit(anchors, 1, 2, minimumPairSeparation, playback) is not { } odd ||
             Math.Abs(even.Project(first) - odd.Project(first)) > FoldAgreementMs ||
             Math.Abs(even.Project(last) - odd.Project(last)) > FoldAgreementMs ||
             ValidatedInliers(anchors, (anchor, index) => Project(anchor, index % 2 == 0 ? odd : even), token) == null ||
-            Fit(anchors, 0, 1, minimumPairSeparation) is not { } clock)
+            Fit(anchors, 0, 1, minimumPairSeparation, playback) is not { } clock)
             return null;
 
         var intervals = new (TimeSpan Start, TimeSpan End)[firstPass.Count];
-        long mediaMilliseconds = duration.Ticks / TimeSpan.TicksPerMillisecond;
         long previousEnd = 0;
         int clipped = 0;
         for (int i = 0; i < intervals.Length; i++)
@@ -156,7 +160,8 @@ internal static class SrtSubtitleClock
         return quartilesSeen == (1 << QuartileCount) - 1;
     }
 
-    private static ClockMap? Fit(IReadOnlyList<Anchor> anchors, int offset, int stride, double minimumPairSeparation)
+    private static ClockMap? Fit(IReadOnlyList<Anchor> anchors, int offset, int stride, double minimumPairSeparation,
+        PlaybackBounds playback)
     {
         int count = (anchors.Count - offset + stride - 1) / stride;
         int sampleCount = Math.Min(count, MaximumFitAnchors);
@@ -181,10 +186,45 @@ internal static class SrtSubtitleClock
             return null;
 
         double scale = Median(slopes);
-        if (scale is < .8 or > 1.25)
+        if (scale is < MinimumScale or > MaximumScale)
             return null;
         double offsetMs = Median(sample.Select(anchor => anchor.SpeechCenter - scale * anchor.AuthoredCenter).ToList());
-        return new(scale, offsetMs);
+        return ConstrainUnanchoredEdge(new(scale, offsetMs), sample, playback);
+    }
+
+    private static ClockMap? ConstrainUnanchoredEdge(ClockMap raw, Anchor[] sample, PlaybackBounds playback)
+    {
+        long rawStart = RoundedMilliseconds(raw.Project(playback.AuthoredStart));
+        long rawEnd = RoundedMilliseconds(raw.Project(playback.AuthoredEnd));
+        bool pinStart = rawStart < 0 && !playback.FirstAnchored;
+        bool pinEnd = rawEnd > playback.MediaEnd && !playback.LastAnchored;
+        if (!pinStart && !pinEnd)
+            return raw;
+
+        // One small overshoot can justify refitting with that playback edge fixed.
+        // Two simultaneous overshoots do not have independent support for choosing the scale.
+        if (pinStart && (rawStart < -PlaybackEdgeToleranceMs || rawEnd > playback.MediaEnd) ||
+            pinEnd && (rawEnd - playback.MediaEnd > PlaybackEdgeToleranceMs || rawStart < 0))
+            return null;
+
+        double span = playback.AuthoredEnd - playback.AuthoredStart;
+        double authoredEdge = pinStart ? playback.AuthoredStart : playback.AuthoredEnd;
+        double mediaEdge = pinStart ? 0 : playback.MediaEnd;
+        long rawOpposite = pinStart ? rawEnd : rawStart;
+        double minOpposite = Math.Max(0, rawOpposite - PlaybackEdgeToleranceMs);
+        double maxOpposite = Math.Min(playback.MediaEnd, rawOpposite + PlaybackEdgeToleranceMs);
+        double minScale = Math.Max(MinimumScale, pinStart ? minOpposite / span : (mediaEdge - maxOpposite) / span);
+        double maxScale = Math.Min(MaximumScale, pinStart ? maxOpposite / span : (mediaEdge - minOpposite) / span);
+        if (minScale > maxScale)
+            return null;
+
+        var slopes = sample.Where(anchor => anchor.AuthoredCenter != authoredEdge)
+            .Select(anchor => (anchor.SpeechCenter - mediaEdge) / (anchor.AuthoredCenter - authoredEdge)).ToList();
+        if (slopes.Count == 0)
+            return null;
+
+        double scale = Math.Clamp(Median(slopes), minScale, maxScale);
+        return new(scale, mediaEdge - scale * authoredEdge);
     }
 
     private static (double Start, double End) Project(Anchor anchor, ClockMap clock) =>
@@ -236,6 +276,9 @@ internal static class SrtSubtitleClock
     {
         public double Project(double time) => Scale * time + Offset;
     }
+
+    private readonly record struct PlaybackBounds(
+        double AuthoredStart, double AuthoredEnd, long MediaEnd, bool FirstAnchored, bool LastAnchored);
 
     private readonly record struct Anchor(
         double AuthoredStart, double AuthoredEnd, double SpeechStart, double SpeechEnd, int Quartile, int CueIndex)
