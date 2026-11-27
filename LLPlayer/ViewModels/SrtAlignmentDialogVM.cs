@@ -61,7 +61,8 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
     }
 
     public IReadOnlyList<ReviewRow> ReviewRows { get; private set => Set(ref field, value); } = [];
-    public bool HasUnmatched => _draft is { } draft && draft.MatchedCount < draft.TotalCount;
+    public bool HasUnmatched => _draft is { } draft && (draft.CanSaveOriginal || draft.CanSaveTranslated)
+        && draft.MatchedCount < draft.TotalCount;
     public bool IsWorking => _operation != null || _stopping;
     public bool CanEditLanguage => !IsWorking && !_needsCleanup && !_sourceStale && _session?.IsCurrent == true;
     public bool CanPrepare => CanEditLanguage && IsLanguageCode(Language);
@@ -107,9 +108,13 @@ public sealed class SrtAlignmentDialogVM : Bindable, IDialogAware
 
             _draft = draft;
             ReviewRows = draft.Rows.Select(row => new ReviewRow(row)).ToArray();
-            StatusText = draft.CanSaveOriginal
-                ? $"Matched {draft.MatchedCount} of {draft.TotalCount} cues."
-                : $"Matched {draft.MatchedCount} of {draft.TotalCount} cues. No valid SRT can be saved.";
+            string matchSummary = $"Matched {draft.MatchedCount} of {draft.TotalCount} cues.";
+            StatusText = draft switch
+            {
+                { HasTimingConflicts: true } => matchSummary + " Export is blocked because proposed and retained timings overlap or are out of order. Review the intervals, then reload a corrected SRT and try again.",
+                { CanSaveOriginal: true } => matchSummary,
+                _ => matchSummary + " No valid SRT can be saved."
+            };
         });
     }
 

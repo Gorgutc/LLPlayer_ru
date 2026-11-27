@@ -1,5 +1,5 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:conv="using:Avalonia.Data.Converters"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
         x:Class="LLPlayer.Avalonia.Views.SrtAlignmentWindow"
         x:DataType="vm:SrtAlignmentViewModel" Classes="dialog" Title="Align SRT to audio - LLPlayer"
         Width="780" Height="620" MinWidth="480" MinHeight="440" CanResize="True" SizeToContent="Manual"
@@ -41,8 +41,7 @@
                 <TextBlock Text="{Binding Original, StringFormat='Original {0}'}" Classes="small muted mono" />
                 <TextBlock Text="{Binding Proposed, StringFormat='Proposed {0}'}" Classes="small mono" />
               </WrapPanel>
-              <TextBlock Text="{Binding Reason}" Classes="small muted" TextWrapping="Wrap"
-                         IsVisible="{Binding Reason, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" />
+              <TextBlock Text="{Binding Match}" Classes="small muted" TextWrapping="Wrap" />
             </StackPanel>
           </Border>
         </DataTemplate>

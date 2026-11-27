@@ -29,6 +29,7 @@ public sealed class SrtAlignmentDraft(IReadOnlyList<SrtAlignmentRow> rows, bool 
     public IReadOnlyList<SrtAlignmentRow> Rows { get; } = Array.AsReadOnly(rows.ToArray());
     public bool CanSaveOriginal { get; } = canSaveOriginal;
     public bool CanSaveTranslated { get; } = canSaveTranslated;
+    public bool HasTimingConflicts { get; init; }
     public int MatchedCount { get; } = rows.Count(row => row.ProposedStart.HasValue);
     public int TotalCount => Rows.Count;
 }
@@ -49,6 +50,7 @@ public sealed class SrtAlignmentWorkflow
     readonly SemaphoreSlim drainGate = new(1, 1);
     Operation? active;
     Func<ValueTask>? pendingCpuDrain;
+    readonly HashSet<Operation> activeSaves = [];
     bool shuttingDown;
 
     public SrtAlignmentWorkflow(GpuWorkCoordinator? coordinator, LanguageResourceCoordinator resources)
@@ -85,6 +87,8 @@ public sealed class SrtAlignmentWorkflow
         {
             shuttingDown = true;
             active?.Cancellation.CancelAsync();
+            foreach (Operation save in activeSaves)
+                _ = save.Cancellation.CancelAsync();
         }
     }
 
@@ -111,20 +115,20 @@ public sealed class SrtAlignmentWorkflow
         await drainGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            Task? completion = null;
-            Task? cancellation = null;
+            List<Task> pending = [];
+            bool unrelatedRecognition;
             lock (gate)
             {
-                if (active != null)
-                {
-                    if (owner != null && !ReferenceEquals(owner, active.Session)) return;
-                    cancellation = active.Cancellation.CancelAsync();
-                    completion = active.Completion.Task;
-                }
+                unrelatedRecognition = active != null && owner != null && !ReferenceEquals(owner, active.Session);
+                if (active != null && !unrelatedRecognition)
+                    Cancel(active);
+                foreach (Operation save in activeSaves)
+                    if (owner == null || ReferenceEquals(owner, save.Session))
+                        Cancel(save);
             }
 
-            if (cancellation != null) await cancellation.ConfigureAwait(false);
-            if (completion != null) await completion.ConfigureAwait(false);
+            await Task.WhenAll(pending).ConfigureAwait(false);
+            if (unrelatedRecognition) return;
 
             Func<ValueTask>? stop;
             lock (gate) stop = pendingCpuDrain;
@@ -134,8 +138,34 @@ public sealed class SrtAlignmentWorkflow
                 lock (gate) pendingCpuDrain = null;
             }
             if (coordinator != null) await coordinator.RetryDrainAsync(GpuOperation).ConfigureAwait(false);
+
+            void Cancel(Operation operation)
+            {
+                pending.Add(operation.Cancellation.CancelAsync());
+                pending.Add(operation.Completion.Task);
+            }
         }
         finally { drainGate.Release(); }
+    }
+
+    Operation BeginSave(Session session, CancellationToken token)
+    {
+        lock (gate)
+        {
+            if (shuttingDown)
+                throw new InvalidOperationException("SRT alignment is shutting down.");
+
+            var save = new Operation(session, CancellationTokenSource.CreateLinkedTokenSource(token));
+            activeSaves.Add(save);
+            return save;
+        }
+    }
+
+    void CompleteSave(Operation save)
+    {
+        lock (gate) activeSaves.Remove(save);
+        save.Cancellation.Dispose();
+        save.Completion.SetResult();
     }
 
     async Task<SrtAlignmentDraft> RunAsync(Session owner, SrtAlignmentInput input, Config config,
@@ -163,9 +193,15 @@ public sealed class SrtAlignmentWorkflow
             runToken.ThrowIfCancellationRequested();
             owner.EnsureCurrent();
             model = resources.AcquireUse();
-            IReadOnlyList<WordTiming> words = await readWords(config,
-                new(input.MediaPath, input.StreamIndex, language, device), runToken).ConfigureAwait(false);
-            return await owner.PrepareResultAsync(words, runToken).ConfigureAwait(false);
+            var request = new SrtAlignmentAudioRequest(input.MediaPath, input.StreamIndex, language, device);
+            IReadOnlyList<WordTiming> words = await readWords(config, request, runToken).ConfigureAwait(false);
+            var firstPass = SrtAudioAlignment.Align(input.Document.Cues, words, input.Duration, runToken);
+            var proposals = await SrtAlignmentSpeechRetry.RetryAsync(firstPass, input.Duration, window =>
+            {
+                owner.EnsureCurrent();
+                return readWords(config, request with { Window = window }, runToken);
+            }, runToken).ConfigureAwait(false);
+            return await owner.PrepareResultAsync(firstPass, proposals, runToken).ConfigureAwait(false);
         }
         catch (EngineProcessDrainException error)
         {
@@ -231,31 +267,50 @@ public sealed class SrtAlignmentWorkflow
             finally { transition.Release(); }
         }
 
-        public async Task<SrtAlignmentDraft> PrepareResultAsync(IReadOnlyList<WordTiming> words, CancellationToken token)
+        public async Task<SrtAlignmentDraft> PrepareResultAsync(IReadOnlyList<SrtAlignmentProposal> firstPass,
+            IReadOnlyList<SrtAlignmentProposal> proposals, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();
             EnsureCurrent();
             await VerifySelectedFileAsync(token).ConfigureAwait(false);
 
-            IReadOnlyList<SrtAlignmentProposal> proposals = SrtAudioAlignment.Align(input.Document.Cues, words, input.Duration, token);
-            var rows = proposals.Select(proposal => new SrtAlignmentRow(proposal.Cue.Id, proposal.Cue.Text,
-                proposal.Cue.Start, proposal.Cue.End, proposal.Start, proposal.End, proposal.Coverage,
-                Explain(proposal.Rejection))).ToArray();
+            var rows = BuildRows(proposals);
             metadata = input.CaptureMetadata();
-            bool canSave = rows.Any(row => row.ProposedStart.HasValue) && HasValidOrder(rows);
+            bool hasProposals = rows.Any(row => row.ProposedStart.HasValue);
+            bool timingConflicts = hasProposals && !HasValidOrder(rows);
+            if (timingConflicts)
+            {
+                // Optional additional speech must never take away an already exportable result.
+                var original = BuildRows(firstPass);
+                if (original.Any(row => row.ProposedStart.HasValue) && HasValidOrder(original))
+                {
+                    rows = original;
+                    timingConflicts = false;
+                }
+            }
+            bool canSave = hasProposals && !timingConflicts;
             var translations = metadata.Where(item => !string.IsNullOrWhiteSpace(item.TranslatedText))
                 .Select(item => item.Id).ToHashSet();
             token.ThrowIfCancellationRequested();
             EnsureCurrent();
             return prepared = new SrtAlignmentDraft(rows, canSave,
-                canSave && rows.All(row => translations.Contains(row.Id)));
+                canSave && rows.All(row => translations.Contains(row.Id))) { HasTimingConflicts = timingConflicts };
         }
+
+        private static SrtAlignmentRow[] BuildRows(IReadOnlyList<SrtAlignmentProposal> proposals) =>
+            proposals.Select(proposal => new SrtAlignmentRow(proposal.Cue.Id, proposal.Cue.Text,
+                proposal.Cue.Start, proposal.Cue.End, proposal.Start, proposal.End, proposal.Coverage,
+                Explain(proposal.Rejection))).ToArray();
 
         public async Task SaveAsync(SrtAlignmentDraft draft, string path, bool translated, bool acceptUnmatched, CancellationToken token)
         {
             await transition.WaitAsync(token).ConfigureAwait(false);
+            Operation? save = null;
             try
             {
+                save = owner.BeginSave(this, token);
+                token = save.Cancellation.Token;
+                token.ThrowIfCancellationRequested();
                 EnsureCurrent();
                 if (!ReferenceEquals(prepared, draft)) throw new InvalidOperationException("Prepare a new alignment first.");
                 if (!(translated ? draft.CanSaveTranslated : draft.CanSaveOriginal))
@@ -299,7 +354,12 @@ public sealed class SrtAlignmentWorkflow
                     catch (UnauthorizedAccessException) { }
                 }
             }
-            finally { transition.Release(); }
+            finally
+            {
+                transition.Release();
+                if (save != null)
+                    owner.CompleteSave(save);
+            }
         }
 
         byte[] BuildTranslation(SrtAlignmentDraft draft)

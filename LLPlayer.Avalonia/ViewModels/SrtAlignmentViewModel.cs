@@ -12,7 +12,7 @@ public sealed record SrtAlignmentPreviewRow(SrtAlignmentRow Cue)
     public string Proposed => Cue.ProposedStart is TimeSpan start && Cue.ProposedEnd is TimeSpan end
         ? Format(start, end) : "Keep original";
     public string Text => Cue.Text;
-    public string? Reason => Cue.Reason;
+    public string Match => Cue.Reason ?? $"Matched {Cue.Coverage:P0}";
 
     static string Format(TimeSpan start, TimeSpan end) => $"{FormatTime(start)} – {FormatTime(end)}";
     static string FormatTime(TimeSpan t) => $"{(long)t.TotalHours:00}:{t.Minutes:00}:{t.Seconds:00}.{t.Milliseconds:000}";
@@ -49,7 +49,8 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
     public string SubtitleName => Path.GetFileName(session.SourcePath);
     public string AudioLabel => session.AudioLabel;
     public bool CanUseCuda => session.CanUseCuda;
-    public bool NeedsAcknowledgment => Draft is { } result && result.MatchedCount < result.TotalCount;
+    public bool NeedsAcknowledgment => Draft is { } result && (result.CanSaveOriginal || result.CanSaveTranslated)
+        && result.MatchedCount < result.TotalCount;
     public bool HasPreview => Draft != null;
     public bool LacksLinkedTranslation => Draft is { CanSaveOriginal: true, CanSaveTranslated: false };
     public string CoverageText => Draft is { } result ? $"{result.MatchedCount} of {result.TotalCount} cues matched" : "";
@@ -88,9 +89,12 @@ public sealed partial class SrtAlignmentViewModel : ObservableObject
 
             Rows = result.Rows.Select(row => new SrtAlignmentPreviewRow(row)).ToArray();
             Draft = result;
-            Message = result.CanSaveOriginal
-                ? "Review the proposed times on the media clock before saving a separate SRT."
-                : "The proposals could not be saved. Review the timing and match details below.";
+            Message = result switch
+            {
+                { HasTimingConflicts: true } => "Export is blocked because proposed and retained timings overlap or are out of order. Review the intervals, then reload a corrected SRT and try again.",
+                { CanSaveOriginal: true } => "Review the proposed times on the media clock before saving a separate SRT.",
+                _ => "The proposals could not be saved. Review the timing and match details below."
+            };
         }, "Subtitle alignment");
     }
 

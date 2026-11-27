@@ -147,6 +147,11 @@ internal static class PortableVideoTestMedia
         "-itsoffset", "1.25", "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=16000:duration=2.4",
         "-map", "0:v", "-map", "1:a", "-map", "2:a", "-c:v", "mpeg4", "-c:a", "pcm_s16le", "-output_ts_offset", "5", o));
 
+    public static string AlignmentDriftingAudio => Clip("alignment-drifting-pts.mkv", o => RunCli(
+        "-f", "lavfi", "-i", "color=c=black:s=64x64:d=4",
+        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=16000:duration=4",
+        "-af", "asetpts=PTS+floor(T)*0.08/TB", "-c:v", "mpeg4", "-c:a", "pcm_s16le", o));
+
     /// <summary>320x180 solid colour (e.g. 0x808080), 2 s, lossless 4:2:0.</summary>
     public static string Solid(string rgbHex) => Clip($"solid-{rgbHex}.mp4",
         o => RunCli("-f", "lavfi", "-i", $"color=c=0x{rgbHex}:s=320x180:r=25:d=2", "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p", o));

@@ -18,7 +18,10 @@ public enum SrtAlignmentRejection
 }
 
 public sealed record SrtAlignmentProposal(
-    SrtTimingCue Cue, TimeSpan? Start, TimeSpan? End, double Coverage, SrtAlignmentRejection Rejection);
+    SrtTimingCue Cue, TimeSpan? Start, TimeSpan? End, double Coverage, SrtAlignmentRejection Rejection)
+{
+    public bool IsExactAnchor { get; init; }
+}
 
 /// <summary>Matches authored subtitle text to timed speech words without modifying the original cues.</summary>
 public static partial class SrtAudioAlignment
@@ -85,10 +88,12 @@ public static partial class SrtAudioAlignment
 
         // Anchor only at unique whole-phrase matches. New proposals can never enlarge a later search window.
         var nextAnchors = new Match?[cues.Count];
+        var exactAnchors = new bool[cues.Count];
         Match? next = null;
         for (int i = matches.Length - 1; i >= 0; i--)
         {
             nextAnchors[i] = next;
+            exactAnchors[i] = matches[i].Match.HasValue;
             next = matches[i].Match ?? next;
         }
         Match? previous = null;
@@ -126,7 +131,7 @@ public static partial class SrtAudioAlignment
             SearchResult result = matches[i];
             proposals[i] = result.Match is { } match
                 ? new(cues[i], Milliseconds(speech[match.First].Start), Milliseconds(speech[match.Last].End),
-                    (double)match.Matched / texts[i].Length, SrtAlignmentRejection.None)
+                    (double)match.Matched / texts[i].Length, SrtAlignmentRejection.None) { IsExactAnchor = exactAnchors[i] }
                 : new(cues[i], null, null, 0, result.Rejection);
         }
         return proposals;

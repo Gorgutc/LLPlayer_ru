@@ -1,6 +1,7 @@
 ﻿using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Avalonia.Services;
 using LLPlayer.Avalonia.ViewModels;
@@ -89,6 +90,43 @@ public sealed class SrtAlignmentSidebarTests
 
         var saved = Assert.Single(session.Saves);
         Assert.Equal(("source.aligned.translated.srt", true, true), saved);
+    }
+
+    [AvaloniaFact]
+    public async Task Blocked_draft_explains_conflicting_times_and_displays_cue_coverage()
+    {
+        var rows = MakeDraft(partial: true).Rows.ToArray();
+        rows[0] = rows[0] with
+        {
+            ProposedStart = TimeSpan.FromSeconds(4.5),
+            ProposedEnd = TimeSpan.FromSeconds(5.5),
+            Coverage = 0.8
+        };
+        var session = new AlignmentSession
+        {
+            Result = new(rows, canSaveOriginal: false, canSaveTranslated: false) { HasTimingConflicts = true }
+        };
+        var model = new SrtAlignmentViewModel(session, 0);
+        var window = new SrtAlignmentWindow(model);
+
+        try
+        {
+            window.Show();
+            await model.PrepareCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Contains("overlap or are out of order", model.Message);
+            Assert.False(window.FindControl<CheckBox>("AlignmentKeepUnmatched")!.IsVisible);
+            Assert.False(model.SaveOriginalCommand.CanExecute(null));
+            Assert.False(model.SaveTranslationCommand.CanExecute(null));
+            string coverage = $"Matched {0.8:P0}";
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), control => control.Text == coverage);
+        }
+        finally
+        {
+            await window.DrainForShutdownAsync();
+            window.Close();
+        }
     }
 
     [AvaloniaFact]

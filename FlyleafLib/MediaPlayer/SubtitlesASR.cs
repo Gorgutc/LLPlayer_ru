@@ -487,11 +487,13 @@ public class AudioReader : IDisposable
 {
     const int SampleRate = 16_000;
     const int WavHeaderSize = 44;
+    static readonly TimeSpan AlignmentClockTolerance = TimeSpan.FromMilliseconds(100);
     private readonly Config _config;
     private readonly int _subIndex;
     private readonly Func<bool>? _preferCpu;
     private readonly bool _confirmProcessExit;
     internal bool StrictAlignment { get; init; }
+    internal SrtAlignmentAudioWindow? AlignmentWindow { get; init; }
 
     // F-19 slice 2: when true, run Silero VAD over each chunk's PCM and attach the speech segments so
     // re-segmentation can snap cue boundaries onto pauses. Only the interactive ASR path enables it (batch leaves
@@ -563,6 +565,27 @@ public class AudioReader : IDisposable
 
     private static TimeSpan PcmDuration(MemoryStream wave) =>
         TimeSpan.FromSeconds((wave.Length - WavHeaderSize) / (double)(SampleRate * sizeof(short)));
+
+    internal static bool TryTrimAlignmentWave(MemoryStream wave, TimeSpan sourceStart, SrtAlignmentAudioWindow window,
+        out TimeSpan start)
+    {
+        const int ticksPerSample = (int)TimeSpan.TicksPerSecond / SampleRate;
+        long maxTicks = (wave.Length - WavHeaderSize) / sizeof(short) * ticksPerSample;
+        long startTicks = Math.Clamp((window.Start - sourceStart).Ticks, 0, maxTicks);
+        long endTicks = Math.Clamp((window.End - sourceStart).Ticks, 0, maxTicks);
+        // The WAV starts with the first complete sample in the requested interval.
+        int firstSample = (int)((startTicks + ticksPerSample - 1) / ticksPerSample);
+        int sampleCount = (int)(endTicks / ticksPerSample) - firstSample;
+        start = sourceStart + TimeSpan.FromTicks((long)firstSample * ticksPerSample);
+        if (sampleCount <= 0)
+            return false;
+
+        byte[] buffer = wave.GetBuffer();
+        buffer.AsSpan(WavHeaderSize + firstSample * sizeof(short), sampleCount * sizeof(short))
+            .CopyTo(buffer.AsSpan(WavHeaderSize));
+        wave.SetLength(WavHeaderSize + sampleCount * sizeof(short));
+        return true;
+    }
 
     /// <summary>
     /// Extract audio files in WAV format and run Whisper
@@ -851,6 +874,21 @@ public class AudioReader : IDisposable
             int demuxErrors = 0;
             int decodeErrors = 0;
 
+            if (AlignmentWindow is { } window)
+            {
+                // Backward seek can land on an earlier keyframe. Decode the preroll but only
+                // retain a second of context for the resampler and denoising before the retry.
+                TimeSpan decodeFloor = TimeSpan.FromTicks(Math.Max(0, window.Start.Ticks - TimeSpan.TicksPerSecond));
+                if (decodeFloor > TimeSpan.Zero && demuxer.Seek(demuxer.StartTime + decodeFloor.Ticks) < 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    throw new InvalidDataException("Could not seek to the alignment retry window.");
+                }
+
+                RunPass(null, window, decodeFloor);
+                return;
+            }
+
             // T-08 fold-back: when ASR starts mid-video, transcribe the skipped earlier span FIRST (so cues are still
             // emitted in increasing-time order, keeping the append-only subtitle store sorted), then the forward span.
             // When fold-back is off this is a single forward pass from curTime, byte-identical to before.
@@ -913,7 +951,7 @@ public class AudioReader : IDisposable
 
             // Transcribe from the demuxer's current position until EOF, or — for a backfill pass — until the frame
             // time reaches stopAt. Resets chunk state at entry so it is safe to invoke twice over the one channel.
-            unsafe void RunPass(TimeSpan? stopAt)
+            unsafe void RunPass(TimeSpan? stopAt, SrtAlignmentAudioWindow? retry = null, TimeSpan decodeFloor = default)
             {
                 // Start each pass with a fresh, header-only WAV buffer (never the one just handed to the consumer).
                 if (memoryStreamPool.TryPop(out var pooled))
@@ -933,6 +971,8 @@ public class AudioReader : IDisposable
                 demuxErrors = 0;
                 decodeErrors = 0;
                 chunkSw.Restart();
+                long retryInputSamples = 0;
+                (int Rate, int Format, ulong Layout)? retryFormat = null;
 
                 bool stop = false;
 
@@ -1027,13 +1067,29 @@ public class AudioReader : IDisposable
                         waveDuration = waveDuration.Add(new TimeSpan((long)(_frame->duration * _stream.Timebase)));
 
                         TimeSpan frameTime = new((long)(framePts * _stream.Timebase) - demuxer.StartTime);
+                        if (retry.HasValue && frameTime < decodeFloor)
+                            continue;
                         if (StrictAlignment)
                         {
                             // The sample clock is continuous within a WAV chunk. A discontinuity in the
                             // source clock would otherwise shift every word after it in that chunk.
-                            if (nextFrameTime is { } expected && (frameTime - expected).Duration() > TimeSpan.FromMilliseconds(100))
+                            if (nextFrameTime is { } expected && (frameTime - expected).Duration() > AlignmentClockTolerance)
                                 throw new InvalidDataException("The audio stream contains a timestamp discontinuity.");
                             nextFrameTime = frameTime + TimeSpan.FromSeconds(_frame->nb_samples / (double)_frame->sample_rate);
+                        }
+                        if (retry.HasValue)
+                        {
+                            var format = (Rate: _frame->sample_rate, Format: _frame->format, Layout: _frame->ch_layout.u.mask);
+                            if (retryFormat is { } previousFormat && format != previousFormat)
+                                throw new InvalidDataException("The audio format changed inside the alignment retry window.");
+                            retryFormat = format;
+
+                            // Comparing with the cumulative sample clock catches smaller PTS jumps
+                            // that would individually pass the adjacent-frame continuity check.
+                            TimeSpan elapsedSamples = TimeSpan.FromSeconds(retryInputSamples / (double)format.Rate);
+                            if (chunkStart is { } origin && (frameTime - origin - elapsedSamples).Duration() > AlignmentClockTolerance)
+                                throw new InvalidDataException("The audio sample clock drifts within the alignment retry window.");
+                            retryInputSamples += _frame->nb_samples;
                         }
 
                         if (chunkStart == null)
@@ -1047,6 +1103,19 @@ public class AudioReader : IDisposable
                         }
 
                         int resampledDataSize = ResampleTo(waveStream, _frame, targetSampleRate, targetChannel);
+                        if (retry is { } range)
+                        {
+                            // Do not cut at the ordinary size/time/silence boundaries. The
+                            // first frame at end supplies resampling context, then gets clipped.
+                            if (frameTime >= range.End)
+                            {
+                                stop = true;
+                                break;
+                            }
+                            if (PcmDuration(waveStream) > SrtAlignmentAudioWindow.MaxDuration + TimeSpan.FromSeconds(2))
+                                throw new InvalidDataException("Audio timestamps did not reach the end of the alignment retry window.");
+                            continue;
+                        }
 
                         // Cut a chunk when: (a) a hard size/time cap is hit (original behavior, always the ceiling);
                         // (b) T-09 — past the soft fraction of the budget AND this frame is silent (cleaner phrase
@@ -1108,6 +1177,26 @@ public class AudioReader : IDisposable
                 }
 
                 token.ThrowIfCancellationRequested();
+
+                if (retry is { } bounded)
+                {
+                    if (chunkStart is not { } origin)
+                        return;
+                    int size;
+                    while ((size = _resampler.DrainMono(SampleRate)) > 0)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        WriteResampledTo(waveStream, size);
+                    }
+                    DenoiseFlush(waveStream);
+                    if (TryTrimAlignmentWave(waveStream, origin, bounded, out TimeSpan start))
+                    {
+                        UpdateWavHeader(waveStream);
+                        channel.Writer.WriteAsync(new(waveStream, 1, start, start + PcmDuration(waveStream)), token)
+                            .AsTask().Wait(token);
+                    }
+                    return;
+                }
 
                 // F-02: flush the afftdn lookahead tail into the current chunk so the pass loses no audio.
                 DenoiseFlush(waveStream);
@@ -1183,6 +1272,12 @@ public class AudioReader : IDisposable
     private unsafe int ResampleTo(Stream toStream, AVFrame* frame, int targetSampleRate, int targetChannel)
     {
         int resampledDataSize = _resampler.Resample(frame, targetSampleRate, targetChannel);
+        WriteResampledTo(toStream, resampledDataSize);
+        return resampledDataSize;
+    }
+
+    private unsafe void WriteResampledTo(Stream toStream, int resampledDataSize)
+    {
         byte[] sampledBuf = _resampler.Buffer;
 
         // F-02: managed high-pass in place over the resampled S16 mono PCM (size-preserving, so the T-09 silence
@@ -1192,12 +1287,8 @@ public class AudioReader : IDisposable
 
         // The optional native afftdn stage (when available) writes its own output to toStream and returns; otherwise
         // (off, or afftdn unavailable) the high-passed/raw PCM is written here.
-        if (DenoiseAfftdnWrite(toStream, resampledDataSize))
-            return resampledDataSize;
-
-        toStream.Write(sampledBuf, 0, resampledDataSize);
-
-        return resampledDataSize;
+        if (!DenoiseAfftdnWrite(toStream, resampledDataSize))
+            toStream.Write(sampledBuf, 0, resampledDataSize);
     }
 
     // --- F-02 optional native afftdn denoise stage (mirrors AudioDecoder.Filters.cs avfilter pattern) ---
@@ -2012,7 +2103,7 @@ public partial class FasterWhisperASRService : IASRService
             }
 
             if (StrictAlignment && !IsSuccessfulAlignmentExit(exitCode, lastLine))
-                throw new InvalidOperationException($"Faster Whisper did not complete alignment transcription (exit code {exitCode?.ToString() ?? "unknown"}).")
+                throw new InvalidDataException($"Faster Whisper did not complete alignment transcription (exit code {exitCode?.ToString() ?? "unknown"}).")
                 {
                     Data =
                     {

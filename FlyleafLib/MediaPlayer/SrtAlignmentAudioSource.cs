@@ -12,7 +12,15 @@ namespace FlyleafLib.MediaPlayer;
 
 public enum SrtAlignmentDevice { Cpu, Cuda }
 
-public sealed record SrtAlignmentAudioRequest(string MediaPath, int StreamIndex, string Language, SrtAlignmentDevice Device);
+public readonly record struct SrtAlignmentAudioWindow(TimeSpan Start, TimeSpan End)
+{
+    internal static readonly TimeSpan MaxDuration = TimeSpan.FromSeconds(28);
+}
+
+public sealed record SrtAlignmentAudioRequest(string MediaPath, int StreamIndex, string Language, SrtAlignmentDevice Device)
+{
+    public SrtAlignmentAudioWindow? Window { get; init; }
+}
 
 /// <summary>Reads timestamped words from the selected local audio stream without changing playback subtitles.</summary>
 public static class SrtAlignmentAudioSource
@@ -24,9 +32,12 @@ public static class SrtAlignmentAudioSource
         if (!Path.IsPathFullyQualified(request.MediaPath) || new Uri(request.MediaPath).IsUnc ||
             !File.Exists(request.MediaPath) || request.StreamIndex < 0)
             throw new ArgumentException("Alignment requires an existing local media file and a selected audio stream.", nameof(request));
+        if (request.Window is { } window && (window.Start < TimeSpan.Zero || window.End <= window.Start ||
+            window.End - window.Start > SrtAlignmentAudioWindow.MaxDuration))
+            throw new ArgumentException("An alignment retry window must be positive and at most 28 seconds.", nameof(request));
 
         Config settings = CreateRunSettings(recognitionSnapshot, request);
-        using var reader = new AudioReader(settings, 0) { StrictAlignment = true };
+        using var reader = new AudioReader(settings, 0) { StrictAlignment = true, AlignmentWindow = request.Window };
         reader.Open(request.MediaPath, request.StreamIndex, MediaType.Video, token);
         token.ThrowIfCancellationRequested();
 
@@ -99,9 +110,9 @@ public static class SrtAlignmentAudioSource
     internal static IReadOnlyList<IReadOnlyList<WordTiming>> ReadWordEvidence(string path,
         IReadOnlyList<(string text, TimeSpan start, TimeSpan end, string language)> expected)
     {
-        using var stream = File.OpenRead(path);
         try
         {
+            using var stream = File.OpenRead(path);
             using JsonDocument document = JsonDocument.Parse(stream);
             JsonElement segments = document.RootElement.GetProperty("segments");
             if (segments.GetArrayLength() != expected.Count)
@@ -131,7 +142,8 @@ public static class SrtAlignmentAudioSource
             }
             return result;
         }
-        catch (Exception error) when (error is JsonException or KeyNotFoundException or InvalidOperationException or OverflowException or FormatException)
+        catch (Exception error) when (error is FileNotFoundException or JsonException or KeyNotFoundException
+            or InvalidOperationException or OverflowException or FormatException)
         {
             throw new InvalidDataException("Faster Whisper returned invalid word timing JSON.", error);
         }

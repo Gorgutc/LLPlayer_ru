@@ -133,19 +133,11 @@ public sealed class PortableFasterWhisperTests : IDisposable
     [Fact]
     public async Task Align_UsesExactDelayedAudioStreamAndAddsItsMediaOffset()
     {
-        Config config = CreateConfig("""
+        Config config = CreateAlignmentConfig("""
             for wave do :; done
             printf '%s\n' '{"segments":[{"start":0.1,"end":0.25,"text":" two words","words":[{"word":" two","start":0.1,"end":0.2},{"word":" words","start":0.21,"end":0.25}]}]}' > "${wave%.*}.json"
             printf '[00:00.100 --> 00:00.250] two words\nOperation finished in: 1s\n'
             """);
-        config.Subtitles.FasterWhisperConfig.UseManualModel = true;
-        config.Subtitles.FasterWhisperConfig.ManualModelDir = directory;
-        config.Subtitles.ASRChunkSeconds = 1;
-        config.Subtitles.ASRSplitOnSilence = false;
-        string model = Path.Combine(directory, "faster-whisper-tiny");
-        Directory.CreateDirectory(model);
-        foreach (string file in new[] { "model.bin", "config.json", "tokenizer.json", "vocabulary.json" })
-            File.WriteAllText(Path.Combine(model, file), "fixture");
         PortableVideoTestMedia.RequireEngine();
         var request = new SrtAlignmentAudioRequest(PortableVideoTestMedia.AlignmentTwoAudioTracks, 2, "en", SrtAlignmentDevice.Cpu);
 
@@ -158,8 +150,65 @@ public sealed class PortableFasterWhisperTests : IDisposable
             fourth => Assert.InRange(fourth.End.TotalSeconds, 2.50, 2.54),
             fifth => Assert.InRange(fifth.Start.TotalSeconds, 3.38, 3.42),
             sixth => Assert.InRange(sixth.End.TotalSeconds, 3.53, 3.57));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => SrtAlignmentAudioSource.ReadWordsAsync(config,
+        await Assert.ThrowsAsync<InvalidDataException>(() => SrtAlignmentAudioSource.ReadWordsAsync(config,
             request with { StreamIndex = 0 }, TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(1.0, 1.85, 1.35, 19_244)]
+    [InlineData(2.137, 3.5, 2.237, 43_660)]
+    public async Task Align_RetrySuppliesOneClippedWaveAndUsesItsActualMediaOrigin(
+        double start, double end, double firstWordStart, int expectedWaveBytes)
+    {
+        Config config = CreateAlignmentConfig("""
+            for wave do :; done
+            wc -c < "$wave" >> "$(dirname "$0")/sizes.txt"
+            printf '%s\n' '{"segments":[{"start":0.1,"end":0.25,"text":" two words","words":[{"word":" two","start":0.1,"end":0.2},{"word":" words","start":0.21,"end":0.25}]}]}' > "${wave%.*}.json"
+            printf '[00:00.100 --> 00:00.250] two words\nOperation finished in: 1s\n'
+            """);
+        PortableVideoTestMedia.RequireEngine();
+        var request = new SrtAlignmentAudioRequest(PortableVideoTestMedia.AlignmentTwoAudioTracks, 2, "en", SrtAlignmentDevice.Cpu)
+        {
+            Window = new(TimeSpan.FromSeconds(start), TimeSpan.FromSeconds(end))
+        };
+
+        var words = await SrtAlignmentAudioSource.ReadWordsAsync(config, request, TestContext.Current.CancellationToken);
+
+        Assert.Collection(words,
+            first => Assert.InRange(first.Start.TotalSeconds, firstWordStart - .001, firstWordStart + .001),
+            second => Assert.InRange(second.End.TotalSeconds, firstWordStart + .149, firstWordStart + .151));
+        string count = Assert.Single(File.ReadAllLines(Path.Combine(directory, "sizes.txt")));
+        Assert.InRange(int.Parse(count), expectedWaveBytes - 4, expectedWaveBytes);
+    }
+
+    [Fact]
+    public async Task Align_RetryRejectsDriftAccumulatedFromFramesBelowTheDiscontinuityTolerance()
+    {
+        Config config = CreateAlignmentConfig("exit 90");
+        PortableVideoTestMedia.RequireEngine();
+        var request = new SrtAlignmentAudioRequest(PortableVideoTestMedia.AlignmentDriftingAudio, 1, "en", SrtAlignmentDevice.Cpu)
+        {
+            Window = new(TimeSpan.Zero, TimeSpan.FromSeconds(3.5))
+        };
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            SrtAlignmentAudioSource.ReadWordsAsync(config, request, TestContext.Current.CancellationToken));
+
+        Assert.Contains("drifts within the alignment retry window", error.Message, StringComparison.Ordinal);
+    }
+
+    Config CreateAlignmentConfig(string body)
+    {
+        Config config = CreateConfig(body);
+        config.Subtitles.FasterWhisperConfig.UseManualModel = true;
+        config.Subtitles.FasterWhisperConfig.ManualModelDir = directory;
+        config.Subtitles.ASRChunkSeconds = 1;
+        config.Subtitles.ASRSplitOnSilence = false;
+        string model = Path.Combine(directory, "faster-whisper-tiny");
+        Directory.CreateDirectory(model);
+        foreach (string file in new[] { "model.bin", "config.json", "tokenizer.json", "vocabulary.json" })
+            File.WriteAllText(Path.Combine(model, file), "fixture");
+        return config;
     }
 
     static async Task<List<(string, TimeSpan, TimeSpan, string)>> Collect(

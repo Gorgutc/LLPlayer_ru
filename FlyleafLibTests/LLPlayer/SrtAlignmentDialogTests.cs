@@ -42,6 +42,25 @@ public sealed class SrtAlignmentDialogTests
     }
 
     [Fact]
+    public async Task Blocked_draft_explains_conflicting_times_without_requesting_consent()
+    {
+        var rows = Draft().Rows.ToArray();
+        rows[0] = rows[0] with { ProposedStart = TimeSpan.FromSeconds(7.5), ProposedEnd = TimeSpan.FromSeconds(8.5) };
+        SrtAlignmentDraft blocked = new(rows, canSaveOriginal: false, canSaveTranslated: false)
+        {
+            HasTimingConflicts = true
+        };
+        var model = Open(new Session { Prepare = _ => Task.FromResult(blocked) });
+
+        await model.PrepareAsync();
+
+        Assert.Contains("overlap or are out of order", model.StatusText);
+        Assert.False(model.HasUnmatched);
+        Assert.False(model.CanSaveOriginal);
+        Assert.False(model.CanSaveTranslation);
+    }
+
+    [Fact]
     public async Task Prepare_accepts_supported_whisper_codes_and_rejects_unknown_codes()
     {
         Session session = new();

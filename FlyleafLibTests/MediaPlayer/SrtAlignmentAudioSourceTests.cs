@@ -9,6 +9,33 @@ public sealed class SrtAlignmentAudioSourceTests : IDisposable
     readonly string directory = Path.Combine(Path.GetTempPath(), $"llplayer-alignment-{Guid.NewGuid():N}");
 
     [Fact]
+    public void RetryPcmUsesTheFirstCompleteSampleInsideTheWindowAsItsOrigin()
+    {
+        TimeSpan sourceStart = TimeSpan.FromSeconds(10) + TimeSpan.FromTicks(100);
+        var window = new SrtAlignmentAudioWindow(sourceStart + TimeSpan.FromTicks(900),
+            sourceStart + TimeSpan.FromTicks(4_050));
+        using var wave = new MemoryStream();
+        wave.Write(new byte[44]);
+        wave.Write(new byte[] { 0, 0, 11, 0, 22, 0, 33, 0, 44, 0, 55, 0, 66, 0, 77, 0 });
+
+        Assert.True(AudioReader.TryTrimAlignmentWave(wave, sourceStart, window, out TimeSpan start));
+
+        Assert.Equal(sourceStart + TimeSpan.FromTicks(1_250), start);
+        Assert.Equal(new byte[] { 22, 0, 33, 0, 44, 0, 55, 0 }, wave.ToArray()[44..]);
+    }
+
+    [Fact]
+    public void RetryPcmDoesNotInventSamplesBeforeTheSelectedAudioStarts()
+    {
+        TimeSpan sourceStart = TimeSpan.FromSeconds(5);
+        var window = new SrtAlignmentAudioWindow(sourceStart - TimeSpan.FromSeconds(2), sourceStart);
+        using var wave = new MemoryStream();
+        wave.Write(new byte[48]);
+
+        Assert.False(AudioReader.TryTrimAlignmentWave(wave, sourceStart, window, out _));
+    }
+
+    [Fact]
     public void SnapshotPinsLocalModelLanguageAndDeviceWithoutInheritingArguments()
     {
         string model = Path.Combine(directory, "faster-whisper-large-v3");
@@ -83,6 +110,17 @@ public sealed class SrtAlignmentAudioSourceTests : IDisposable
         Assert.Throws<InvalidDataException>(() => SrtAlignmentAudioSource.ToMediaWords(
             [new WordTiming("outside", TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3))],
             TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public void MissingWordOutputIsInvalidEvidence()
+    {
+        Directory.CreateDirectory(directory);
+        var error = Assert.Throws<InvalidDataException>(() =>
+            SrtAlignmentAudioSource.ReadWordEvidence(Path.Combine(directory, "missing.json"),
+                [("spoken words", TimeSpan.Zero, TimeSpan.FromSeconds(1), "en")]));
+
+        Assert.IsType<FileNotFoundException>(error.InnerException);
     }
 
     [Fact]
