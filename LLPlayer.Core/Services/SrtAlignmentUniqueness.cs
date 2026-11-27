@@ -9,9 +9,11 @@ internal static class SrtAlignmentUniqueness
     private static readonly TimeSpan MaxWindowDuration = TimeSpan.FromSeconds(28);
     private static readonly TimeSpan MinimumOverlap = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ContextPadding = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan SuspectWordDuration = TimeSpan.FromSeconds(2);
 
     public static async Task<SrtAlignmentRejection> VerifyAsync(SrtAlignmentProposal onlyMatch, TimeSpan duration,
-        Func<SrtAlignmentAudioWindow, Task<IReadOnlyList<WordTiming>>> read, CancellationToken token)
+        Func<SrtAlignmentAudioWindow, Task<IReadOnlyList<WordTiming>>> read, CancellationToken token,
+        IReadOnlyList<WordTiming>? primaryWords = null)
     {
         token.ThrowIfCancellationRequested();
         if (onlyMatch.Start is not { } start || onlyMatch.End is not { } end ||
@@ -26,8 +28,9 @@ internal static class SrtAlignmentUniqueness
         // Establish that the whole alternate range can be checked before starting any recognizers.
         // Each split overlaps enough to contain a repeated phrase straddling its seam.
         List<Probe> probes = [];
-        if ((start > TimeSpan.Zero && !AddProbes(probes, TimeSpan.Zero, start + padding, overlap, before: true)) ||
-            (end < duration && !AddProbes(probes, end - padding, duration, overlap, before: false)))
+        if ((start > TimeSpan.Zero && !AddProbes(probes, TimeSpan.Zero, start + padding, overlap, ProbeKind.Before)) ||
+            (end < duration && !AddProbes(probes, end - padding, duration, overlap, ProbeKind.After)) ||
+            !AddStretchedWordProbes(probes, primaryWords, start, end, overlap, token))
             return SrtAlignmentRejection.InvalidTiming;
 
         bool unavailableEvidence = false;
@@ -48,7 +51,21 @@ internal static class SrtAlignmentUniqueness
             token.ThrowIfCancellationRequested();
 
             WordTiming[] bounded = words.Where(word => word.Start >= probe.Window.Start && word.End <= probe.Window.End).ToArray();
-            WordTiming[] alternate = bounded.Where(word => probe.Before ? word.End <= start : word.Start >= end).ToArray();
+            if (probe.Kind == ProbeKind.InsideWord)
+            {
+                // A whole cue independently heard inside one primary word cannot be assigned to
+                // the proposed timing with confidence. A long pronunciation alone proves nothing.
+                var withinWord = SrtAudioAlignment.Align([onlyMatch.Cue], bounded, duration, token)[0];
+                if (withinWord.Rejection == SrtAlignmentRejection.Ambiguous ||
+                    (withinWord.Start is { } insideStart && withinWord.End is { } insideEnd &&
+                    (insideStart - start >= ContextPadding || end - insideEnd >= ContextPadding)))
+                    return SrtAlignmentRejection.Ambiguous;
+                unavailableEvidence |= withinWord.Rejection == SrtAlignmentRejection.InvalidTiming;
+                continue;
+            }
+
+            bool before = probe.Kind == ProbeKind.Before;
+            WordTiming[] alternate = bounded.Where(word => before ? word.End <= start : word.Start >= end).ToArray();
             SrtAlignmentProposal candidate = SrtAudioAlignment.Align([onlyMatch.Cue], alternate, duration, token)[0];
             if (candidate.Start.HasValue || candidate.Rejection == SrtAlignmentRejection.Ambiguous)
                 return SrtAlignmentRejection.Ambiguous;
@@ -65,13 +82,32 @@ internal static class SrtAlignmentUniqueness
                 // A stretched incumbent may slightly overlap another real phrase. Under padding,
                 // require a literal match whose midpoint is outside it and whose far edge is distinct.
                 var padded = SrtAudioAlignment.Align([onlyMatch.Cue], bounded, duration, token)[0];
-                if (IsDistinctPaddedMatch(padded, probe.Before, start, end))
+                if (IsDistinctPaddedMatch(padded, before, start, end))
                     return SrtAlignmentRejection.Ambiguous;
                 if (padded.Rejection == SrtAlignmentRejection.InvalidTiming)
                     unavailableEvidence = true;
             }
         }
         return unavailableEvidence ? SrtAlignmentRejection.InvalidTiming : SrtAlignmentRejection.None;
+    }
+
+    private static bool AddStretchedWordProbes(List<Probe> probes, IReadOnlyList<WordTiming>? primaryWords,
+        TimeSpan start, TimeSpan end, TimeSpan overlap, CancellationToken token)
+    {
+        if (primaryWords == null) return true;
+
+        foreach (WordTiming word in primaryWords)
+        {
+            token.ThrowIfCancellationRequested();
+            if (word.End <= start || word.Start >= end)
+                continue;
+
+            TimeSpan from = word.Start > start ? word.Start : start;
+            TimeSpan to = word.End < end ? word.End : end;
+            if (to - from >= SuspectWordDuration && !AddProbes(probes, from, to, overlap, ProbeKind.InsideWord))
+                return false;
+        }
+        return true;
     }
 
     private static bool IsDistinctPaddedMatch(SrtAlignmentProposal candidate, bool before, TimeSpan start, TimeSpan end)
@@ -85,7 +121,7 @@ internal static class SrtAlignmentUniqueness
             : midpoint >= end && candidateEnd - end >= ContextPadding;
     }
 
-    private static bool AddProbes(List<Probe> probes, TimeSpan from, TimeSpan to, TimeSpan overlap, bool before)
+    private static bool AddProbes(List<Probe> probes, TimeSpan from, TimeSpan to, TimeSpan overlap, ProbeKind kind)
     {
         while (from < to)
         {
@@ -94,7 +130,7 @@ internal static class SrtAlignmentUniqueness
 
             TimeSpan remaining = to - from;
             TimeSpan end = remaining <= MaxWindowDuration ? to : from + MaxWindowDuration;
-            probes.Add(new(new(from, end), before));
+            probes.Add(new(new(from, end), kind));
             if (end == to)
                 return true;
             if (overlap >= MaxWindowDuration)
@@ -105,5 +141,6 @@ internal static class SrtAlignmentUniqueness
         return true;
     }
 
-    private readonly record struct Probe(SrtAlignmentAudioWindow Window, bool Before);
+    private enum ProbeKind { Before, After, InsideWord }
+    private readonly record struct Probe(SrtAlignmentAudioWindow Window, ProbeKind Kind);
 }

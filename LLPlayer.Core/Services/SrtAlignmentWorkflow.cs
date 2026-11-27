@@ -248,7 +248,7 @@ public sealed class SrtAlignmentWorkflow
             if (proposals.Count == 1 && proposals[0].Start.HasValue)
             {
                 var match = proposals[0];
-                var uniqueness = await SrtAlignmentUniqueness.VerifyAsync(match, input.Duration, ReadWindow, runToken)
+                var uniqueness = await SrtAlignmentUniqueness.VerifyAsync(match, input.Duration, ReadWindow, runToken, words)
                     .ConfigureAwait(false);
                 if (uniqueness != SrtAlignmentRejection.None)
                     proposals = firstPass = [new(match.Cue, null, null, 0, uniqueness == SrtAlignmentRejection.InvalidTiming

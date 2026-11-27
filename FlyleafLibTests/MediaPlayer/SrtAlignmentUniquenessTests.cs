@@ -73,6 +73,53 @@ public sealed class SrtAlignmentUniquenessTests
         Assert.Equal(SrtAlignmentRejection.None, result);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AStretchedFinalWordIsAuditedForAHiddenCompletePhrase(bool containsRepeat)
+    {
+        List<SrtAlignmentAudioWindow> requests = [];
+        WordTiming[] primary =
+        [
+            new("the", Sec(4), Sec(4.2)), new("man", Sec(4.2), Sec(4.4)), new("took", Sec(4.4), Sec(4.7)),
+            new("the", Sec(4.7), Sec(5)), new("dress", Sec(5), Sec(9))
+        ];
+        var result = await SrtAlignmentUniqueness.VerifyAsync(Match(4, 9), Sec(10), window =>
+        {
+            requests.Add(window);
+            if (window.Start > Sec(6) || window.End < Sec(8))
+                return Words([]);
+            return Words(containsRepeat ? Spoken(6, wordDuration: .4) : [new("dress", Sec(6), Sec(8))]);
+        }, Token, primary);
+
+        Assert.Equal(containsRepeat ? SrtAlignmentRejection.Ambiguous : SrtAlignmentRejection.None, result);
+        Assert.Contains(new SrtAlignmentAudioWindow(Sec(5), Sec(9)), requests);
+    }
+
+    [Fact]
+    public async Task OrdinaryPrimaryWordsDoNotAddInteriorProbes()
+    {
+        List<SrtAlignmentAudioWindow> requests = [];
+        var result = await SrtAlignmentUniqueness.VerifyAsync(Match(4, 9), Sec(10), window =>
+        {
+            requests.Add(window);
+            return Words([]);
+        }, Token, Spoken(4, wordDuration: 1));
+
+        Assert.Equal(SrtAlignmentRejection.None, result);
+        Assert.Equal(2, requests.Count);
+    }
+
+    [Fact]
+    public async Task StretchedWordProbesCannotExceedTheVerificationBudget()
+    {
+        var result = await SrtAlignmentUniqueness.VerifyAsync(Match(0, 15), Sec(15),
+            _ => throw new InvalidOperationException("The complete audit must fit within the window budget."),
+            Token, Spoken(0, wordDuration: 3));
+
+        Assert.Equal(SrtAlignmentRejection.InvalidTiming, result);
+    }
+
     [Fact]
     public async Task SeveralMatchesInsideOneProbeAreAlsoAmbiguous()
     {
