@@ -1,8 +1,11 @@
-﻿using System.IO;
+﻿using System.ComponentModel;
+using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using FlyleafLib;
 using FlyleafLib.Controls.WPF;
 using FlyleafLib.MediaPlayer;
+using LLPlayer.Core.Services;
 using MaterialDesignThemes.Wpf;
 
 namespace LLPlayer.Services;
@@ -14,6 +17,12 @@ public class FlyleafManager
     public FlyleafHost? FlyleafHost => Player.Host as FlyleafHost;
     public AppConfig Config { get; }
     public AppActions Action { get; }
+    public LanguageResourceCoordinator LanguageResources { get; } = new();
+    public SrtAlignmentWorkflow SrtAlignment { get; }
+    public event Action? SrtAlignmentSourceChanged;
+
+    private int _srtAlignmentSourceUpdatePending;
+    private Task? _srtAlignmentShutdown;
 
     /// <summary>App-wide MaterialDesign snackbar queue (notifications + actionable config errors).</summary>
     public ISnackbarMessageQueue MessageQueue { get; }
@@ -25,10 +34,88 @@ public class FlyleafManager
     {
         Player = player;
         MessageQueue = messageQueue;
+        SrtAlignment = new(null, LanguageResources);
 
         // Load app configuration at this time
         Config = LoadAppConfig();
-        Action = new AppActions(Player, Config, dialogService);
+        Action = new AppActions(Player, Config, dialogService, SrtAlignment);
+
+        Player.Opening += OnAlignmentSourceEvent;
+        Player.OpenCompleted += OnAlignmentSourceEvent;
+        Player.OpenAudioStreamCompleted += OnAlignmentSourceEvent;
+        Player.OpenExternalAudioStreamCompleted += OnAlignmentSourceEvent;
+        Player.OpenSubtitlesStreamCompleted += OnAlignmentSourceEvent;
+        Player.OpenExternalSubtitlesStreamCompleted += OnAlignmentSourceEvent;
+        Player.PropertyChanged += OnAlignmentPlayerChanged;
+        Player.Audio.PropertyChanged += OnAlignmentAudioChanged;
+        for (int slot = 0; slot < Player.subNum; slot++)
+        {
+            Player.Subtitles[slot].PropertyChanged += OnAlignmentSubtitleChanged;
+            Player.SubtitlesManager[slot].PropertyChanged += OnAlignmentManagerChanged;
+        }
+    }
+
+    private void OnAlignmentSourceEvent(object? sender, object? args) => QueueAlignmentSourceUpdate();
+
+    private void OnAlignmentPlayerChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(Player.CanPlay) or nameof(Player.Status))
+            QueueAlignmentSourceUpdate();
+    }
+
+    private void OnAlignmentAudioChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(Audio.IsOpened))
+            QueueAlignmentSourceUpdate();
+    }
+
+    private void OnAlignmentSubtitleChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName is nameof(Subtitle.IsOpened) or nameof(Subtitle.EnabledASR))
+            QueueAlignmentSourceUpdate();
+    }
+
+    private void OnAlignmentManagerChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(SubManager.IsLoading))
+            QueueAlignmentSourceUpdate();
+    }
+
+    private void QueueAlignmentSourceUpdate()
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.HasShutdownStarted ||
+            Interlocked.Exchange(ref _srtAlignmentSourceUpdatePending, 1) != 0)
+            return;
+
+        // Engine events may run inside native locks. Recheck ownership only after yielding to the UI dispatcher.
+        dispatcher.InvokeAsync(() =>
+        {
+            Interlocked.Exchange(ref _srtAlignmentSourceUpdatePending, 0);
+            SrtAlignment.CancelStaleSources();
+            SrtAlignmentSourceChanged?.Invoke();
+        }, DispatcherPriority.Background);
+    }
+
+    public Task DrainSrtAlignmentForShutdownAsync()
+    {
+        if (_srtAlignmentShutdown == null || _srtAlignmentShutdown.IsFaulted || _srtAlignmentShutdown.IsCanceled)
+            _srtAlignmentShutdown = DrainCoreAsync();
+        return _srtAlignmentShutdown;
+
+        async Task DrainCoreAsync()
+        {
+            SrtAlignment.BeginShutdown();
+            try
+            {
+                await SrtAlignment.DrainAsync();
+            }
+            catch
+            {
+                SrtAlignment.ResumeAfterFailedShutdown();
+                throw;
+            }
+        }
     }
 
     private AppConfig LoadAppConfig()

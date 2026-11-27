@@ -11,8 +11,10 @@ namespace LLPlayer.Services;
 /// main video window is closed: while a batch is running or its window is open, the app stays alive in the
 /// tray instead of shutting down.
 /// </summary>
-public sealed class BatchActivityService
+public sealed class BatchActivityService(FlyleafManager fl)
 {
+    private bool _quitPending;
+
     /// <summary>The batch dialog window is currently open.</summary>
     public bool IsDialogOpen { get; private set; }
 
@@ -80,22 +82,38 @@ public sealed class BatchActivityService
     }
 
     /// <summary>
-    /// Begin an explicit application shutdown: flag it (so the main-window close handler does not divert to
-    /// the tray and the batch dialog does not prompt), ask the batch VM to cancel any in-flight run, then
-    /// shut WPF down. Safe to call more than once. Note: on quit, batch cancellation/cleanup is best-effort —
-    /// `Shutdown()` is called synchronously, so the run's cancellation continuations may not all complete.
+    /// Drain the supervised SRT alignment before initiating explicit WPF shutdown and requesting batch cancellation.
     /// </summary>
     public void RequestQuit()
     {
-        if (IsShuttingDown)
+        if (_quitPending || IsShuttingDown)
+            return;
+        _quitPending = true;
+        _ = DrainAlignmentAndQuitAsync();
+    }
+
+    private async Task DrainAlignmentAndQuitAsync()
+    {
+        try
         {
-            Application.Current.Shutdown();
+            await fl.DrainSrtAlignmentForShutdownAsync();
+        }
+        catch (Exception ex)
+        {
+            _quitPending = false;
+            ErrorDialogHelper.ShowKnownErrorPopup(ex.Message, "Stop SRT alignment before quitting");
             return;
         }
 
         IsShuttingDown = true;
-        CancelRequested?.Invoke(this, EventArgs.Empty);
-        Changed?.Invoke(this, EventArgs.Empty);
-        Application.Current.Shutdown();
+        try
+        {
+            CancelRequested?.Invoke(this, EventArgs.Empty);
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+        finally
+        {
+            Application.Current.Shutdown();
+        }
     }
 }

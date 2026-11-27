@@ -1,4 +1,5 @@
 ﻿using System.Collections.Specialized;
+using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
@@ -191,6 +192,8 @@ public class SubManager : INotifyPropertyChanged
     public int Height { get; internal set; }
 
     private readonly object _subsLocker = new();
+    private SrtTimingSource? _srtTimingSource;
+    private long _srtTimingGeneration;
     private readonly HashSet<SubtitleData> _voiceAssignedSubs = [];
     private long _voiceAssignmentGeneration;
     private readonly Config _config;
@@ -282,6 +285,7 @@ public class SubManager : INotifyPropertyChanged
         List<SubtitleData> loaded = [.. items];
         lock (_subsLocker)
         {
+            InvalidateSrtTimingSourceLocked();
             CurrentIndex = -1;
             SelectedSub = null;
             Subs.Clear();
@@ -333,6 +337,71 @@ public class SubManager : INotifyPropertyChanged
         {
             return Subs.ToList();
         }
+    }
+
+    /// <summary>The current verified external SRT, once subtitle loading finishes.</summary>
+    public SrtTimingSource? CaptureSrtTimingSource()
+    {
+        lock (_subsLocker)
+            return _srtTimingSource is { } source && source.OwnsNativeInput() ? source : null;
+    }
+
+    public bool TryCaptureSrtTimingMetadata(SrtTimingSource source, out ImmutableArray<SrtTimingCueMetadata> metadata)
+    {
+        lock (_subsLocker)
+        {
+            metadata = [];
+            if (!OwnsSrtTimingSourceLocked(source))
+                return false;
+
+            var values = ImmutableArray.CreateBuilder<SrtTimingCueMetadata>();
+            foreach (SrtTimingCueLink link in source.Links)
+            {
+                SubtitleData cue = link.Cue;
+                if ((uint)cue.Index >= (uint)Subs.Count || !ReferenceEquals(Subs[cue.Index], cue)
+                    || cue.StartTime != link.Start || cue.EndTime != link.End || cue.Text != link.Text)
+                    continue;
+
+                values.Add(new(link.Id, cue.Text, cue.TranslatedText, cue.Language, cue.SpeakerId,
+                    cue.AssignedVoiceId, cue.SubStyles?.ToImmutableArray() ?? []));
+            }
+            metadata = values.ToImmutable();
+            return true;
+        }
+    }
+
+    /// <summary>Perform the final synchronous save operation while the subtitle source is still owned.</summary>
+    public bool TryUseSrtTimingSource(SrtTimingSource source, Func<bool> owns, Action commit)
+    {
+        lock (_subsLocker)
+        {
+            if (!OwnsSrtTimingSourceLocked(source) || !owns())
+                return false;
+
+            commit();
+            return true;
+        }
+    }
+
+    private bool OwnsSrtTimingSourceLocked(SrtTimingSource source) =>
+        ReferenceEquals(_srtTimingSource, source) && source.OwnsNativeInput();
+
+    internal void BeginSrtTimingNativeChange()
+    {
+        lock (_subsLocker)
+            InvalidateSrtTimingSourceLocked();
+    }
+
+    internal long CaptureSrtTimingLoadGeneration()
+    {
+        lock (_subsLocker)
+            return _srtTimingGeneration;
+    }
+
+    private void InvalidateSrtTimingSourceLocked()
+    {
+        _srtTimingSource = null;
+        _srtTimingGeneration++;
     }
 
 #if !WINDOWS
@@ -694,16 +763,31 @@ public class SubManager : INotifyPropertyChanged
     }
 
     public void Open(string url, int streamIndex, MediaType type, bool useBitmap, Language lang)
+        => Open(url, streamIndex, type, useBitmap, lang, null, null, null);
+
+    internal void Open(string url, int streamIndex, MediaType type, bool useBitmap, Language lang,
+        SrtTimingInput? nativeSrt, Func<bool>? ownsNativeInput, long? expectedLoadGeneration)
     {
         // Asynchronously read subtitle timestamps and text
+
+        if (expectedLoadGeneration is { } queued && queued != CaptureSrtTimingLoadGeneration())
+            return;
 
         // Cancel if already executed
         TryCancelWait();
 
         lock (_locker)
         {
-            using var loading = StartLoading();
+            long srtGeneration;
+            lock (_subsLocker)
+            {
+                if (expectedLoadGeneration is { } expected && expected != _srtTimingGeneration)
+                    return;
+                InvalidateSrtTimingSourceLocked();
+                srtGeneration = _srtTimingGeneration;
+            }
 
+            using var loading = StartLoading();
             List<SubtitleData> subChunk = new();
 
             try
@@ -713,6 +797,11 @@ public class SubManager : INotifyPropertyChanged
                 reader.Open(url, streamIndex, type, _cts.Token);
 
                 _cts.Token.ThrowIfCancellationRequested();
+                SrtTimingDocument? srtDocument = nativeSrt?.ParseIfSameInput(reader.LoadedSrtInput);
+                Dictionary<(TimeSpan Start, TimeSpan End), SrtTimingCue>? authorCues = srtDocument?.Cues
+                    .GroupBy(cue => (cue.Start, cue.End)).Where(cues => cues.Count() == 1)
+                    .ToDictionary(cues => cues.Key, cues => cues.First());
+                Dictionary<int, SrtTimingCueLink?>? srtLinks = authorCues == null ? null : new();
 
                 bool isFirst = true;
                 int subCnt = 0;
@@ -735,8 +824,18 @@ public class SubManager : INotifyPropertyChanged
                     // short, capped-line cues (line/character overflow, proportional timings), gated by
                     // ResegmentSubtitles (default on). Bitmap and styled (ASS) cues pass through unchanged; a cue
                     // that already fits is left untouched, so well-formatted subtitles keep their authored timing.
-                    foreach (SubtitleData cue in ResegmentLoaded(
-                                 data, _config.Subtitles.ResegmentSubtitles, _config.Subtitles.SubtitleSegmentOptions))
+                    List<SubtitleData> cues = ResegmentLoaded(
+                        data, _config.Subtitles.ResegmentSubtitles, _config.Subtitles.SubtitleSegmentOptions);
+                    if (srtLinks != null && cues.Count == 1
+                        && authorCues!.TryGetValue((data.StartTime, data.EndTime), out SrtTimingCue? author)
+                        && SrtTimingCueLink.MatchesAuthorText(author.Text, data.Text))
+                    {
+                        SubtitleData linked = cues[0];
+                        var link = new SrtTimingCueLink(author.Id, linked, linked.StartTime, linked.EndTime, linked.Text);
+                        if (!srtLinks.TryAdd(author.Id, link))
+                            srtLinks[author.Id] = null;
+                    }
+                    foreach (SubtitleData cue in cues)
                     {
                         cue.Index = subCnt++;
                         subChunk.Add(cue);
@@ -756,6 +855,18 @@ public class SubManager : INotifyPropertyChanged
                 if (subChunk.Count > 0)
                 {
                     AddRange(subChunk);
+                }
+                if (srtDocument != null && nativeSrt != null && srtLinks != null)
+                {
+                    _cts.Token.ThrowIfCancellationRequested();
+                    ImmutableArray<SrtTimingCueLink> links = srtLinks.Values.Where(link => link.HasValue)
+                        .Select(link => link.GetValueOrDefault())
+                        .OrderBy(link => link.Id).ToImmutableArray();
+                    lock (_subsLocker)
+                    {
+                        if (srtGeneration == _srtTimingGeneration && ownsNativeInput != null && ownsNativeInput())
+                            _srtTimingSource = new(nativeSrt.Path, srtDocument, links, ownsNativeInput);
+                    }
                 }
                 refreshSw.Stop();
                 Log.Info("End loading subs");
@@ -854,6 +965,7 @@ public class SubManager : INotifyPropertyChanged
     {
         lock (_subsLocker)
         {
+            InvalidateSrtTimingSourceLocked();
             CurrentIndex = -1;
             SelectedSub = null;
             foreach (var sub in Subs)
@@ -911,6 +1023,7 @@ public unsafe class SubtitleReader : IDisposable
 
     public bool IsBitmap => _stream?.IsBitmap == true;
     public Language TrackLanguage => _stream?.Language ?? Language.Unknown;
+    internal SrtTimingInput? LoadedSrtInput => _demuxer?.Demuxer.LoadedSrtInput;
 
     public SubtitleReader(SubManager manager, Config config, int subIndex)
     {

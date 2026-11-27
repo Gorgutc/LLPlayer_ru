@@ -3,6 +3,7 @@ using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
+using FlyleafLibTests.Core;
 using LLPlayer.Core.Automation;
 using LLPlayer.Core.Batch;
 using LLPlayer.Core.Services;
@@ -10,8 +11,16 @@ using LLPlayer.Core.Services.Models;
 
 namespace FlyleafLibTests.Automation;
 
-public sealed class ControlWorkflowTests
+[Collection(RecognitionCommandQueueCollection.Name)]
+public sealed class ControlWorkflowTests : IDisposable
 {
+    // Config(true) still creates the WPF video config, which otherwise requires a dispatcher.
+    private readonly bool previousTestMode = (bool)typeof(Utils).GetProperty(nameof(Utils.IsTesting))!.GetValue(null)!;
+
+    public ControlWorkflowTests() => Utils.IsTesting = true;
+
+    public void Dispose() => Utils.IsTesting = previousTestMode;
+
     [Fact]
     public async Task Asr_job_completes_after_actual_engine_completion()
     {

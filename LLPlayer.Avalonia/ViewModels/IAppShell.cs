@@ -17,6 +17,7 @@ public interface IAppShell
     void ShowSettings(SettingsViewModel model) { }
     void ShowWordManager(WordManagerViewModel model) { }
     void ShowSubtitlesExport(SubtitlesExportViewModel model) { }
+    void ShowSrtAlignment(SrtAlignmentViewModel model) { }
     void ShowTranslation(TranslationViewModel model) { }
     void ShowOnlineVideo(OnlineVideoViewModel model) { }
     void ShowRecognition(RecognitionViewModel model) { }

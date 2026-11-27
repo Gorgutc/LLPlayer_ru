@@ -8,7 +8,9 @@ using System.Windows.Media;
 using FlyleafLib;
 using FlyleafLib.Controls.WPF;
 using FlyleafLib.MediaPlayer;
+using LLPlayer.Core.Services;
 using LLPlayer.Extensions;
+using LLPlayer.ViewModels;
 using LLPlayer.Views;
 using WpfColorFontDialog;
 using KeyBinding = FlyleafLib.MediaPlayer.KeyBinding;
@@ -21,13 +23,16 @@ public class AppActions
     private readonly AppConfig _config;
     private FlyleafHost? _flyleafHost => _player.Host as FlyleafHost;
     private readonly IDialogService _dialogService;
+    private readonly SrtAlignmentWorkflow _srtAlignment;
+    private bool _alignmentDialogOpen;
 
 #pragma warning disable CS9264
-    public AppActions(Player player, AppConfig config, IDialogService dialogService)
+    public AppActions(Player player, AppConfig config, IDialogService dialogService, SrtAlignmentWorkflow srtAlignment)
     {
         _player = player;
         _config = config;
         _dialogService = dialogService;
+        _srtAlignment = srtAlignment;
 
         CustomActions = GetCustomActions();
 
@@ -542,6 +547,29 @@ public class AppActions
             }
         }, false);
     });
+
+    public void OpenSrtAlignment(int slot)
+    {
+        if (_alignmentDialogOpen)
+            return;
+
+        try
+        {
+            ISrtAlignmentSession session = _srtAlignment.Capture(_player, slot);
+            _alignmentDialogOpen = true;
+            _player.Activity.ForceFullActive();
+            _dialogService.ShowDialog(nameof(SrtAlignmentDialog),
+                new DialogParameters { { SrtAlignmentDialogVM.SessionKey, session } });
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogHelper.ShowKnownErrorPopup(ex.Message, "Align SRT to Audio");
+        }
+        finally
+        {
+            _alignmentDialogOpen = false;
+        }
+    }
 
     public DelegateCommand CmdOpenWindowAiInsights => field ??= new(() =>
     {

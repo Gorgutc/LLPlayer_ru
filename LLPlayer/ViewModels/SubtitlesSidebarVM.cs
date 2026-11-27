@@ -18,6 +18,7 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
         FL = fl;
 
         FL.Config.PropertyChanged += OnConfigOnPropertyChanged;
+        FL.SrtAlignmentSourceChanged += RefreshSrtAlignmentCommand;
         // F-16 phase 2a: keep each row's per-line dub-voice menu in sync with the dub voice bank.
         FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged += OnDubbingConfigPropertyChanged;
         _voiceAssignmentSaves = new(
@@ -35,6 +36,7 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
     public void Dispose()
     {
         FL.Config.PropertyChanged -= OnConfigOnPropertyChanged;
+        FL.SrtAlignmentSourceChanged -= RefreshSrtAlignmentCommand;
         FL.PlayerConfig.Subtitles.DubbingConfig.PropertyChanged -= OnDubbingConfigPropertyChanged;
 
         _voiceAssignmentSaves.Dispose();
@@ -54,6 +56,7 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
             case nameof(FL.Config.SidebarShowSecondary):
                 OnPropertyChanged(nameof(SubIndex));
                 OnPropertyChanged(nameof(SubManager));
+                RefreshSrtAlignmentCommand();
 
                 // prevent unnecessary filter update
                 if (_lastSearchText[SubIndex] != _trimSearchText)
@@ -143,6 +146,12 @@ public class SubtitlesSidebarVM : Bindable, IDisposable
     {
         FL.Action.CmdOpenWindowSubsExporter.Execute();
     });
+
+    public DelegateCommand CmdAlignSrtToAudio => field ??= new(
+        () => FL.Action.OpenSrtAlignment(SubIndex),
+        () => FL.SrtAlignment.CanStart(FL.Player, SubIndex));
+
+    private void RefreshSrtAlignmentCommand() => CmdAlignSrtToAudio.RaiseCanExecuteChanged();
 
     public DelegateCommand CmdSwapSidebarPosition => field ??= new(() =>
     {

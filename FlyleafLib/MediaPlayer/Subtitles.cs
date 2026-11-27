@@ -639,7 +639,8 @@ public class Subtitle : NotifyPropertyChanged
         UpdateUI();
 
         // Create cache of the all subtitles in a separate thread
-        Task.Run(Load)
+        long loadGeneration = _player.SubtitlesManager[_subIndex].CaptureSrtTimingLoadGeneration();
+        Task.Run(() => Load(subStream, loadGeneration))
             .ContinueWith(t =>
             {
                 // TODO: L: error handling - restore state gracefully?
@@ -652,24 +653,33 @@ public class Subtitle : NotifyPropertyChanged
             }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    internal void Load()
+    private void Load(SubtitlesStream stream, long loadGeneration)
     {
-        SubtitlesStream stream = Decoder.SubtitlesStreams[_subIndex];
+        if (!ReferenceEquals(stream, Decoder.SubtitlesStreams[_subIndex]))
+            return;
+
         ExternalSubtitlesStream extStream = stream.ExternalStream as ExternalSubtitlesStream;
 
         if (extStream != null)
         {
             // external sub
             // always load all bitmaps on memory with external subtitles
-            _player.SubtitlesManager.Open(_subIndex, stream.Demuxer.Url, stream.StreamIndex, stream.Demuxer.Type, true, extStream.Language);
+            SrtTimingInput nativeSrt = stream.Demuxer.LoadedSrtInput;
+            _player.SubtitlesManager[_subIndex].Open(stream.Demuxer.Url, stream.StreamIndex, stream.Demuxer.Type,
+                true, extStream.Language, nativeSrt, () => ReferenceEquals(stream, Decoder.SubtitlesStreams[_subIndex])
+                    && ReferenceEquals(nativeSrt, stream.Demuxer.LoadedSrtInput), loadGeneration);
         }
         else
         {
             // internal sub
             // load all bitmaps on memory when cache enabled or OCR used
             bool useBitmap = Config.Subtitles.EnabledCached || SubtitlesSelectedHelper.GetMethod(_subIndex) == SelectSubMethod.OCR;
-            _player.SubtitlesManager.Open(_subIndex, stream.Demuxer.Url, stream.StreamIndex, stream.Demuxer.Type, useBitmap, stream.Language);
+            _player.SubtitlesManager[_subIndex].Open(stream.Demuxer.Url, stream.StreamIndex, stream.Demuxer.Type,
+                useBitmap, stream.Language, null, null, loadGeneration);
         }
+
+        if (!ReferenceEquals(stream, Decoder.SubtitlesStreams[_subIndex]))
+            return;
 
         TimeSpan curTime = new(_player.CurTime);
 

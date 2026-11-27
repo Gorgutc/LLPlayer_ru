@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using FlyleafLib.Controls.WPF;
 using LLPlayer.Services;
 using LLPlayer.ViewModels;
@@ -169,11 +170,13 @@ public partial class MainWindow : Window
 
     private AppTrayService? _tray;
     private bool _playerDisposed;
+    private bool _alignmentDrained;
+    private bool _alignmentClosePending;
 
     protected override void OnClosing(CancelEventArgs e)
     {
         base.OnClosing(e);
-        if (e.Cancel)
+        if (e.Cancel || _alignmentDrained)
         {
             return;
         }
@@ -192,6 +195,45 @@ public partial class MainWindow : Window
         {
             // Never let tray/lifetime logic block a normal close.
             System.Diagnostics.Debug.WriteLine($"Minimize-to-tray on close failed: {ex}");
+        }
+
+        if (e.Cancel)
+            return;
+        if (_alignmentClosePending)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        Task drain = ((MainWindowVM)DataContext).FL.DrainSrtAlignmentForShutdownAsync();
+        if (drain.IsCompletedSuccessfully)
+        {
+            _alignmentDrained = true;
+            return;
+        }
+
+        e.Cancel = true;
+        _alignmentClosePending = true;
+        _ = CompleteCloseAfterAlignmentAsync(drain);
+    }
+
+    private async Task CompleteCloseAfterAlignmentAsync(Task drain)
+    {
+        // Close cannot be re-entered from the current Closing event.
+        await System.Windows.Threading.Dispatcher.Yield(DispatcherPriority.Background);
+        try
+        {
+            await drain;
+            _alignmentDrained = true;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            ErrorDialogHelper.ShowKnownErrorPopup(ex.Message, "Stop SRT alignment before closing");
+        }
+        finally
+        {
+            _alignmentClosePending = false;
         }
     }
 

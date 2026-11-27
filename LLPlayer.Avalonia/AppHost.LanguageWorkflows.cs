@@ -128,6 +128,7 @@ public sealed partial class AppHost
             languageShuttingDown = true;
             controller.BeginRecognitionShutdown();
             controller.BeginDiarizationShutdown();
+            controller.BeginSrtAlignmentShutdown();
             languageBatch.BeginShutdown();
         };
         window.BackgroundRequested = backgroundWindow =>

@@ -1323,6 +1323,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (slot == Sidebar.SelectedSlot)
             Sidebar.Reload();
         insights?.Refresh();
+        RefreshSrtAlignmentState();
     }
 
     void OnSidebarSynchronizationFailed(string message)
@@ -1332,6 +1333,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         insights?.Invalidate();
         Sidebar.Clear();
+        RefreshSrtAlignmentState();
         ClearPlaybackChoices();
         pendingMediaRequest = null;
         pendingSubtitles.Clear();
@@ -1383,6 +1385,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             case nameof(SubtitlesSidebarViewModel.SelectedSlot):
                 prefs.SidebarShowSecondary = Sidebar.SelectedSlot == 1;
+                RefreshSrtAlignmentState();
                 break;
             case nameof(SubtitlesSidebarViewModel.MatchCase):
                 prefs.SidebarSearchMatchCase = Sidebar.MatchCase;
@@ -1410,6 +1413,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (e.PropertyName is nameof(IDiarizationController.IsDiarizing) or nameof(IDiarizationController.CanCancelDiarization)
             or nameof(IPlaybackController.IsOpened) or nameof(IPlaybackController.IsOpening))
             RefreshDiarizationCommandState();
+        if (e.PropertyName is nameof(ISrtAlignmentController.CanStartSrtAlignment)
+            or nameof(IPlaybackController.IsOpened) or nameof(IPlaybackController.IsOpening))
+            RefreshSrtAlignmentState();
         switch (e.PropertyName)
         {
             case "VideoBackendPreferences":

@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels"
+        x:Class="LLPlayer.Avalonia.Views.SrtAlignmentWindow"
+        x:DataType="vm:SrtAlignmentViewModel" Classes="dialog" Title="Align SRT to audio - LLPlayer"
+        Width="780" Height="620" MinWidth="480" MinHeight="440" CanResize="True" SizeToContent="Manual"
+        WindowStartupLocation="CenterOwner">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <StackPanel Spacing="4" Margin="0,0,0,16">
+      <TextBlock Text="Align SRT to audio" Classes="dialog-title" />
+      <TextBlock Text="{Binding SubtitleName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding TrackLabel, StringFormat='Subtitle track: {0}'}" Classes="small muted" />
+      <TextBlock Text="{Binding AudioLabel, StringFormat='Audio: {0}'}" Classes="small muted" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Spacing="8" Margin="0,0,0,12">
+      <WrapPanel ItemSpacing="12" LineSpacing="6" IsEnabled="{Binding CanEditOptions}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="Audio language" VerticalAlignment="Center" />
+          <TextBox Name="AlignmentLanguage" Text="{Binding Language}" Width="80"
+                   AutomationProperties.Name="Audio language code" PlaceholderText="en" />
+        </StackPanel>
+        <CheckBox Name="AlignmentCpu" Content="Run on CPU" IsChecked="{Binding UseCpu}"
+                  IsEnabled="{Binding CanUseCuda}" VerticalAlignment="Center" />
+        <Button Name="AlignmentPrepare" Content="Find new timings" Command="{Binding PrepareCommand}" />
+      </WrapPanel>
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" />
+      <TextBlock Name="AlignmentMessage" Text="{Binding Message}" Classes="small muted"
+                 TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
+      <TextBlock Text="{Binding CoverageText}" IsVisible="{Binding HasPreview}" Classes="small"
+                 AutomationProperties.LiveSetting="Polite" />
+    </StackPanel>
+
+    <ListBox Grid.Row="2" Name="AlignmentRows" ItemsSource="{Binding Rows}" IsVisible="{Binding HasPreview}"
+             AutomationProperties.Name="Alignment preview">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:SrtAlignmentPreviewRow">
+          <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Shadcn.BorderBrush}" Padding="4,4,4,8">
+            <StackPanel Spacing="4">
+              <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+              <WrapPanel ItemSpacing="12" LineSpacing="4">
+                <TextBlock Text="{Binding Original, StringFormat='Original {0}'}" Classes="small muted mono" />
+                <TextBlock Text="{Binding Proposed, StringFormat='Proposed {0}'}" Classes="small mono" />
+              </WrapPanel>
+              <TextBlock Text="{Binding Match}" Classes="small muted" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <StackPanel Grid.Row="3" Spacing="8" Margin="0,12,0,0">
+      <CheckBox Name="AlignmentKeepUnmatched" IsVisible="{Binding NeedsAcknowledgment}" IsChecked="{Binding TimingAcknowledged}"
+                IsEnabled="{Binding CanEditOptions}" Content="{Binding TimingAcknowledgmentText}" />
+      <TextBlock IsVisible="{Binding LacksLinkedTranslation}" Classes="small muted" TextWrapping="Wrap"
+                 Text="A complete linked translation is required to export translated cues." />
+      <WrapPanel HorizontalAlignment="Right" ItemSpacing="8" LineSpacing="6">
+        <Button Name="AlignmentCancel" Content="Cancel operation" Classes="outline" Command="{Binding CancelCommand}" />
+        <Button Content="Close" Classes="outline" Click="OnClose" IsEnabled="{Binding !Draining}" />
+        <Button Name="AlignmentSaveTranslation" Content="Save linked translation…" Classes="outline"
+                Command="{Binding SaveTranslationCommand}" />
+        <Button Name="AlignmentSaveOriginal" Content="Save aligned original…" Command="{Binding SaveOriginalCommand}" />
+      </WrapPanel>
+    </StackPanel>
+  </Grid>
+</Window>

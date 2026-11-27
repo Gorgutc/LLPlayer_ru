@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Security.Cryptography;
 using Avalonia.Headless.XUnit;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
@@ -382,6 +383,59 @@ public sealed class SubtitlePlaybackRegressionTests
             Assert.Equal(0, openings);
         }
         finally { release.Set(); await controller.DisposeAsync(); player.Dispose(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Loaded_SRT_alignment_snapshot_keeps_author_cues_and_rejects_same_path_replacement()
+    {
+        using TempDir state = new();
+        var (player, controller, media) = Create(state);
+        player.Config.Subtitles.SubtitleMinCueDurationSec = 0;
+        string path = Path.Combine(state.Path, "alignment-source.srt");
+        string longCue = string.Join(' ', Enumerable.Repeat("One authored sentence.", 35));
+        string original = $"7\n00:00:01,000 --> 00:00:02,000\n<i>Café</i>\n\n9\n00:00:02,500 --> 00:00:07,000\n{longCue}\n";
+        await File.WriteAllTextAsync(path, original, TestContext.Current.CancellationToken);
+        try
+        {
+            Assert.Null((await OpenAndWait(controller, media, () => controller.Open(media))).Error);
+            var opened = await OpenAndWait(controller, path, () => controller.OpenSubtitles(path));
+            Assert.True(opened.IsSubtitles);
+            Assert.Null(opened.Error);
+
+            SubManager manager = player.SubtitlesManager[0];
+            await WaitUntil(() => !manager.IsLoading && manager.CaptureSrtTimingSource() != null);
+            SrtTimingSource source = Assert.IsType<SrtTimingSource>(manager.CaptureSrtTimingSource());
+            var target = Assert.IsType<Player.SrtAlignmentTarget>(player.CaptureSrtAlignmentTarget(0));
+            Assert.Same(source, target.Source);
+            Assert.Equal(1, target.StreamIndex);
+            Assert.Equal(2, source.Document.Cues.Length);
+            Assert.Equal(longCue, source.Document.Cues[1].Text);
+            Assert.True(manager.SnapshotSubs().Count > 2);
+            bool MatchesFile() => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))) == source.Document.Sha256;
+            Assert.True(MatchesFile());
+
+            SubtitleData first = manager.SnapshotSubs()[0];
+            first.TranslatedText = "Кафе";
+            first.SpeakerId = "speaker-1";
+            first.AssignedVoiceId = "voice-1";
+            Assert.True(manager.TryCaptureSrtTimingMetadata(source, out var current));
+            SrtTimingCueMetadata linked = Assert.Single(current);
+            Assert.Equal(0, linked.Id);
+            Assert.Equal("Кафе", linked.TranslatedText);
+            Assert.Equal("speaker-1", linked.SpeakerId);
+            Assert.Equal("voice-1", linked.AssignedVoiceId);
+            Assert.NotEmpty(linked.Styles);
+            first.TranslatedText = "Новый перевод";
+            Assert.True(manager.TryCaptureSrtTimingMetadata(source, out var after));
+            Assert.Equal("Кафе", linked.TranslatedText);
+            Assert.Equal("Новый перевод", Assert.Single(after).TranslatedText);
+
+            await File.WriteAllTextAsync(path, original.Replace("Café", "Caña"), TestContext.Current.CancellationToken);
+            Assert.False(MatchesFile());
+            Assert.False(manager.TryUseSrtTimingSource(source, MatchesFile,
+                () => throw new Xunit.Sdk.XunitException("A stale source cannot be committed.")));
+        }
+        finally { await controller.DisposeAsync(); player.Dispose(); }
     }
 
     sealed class QueuedDispatcher : IUIDispatcher

@@ -366,12 +366,14 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
 
     async Task DrainGpuWorkBeforeShutdownAsync()
     {
-        // Signal every owner before awaiting any of them; all three workflows share a permit.
+        // Signal every owner before awaiting any of them, since they share a permit.
         controller?.BeginRecognitionShutdown();
         controller?.BeginDiarizationShutdown();
+        controller?.BeginSrtAlignmentShutdown();
         languageBatch?.BeginShutdown();
         await Task.WhenAll(controller?.DrainRecognitionAsync() ?? Task.CompletedTask,
             controller?.DrainDiarizationAsync() ?? Task.CompletedTask,
+            controller?.DrainSrtAlignmentAsync() ?? Task.CompletedTask,
             languageBatch?.DrainAsync() ?? Task.CompletedTask);
         await gpuCoordinator.RetryDrainAsync();
     }
@@ -381,6 +383,7 @@ public sealed partial class AppHost(AppOptions options, IClassicDesktopStyleAppl
         languageShuttingDown = false;
         controller?.ResumeRecognitionAfterFailedShutdown();
         controller?.ResumeDiarizationAfterFailedShutdown();
+        controller?.ResumeSrtAlignmentAfterFailedShutdown();
         languageBatch?.ResumeAfterFailedShutdown();
     }
 

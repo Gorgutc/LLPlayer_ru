@@ -485,10 +485,15 @@ public class SubtitlesASR
 
 public class AudioReader : IDisposable
 {
+    const int SampleRate = 16_000;
+    const int WavHeaderSize = 44;
+    static readonly TimeSpan AlignmentClockTolerance = TimeSpan.FromMilliseconds(100);
     private readonly Config _config;
     private readonly int _subIndex;
     private readonly Func<bool>? _preferCpu;
     private readonly bool _confirmProcessExit;
+    internal bool StrictAlignment { get; init; }
+    internal SrtAlignmentAudioWindow? AlignmentWindow { get; init; }
 
     // F-19 slice 2: when true, run Silero VAD over each chunk's PCM and attach the speech segments so
     // re-segmentation can snap cue boundaries onto pauses. Only the interactive ASR path enables it (batch leaves
@@ -536,7 +541,11 @@ public class AudioReader : IDisposable
             throw new InvalidOperationException($"demuxer open error: {error}");
         }
 
-        _stream = (AudioStream)_demuxer.Demuxer.AVStreamToStream[streamIndex];
+        Demuxer demuxer = _demuxer.Demuxer;
+        if (StrictAlignment && (demuxer.IsLive || demuxer.Duration <= 0 || demuxer.VideoStreams.Count == 0 ||
+            !demuxer.AVStreamToStream.TryGetValue(streamIndex, out var stream) || stream is not AudioStream))
+            throw new InvalidOperationException("The selected audio stream is no longer available in the local video.");
+        _stream = (AudioStream)demuxer.AVStreamToStream[streamIndex];
 
         _decoder = new AudioDecoder(_config, _subIndex + 1);
         _decoder.Log.Prefix = _decoder.Log.Prefix.Replace("Decoder: ", "DecoderA:");
@@ -553,6 +562,30 @@ public class AudioReader : IDisposable
     }
 
     private record struct AudioChunk(MemoryStream Stream, int ChunkNumber, TimeSpan Start, TimeSpan End);
+
+    private static TimeSpan PcmDuration(MemoryStream wave) =>
+        TimeSpan.FromSeconds((wave.Length - WavHeaderSize) / (double)(SampleRate * sizeof(short)));
+
+    internal static bool TryTrimAlignmentWave(MemoryStream wave, TimeSpan sourceStart, SrtAlignmentAudioWindow window,
+        out TimeSpan start)
+    {
+        const int ticksPerSample = (int)TimeSpan.TicksPerSecond / SampleRate;
+        long maxTicks = (wave.Length - WavHeaderSize) / sizeof(short) * ticksPerSample;
+        long startTicks = Math.Clamp((window.Start - sourceStart).Ticks, 0, maxTicks);
+        long endTicks = Math.Clamp((window.End - sourceStart).Ticks, 0, maxTicks);
+        // The WAV starts with the first complete sample in the requested interval.
+        int firstSample = (int)((startTicks + ticksPerSample - 1) / ticksPerSample);
+        int sampleCount = (int)(endTicks / ticksPerSample) - firstSample;
+        start = sourceStart + TimeSpan.FromTicks((long)firstSample * ticksPerSample);
+        if (sampleCount <= 0)
+            return false;
+
+        byte[] buffer = wave.GetBuffer();
+        buffer.AsSpan(WavHeaderSize + firstSample * sizeof(short), sampleCount * sizeof(short))
+            .CopyTo(buffer.AsSpan(WavHeaderSize));
+        wave.SetLength(WavHeaderSize + sampleCount * sizeof(short));
+        return true;
+    }
 
     /// <summary>
     /// Extract audio files in WAV format and run Whisper
@@ -622,6 +655,9 @@ public class AudioReader : IDisposable
                 return;
             }
 
+            if (StrictAlignment && exception.Flatten().InnerExceptions is { Count: 1 } failures)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(failures[0]);
+
             // canceled because of exceptions
             throw;
         }
@@ -640,7 +676,10 @@ public class AudioReader : IDisposable
             await using IASRService asrService = _config.Subtitles.ASREngine switch
             {
                 SubASREngineType.WhisperCpp => new WhisperCppASRService(_config),
-                SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config, _preferCpu, _confirmProcessExit),
+                SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config, _preferCpu, _confirmProcessExit)
+                {
+                    StrictAlignment = StrictAlignment
+                },
                 _ => throw new InvalidOperationException()
             };
 
@@ -747,7 +786,13 @@ public class AudioReader : IDisposable
                         // F-19: shift per-word timestamps into the same absolute frame as start/end (they arrive
                         // chunk-relative like data.start/end). Re-segmentation clamps them into the final cue span.
                         IReadOnlyList<WordTiming>? wordsAbs = null;
-                        if (data.words is { Count: > 0 })
+                        if (StrictAlignment)
+                        {
+                            // AudioReader produces 16 kHz mono PCM16 with a 44-byte WAV header. Its
+                            // byte length includes the final frame, while chunk.End denotes that frame's PTS.
+                            wordsAbs = SrtAlignmentAudioSource.ToMediaWords(data.words!, chunk.Start, PcmDuration(chunk.Stream));
+                        }
+                        else if (data.words is { Count: > 0 })
                         {
                             List<WordTiming> abs = new(data.words.Count);
                             foreach (WordTiming w in data.words)
@@ -797,14 +842,16 @@ public class AudioReader : IDisposable
             // When passing the audio file to Whisper, it must be converted to a 16000 sample rate WAV file.
             // For this purpose, the ffmpeg API is used to perform the conversion.
             // Audio files are divided by a certain size, stored in memory, and passed by memory stream.
-            int targetSampleRate = 16000;
+            int targetSampleRate = SampleRate;
             int targetChannel = 1;
-            const int waveHeaderSize = 44;
 
             // Stream processing is performed by dividing the audio by a certain size and passing it to whisper.
             long chunkSize = _config.Subtitles.ASRChunkSize;
-            // Also split by elapsed seconds for live
-            TimeSpan chunkElapsed = TimeSpan.FromSeconds(_config.Subtitles.ASRChunkSeconds);
+            // Streaming ASR uses wall clock to avoid delaying live output. Offline alignment
+            // instead caps decoded audio length, regardless of how fast FFmpeg can read it.
+            TimeSpan chunkElapsed = TimeSpan.FromSeconds(StrictAlignment
+                ? Math.Clamp(_config.Subtitles.ASRChunkSeconds, 1, 28)
+                : _config.Subtitles.ASRChunkSeconds);
 
             // T-09: prefer to cut a chunk at a silent frame instead of strictly at the cap (read tunables once).
             bool splitOnSilence = _config.Subtitles.ASRSplitOnSilence;
@@ -822,9 +869,25 @@ public class AudioReader : IDisposable
             Stopwatch chunkSw = new();
             int chunkCnt = 0;
             TimeSpan? chunkStart = null;
+            TimeSpan? nextFrameTime = null;
             long framePts = NoTs;
             int demuxErrors = 0;
             int decodeErrors = 0;
+
+            if (AlignmentWindow is { } window)
+            {
+                // Backward seek can land on an earlier keyframe. Decode the preroll but only
+                // retain a second of context for the resampler and denoising before the retry.
+                TimeSpan decodeFloor = TimeSpan.FromTicks(Math.Max(0, window.Start.Ticks - TimeSpan.TicksPerSecond));
+                if (decodeFloor > TimeSpan.Zero && demuxer.Seek(demuxer.StartTime + decodeFloor.Ticks) < 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    throw new InvalidDataException("Could not seek to the alignment retry window.");
+                }
+
+                RunPass(null, window, decodeFloor);
+                return;
+            }
 
             // T-08 fold-back: when ASR starts mid-video, transcribe the skipped earlier span FIRST (so cues are still
             // emitted in increasing-time order, keeping the append-only subtitle store sorted), then the forward span.
@@ -888,7 +951,7 @@ public class AudioReader : IDisposable
 
             // Transcribe from the demuxer's current position until EOF, or — for a backfill pass — until the frame
             // time reaches stopAt. Resets chunk state at entry so it is safe to invoke twice over the one channel.
-            unsafe void RunPass(TimeSpan? stopAt)
+            unsafe void RunPass(TimeSpan? stopAt, SrtAlignmentAudioWindow? retry = null, TimeSpan decodeFloor = default)
             {
                 // Start each pass with a fresh, header-only WAV buffer (never the one just handed to the consumer).
                 if (memoryStreamPool.TryPop(out var pooled))
@@ -908,6 +971,8 @@ public class AudioReader : IDisposable
                 demuxErrors = 0;
                 decodeErrors = 0;
                 chunkSw.Restart();
+                long retryInputSamples = 0;
+                (int Rate, int Format, ulong Layout)? retryFormat = null;
 
                 bool stop = false;
 
@@ -981,6 +1046,10 @@ public class AudioReader : IDisposable
                         }
                         ret.ThrowExceptionIfError("avcodec_receive_frame");
 
+                        if (StrictAlignment && (_frame->sample_rate <= 0 ||
+                            (_frame->best_effort_timestamp == NoTs && _frame->pts == NoTs)))
+                            throw new InvalidDataException("Alignment requires timestamped audio frames.");
+
                         if (_frame->best_effort_timestamp != NoTs)
                         {
                             framePts = _frame->best_effort_timestamp;
@@ -997,9 +1066,35 @@ public class AudioReader : IDisposable
 
                         waveDuration = waveDuration.Add(new TimeSpan((long)(_frame->duration * _stream.Timebase)));
 
+                        TimeSpan frameTime = new((long)(framePts * _stream.Timebase) - demuxer.StartTime);
+                        if (retry.HasValue && frameTime < decodeFloor)
+                            continue;
+                        if (StrictAlignment)
+                        {
+                            // The sample clock is continuous within a WAV chunk. A discontinuity in the
+                            // source clock would otherwise shift every word after it in that chunk.
+                            if (nextFrameTime is { } expected && (frameTime - expected).Duration() > AlignmentClockTolerance)
+                                throw new InvalidDataException("The audio stream contains a timestamp discontinuity.");
+                            nextFrameTime = frameTime + TimeSpan.FromSeconds(_frame->nb_samples / (double)_frame->sample_rate);
+                        }
+                        if (retry.HasValue)
+                        {
+                            var format = (Rate: _frame->sample_rate, Format: _frame->format, Layout: _frame->ch_layout.u.mask);
+                            if (retryFormat is { } previousFormat && format != previousFormat)
+                                throw new InvalidDataException("The audio format changed inside the alignment retry window.");
+                            retryFormat = format;
+
+                            // Comparing with the cumulative sample clock catches smaller PTS jumps
+                            // that would individually pass the adjacent-frame continuity check.
+                            TimeSpan elapsedSamples = TimeSpan.FromSeconds(retryInputSamples / (double)format.Rate);
+                            if (chunkStart is { } origin && (frameTime - origin - elapsedSamples).Duration() > AlignmentClockTolerance)
+                                throw new InvalidDataException("The audio sample clock drifts within the alignment retry window.");
+                            retryInputSamples += _frame->nb_samples;
+                        }
+
                         if (chunkStart == null)
                         {
-                            chunkStart = new TimeSpan((long)(framePts * _stream.Timebase) - demuxer.StartTime);
+                            chunkStart = frameTime;
                             if (chunkStart.Value.Ticks < 0)
                             {
                                 // Correct to 0 if negative
@@ -1008,17 +1103,30 @@ public class AudioReader : IDisposable
                         }
 
                         int resampledDataSize = ResampleTo(waveStream, _frame, targetSampleRate, targetChannel);
+                        if (retry is { } range)
+                        {
+                            // Do not cut at the ordinary size/time/silence boundaries. The
+                            // first frame at end supplies resampling context, then gets clipped.
+                            if (frameTime >= range.End)
+                            {
+                                stop = true;
+                                break;
+                            }
+                            if (PcmDuration(waveStream) > SrtAlignmentAudioWindow.MaxDuration + TimeSpan.FromSeconds(2))
+                                throw new InvalidDataException("Audio timestamps did not reach the end of the alignment retry window.");
+                            continue;
+                        }
 
                         // Cut a chunk when: (a) a hard size/time cap is hit (original behavior, always the ceiling);
                         // (b) T-09 — past the soft fraction of the budget AND this frame is silent (cleaner phrase
                         // boundary); or (c) T-08 — a backfill pass reached its stop time. The hard cap guarantees a
                         // cut always fires, so back-pressure / EOF-tail semantics are unchanged.
-                        TimeSpan frameTime = new((long)(framePts * _stream.Timebase) - demuxer.StartTime);
                         bool reachedStop = AsrFoldback.ReachedStop(frameTime, stopAt);
-                        bool hardCap = waveStream.Length >= chunkSize || chunkSw.Elapsed >= chunkElapsed;
+                        TimeSpan elapsed = StrictAlignment ? PcmDuration(waveStream) : chunkSw.Elapsed;
+                        bool hardCap = waveStream.Length >= chunkSize || elapsed >= chunkElapsed;
                         bool softCut = splitOnSilence
                             && resampledDataSize > 0
-                            && AsrSilence.IsSoftReady(waveStream.Length, chunkSize, chunkSw.Elapsed, chunkElapsed, silenceSoftFraction)
+                            && AsrSilence.IsSoftReady(waveStream.Length, chunkSize, elapsed, chunkElapsed, silenceSoftFraction)
                             && AsrSilence.IsSilent(_resampler.Buffer, resampledDataSize, silenceRmsThreshold);
 
                         if (hardCap || softCut || reachedStop)
@@ -1070,11 +1178,31 @@ public class AudioReader : IDisposable
 
                 token.ThrowIfCancellationRequested();
 
+                if (retry is { } bounded)
+                {
+                    if (chunkStart is not { } origin)
+                        return;
+                    int size;
+                    while ((size = _resampler.DrainMono(SampleRate)) > 0)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        WriteResampledTo(waveStream, size);
+                    }
+                    DenoiseFlush(waveStream);
+                    if (TryTrimAlignmentWave(waveStream, origin, bounded, out TimeSpan start))
+                    {
+                        UpdateWavHeader(waveStream);
+                        channel.Writer.WriteAsync(new(waveStream, 1, start, start + PcmDuration(waveStream)), token)
+                            .AsTask().Wait(token);
+                    }
+                    return;
+                }
+
                 // F-02: flush the afftdn lookahead tail into the current chunk so the pass loses no audio.
                 DenoiseFlush(waveStream);
 
                 // Process remaining (this pass's tail chunk).
-                if (waveStream.Length > waveHeaderSize && framePts != NoTs)
+                if (waveStream.Length > WavHeaderSize && framePts != NoTs)
                 {
                     TimeSpan chunkEnd = new TimeSpan((long)(framePts * _stream.Timebase) - demuxer.StartTime);
 
@@ -1144,6 +1272,12 @@ public class AudioReader : IDisposable
     private unsafe int ResampleTo(Stream toStream, AVFrame* frame, int targetSampleRate, int targetChannel)
     {
         int resampledDataSize = _resampler.Resample(frame, targetSampleRate, targetChannel);
+        WriteResampledTo(toStream, resampledDataSize);
+        return resampledDataSize;
+    }
+
+    private unsafe void WriteResampledTo(Stream toStream, int resampledDataSize)
+    {
         byte[] sampledBuf = _resampler.Buffer;
 
         // F-02: managed high-pass in place over the resampled S16 mono PCM (size-preserving, so the T-09 silence
@@ -1153,12 +1287,8 @@ public class AudioReader : IDisposable
 
         // The optional native afftdn stage (when available) writes its own output to toStream and returns; otherwise
         // (off, or afftdn unavailable) the high-passed/raw PCM is written here.
-        if (DenoiseAfftdnWrite(toStream, resampledDataSize))
-            return resampledDataSize;
-
-        toStream.Write(sampledBuf, 0, resampledDataSize);
-
-        return resampledDataSize;
+        if (!DenoiseAfftdnWrite(toStream, resampledDataSize))
+            toStream.Write(sampledBuf, 0, resampledDataSize);
     }
 
     // --- F-02 optional native afftdn denoise stage (mirrors AudioDecoder.Filters.cs avfilter pattern) ---
@@ -1516,11 +1646,12 @@ public class WhisperCppASRService : IASRService
 // Do not support official OpenAI Whisper version
 public partial class FasterWhisperASRService : IASRService
 {
+    internal bool StrictAlignment { get; init; }
     private readonly Config _config;
 #if !WINDOWS
     private readonly bool _confirmProcessExit;
-    private readonly ProcessPriorityClass _processPriority;
 #endif
+    private readonly ProcessPriorityClass _processPriority;
 
     public FasterWhisperASRService(Config config, Func<bool>? preferCpu = null, bool confirmProcessExit = false)
     {
@@ -1528,8 +1659,8 @@ public partial class FasterWhisperASRService : IASRService
         _preferCpu = preferCpu;
 #if !WINDOWS
         _confirmProcessExit = confirmProcessExit;
-        _processPriority = config.Subtitles.FasterWhisperConfig.ProcessPriority;
 #endif
+        _processPriority = config.Subtitles.FasterWhisperConfig.ProcessPriority;
 
         bool wordTimestamps = _config.Subtitles.WordTimestamps;
         _cmdBase = BuildCommand(_config.Subtitles.FasterWhisperConfig, _config.Subtitles.WhisperConfig, wordTimestamps: wordTimestamps);
@@ -1575,6 +1706,8 @@ public partial class FasterWhisperASRService : IASRService
     [GeneratedRegex("^Operation finished in:")]
     private static partial Regex EndReg { get; }
 
+    internal static bool IsSuccessfulAlignmentExit(int? exitCode, string? lastLine)
+        => exitCode == 0 && lastLine != null && EndReg.Match(lastLine).Success;
 
     public ValueTask DisposeAsync()
     {
@@ -1782,12 +1915,6 @@ public partial class FasterWhisperASRService : IASRService
         List<(string text, TimeSpan start, TimeSpan end, string language)>? buffered =
             _config.Subtitles.WordTimestamps ? new() : null;
 
-        // write WAV to tmp folder
-        await using (FileStream fileStream = new(tempFilePath, FileMode.Create, FileAccess.Write))
-        {
-            waveStream.WriteTo(fileStream);
-        }
-
         // HC-19: dispose the per-chunk force-kill CTS and its token registration. Do() runs once PER audio chunk,
         // and `token` lives for the whole ASR run, so a leaked registration + CTS per chunk accumulated into
         // hundreds of live objects on a multi-hour file. 'using' declarations dispose both when this async
@@ -1799,18 +1926,20 @@ public partial class FasterWhisperASRService : IASRService
             forceCts.CancelAfter(5000);
         });
 
-#if !WINDOWS
         FlyleafLib.Plugins.OnlineVideoProcess? engine = null;
-#endif
         try
         {
+            // The file and any partial output belong to this chunk even if writing the input fails.
+            await using (FileStream fileStream = new(tempFilePath, FileMode.Create, FileAccess.Write))
+            {
+                waveStream.WriteTo(fileStream);
+            }
+
             string? lastLine = null;
             StringBuilder output = new(); // for error output
             Lock outputLock = new();
             bool oneSuccess = false;
-#if !WINDOWS
-            int exitCode = 0;
-#endif
+            int? exitCode = null;
 
             // Per-segment detection (T-10): re-detect the language for every chunk instead of pinning the first
             // chunk's. Clearing the remembered language makes the stderr detection below capture this chunk's own
@@ -1837,11 +1966,14 @@ public partial class FasterWhisperASRService : IASRService
             Command cmd = baseCmd.WithArguments($"{baseCmd.Arguments} {addedArgs}");
 
             IAsyncEnumerable<CommandEvent> events;
+            if (StrictAlignment
 #if !WINDOWS
-            if (_confirmProcessExit)
+                || _confirmProcessExit
+#endif
+                )
             {
                 token.ThrowIfCancellationRequested();
-                engine = FlyleafLib.Plugins.OnlineVideoProcess.StartEngine(new ProcessStartInfo
+                var processInfo = new ProcessStartInfo
                 {
                     FileName = Path.GetFullPath(cmd.TargetFilePath),
                     Arguments = cmd.Arguments,
@@ -1849,20 +1981,23 @@ public partial class FasterWhisperASRService : IASRService
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
-                }, _processPriority);
+                };
+                if (StrictAlignment)
+                {
+                    processInfo.Environment["HF_HUB_OFFLINE"] = "1";
+                    processInfo.Environment["TRANSFORMERS_OFFLINE"] = "1";
+                }
+                engine = FlyleafLib.Plugins.OnlineVideoProcess.StartEngine(processInfo, _processPriority);
                 events = engine.ReadEngineEventsAsync(token);
             }
             else
-#endif
                 events = cmd.ListenAsync(Encoding.Default, Encoding.Default, forceCts.Token, token);
 
             await foreach (var cmdEvent in events)
             {
                 token.ThrowIfCancellationRequested();
-#if !WINDOWS
                 if (cmdEvent is ExitedCommandEvent exited)
                     exitCode = exited.ExitCode;
-#endif
 
                 if (cmdEvent is StandardErrorCommandEvent stdErr)
                 {
@@ -1967,15 +2102,23 @@ public partial class FasterWhisperASRService : IASRService
                 }
             }
 
-            // F-19: flush the buffered cues (with words) BEFORE the success-sentinel validation, so a chunk that
-            // produced cues but whose stdout tail failed the sentinel still commits them — matching the streaming
-            // (WordTimestamps-off) path, which yields each cue as it is parsed, before validating. The whisper
-            // process has already exited (the stdout loop ended), so the per-word JSON is present here regardless
-            // of whether the sentinel matched. TryReadWordTimings returns null (→ null words → character-proportion
-            // timing) on any missing file, parse error, or segment-count mismatch, so words are never mis-attached.
+            if (StrictAlignment && !IsSuccessfulAlignmentExit(exitCode, lastLine))
+                throw new InvalidDataException($"Faster Whisper did not complete alignment transcription (exit code {exitCode?.ToString() ?? "unknown"}).")
+                {
+                    Data =
+                    {
+                        ["whisper_command"] = cmd.CommandToText(),
+                        ["whisper_output"] = output.ToString()
+                    }
+                };
+
+            // Keep regular recognition streaming semantics. Its buffered cues are emitted before
+            // the sentinel check, and unavailable words fall back to proportional timings.
             if (buffered != null)
             {
-                IReadOnlyList<IReadOnlyList<WordTiming>>? segmentWords = TryReadWordTimings(outputJsonPath, buffered.Count);
+                IReadOnlyList<IReadOnlyList<WordTiming>>? segmentWords = StrictAlignment
+                    ? SrtAlignmentAudioSource.ReadWordEvidence(outputJsonPath, buffered)
+                    : TryReadWordTimings(outputJsonPath, buffered.Count);
                 for (int i = 0; i < buffered.Count; i++)
                 {
                     (string text, TimeSpan start, TimeSpan end, string language) cue = buffered[i];
@@ -1985,7 +2128,7 @@ public partial class FasterWhisperASRService : IASRService
 
             // validate if success
 #if !WINDOWS
-            if (exitCode != 0 || lastLine == null || !EndReg.Match(lastLine).Success)
+            if (exitCode.GetValueOrDefault() != 0 || lastLine == null || !EndReg.Match(lastLine).Success)
             {
                 throw new InvalidOperationException($"Failed to execute faster-whisper (exit code {exitCode}).")
 #else
@@ -2004,13 +2147,12 @@ public partial class FasterWhisperASRService : IASRService
         }
         finally
         {
-#if !WINDOWS
             if (engine is not null)
             {
                 try { await engine.DisposeEngineAsync().ConfigureAwait(false); }
                 catch (Exception stopFailure)
                 {
-                    throw new EngineProcessDrainException("Could not confirm that FasterWhisper stopped. Retry shutdown before starting another GPU job.",
+                    throw new EngineProcessDrainException("Could not confirm that FasterWhisper stopped. Retry shutdown before starting another job.",
                         stopFailure, async () =>
                         {
                             await engine.DisposeEngineAsync().ConfigureAwait(false);
@@ -2018,7 +2160,6 @@ public partial class FasterWhisperASRService : IASRService
                         });
                 }
             }
-#endif
             CleanupChunkFiles();
         }
 

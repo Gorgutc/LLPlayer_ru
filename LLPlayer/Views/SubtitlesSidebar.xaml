@@ -336,6 +336,12 @@
                                 </StackPanel>
                             </Button>
                         </Grid>
+                        <Button Margin="0 6 0 2"
+                                Style="{StaticResource MaterialDesignOutlinedButton}"
+                                Command="{Binding CmdAlignSrtToAudio}"
+                                Content="Align SRT to Audio…"
+                                ToolTip="Align the selected SRT to speech in the current audio track"
+                                AutomationProperties.Name="Align SRT to audio" />
                     </StackPanel>
                 </Border>
             </materialDesign:PopupBox>

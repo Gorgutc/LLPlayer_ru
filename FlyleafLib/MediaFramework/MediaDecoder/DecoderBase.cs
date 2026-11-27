@@ -25,6 +25,7 @@ public abstract unsafe class DecoderBase : RunThreadBase
     internal AVFrame*           frame;
     protected AVCodecContext*   codecCtx;
     internal  object            lockCodecCtx    = new();
+    internal long StreamGeneration { get; private set; }
 
     protected Demuxer           demuxer;
 
@@ -48,6 +49,7 @@ public abstract unsafe class DecoderBase : RunThreadBase
     {
         lock (lockActions)
         {
+            StreamGeneration++;
             var prevStream = Stream;
             Dispose();
             frame = av_frame_alloc();   // TBR: Consider different full Dispose (including also the renderer?)* | 1) to avoid re-allocating -just unref- 2) we might forget it somewhere

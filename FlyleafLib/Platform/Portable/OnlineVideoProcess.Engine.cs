@@ -42,13 +42,13 @@ public sealed partial class OnlineVideoProcess
     internal static OnlineVideoProcess StartEngine(ProcessStartInfo info,
         ProcessPriorityClass priority = ProcessPriorityClass.Normal)
     {
-        if (!OnlineVideoRequest.IsExecutablePath(info.FileName) || info.UseShellExecute)
+        if (!IsExecutablePath(info.FileName) || info.UseShellExecute)
             throw new ArgumentException("An absolute engine executable is required.");
         if (OperatingSystem.IsWindows())
             return StartWindows(info, ownedEngine: true, priority);
         if (!OperatingSystem.IsLinux())
             throw new PlatformNotSupportedException();
-        if (!OnlineVideoRequest.IsExecutablePath(LinuxSessionLauncher) || !OnlineVideoRequest.IsExecutablePath("/bin/sh"))
+        if (!IsExecutablePath(LinuxSessionLauncher) || !IsExecutablePath("/bin/sh"))
             throw new FileNotFoundException("GPU engine coordination requires /usr/bin/setsid and /bin/sh.");
 
         string prefix = "LLPLAYER_ENGINE_EXIT_" + Guid.NewGuid().ToString("N") + "=";
