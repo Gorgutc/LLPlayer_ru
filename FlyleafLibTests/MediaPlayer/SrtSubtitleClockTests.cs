@@ -79,6 +79,33 @@ public sealed class SrtSubtitleClockTests
         Assert.Null(SrtSubtitleClock.TryCreate(proposals, TimeSpan.FromSeconds(60), Token));
     }
 
+    [Theory]
+    [InlineData(-2000)]
+    [InlineData(2000)]
+    public void AWellSupportedClockCannotOverrideALocallyShiftedExactPhrase(int localShiftMs)
+    {
+        SrtAlignmentProposal[] proposals = MakeProposals((i, time) => time + 2800 + (i == 5 ? localShiftMs : 0));
+        proposals[8] = Unmatched(proposals[8]);
+        // The other 10 of 11 anchors match both edges exactly and the regional medians are all zero.
+        // This phrase's two edges still establish a local timing change.
+        Assert.Null(SrtSubtitleClock.TryCreate(proposals, TimeSpan.FromSeconds(60), Token));
+    }
+
+    [Fact]
+    public void ALongSpeechTailAloneDoesNotVetoTheTrackCorrection()
+    {
+        SrtAlignmentProposal[] proposals = MakeProposals((_, time) => time + 2800);
+        proposals[8] = Unmatched(proposals[8]);
+        proposals[5] = proposals[5] with { End = proposals[5].End!.Value.Add(TimeSpan.FromSeconds(2)) };
+
+        var fit = SrtSubtitleClock.TryCreate(proposals, TimeSpan.FromSeconds(60), Token);
+
+        Assert.NotNull(fit);
+        Assert.Equal(10, fit.Value.Summary.AnchorCount);
+        Assert.Equal(proposals[5].Start, fit.Value.Intervals[5].Start);
+        Assert.Equal(TimeSpan.FromMilliseconds(1400), fit.Value.Intervals[5].End - fit.Value.Intervals[5].Start);
+    }
+
     [Fact]
     public void ExtrapolationPastMediaDurationDoesNotClipAnUnmatchedCue()
     {
@@ -160,7 +187,7 @@ public sealed class SrtSubtitleClockTests
     [Fact]
     public void AnOutlierCannotBridgeARequiredGapInTheFinalMap()
     {
-        SrtAlignmentProposal[] proposals = MakeProposals((i, time) => time + (i == 5 ? 4800 : 2800), count: 45);
+        SrtAlignmentProposal[] proposals = MakeProposals((i, time) => time + (i == 5 ? 4000 : 2800), count: 45);
         for (int i = 2; i < 10; i++)
             if (i != 5)
                 proposals[i] = Unmatched(proposals[i]);

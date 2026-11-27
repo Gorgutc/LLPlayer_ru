@@ -14,6 +14,7 @@ internal static class SrtSubtitleClock
     private const int MaximumFitAnchors = 64;
     private const int QuartileCount = 4;
     private const double BoundaryToleranceMs = 750;
+    private const double ContradictoryPhraseToleranceMs = 1_500;
     private const double FoldAgreementMs = 500;
     private const double QuartileBiasToleranceMs = 400;
     private const double MaximumUnsupportedGapMs = 32_000;
@@ -202,6 +203,10 @@ internal static class SrtSubtitleClock
             var (start, end) = project(anchor, i);
             double startResidual = start - anchor.SpeechStart;
             double endResidual = end - anchor.SpeechEnd;
+            // A whole phrase displaced in the same direction at both edges is evidence of a local edit.
+            if ((startResidual > ContradictoryPhraseToleranceMs && endResidual > ContradictoryPhraseToleranceMs) ||
+                (startResidual < -ContradictoryPhraseToleranceMs && endResidual < -ContradictoryPhraseToleranceMs))
+                return null;
             if (WithinTolerance(startResidual, endResidual))
                 inliers.Add(anchor);
             quartiles[anchor.Quartile].Starts.Add(startResidual);
