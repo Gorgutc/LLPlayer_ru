@@ -165,6 +165,18 @@ public sealed class SrtSubtitleClockTests
         Assert.Null(SrtSubtitleClock.TryCreate(proposals, duration, Token));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnElidedRepeatCannotAuthorizeTrimmingAnEndpoint(bool leading)
+    {
+        var (proposals, duration) = PlaybackEdgeProposals(firstOvershootMs: 290, lastOvershootMs: 290);
+        int edge = leading ? 0 : proposals.Length - 1;
+        proposals[edge] = proposals[edge] with { OneRepeatedWordElided = true };
+
+        Assert.Null(SrtSubtitleClock.TryCreate(proposals, duration, CancellationToken.None));
+    }
+
     [Fact]
     public void AMinorUnanchoredLeadingOvershootCanUseOnePlayableMapWithoutTrimming()
     {

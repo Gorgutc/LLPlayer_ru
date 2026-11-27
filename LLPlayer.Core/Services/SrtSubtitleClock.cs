@@ -93,13 +93,14 @@ internal static class SrtSubtitleClock
 
             // Allow rounding a small overshoot to the playable edge only with speech confirmed at that edge.
             if (i == 0 && start is >= -PlaybackEdgeToleranceMs and < 0 && proposal.IsExactAnchor &&
+                !proposal.OneRepeatedWordElided &&
                 proposal.Start is { } speechStart && speechStart.TotalMilliseconds <= PlaybackEdgeToleranceMs)
             {
                 start = 0;
                 clipped++;
             }
             if (i == intervals.Length - 1 && end > mediaMilliseconds && end - mediaMilliseconds <= PlaybackEdgeToleranceMs &&
-                proposal.IsExactAnchor && proposal.End is { } speechEnd &&
+                proposal.IsExactAnchor && !proposal.OneRepeatedWordElided && proposal.End is { } speechEnd &&
                 (duration - speechEnd).TotalMilliseconds <= PlaybackEdgeToleranceMs)
             {
                 end = mediaMilliseconds;
