@@ -2,6 +2,7 @@ using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.MediaPlayer.Batch;
 using FlyleafLib.MediaPlayer.Dubbing;
+using FlyleafLib.MediaPlayer.SpeechSeparation;
 using FlyleafLib.MediaPlayer.Translation;
 using LLPlayer.ControlApi;
 using LLPlayer.Core.Services;
@@ -19,15 +20,15 @@ public sealed class ControlWorkflows
     readonly Action ensureEngine;
     readonly GpuWorkCoordinator gpu;
     readonly LanguageResourceCoordinator resources;
-    readonly Transcribe transcribe;
+    readonly Transcribe? transcribe;
     readonly string? managedWhisperDirectory;
 
     public ControlWorkflows(Func<Config> captureConfig, Action ensureEngine, GpuWorkCoordinator gpu,
         LanguageResourceCoordinator resources, string? managedWhisperDirectory = null)
-        : this(captureConfig, ensureEngine, gpu, resources, RunAsrAsync, managedWhisperDirectory) { }
+        : this(captureConfig, ensureEngine, gpu, resources, (Transcribe?)null, managedWhisperDirectory) { }
 
     internal ControlWorkflows(Func<Config> captureConfig, Action ensureEngine, GpuWorkCoordinator gpu,
-        LanguageResourceCoordinator resources, Transcribe transcribe, string? managedWhisperDirectory = null)
+        LanguageResourceCoordinator resources, Transcribe? transcribe, string? managedWhisperDirectory = null)
     {
         this.captureConfig = captureConfig;
         this.ensureEngine = ensureEngine;
@@ -62,14 +63,24 @@ public sealed class ControlWorkflows
         ensureEngine();
         Config snapshot = CaptureLocalConfig(savedConfig);
         if (engine.HasValue) snapshot.Subtitles.ASREngine = engine.Value;
+        HtDemucsSpeechSeparator? separator = transcribe is null && snapshot.Subtitles.ASRSpeechSeparation
+            ? HtDemucsSpeechSeparator.TryCreate()
+            : null;
 
         try
         {
-            return await RunOwnedAsync("Speech recognition", FasterWhisperDevicePolicy.RequiresGpuAdmission(snapshot),
-                () => transcribe(snapshot, mediaPath, streamIndex, startTime, slot, pause, progress, token, sourceLanguage),
+            return await RunOwnedAsync("Speech recognition",
+                separator != null || FasterWhisperDevicePolicy.RequiresGpuAdmission(snapshot), RunRecognitionAsync,
                 token, waitingForResource).ConfigureAwait(false);
         }
         catch (MediaAudioSelectionException error) { throw AudioSelectionError(error); }
+
+        Task<BatchAsrResult> RunRecognitionAsync()
+            => transcribe != null
+                ? transcribe(snapshot, mediaPath, streamIndex, startTime, slot, pause, progress, token, sourceLanguage)
+                : new BatchAsrTranscriber(snapshot, confirmProcessExit: true, forRecognition: slot.HasValue,
+                    speechSeparator: separator)
+                    .TranscribeSelectedAsync(mediaPath, streamIndex, startTime, slot, pause, token, progress, sourceLanguage);
     }
 
     public Task RenderDubbingAsync(IReadOnlyList<SubtitleData> cues, string mediaPath, string stagedOutputPath,
@@ -245,9 +256,4 @@ public sealed class ControlWorkflows
     static ControlException AudioSelectionError(MediaAudioSelectionException error) => new(new(
         error.Failure == MediaAudioSelectionFailure.StaleTrack ? "stale_track" : "live_source", error.Message));
 
-    static Task<BatchAsrResult> RunAsrAsync(Config config, string mediaPath, int? streamIndex,
-        TimeSpan startTime, int? slot, PauseToken pause, IProgress<BatchAsrProgress>? progress,
-        CancellationToken token, Language? sourceLanguage) =>
-        new BatchAsrTranscriber(config, confirmProcessExit: true, forRecognition: slot.HasValue)
-            .TranscribeSelectedAsync(mediaPath, streamIndex, startTime, slot, pause, token, progress, sourceLanguage);
 }

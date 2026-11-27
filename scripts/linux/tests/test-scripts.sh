@@ -45,7 +45,7 @@ printf '%s' 'H4sIAAAAAAAEAO1VzWskRRR/3TMbJokbIsqSoMSOs4tBlqaXDK6CxkkyyW5k8kFmdtw
 # ---------------------------------------------------------------- publish.sh --check-package
 make_package() { # dir
     local p="$1" so app f
-    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets/Diarization" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL" "$p/IpaDic" "$p/mcp"
+    mkdir -p "$p/FFmpeg" "$p/dub_sidecar" "$p/Assets/Diarization" "$p/Assets/SpeechSeparation" "$p/runtimes/linux-x64" "$p/Plugins/YoutubeDL" "$p/IpaDic" "$p/mcp"
     cp "$work/YoutubeDL.dll" "$p/Plugins/YoutubeDL/YoutubeDL.dll"
     printf 'symbols\n' > "$p/Plugins/YoutubeDL/YoutubeDL.pdb"
     for f in LLPlayer.Avalonia LLPlayer.Avalonia.dll LLPlayer.Avalonia.deps.json LLPlayer.Avalonia.runtimeconfig.json \
@@ -53,7 +53,8 @@ make_package() { # dir
         IpaDic/sys.dic IpaDic/unk.dic IpaDic/matrix.bin IpaDic/char.bin IpaDic/COPYING IpaDic/AUTHORS \
         libSkiaSharp.so libHarfBuzzSharp.so libonnxruntime.so libe_sqlite3.so llplayer llplayer.desktop llplayer.png llplayer.sh LLPlayer.png \
         LICENSE THIRD-PARTY-NOTICES.md FFmpeg/LICENSE.txt FFmpeg/SOURCE.txt dub_sidecar/server.py dub_sidecar/pyproject.toml dub_sidecar/uv.lock \
-        dub_sidecar/README.md Assets/silero_vad.onnx Assets/Diarization/{sidecar.py,requirements.txt,README.md,NOTICE.md} runtimes/linux-x64/libwhisper.so \
+        dub_sidecar/README.md Assets/silero_vad.onnx Assets/Diarization/{sidecar.py,requirements.txt,README.md,NOTICE.md} \
+        Assets/SpeechSeparation/sidecar.py runtimes/linux-x64/libwhisper.so \
         LLPlayer.Control.dll LLPlayer.ControlHost LLPlayer.ControlHost.dll mcp/LLPlayer.Mcp mcp/LLPlayer.Mcp.dll \
         mcp/LLPlayer.Control.dll mcp/ModelContextProtocol.dll mcp/ModelContextProtocol.Core.dll \
         runtimes/linux-x64/libggml-whisper.so runtimes/linux-x64/libggml-base-whisper.so \
@@ -136,6 +137,14 @@ expect_fail "packaged diarization environment" "unexpected diarization payload" 
     check_pkg "$(mutate diarization-env 'mkdir Assets/Diarization/.venv')"
 expect_fail "linked diarization directory" "unexpected diarization payload" \
     check_pkg "$(mutate diarization-link 'mv Assets/Diarization model; echo x > model/model.safetensors; ln -s ../model Assets/Diarization')"
+expect_fail "missing speech-separation sidecar" "missing required file Assets/SpeechSeparation/sidecar.py" \
+    check_pkg "$(mutate no-speech-separation 'rm Assets/SpeechSeparation/sidecar.py')"
+expect_fail "packaged speech-separation model" "unexpected speech-separation payload" \
+    check_pkg "$(mutate speech-separation-model 'echo x > Assets/SpeechSeparation/04573f0d-f3cf25b2.th')"
+expect_fail "packaged speech-separation environment" "unexpected speech-separation payload" \
+    check_pkg "$(mutate speech-separation-env 'mkdir Assets/SpeechSeparation/.venv')"
+expect_fail "linked speech-separation directory" "unexpected speech-separation payload" \
+    check_pkg "$(mutate speech-separation-link 'mv Assets/SpeechSeparation model; ln -s ../model Assets/SpeechSeparation')"
 expect_fail "misplaced plugin assembly" "misplaced plugin payload" \
     check_pkg "$(mutate misplaced-plugin 'cp Plugins/YoutubeDL/YoutubeDL.dll YoutubeDL.dll')"
 for helper in yt-dlp yt-dlp.exe yt-dlp_linux yt-dlp_linux_aarch64 deno deno.exe pdic-pipe pdic-pipe.exe; do

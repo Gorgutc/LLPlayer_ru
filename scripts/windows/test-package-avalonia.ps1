@@ -49,7 +49,8 @@ function New-Fixture([string]$Name) {
         'IpaDic/sys.dic','IpaDic/unk.dic','IpaDic/matrix.bin','IpaDic/char.bin','IpaDic/COPYING','IpaDic/AUTHORS',
         'FFmpeg/LICENSE.GPLv3.txt','FFmpeg/SOURCE.txt','licenses/OpenALSoft.LICENSE','licenses/OpenALSoft.SOURCE.txt','licenses/Avalonia.ANGLE.LICENSE','licenses/OpenALSoft.BSD-3Clause.txt',
         'dub_sidecar/server.py','dub_sidecar/pyproject.toml','dub_sidecar/uv.lock','dub_sidecar/README.md',
-        'Assets/Diarization/sidecar.py','Assets/Diarization/requirements.txt','Assets/Diarization/README.md','Assets/Diarization/NOTICE.md')
+        'Assets/Diarization/sidecar.py','Assets/Diarization/requirements.txt','Assets/Diarization/README.md','Assets/Diarization/NOTICE.md',
+        'Assets/SpeechSeparation/sidecar.py')
     foreach ($path in @($required) + @($natives) + @($windowsMediaLicenses) + $controlFiles) { Write-FixtureFile $dir $path }
     Write-FixtureFile $dir 'Plugins/YoutubeDL/YoutubeDL.pdb'
     Copy-Item -LiteralPath $script:fixturePlugin -Destination (Join-Path $dir 'Plugins/YoutubeDL/YoutubeDL.dll')
@@ -172,6 +173,9 @@ try {
     Assert-Rejected 'missing diarization sidecar' { param($d) Remove-Item -LiteralPath (Join-Path $d 'Assets/Diarization/sidecar.py') } 'missing required file.*Diarization/sidecar.py'
     Assert-Rejected 'packaged diarization model' { param($d) Write-FixtureFile $d 'Assets/Diarization/model.safetensors' } 'unexpected diarization payload'
     Assert-Rejected 'packaged diarization environment' { param($d) Write-FixtureFile $d 'Assets/Diarization/.venv/pyvenv.cfg' } 'unexpected diarization payload'
+    Assert-Rejected 'missing speech-separation sidecar' { param($d) Remove-Item -LiteralPath (Join-Path $d 'Assets/SpeechSeparation/sidecar.py') } 'missing required file.*SpeechSeparation/sidecar.py'
+    Assert-Rejected 'packaged speech-separation model' { param($d) Write-FixtureFile $d 'Assets/SpeechSeparation/04573f0d-f3cf25b2.th' } 'unexpected speech-separation payload'
+    Assert-Rejected 'packaged speech-separation environment' { param($d) Write-FixtureFile $d 'Assets/SpeechSeparation/.venv/pyvenv.cfg' } 'unexpected speech-separation payload'
     foreach ($name in @('LLPlayer.OnlineVideo.json','LLPlayer.OnlineVideo.json.bak','LLPlayer.OnlineVideo.json.bad',
         '.LLPlayer.OnlineVideo.json.token.tmp','.LLPlayer.OnlineVideo.json.bak','nested/LLPlayer.OnlineVideo.json',
         'nested/LLPlayer.OnlineVideo.json.bak','nested/.LLPlayer.OnlineVideo.json.token.tmp','nested/.LLPlayer.OnlineVideo.json.bak',

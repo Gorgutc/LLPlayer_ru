@@ -5,16 +5,16 @@ namespace LLPlayer.Core.Batch;
 /// <summary>OS input-idle adapter. If global idle cannot be observed, enabled CPU fallback stays on.</summary>
 public sealed class BatchActivityMonitor
 {
-    public string Status { get; private set; } = "CPU while active applies to faster-whisper only.";
+    public string Status { get; private set; } = "CPU while active switches Faster Whisper to CPU and skips HTDemucs FT.";
     public bool IsUserActive(int thresholdSeconds)
     {
         uint? idle = GetIdleMilliseconds();
         if (idle == null)
         {
-            Status = "Global input idle detection is unavailable; CPU mode stays on while enabled (faster-whisper only).";
+            Status = "Global input idle detection is unavailable; the CPU preference stays active and HTDemucs FT is skipped while enabled.";
             return true;
         }
-        Status = "Global input idle detection is available. CPU while active applies to faster-whisper only.";
+        Status = "Global input idle detection is available. CPU while active switches Faster Whisper to CPU and skips HTDemucs FT.";
         return idle.Value < Math.Clamp(thresholdSeconds, 5, 600) * 1000L;
     }
     static uint? GetIdleMilliseconds()

@@ -44,8 +44,9 @@ validate_package() {
     pkg="$(readlink -f "$1")"
     [[ -d "$pkg" ]] || llp_die "package directory not found: $1"
     # ---- Positive content validation (mirrors "Release package is missing required file" on Windows) ----
-    local required diarization app rel path resolved exe hits so_path name ok so link target allowed_natives
+    local required diarization speech_separation app rel path resolved exe hits so_path name ok so link target allowed_natives
     diarization=(Assets/Diarization/{sidecar.py,requirements.txt,README.md,NOTICE.md})
+    speech_separation=Assets/SpeechSeparation/sidecar.py
     required=(
         "LLPlayer.Avalonia"
         "LLPlayer.Avalonia.dll"
@@ -91,6 +92,7 @@ validate_package() {
         "dub_sidecar/uv.lock"
         "dub_sidecar/README.md"
         "${diarization[@]}"
+        "$speech_separation"
     )
     for app in LLPlayer.ControlHost mcp/LLPlayer.Mcp; do
         required+=("$app" "$app.dll" "$app.deps.json" "$app.runtimeconfig.json")
@@ -192,6 +194,13 @@ PY
         [[ -f "$path" && ! -L "$path" && " ${diarization[*]} " == *" $rel "* ]] ||
             reject "an unexpected diarization payload" "$rel"
     done < <(find "$pkg/Assets/Diarization" -mindepth 1 -print)
+    [[ ! -L "$pkg/Assets/SpeechSeparation" ]] ||
+        reject "an unexpected speech-separation payload" "linked Assets/SpeechSeparation directory"
+    while IFS= read -r path; do
+        rel="${path#"$pkg"/}"
+        [[ -f "$path" && ! -L "$path" && "$rel" == "$speech_separation" ]] ||
+            reject "an unexpected speech-separation payload" "$rel"
+    done < <(find "$pkg/Assets/SpeechSeparation" -mindepth 1 -print)
     hits="$(find "$pkg" -type d \( -name DubEngine -o -name dubmodels -o -name '.venv' -o -name venv -o -name __pycache__ \
         -o -name whispermodels -o -name Whisper -o -name tesseractmodels -o -name Recordings -o -name Snapshots \) -print)"
     [[ -z "$hits" ]] || reject "dubbing venv / model / user media folders" "$hits"

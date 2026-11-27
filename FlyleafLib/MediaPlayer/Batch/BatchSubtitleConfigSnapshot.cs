@@ -79,6 +79,7 @@ public static class BatchSubtitleConfigSnapshot
             ASRFoldBack = source.ASRFoldBack,
             // F-02 denoise applies to batch transcription too (same AudioReader producer / ResampleTo seam).
             ASRDenoise = source.ASRDenoise,
+            ASRSpeechSeparation = source.ASRSpeechSeparation,
             // T-10 per-segment language detection applies to batch transcription too (same shared ASR services).
             ASRPerSegmentLanguage = source.ASRPerSegmentLanguage,
             // F-19: a scalar on SubtitlesConfig, so the reflection-completeness guard requires it here. The batch

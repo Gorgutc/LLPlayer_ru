@@ -59,6 +59,9 @@ public class RecognitionParityTests
             window.FindControl<TextBox>("LogProbThresholdBox")!.Text = "-0.7";
             window.FindControl<TextBox>("AsrChunkSizeBox")!.Text = "3000";
             window.FindControl<TextBox>("AsrChunkSecondsBox")!.Text = "31";
+            var speechSeparation = window.FindControl<CheckBox>("SpeechSeparationBox")!;
+            Assert.True(speechSeparation.IsChecked);
+            speechSeparation.IsChecked = false;
             window.FindControl<TextBox>("FasterEnginePathBox")!.Text = executable;
             window.FindControl<TextBox>("FasterModelDirectoryBox")!.Text = temp.Path;
             window.FindControl<CheckBox>("FasterManualEngineBox")!.IsChecked = true;
@@ -76,6 +79,8 @@ public class RecognitionParityTests
             Assert.Equal(SubASREngineType.FasterWhisper, saved.ASREngine);
             Assert.Equal(SubOCREngineType.MicrosoftOCR, saved.OcrPrimaryEngine);
             Assert.Equal(3000, saved.ASRChunkSizeMB); Assert.Equal(31, saved.ASRChunkSeconds);
+            Assert.False(saved.ASRSpeechSeparation);
+            Assert.False(backend.Applied!.ASRSpeechSeparation);
             Assert.Equal(.4f, saved.WhisperCpp.NoSpeechThreshold); Assert.Equal(512, saved.WhisperCpp.AudioContextSize);
             Assert.Equal(.2f, saved.WhisperCpp.Temperature); Assert.Equal(.3f, saved.WhisperCpp.TemperatureInc);
             Assert.Equal(2.4f, saved.WhisperCpp.EntropyThreshold); Assert.Equal(-.7f, saved.WhisperCpp.LogProbThreshold);

@@ -177,6 +177,7 @@ function New-Package([string]$Name, [switch]$OmitCore) {
         'FFmpeg/LICENSE.GPLv3.txt', 'FFmpeg/SOURCE.txt', 'licenses/OpenALSoft.LICENSE', 'licenses/OpenALSoft.SOURCE.txt',
         'licenses/Avalonia.ANGLE.LICENSE', 'licenses/OpenALSoft.BSD-3Clause.txt', 'dub_sidecar/server.py', 'dub_sidecar/pyproject.toml', 'dub_sidecar/uv.lock', 'dub_sidecar/README.md',
         'Assets/Diarization/sidecar.py', 'Assets/Diarization/requirements.txt', 'Assets/Diarization/README.md', 'Assets/Diarization/NOTICE.md',
+        'Assets/SpeechSeparation/sidecar.py',
         'LLPlayer.ControlHost.exe', 'mcp/LLPlayer.Mcp.exe', 'licenses/ModelContextProtocol.LICENSE')
     if (-not $OmitCore) { $required += 'LLPlayer.Core.dll' }
     foreach ($file in @($required) + @($native)) { Write-File $dir $file ($Name + ':' + $file) }

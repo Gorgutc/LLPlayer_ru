@@ -67,6 +67,8 @@
     <Content Include="Assets\silero_vad.onnx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="..\FlyleafLib\Assets\SpeechSeparation\sidecar.py" Link="Assets\SpeechSeparation\sidecar.py"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="lib\7z.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

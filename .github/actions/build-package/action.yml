@@ -159,6 +159,7 @@ runs:
           # F-19 slice 2: bundled Silero VAD model + ONNX Runtime native lib must ship (else cue-timing VAD
           # snapping silently no-ops on end-user machines). Fail closed if either is missing from the package.
           "Assets\silero_vad.onnx"
+          "Assets\SpeechSeparation\sidecar.py"
           "onnxruntime.dll"
           "onnxruntime_providers_shared.dll"
           "e_sqlite3.dll"
@@ -216,6 +217,12 @@ runs:
               $requiredItem.Length -le 0) {
             throw "Release package contains an empty required file $requiredFile."
           }
+        }
+
+        $speechSeparation = Get-Item -LiteralPath (Join-Path $pub 'Assets\SpeechSeparation') -Force
+        if (($speechSeparation.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0 -or
+            @(Get-ChildItem -LiteralPath $speechSeparation.FullName -Force).Count -ne 1) {
+          throw 'Release speech-separation payload must contain only the bundled sidecar.py.'
         }
 
         $forbiddenDubRuntimeDirs = @(Get-ChildItem $pub -Directory -Recurse -ErrorAction SilentlyContinue |

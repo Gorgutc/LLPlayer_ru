@@ -119,6 +119,12 @@
         </Expander>
         <TextBlock Text="Audio chunk size (MB, positive whole number)" /><TextBox Name="AsrChunkSizeBox" Text="{Binding AsrChunkSizeText}" />
         <TextBlock Text="Audio chunk wait limit (seconds, positive whole number)" /><TextBox Name="AsrChunkSecondsBox" Text="{Binding AsrChunkSecondsText}" />
+        <CheckBox Name="SpeechSeparationBox" IsChecked="{Binding Draft.ASRSpeechSeparation}"
+                  AutomationProperties.Name="Separate speech from background audio">
+          <TextBlock Text="Separate speech from background audio (HTDemucs FT)" TextWrapping="Wrap" />
+        </CheckBox>
+        <TextBlock Text="Applies to Batch Subtitles and detached local recognition when a local HTDemucs FT CUDA runtime is configured."
+                   TextWrapping="Wrap" Classes="small muted" />
         <Expander Name="OcrSettingsExpander" Header="Bitmap subtitle OCR engines and language regions" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
           <StackPanel Spacing="8" Margin="0,8,0,0">
             <TextBlock Text="Primary OCR engine" /><ComboBox Name="OcrPrimaryEngineBox" ItemsSource="{Binding OcrEngines}" SelectedItem="{Binding Draft.OcrPrimaryEngine}" HorizontalAlignment="Stretch" />
