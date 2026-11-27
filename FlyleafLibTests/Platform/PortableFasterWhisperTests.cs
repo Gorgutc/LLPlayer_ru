@@ -150,8 +150,10 @@ public sealed class PortableFasterWhisperTests : IDisposable
             fourth => Assert.InRange(fourth.End.TotalSeconds, 2.50, 2.54),
             fifth => Assert.InRange(fifth.Start.TotalSeconds, 3.38, 3.42),
             sixth => Assert.InRange(sixth.End.TotalSeconds, 3.53, 3.57));
-        await Assert.ThrowsAsync<InvalidDataException>(() => SrtAlignmentAudioSource.ReadWordsAsync(config,
+        // Stream 0 is video in this fixture, so the request must fail before transcription.
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => SrtAlignmentAudioSource.ReadWordsAsync(config,
             request with { StreamIndex = 0 }, TestContext.Current.CancellationToken));
+        Assert.Contains("selected audio stream", error.Message, StringComparison.Ordinal);
     }
 
     [Theory]
