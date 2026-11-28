@@ -47,7 +47,7 @@ public static class FasterWhisperDevicePolicy
 
     // ProcessStartInfo.Arguments uses Windows-style double quotes and backslash parity on both targets.
     // Adjacent nonempty quote transitions can differ in native parsers. Treat them as ambiguous.
-    static List<string>? ReadArguments(string command)
+    internal static List<string>? ReadArguments(string command)
     {
         List<string> arguments = [];
         StringBuilder value = new();

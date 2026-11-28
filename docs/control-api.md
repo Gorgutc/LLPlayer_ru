@@ -27,6 +27,7 @@ command = "C:/Applications/LLPlayer/mcp/LLPlayer.Mcp.exe"
 enabled_tools = [
   "llplayer_subtitle_media_probe",
   "llplayer_subtitle_recognition_start",
+  "llplayer_subtitle_recognition_omissions_read",
   "llplayer_subtitle_job_get",
   "llplayer_subtitle_translation_document_read",
   "llplayer_subtitle_translation_document_apply",
@@ -101,5 +102,13 @@ approval_mode = "approve"
 4. Используйте `export.subtitles` с идентификатором задания, ревизией документа, абсолютным путём и форматом. Для полного русского перевода по результатам распознавания с проверенной ревизией можно опустить `path` и передать `format: "srt"`, `text: "translatedOnly"`, `overwrite: false`. Хост возьмёт путь из сохранённого задания и запишет `<имя видео>.ru.srt`. Для нескольких локальных файлов и настроенного провайдера используйте `workflow.create_subtitles`. Чтобы сохранить русские SRT рядом с видео, опустите `outputPath` у соответствующих элементов `files`. Ожидайте завершения задания и сверяйте хеш с результатом операции.
 
 При разрыве соединения работа продолжается в хосте. После сбоя проверьте статус и явно вызовите `resume` у прерванного задания. При несовпадении сохранённого входа или результата операция вернёт ошибку. Для внешнего действия с неопределённым исходом проверьте его на стороне сервиса перед явным подтверждением повтора.
+
+### Предложения о пропущенных фразах
+
+`recognition.start` и `workflow.create_subtitles` включают поиск пропусков для Faster Whisper. Передайте `detectAsrOmissions: false`, чтобы отключить поиск на один запуск. Если параметр отсутствует, поиск включён. В ограниченном MCP это поле передаётся внутри `input` команды распознавания или полного workflow. Общий профиль не меняется.
+
+Результат распознавания возвращает `omissionDetection` с запрошенным режимом `enabled`, фактом выполнения `applied`, состоянием `status` и количеством предложений `totalCount`. У завершившегося workflow сводка относится к конкретному файлу. `unsupported` означает, что движок не поддерживается. `unavailable` означает, что сопоставимые результаты распознавания получить не удалось, например при выключенных таймкодах слов. `partial` означает неполную проверку. Для старых заданий сводка может отсутствовать.
+
+Читайте предложения через `recognition.omissions.read`, в полном MCP через `llplayer_recognition_omissions_read`, в ограниченном через `llplayer_subtitle_recognition_omissions_read`. Передайте `jobId` и при необходимости `offset`, `limit` и `fileIndex` для workflow. Следующую страницу указывает `nextOffset`. `startMs` и `endMs` относятся к шкале исходного медиа. `reviewOnlyReason` отмечает фразы, которые требуют отдельного решения о границах показа. Предложения хранятся отдельно от исходного текста, перевода и экспорта SRT.
 
 [Спецификация MCP](https://modelcontextprotocol.io/docs/2026-07-28/learn/versioning) · [MCP C# SDK 2.4.0](https://github.com/modelcontextprotocol/csharp-sdk/releases/tag/v2.4.0)

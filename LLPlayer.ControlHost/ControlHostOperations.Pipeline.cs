@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -65,12 +66,19 @@ internal sealed partial class ControlHostOperations
                     file.StreamIndex, request.Engine,
                     TimeSpan.Zero, null, default, null, ct,
                     waiting => context.Report(waiting ? "waiting_for_gpu" : "recognizing",
-                        status: waiting ? ControlJobStatus.WaitingForResource : ControlJobStatus.Running), saved.Config);
+                        status: waiting ? ControlJobStatus.WaitingForResource : ControlJobStatus.Running), saved.Config,
+                    detectAsrOmissions: request.DetectAsrOmissions ?? true);
                 await context.VerifyInputAsync(CheckedSourcePath(file.MediaPath, file.RequirePhysicalSource),
                     ct, identityKey: file.FileIdentity);
                 var original = ControlCueDocument.Capture(Guid.NewGuid(), $"{file.MediaPath}|{file.StreamIndex}|{saved.RecognitionIdentity}",
                     result.SourceLanguage.ISO6391, result.Subtitles);
-                checkpoint = checkpoint with { Original = original };
+                var omissions = ControlRecognitionOmissions.Capture(result.OmissionReport, request.DetectAsrOmissions ?? true);
+                checkpoint = checkpoint with
+                {
+                    Original = original,
+                    OmissionReports = (checkpoint.OmissionReports ?? ImmutableDictionary<int, ControlRecognitionOmissions>.Empty)
+                        .SetItem(index, omissions)
+                };
                 context.SaveCheckpoint(ControlProtocol.Encode(checkpoint));
             }
             if (checkpoint.Translated is null)
@@ -95,12 +103,15 @@ internal sealed partial class ControlHostOperations
                 ? stage => ValidateGuardedSidecar(file.MediaPath, file.OutputPath, stage) : null;
             await output.PublishAsync(context, file.OutputPath, request.Overwrite, ct, $"subtitle:{index}", validatePublication);
             var outputs = checkpoint.Outputs.Append(new PipelineOutput(file.OutputPath, output.ComputeSha256(),
-                checkpoint.Translated.Cues.Length)).ToArray();
-            checkpoint = new(index + 1, null, null, outputs);
+                checkpoint.Translated.Cues.Length, checkpoint.OmissionReports?.GetValueOrDefault(index)?.Summarize())).ToArray();
+            checkpoint = new(index + 1, null, null, outputs, checkpoint.OmissionReports);
             context.SaveCheckpoint(ControlProtocol.Encode(checkpoint));
         }
         return Done(checkpoint.Outputs);
     }
+
+    private static ControlRecognitionOmissions? ReadPipelineOmissions(JsonElement? checkpoint, int index) =>
+        checkpoint?.Deserialize<PipelineCheckpoint>(ControlProtocol.Json)?.OmissionReports?.GetValueOrDefault(index);
 
     private static ControlJobException ChangedOutput()
         => new("output_changed", "A completed output differs from its saved receipt.", ControlJobStatus.Interrupted);
@@ -184,8 +195,12 @@ internal sealed partial class ControlHostOperations
         [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool RequirePhysicalSource = false);
     internal sealed record PipelineRequest(IReadOnlyList<PipelineFile> Files, TargetLanguage TargetLanguage,
         SubtitleExportFormat Format = SubtitleExportFormat.Srt, SubASREngineType? Engine = null,
-        string? SourceLanguage = null, bool Overwrite = false, bool Utf8Bom = true, bool SpeakerLabels = false);
+        string? SourceLanguage = null, bool Overwrite = false, bool Utf8Bom = true, bool SpeakerLabels = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DetectAsrOmissions = null);
     private sealed record PipelineCheckpoint(int Next, ControlCueDocument? Original, ControlCueDocument? Translated,
-        IReadOnlyList<PipelineOutput> Outputs);
-    private sealed record PipelineOutput(string Path, string Sha256, int Cues);
+        IReadOnlyList<PipelineOutput> Outputs,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        ImmutableDictionary<int, ControlRecognitionOmissions>? OmissionReports = null);
+    private sealed record PipelineOutput(string Path, string Sha256, int Cues,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlOmissionSummary? OmissionDetection = null);
 }

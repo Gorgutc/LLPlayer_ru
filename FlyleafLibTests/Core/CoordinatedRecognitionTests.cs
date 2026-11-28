@@ -81,12 +81,29 @@ public class CoordinatedRecognitionTests
         finally { backend.SignalStop(); }
     }
 
+    [Fact]
+    public async Task Explicit_off_does_not_attach_to_a_shared_default_on_run()
+    {
+        var backend = new Backend { UseCpu = true };
+        await using var actions = new RecognitionActions(backend, null, new GpuWorkCoordinator());
+        try
+        {
+            await Within(actions.StartAsync(0));
+            Assert.True(backend.DetectAsrOmissions);
+            await Within(actions.StartAsync(1, detectAsrOmissions: false));
+            Assert.False(backend.DetectAsrOmissions);
+            Assert.Equal(2, backend.Starts);
+        }
+        finally { backend.SignalStop(); }
+    }
+
     sealed class Backend : IRecognitionBackend, ICoordinatedRecognitionBackend
     {
         readonly HashSet<int> slots = [];
         TaskCompletionSource? worker;
         public bool UseCpu { get; set; }
         public bool ConfirmProcessExit { get; private set; }
+        public bool DetectAsrOmissions { get; private set; }
         public int Starts { get; private set; }
         public bool HasAudio => true;
         public bool IsLive => false;
@@ -103,18 +120,20 @@ public class CoordinatedRecognitionTests
             config.Subtitles.FasterWhisperConfig.ExtraArguments = UseCpu ? "--device cpu" : "--device cuda";
             return config;
         }
-        public bool CanAttach(int slot) => slots.Count != 0 && !slots.Contains(slot);
+        public bool CanAttach(int slot, bool detectAsrOmissions)
+            => slots.Count != 0 && !slots.Contains(slot) && DetectAsrOmissions == detectAsrOmissions;
         public RecognitionAttempt Start(int slot, object input, Config settings, bool attachOnly, bool confirmProcessExit,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, bool detectAsrOmissions)
         {
             if (attachOnly)
             {
-                Assert.True(CanAttach(slot));
+                Assert.True(CanAttach(slot, detectAsrOmissions));
                 slots.Add(slot);
                 return new(Task.CompletedTask, Task.CompletedTask);
             }
 
             ConfirmProcessExit = confirmProcessExit;
+            DetectAsrOmissions = detectAsrOmissions;
             Starts++;
             slots.Add(slot);
             worker = new(TaskCreationOptions.RunContinuationsAsynchronously);

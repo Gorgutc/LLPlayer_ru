@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json;
 using Avalonia.Headless.XUnit;
 using FlyleafLib.MediaPlayer;
 using LLPlayer.Avalonia.Services;
@@ -80,6 +81,45 @@ public sealed class ControlRecognitionProjectionTests
     }
 
     [AvaloniaFact]
+    public async Task Omission_report_has_run_local_mode_pages_and_does_not_change_the_subtitle_slot()
+    {
+        using TempDir state = new();
+        using Player player = PlaybackControlOpenTests.CreatePlayer(state, out AvaloniaUIDispatcher dispatcher, out CollectionSyncBridge bridge);
+        await using var controller = new FlyleafPlaybackController(player, dispatcher, bridge);
+        string? media = Environment.GetEnvironmentVariable("LLPLAYER_TEST_MEDIA");
+        Assert.SkipWhen(string.IsNullOrWhiteSpace(media), "Requires the canonical local video fixture.");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        CancellationToken token = deadline.Token;
+        await controller.OpenControlMediaAsync(media!, false, token);
+        var host = new ControlledRecognition();
+        host.Finish();
+        controller.ConfigureControlRecognition(new(state.Path, state.Path),
+            _ => Task.FromResult(new FlyleafPlaybackController.ControlRecognitionConnection(host, host)));
+
+        Assert.False(controller.CanReviewAsrOmissions(0));
+        await controller.StartRecognitionAsync(0, detectAsrOmissions: false).WaitAsync(token);
+        var off = Assert.IsType<AsrOmissionReviewSnapshot>(await controller.ReadAsrOmissionsAsync(0, token));
+        Assert.False(off.Enabled);
+        Assert.Equal("disabled", off.Status);
+        Assert.Empty(off.Rows);
+
+        await controller.StartRecognitionAsync(0).WaitAsync(token);
+        var on = Assert.IsType<AsrOmissionReviewSnapshot>(await controller.ReadAsrOmissionsAsync(0, token));
+        Assert.True(on.Enabled);
+        Assert.Equal(65, on.Rows.Count);
+        Assert.True(on.Rows[^1].IsReviewOnly);
+        Assert.Equal(new[] { 0, 0, 64 }, host.ReportOffsets);
+        Assert.Equal(new[] { false, true }, host.OmissionModes);
+        Assert.Equal(new[] { "first words", "last words" }, controller.GetCues(0).Select(cue => cue.Text));
+        Assert.False(controller.IsAsrOmissionReviewCurrent(off));
+        Assert.True(controller.IsAsrOmissionReviewCurrent(on));
+
+        await controller.OpenControlMediaAsync(media!, false, token);
+        Assert.False(controller.IsAsrOmissionReviewCurrent(on));
+        Assert.Null(await controller.ReadAsrOmissionsAsync(0, token));
+    }
+
+    [AvaloniaFact]
     public async Task Reopening_the_same_file_invalidates_the_previous_recognition_projection()
     {
         using TempDir state = new();
@@ -128,6 +168,8 @@ public sealed class ControlRecognitionProjectionTests
         bool completed;
         public int Starts { get; private set; }
         public int Cancels { get; private set; }
+        public List<bool> OmissionModes { get; } = [];
+        public List<int> ReportOffsets { get; } = [];
         public void Finish() => Volatile.Write(ref completed, true);
 
         public Task<ControlResult> InvokeAsync(ControlRequest request, CancellationToken ct = default)
@@ -136,7 +178,22 @@ public sealed class ControlRecognitionProjectionTests
             if (request.OperationId == "recognition.start")
             {
                 Starts++;
+                OmissionModes.Add(request.Arguments.GetProperty("detectAsrOmissions").GetBoolean());
                 return Task.FromResult(new ControlResult(JobId: jobId));
+            }
+            if (request.OperationId == "recognition.omissions.read")
+            {
+                ControlOmissionRead args = request.Arguments.Deserialize<ControlOmissionRead>(ControlProtocol.Json)!;
+                ReportOffsets.Add(args.Offset);
+                Assert.Equal(jobId, args.JobId);
+                bool enabled = OmissionModes[^1];
+                ControlOmissionCandidate[] rows = enabled ? Enumerable.Range(0, 65).Select(n => new ControlOmissionCandidate(
+                    $"suggestion {n}", 2000 + 100 * n, 2100 + 100 * n, "gap", n == 64 ? "partialDonorCue" : null)).ToArray() : [];
+                var slice = rows.Skip(args.Offset).Take(args.Limit).ToArray();
+                int next = args.Offset + slice.Length;
+                ControlOmissionPage report = new(jobId, new(enabled, enabled ? "analyzed" : "disabled", rows.Length),
+                    slice, next < rows.Length ? next : null);
+                return Task.FromResult(new ControlResult(Value: ControlProtocol.Encode(report)));
             }
             Assert.Equal("subtitles.document.read", request.OperationId);
             bool done = Volatile.Read(ref completed);

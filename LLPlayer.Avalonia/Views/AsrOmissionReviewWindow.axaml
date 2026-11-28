@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:LLPlayer.Avalonia.ViewModels" xmlns:svc="using:LLPlayer.Avalonia.Services"
+        x:Class="LLPlayer.Avalonia.Views.AsrOmissionReviewWindow" x:DataType="vm:AsrOmissionReviewViewModel"
+        Classes="dialog" Title="ASR suggestions - LLPlayer" WindowStartupLocation="CenterOwner"
+        Width="690" Height="480" MinWidth="420" MinHeight="320" CanResize="True">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <StackPanel Spacing="4" Margin="0,0,0,12">
+      <TextBlock Text="ASR suggestions" Classes="dialog-title" />
+      <TextBlock Text="{Binding TrackLabel}" FontWeight="SemiBold" />
+      <TextBlock Text="{Binding ModeLabel}" Classes="small muted" />
+      <TextBlock Name="OmissionStatus" Text="{Binding StatusMessage}" Classes="small" TextWrapping="Wrap"
+                 AutomationProperties.LiveSetting="Polite" />
+    </StackPanel>
+    <ListBox Grid.Row="1" Name="OmissionRows" ItemsSource="{Binding Rows}"
+             AutomationProperties.Name="Suggested text and playback times">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="svc:AsrOmissionReviewRow">
+          <Border BorderThickness="0,0,0,1" BorderBrush="{DynamicResource Shadcn.BorderBrush}" Padding="4,4,4,8">
+            <StackPanel Spacing="4">
+              <TextBlock Text="{Binding Timing}" Classes="small mono muted" />
+              <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding ReviewLabel}" IsVisible="{Binding IsReviewOnly}" Classes="small muted" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+    <Button Grid.Row="2" Content="Close" Classes="outline" HorizontalAlignment="Right" Margin="0,12,0,0" Click="OnClose" />
+  </Grid>
+</Window>

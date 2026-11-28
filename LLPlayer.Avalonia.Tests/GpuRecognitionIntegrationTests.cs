@@ -11,6 +11,53 @@ namespace LLPlayer.Avalonia.Tests;
 public sealed class GpuRecognitionIntegrationTests
 {
     [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Shared_native_report_keeps_the_original_audio_delay(bool changeDelay)
+    {
+        using var timeout = TestTimeout();
+        await using var session = new Session("--device cpu");
+        Player player = session.Player;
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        var audio = player.AudioDecoder.AudioStream;
+        var demuxer = player.AudioDecoder.Demuxer;
+        var origin = new SubtitlesASR.OmissionPlaybackSource(player.MediaGeneration, audio, player.Config.Audio.Delay);
+
+        // Install an admitted slot without requiring a transcriber, then exercise the real dual-ASR attach path.
+        Assert.Throws<OperationCanceledException>(() => player.SubtitlesASR.Execute(0, demuxer.Url, audio.StreamIndex,
+            demuxer.Type, TimeSpan.Zero, startupAcknowledged: () => throw new OperationCanceledException(),
+            detectAsrOmissions: true, omissionSource: origin));
+        player.SubtitlesManager[0].Load([new SubtitleData
+        {
+            Text = "canonical words",
+            StartTime = TimeSpan.FromMilliseconds(500),
+            EndTime = TimeSpan.FromSeconds(1)
+        }]);
+        if (changeDelay) player.Config.Audio.Delay += TimeSpan.FromMilliseconds(250).Ticks;
+
+        await session.Controller.StartRecognitionAsync(1).WaitAsync(timeout.Token);
+        await player.Subtitles[1].ASRCompletion.WaitAsync(timeout.Token);
+
+        var attached = player.SubtitlesASR.GetOmissionPlaybackReport(1);
+        Assert.Same(origin, attached.Source);
+        Assert.Equal("canonical words", Assert.Single(session.Controller.GetCues(1)).Text);
+        Assert.Equal(!changeDelay, session.Controller.CanReviewAsrOmissions(1));
+        if (!changeDelay)
+        {
+            var review = Assert.IsType<AsrOmissionReviewSnapshot>(await session.Controller.ReadAsrOmissionsAsync(1, timeout.Token));
+            var changed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            session.Controller.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(FlyleafPlaybackController.RecognitionStatus)
+                    && !session.Controller.IsAsrOmissionReviewCurrent(review)) changed.TrySetResult();
+            };
+            await session.Controller.SetControlSubtitleDelayAsync(1, TimeSpan.FromMilliseconds(250).Ticks, timeout.Token);
+            await changed.Task.WaitAsync(timeout.Token);
+            Assert.False(session.Controller.IsAsrOmissionReviewCurrent(review));
+        }
+    }
+
+    [AvaloniaTheory]
     [InlineData("--device cpu", false)]
     [InlineData("--device=auto", true)]
     public async Task Recognition_admits_the_configured_device_through_the_player(string arguments, bool requiresGpu)

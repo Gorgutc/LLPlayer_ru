@@ -52,7 +52,8 @@ public sealed class ControlWorkflows
 
     public async Task<BatchAsrResult> TranscribeAsync(string mediaPath, int? streamIndex, SubASREngineType? engine,
         TimeSpan startTime, int? slot, PauseToken pause, IProgress<BatchAsrProgress>? progress, CancellationToken token,
-        Action<bool>? waitingForResource = null, Config? savedConfig = null, Language? sourceLanguage = null)
+        Action<bool>? waitingForResource = null, Config? savedConfig = null, Language? sourceLanguage = null,
+        bool detectAsrOmissions = true)
     {
         RequireLocalFile(mediaPath);
         if (streamIndex < 0) throw new ArgumentOutOfRangeException(nameof(streamIndex));
@@ -79,7 +80,7 @@ public sealed class ControlWorkflows
             => transcribe != null
                 ? transcribe(snapshot, mediaPath, streamIndex, startTime, slot, pause, progress, token, sourceLanguage)
                 : new BatchAsrTranscriber(snapshot, confirmProcessExit: true, forRecognition: slot.HasValue,
-                    speechSeparator: separator)
+                    speechSeparator: separator, detectAsrOmissions: detectAsrOmissions)
                     .TranscribeSelectedAsync(mediaPath, streamIndex, startTime, slot, pause, token, progress, sourceLanguage);
     }
 

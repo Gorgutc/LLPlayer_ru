@@ -17,7 +17,7 @@ public sealed partial class FlyleafPlaybackController
 
     sealed record ControlRecognitionInput(PlaybackChoiceMedia Media, PlaybackAudioDelaySource Audio,
         int Slot, SubtitleCueSource? Subtitle, long SubtitleRevision, long AudioRevision, long SubtitleDelay, long AudioDelay,
-        string? Path, int StreamIndex, long StartTicks, ControlNetworkAudio? NetworkAudio = null);
+        string? Path, int StreamIndex, long StartTicks, bool DetectAsrOmissions, ControlNetworkAudio? NetworkAudio = null);
 
     sealed class ControlRecognitionRun(ControlRecognitionInput input)
     {
@@ -94,7 +94,7 @@ public sealed partial class FlyleafPlaybackController
         }
     }
 
-    ControlRecognitionInput CaptureControlRecognitionInput(int slot)
+    ControlRecognitionInput CaptureControlRecognitionInput(int slot, bool detectAsrOmissions)
     {
         if (slot is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(slot));
         ObjectDisposedException.ThrowIf(disposed || player.IsDisposed, this);
@@ -122,7 +122,7 @@ public sealed partial class FlyleafPlaybackController
             input = new(media, audio, slot, CaptureSubtitleCueSource(slot),
                 Volatile.Read(ref controlSubtitleRevision[slot]), Volatile.Read(ref controlAudioRevision),
                 player.Config.Subtitles[slot].Delay, player.Config.Audio.Delay, hasLocalPath ? path : null,
-                stream.StreamIndex, Math.Max(0L, player.CurTime), network);
+                stream.StreamIndex, Math.Max(0L, player.CurTime), detectAsrOmissions, network);
         }))
             throw new RecognitionActionCanceledException("Recognition was canceled because the audio source changed.");
         return input!;
@@ -147,7 +147,8 @@ public sealed partial class FlyleafPlaybackController
 
     static bool SameControlAudio(ControlRecognitionInput first, ControlRecognitionInput second)
         => first.Media == second.Media && first.Audio == second.Audio && first.AudioRevision == second.AudioRevision
-            && first.AudioDelay == second.AudioDelay && first.StreamIndex == second.StreamIndex;
+            && first.AudioDelay == second.AudioDelay && first.StreamIndex == second.StreamIndex
+            && first.DetectAsrOmissions == second.DetectAsrOmissions;
 
     async Task StartControlRecognitionAsync(ControlRecognitionInput input, AppPaths paths)
     {
@@ -169,6 +170,7 @@ public sealed partial class FlyleafPlaybackController
                 || !SameControlAudio(shared.Input, input);
             attachment = new(start ? new(input) : shared!, input);
             controlRecognition[input.Slot] = attachment;
+            completedOmissionSources[input.Slot] = null;
         }
         Raise(nameof(RecognitionStatus));
 
@@ -182,6 +184,8 @@ public sealed partial class FlyleafPlaybackController
             if (latest != null) await ProjectControlRecognitionAsync(attachment, latest, token);
             await run.Finished.Task.WaitAsync(token);
             if (run.Error is { } error) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
+            if (await run.Job.Task is { } jobId)
+                RememberControlOmissionSource(attachment, jobId, paths);
         }
         finally
         {
@@ -215,7 +219,7 @@ public sealed partial class FlyleafPlaybackController
             if (prepared.IsSnapshot && !OwnsControlRecognitionAudio(input))
                 throw new InvalidOperationException("The selected audio source changed before recognition.");
 
-            var args = new { MediaPath = prepared.Path, prepared.StreamIndex, input.StartTicks, input.Slot,
+            var args = new { MediaPath = prepared.Path, prepared.StreamIndex, input.StartTicks, input.Slot, input.DetectAsrOmissions,
                 prepared.SourceRevision, prepared.SourceLanguage };
             // After submission begins, a lost HTTP response cannot prove the host did not accept the input.
             preserveSnapshot = true;

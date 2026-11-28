@@ -1,5 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 using FlyleafLib.MediaPlayer.Dubbing;
+using FlyleafLib.MediaPlayer.AsrOmissions;
 using FlyleafLib.MediaPlayer.Translation;
 
 namespace FlyleafLib.MediaPlayer.Batch;
@@ -130,7 +131,10 @@ public sealed class BatchSubtitleJob : NotifyPropertyChanged
     }
 }
 
-public sealed record BatchAsrResult(IReadOnlyList<SubtitleData> Subtitles, Language SourceLanguage);
+public sealed record BatchAsrResult(IReadOnlyList<SubtitleData> Subtitles, Language SourceLanguage)
+{
+    public AsrOmissionReport? OmissionReport { get; init; }
+}
 
 public static class BatchSubtitleScanPolicy
 {

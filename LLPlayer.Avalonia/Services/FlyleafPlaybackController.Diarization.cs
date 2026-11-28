@@ -37,7 +37,9 @@ public sealed partial class FlyleafPlaybackController : IDiarizationController
 
     void OnDiarizationAudioConfigChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Config.AudioConfig.Delay)) QueueDiarizationValidation();
+        if (e.PropertyName != nameof(Config.AudioConfig.Delay)) return;
+        QueueDiarizationValidation();
+        Raise(nameof(RecognitionStatus));
     }
 
     void OnDiarizationCoordinatorChanged() => Raise(nameof(CanCancelDiarization));

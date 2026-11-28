@@ -49,9 +49,10 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             return $"ASR: {(Recognition.IsWaitingForGpu ? "waiting for GPU" : player.IsASRRunning ? player.IsASRPaused ? "paused" : "running" : "idle")} · Primary: {(player.Subtitles[0].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[0].IsLoading ? "loading" : "ready")}, {GetCues(0).Count} cues · Secondary: {(player.Subtitles[1].EnabledASR ? "ASR" : "subtitles")}, {(player.SubtitlesManager[1].IsLoading ? "loading" : "ready")}, {GetCues(1).Count} cues";
         }
     }
-    public Task StartRecognitionAsync(int slot)
+    public Task StartRecognitionAsync(int slot, bool detectAsrOmissions = true)
         => controlAsrPaths is { } paths
-            ? StartControlRecognitionAsync(CaptureControlRecognitionInput(slot), paths) : Recognition.StartAsync(slot);
+            ? StartControlRecognitionAsync(CaptureControlRecognitionInput(slot, detectAsrOmissions), paths)
+            : StartNativeRecognitionWithOmissionSourceAsync(slot, detectAsrOmissions);
     public Task CancelRecognitionAsync(int slot)
     {
         if (slot is < 0 or > 1) throw new ArgumentOutOfRangeException(nameof(slot));
@@ -149,6 +150,7 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
                 Recognition.CancelStaleStarts();
                 QueueDiarizationValidation();
                 QueueSrtAlignmentValidation();
+                Raise(nameof(RecognitionStatus));
             }
             if (e.PropertyName is nameof(FlyleafLib.MediaPlayer.Audio.Volume) or nameof(FlyleafLib.MediaPlayer.Audio.Mute))
                 Raise(e.PropertyName);
@@ -204,7 +206,10 @@ public sealed partial class FlyleafPlaybackController : IPlaybackController, IRe
             if (e.PropertyName == nameof(Config.SubConfig.Visible))
                 Raise(nameof(SubtitlesVisible));
             if (e.PropertyName == nameof(Config.SubConfig.Delay))
+            {
                 QueueDiarizationValidation();
+                Raise(nameof(RecognitionStatus));
+            }
         };
         primaryBitmapPositionChanged = (_, e) => OnBitmapPositionChanged(0, e.PropertyName);
         secondaryBitmapPositionChanged = (_, e) => OnBitmapPositionChanged(1, e.PropertyName);

@@ -14,6 +14,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
     private readonly bool _confirmProcessExit;
     private readonly bool _forRecognition;
     private readonly bool _strictExplicitStream;
+    private readonly bool _detectAsrOmissions;
     private readonly HtDemucsSpeechSeparator? _speechSeparator;
 
     /// <param name="preferCpu">Optional per-chunk device policy for faster-whisper: when it returns true the
@@ -36,7 +37,8 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         bool confirmProcessExit = false,
         bool forRecognition = false,
         bool strictExplicitStream = false,
-        HtDemucsSpeechSeparator? speechSeparator = null)
+        HtDemucsSpeechSeparator? speechSeparator = null,
+        bool detectAsrOmissions = false)
     {
         _batchConfig = forRecognition
             ? BatchSubtitleConfigSnapshot.CreateForRecognition(sourceConfig)
@@ -47,6 +49,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         _confirmProcessExit = confirmProcessExit;
         _forRecognition = forRecognition;
         _strictExplicitStream = strictExplicitStream;
+        _detectAsrOmissions = detectAsrOmissions;
         _speechSeparator = _batchConfig.Subtitles.ASRSpeechSeparation ? speechSeparator : null;
         ValidateAsrConfig(_batchConfig);
     }
@@ -125,7 +128,8 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 
         bool interactive = slot.HasValue;
         using AudioReader reader = new(batchConfig, slot.GetValueOrDefault(), _preferCpu,
-            enableVadSnapping: interactive && batchConfig.Subtitles.VadCueSnapping, confirmProcessExit: _confirmProcessExit);
+            enableVadSnapping: interactive && batchConfig.Subtitles.VadCueSnapping, confirmProcessExit: _confirmProcessExit,
+            detectAsrOmissions: _detectAsrOmissions);
         if (separated is null)
             reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
         else
@@ -232,7 +236,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
             subtitles[i].Index = i;
         }
 
-        return new BatchAsrResult(subtitles, sourceLanguage);
+        return new BatchAsrResult(subtitles, sourceLanguage) { OmissionReport = reader.OmissionReport };
     }
 
     internal static Language ResolveInitialSourceLanguage(Config batchConfig, MediaAudioProbeResult audio)

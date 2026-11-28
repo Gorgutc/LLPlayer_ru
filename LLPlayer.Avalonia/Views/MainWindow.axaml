@@ -132,6 +132,8 @@
         <Separator />
         <MenuItem Header="Start ASR — primary" Command="{Binding StartRecognitionCommand}" CommandParameter="0" />
         <MenuItem Header="Start ASR — secondary" Command="{Binding StartRecognitionCommand}" CommandParameter="1" />
+        <MenuItem Header="Start ASR without omission search — primary" Command="{Binding StartRecognitionWithoutOmissionSearchCommand}" CommandParameter="0" />
+        <MenuItem Header="Start ASR without omission search — secondary" Command="{Binding StartRecognitionWithoutOmissionSearchCommand}" CommandParameter="1" />
         <MenuItem Header="Pause / resume ASR (both slots)" Command="{Binding ToggleRecognitionPauseCommand}" />
         <MenuItem Header="Cancel and clear slot — primary" Command="{Binding CancelRecognitionCommand}" CommandParameter="0" />
         <MenuItem Header="Cancel and clear slot — secondary" Command="{Binding CancelRecognitionCommand}" CommandParameter="1" />
@@ -671,6 +673,9 @@
             <Button Name="AlignSrtButton" Content="Align SRT to audio…" Classes="outline"
                     Command="{Binding ShowSrtAlignmentCommand}" HorizontalAlignment="Stretch"
                     ToolTip.Tip="Align the selected local SRT to the current audio track" />
+            <Button Name="ReviewAsrOmissionsButton" Content="Review ASR suggestions…" Classes="outline"
+                    Command="{Binding ShowAsrOmissionReviewCommand}" HorizontalAlignment="Stretch"
+                    ToolTip.Tip="Review suggestions from the latest recognition run for this subtitle track" />
             <TextBox Name="FilterBox" PlaceholderText="Search subtitles…" Text="{Binding Sidebar.FilterText}">
               <TextBox.InnerLeftContent>
                 <c:LucideIcon Data="{StaticResource Icon.Search}" Size="14" Margin="10,0,0,0"

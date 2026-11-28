@@ -123,6 +123,7 @@ def verify_provider(api, media, fixture, revision, requests, wait_for_job, check
         "sourceLanguage": "en",
         "format": "srt",
         "utf8Bom": False,
+        "detectAsrOmissions": False,
     }
     request_id = str(uuid4())
     response = api.operation("workflow.create_subtitles", arguments, request_id=request_id)
@@ -131,9 +132,17 @@ def verify_provider(api, media, fixture, revision, requests, wait_for_job, check
     [receipt] = job["value"]
     check(Path(receipt["path"]) == output and receipt["cues"] == len(SOURCE),
           "The provider workflow returned the wrong durable receipt")
+    omissions = api.operation("recognition.omissions.read", {"jobId": job_id, "fileIndex": 0})["value"]
+    summary = receipt["omissionDetection"]
+    check(summary["enabled"] is False and summary["status"] == "disabled" and summary["applied"] is False
+          and omissions["omissionDetection"] == summary and not omissions["candidates"],
+          "The explicit OFF provider workflow did not retain its per-file omission mode")
     check_srt(output, GERMAN, receipt["sha256"], check)
     replay = api.operation("workflow.create_subtitles", arguments, request_id=request_id)
     check(replay["jobId"] == job_id, "Provider workflow replay allocated another job")
+    conflict = api.operation("workflow.create_subtitles", dict(arguments, detectAsrOmissions=True), request_id=request_id)
+    check(conflict["error"]["code"] == "request_conflict",
+          "Changing the omission mode reused an already admitted workflow request")
     check(sorted((path, request["source_lang"], request["target_lang"], request["text"])
                  for path, request in requests) ==
           sorted(("/translate", "EN", "DE", sentence) for sentence in SOURCE),
@@ -155,6 +164,10 @@ def verify_harness(api, client, media, fixture, source_revision, wait_for_job, c
     accepted = invoke("recognition.start", arguments, writable=True, request_id=request_id)
     job_id = queue_job(accepted, check)
     awaiting = wait_for_job(api, job_id, "awaitingTranslation")
+    omitted = invoke("recognition.omissions.read", {"jobId": job_id})["value"]
+    check(omitted["omissionDetection"]["enabled"] is True and
+          omitted["omissionDetection"] == awaiting["value"]["omissionDetection"],
+          "The generic MCP did not retain the default-enabled recognition report")
     replay = api.operation("recognition.start", arguments, request_id=request_id)
     check(replay["jobId"] == job_id, "HTTP did not recognize the job submitted by MCP")
     draft = {"jobId": job_id, "revision": awaiting["value"]["revision"]}
@@ -275,6 +288,10 @@ def verify_sidecars(api, media, requests, wait_for_job, check):
     [receipt] = durable["value"]
     check(Path(receipt["path"]) == output and receipt["cues"] == len(SOURCE),
           "The inferred provider destination is not beside the physical source")
+    suggestions = api.operation("recognition.omissions.read", {"jobId": durable["jobId"]})["value"]
+    check(receipt["omissionDetection"]["enabled"] is True and
+          suggestions["omissionDetection"] == receipt["omissionDetection"],
+          "The inferred provider workflow lost its default-enabled omission report")
     check_srt(output, RUSSIAN, receipt["sha256"], check)
     replay = api.operation("workflow.create_subtitles", pipeline, request_id=pipeline_id)
     check(replay["jobId"] == durable["jobId"], "Inferred provider output replay did not retain its job")
