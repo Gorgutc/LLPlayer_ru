@@ -637,7 +637,8 @@ public class AudioReader : IDisposable
     }
 
     private record struct AudioChunk(MemoryStream Stream, int ChunkNumber, TimeSpan Start, TimeSpan End,
-        int DecodePass = 0, bool TrustedClock = false, bool FileEnd = false, TimeSpan InputFrameEnd = default)
+        int DecodePass = 0, bool TrustedClock = false, bool FileEnd = false, TimeSpan InputFrameEnd = default,
+        bool DecodeError = false, IReadOnlyList<int>? Discontinuities = null)
     {
         internal int Samples => PcmSampleCount(Stream);
     }
@@ -657,6 +658,15 @@ public class AudioReader : IDisposable
             return false;
         return Math.Abs((right - left).Ticks - samples * ticksPerSample) <= ticksPerSample &&
             Math.Abs((right - leftFrameEnd).Ticks) <= ticksPerSample;
+    }
+
+    internal static bool HasContinuousPhantomWindow(AsrPhantomCandidate candidate, IReadOnlyList<int>? cuts)
+    {
+        if (cuts is null)
+            return true;
+        // Include the usual acoustic padding and a second margin for buffered resampling/denoise output.
+        const int margin = 2 * AsrPhantomFilter.PaddingSamples;
+        return cuts.All(cut => cut < (long)candidate.StartSample - margin || cut > (long)candidate.EndSample + margin);
     }
 
     private static TimeSpan PcmDuration(MemoryStream wave) =>
@@ -941,15 +951,18 @@ public class AudioReader : IDisposable
                     {
                         IReadOnlyList<AsrPhantomDecision>? decisions = null;
                         IReadOnlyList<AsrPhantomCandidate>? native = service.LastPhantomCandidates;
-                        if (native is { Count: > 0 } && native.Count == ordinal + 1 && chunk.TrustedClock &&
+                        // Native cue identity is on the exact submitted PCM clock. A PTS gap elsewhere in that
+                        // WAV precludes borrowed context, but does not invalidate its fully covered interior.
+                        if (native is { Count: > 0 } && native.Count == ordinal + 1 && !chunk.DecodeError &&
                             chunk.Samples is > 0 and <= SpeechSeparation.HtDemucsSpeechSeparator.MaxAsrEvidenceSamples)
                         {
-                            ReadOnlyMemory<short> prefix = previousPcm is { } left && left.Pass == chunk.DecodePass &&
+                            ReadOnlyMemory<short> prefix = chunk.TrustedClock && previousPcm is { } left && left.Pass == chunk.DecodePass &&
                                 left.Number == chunk.ChunkNumber - 1 && CanBorrowPhantomContext(left.Start, left.Samples, left.FrameEnd, chunk.Start)
                                 ? left.Tail : ReadOnlyMemory<short>.Empty;
                             ReadOnlyMemory<short> suffix = ReadOnlyMemory<short>.Empty;
-                            bool knownLeft = curTime == TimeSpan.Zero && chunk.ChunkNumber == 1 && chunk.Start == TimeSpan.Zero;
-                            if (!chunk.FileEnd && native.Any(c =>
+                            bool knownLeft = chunk.TrustedClock && curTime == TimeSpan.Zero && chunk.ChunkNumber == 1 && chunk.Start == TimeSpan.Zero;
+                            bool knownRight = chunk.TrustedClock && chunk.FileEnd;
+                            if (chunk.TrustedClock && !knownRight && native.Any(c =>
                                 c.EndSample > chunk.Samples - AsrPhantomFilter.PaddingSamples ||
                                 !knownLeft && !prefix.IsEmpty && c.StartSample < AsrPhantomFilter.PaddingSamples))
                             {
@@ -966,7 +979,8 @@ public class AudioReader : IDisposable
                             }
 
                             decisions = await phantom.AnalyzeAsync(Pcm(chunk).ToArray(),
-                                native.Select(c => (AsrPhantomCandidate?)c).ToArray(), prefix, suffix, knownLeft, chunk.FileEnd, token);
+                                native.Select(c => HasContinuousPhantomWindow(c, chunk.Discontinuities)
+                                    ? (AsrPhantomCandidate?)c : null).ToArray(), prefix, suffix, knownLeft, knownRight, token);
                             if (decisions.Count != native.Count)
                                 decisions = null;
                         }
@@ -1162,10 +1176,11 @@ public class AudioReader : IDisposable
             unsafe void RunPass(TimeSpan? stopAt, SrtAlignmentAudioWindow? retry = null, TimeSpan decodeFloor = default)
             {
                 int decodePass = ++passNumber;
-                bool trustedClock = true, reachedFileEnd = false;
+                bool trustedClock = true, reachedFileEnd = false, decodeError = false;
                 bool trackPhantomClock = SeparatePhantomEvidence is not null && _config.Subtitles.WordTimestamps && _isFile && !StrictAlignment;
                 TimeSpan? previousFrameEnd = null;
                 (int Format, int Rate, ulong Layout)? previousPhantomFormat = null;
+                List<int>? discontinuities = null;
                 long frameClockTolerance = (long)Math.Ceiling(_stream.Timebase) + 1;
                 // Start each pass with a fresh, header-only WAV buffer (never the one just handed to the consumer).
                 if (memoryStreamPool.TryPop(out var pooled))
@@ -1215,6 +1230,7 @@ public class AudioReader : IDisposable
 
                         // demux error
                         trustedClock = false;
+                        decodeError = true;
                         if (CanWarn) Log.Warn($"av_read_frame: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
                         if (++demuxErrors == _config.Demuxer.MaxErrors)
@@ -1244,6 +1260,7 @@ public class AudioReader : IDisposable
 
                         // decoder error
                         trustedClock = false;
+                        decodeError = true;
                         if (CanWarn) Log.Warn($"avcodec_send_packet: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
                         if (++decodeErrors == _config.Decoder.MaxErrors)
@@ -1290,20 +1307,28 @@ public class AudioReader : IDisposable
                         if (trackPhantomClock)
                         {
                             var format = (_frame->format, _frame->sample_rate, _frame->ch_layout.u.mask);
+                            bool cut = _frame->best_effort_timestamp == NoTs && _frame->pts == NoTs;
                             if (previousPhantomFormat is { } oldFormat && oldFormat != format)
                             {
                                 // A new resampler cannot lend context to a chunk on the preceding sample clock.
                                 decodePass = ++passNumber;
-                                if (chunkStart.HasValue)
-                                    trustedClock = false;
+                                cut |= chunkStart.HasValue;
                             }
                             previousPhantomFormat = format;
                             if (previousFrameEnd is { } expectedEnd && Math.Abs((frameTime - expectedEnd).Ticks) > frameClockTolerance)
+                                cut = true;
+                            if (_frame->nb_samples <= 0 || _frame->sample_rate <= 0)
+                            {
+                                decodeError = true;
                                 trustedClock = false;
-                            if (_frame->nb_samples <= 0 || _frame->sample_rate <= 0 || frameTime < TimeSpan.Zero)
-                                trustedClock = false;
+                            }
                             else
                                 previousFrameEnd = frameTime + TimeSpan.FromSeconds(_frame->nb_samples / (double)_frame->sample_rate);
+                            if (cut || frameTime < TimeSpan.Zero)
+                            {
+                                trustedClock = false;
+                                (discontinuities ??= []).Add(PcmSampleCount(waveStream));
+                            }
                         }
                         if (retry.HasValue && frameTime < decodeFloor)
                             continue;
@@ -1386,7 +1411,8 @@ public class AudioReader : IDisposable
                             UpdateWavHeader(waveStream);
 
                             AudioChunk chunk = new(waveStream, chunkCnt, chunkStart.Value, chunkEnd, decodePass, trustedClock,
-                                InputFrameEnd: previousFrameEnd.GetValueOrDefault());
+                                InputFrameEnd: previousFrameEnd.GetValueOrDefault(), DecodeError: decodeError,
+                                Discontinuities: discontinuities);
 
                             if (CanDebug) Log.Debug($"Writing chunk to channel ({chunkCnt})");
                             // if channel capacity reached, it will be waited
@@ -1401,7 +1427,9 @@ public class AudioReader : IDisposable
                             WriteWavHeader(waveStream, targetSampleRate, targetChannel);
                             waveDuration = TimeSpan.Zero;
                             trustedClock = true;
+                            decodeError = false;
                             previousFrameEnd = null;
+                            discontinuities = null;
 
                             chunkStart = null;
                             chunkSw.Restart();
@@ -1455,7 +1483,7 @@ public class AudioReader : IDisposable
                     UpdateWavHeader(waveStream);
 
                     AudioChunk chunk = new(waveStream, chunkCnt, chunkStart!.Value, chunkEnd, decodePass, trustedClock,
-                        reachedFileEnd, previousFrameEnd.GetValueOrDefault());
+                        reachedFileEnd, previousFrameEnd.GetValueOrDefault(), decodeError, discontinuities);
 
                     if (CanDebug) Log.Debug($"Writing last chunk to channel ({chunkCnt})");
                     channel.Writer.WriteAsync(chunk, token).AsTask().Wait(token);

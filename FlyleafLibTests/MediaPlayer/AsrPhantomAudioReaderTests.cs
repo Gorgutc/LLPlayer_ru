@@ -36,4 +36,16 @@ public class AsrPhantomAudioReaderTests
 
         Assert.False(AudioReader.CanBorrowPhantomContext(TimeSpan.Zero, 32_000, actualFrameEnd, nominalBoundary));
     }
+
+    [Theory]
+    [InlineData(372, true)]
+    [InlineData(4_800_000, false)]
+    [InlineData(5_127_999, false)]
+    [InlineData(5_128_001, true)]
+    public void GapsInvalidateOnlyTheAcousticWindowAroundTheSplice(int cut, bool canAnalyze)
+    {
+        var candidate = new AsrPhantomCandidate(4_800_000, 5_120_000, 0.6);
+
+        Assert.Equal(canAnalyze, AudioReader.HasContinuousPhantomWindow(candidate, [cut]));
+    }
 }
