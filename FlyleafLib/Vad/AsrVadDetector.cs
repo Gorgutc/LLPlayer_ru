@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using FlyleafLib.MediaPlayer;
 
 namespace FlyleafLib.Vad;
 
@@ -23,6 +24,7 @@ public sealed class AsrVadDetector : IDisposable
     // Silero example defaults; sensible for cue-boundary snapping over speech. 16 kHz matches the ASR resampler.
     private const float Threshold = 0.5f;
     private const int SampleRate = 16000;
+    internal const int WindowSamples = 512;
     private const int MinSpeechDurationMs = 250;
     private const float MaxSpeechDurationSeconds = float.PositiveInfinity;
     private const int MinSilenceDurationMs = 100;
@@ -83,7 +85,7 @@ public sealed class AsrVadDetector : IDisposable
                 return Array.Empty<SpeechSegment>();
 
             int sampleCount = (len - WavHeaderSize) / 2;
-            if (sampleCount < 512) // one VAD window @16k; nothing to analyze
+            if (sampleCount < WindowSamples)
                 return Array.Empty<SpeechSegment>();
 
             float[] samples = new float[sampleCount];
@@ -112,6 +114,52 @@ public sealed class AsrVadDetector : IDisposable
             Log.Warn($"Silero VAD detect failed for a chunk; skipping snap (falling back to prior timing): {e.Message}");
             return Array.Empty<SpeechSegment>();
         }
+    }
+
+    /// <summary>
+    /// Measures the already aligned PCM for an acoustic suppression decision. Null means unmeasured.
+    /// An empty interval list with completed coverage is a distinct, successful result.
+    /// </summary>
+    internal AsrPhantomVoice? MeasureForPhantomFilter(ReadOnlySpan<short> pcm)
+    {
+        if (pcm.Length < WindowSamples)
+            return null;
+        try
+        {
+            float[] samples = new float[pcm.Length];
+            for (int index = 0; index < pcm.Length; index++)
+                samples[index] = pcm[index] / 32768f;
+            return ToPhantomEvidence(pcm.Length, _detector.GetSpeechSegments(samples));
+        }
+        catch (Exception error) when (error is not OutOfMemoryException and not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    internal static AsrPhantomVoice? ToPhantomEvidence(int sampleCount, IReadOnlyList<SileroSpeechSegment> segments)
+    {
+        int covered = sampleCount / WindowSamples * WindowSamples;
+        if (covered <= 0)
+            return null;
+        List<AsrPhantomVoiceInterval> intervals = new(segments.Count);
+        float previousEnd = 0;
+        int previousEndSample = 0;
+        foreach (SileroSpeechSegment segment in segments)
+        {
+            if (segment.StartSecond is not float a || segment.EndSecond is not float b ||
+                !float.IsFinite(a) || !float.IsFinite(b) || a < previousEnd || a >= b ||
+                b > (double)sampleCount / SampleRate + 0.000501)
+                return null;
+            int start = Math.Max(previousEndSample, (int)Math.Floor((double)a * SampleRate));
+            int end = (int)Math.Min(sampleCount, Math.Ceiling((double)b * SampleRate));
+            if (start >= end)
+                return null;
+            intervals.Add(new(start, end));
+            previousEnd = b;
+            previousEndSample = end;
+        }
+        return new(covered, intervals);
     }
 
     public void Dispose() => _detector.Dispose();

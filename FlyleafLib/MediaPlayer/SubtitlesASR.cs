@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -563,6 +564,8 @@ public class AudioReader : IDisposable
     internal AsrOmissionReport OmissionReport { get; private set; }
     internal bool StrictAlignment { get; init; }
     internal SrtAlignmentAudioWindow? AlignmentWindow { get; init; }
+    internal Func<ReadOnlyMemory<short>, CancellationToken, Task<short[]?>>? SeparatePhantomEvidence { get; init; }
+    internal Action<string>? ObserveSuppressedLanguage { get; init; }
 
     // F-19 slice 2: when true, run Silero VAD over each chunk's PCM and attach the speech segments so
     // re-segmentation can snap cue boundaries onto pauses. Only the interactive ASR path enables it (batch leaves
@@ -633,7 +636,28 @@ public class AudioReader : IDisposable
         _isFile = File.Exists(url);
     }
 
-    private record struct AudioChunk(MemoryStream Stream, int ChunkNumber, TimeSpan Start, TimeSpan End);
+    private record struct AudioChunk(MemoryStream Stream, int ChunkNumber, TimeSpan Start, TimeSpan End,
+        int DecodePass = 0, bool TrustedClock = false, bool FileEnd = false, TimeSpan InputFrameEnd = default)
+    {
+        internal int Samples => PcmSampleCount(Stream);
+    }
+
+    internal static int PcmSampleCount(MemoryStream wave) =>
+        wave.Length is > WavHeaderSize and <= int.MaxValue && (wave.Length - WavHeaderSize) % sizeof(short) == 0
+            ? (int)((wave.Length - WavHeaderSize) / sizeof(short))
+            : 0;
+
+    private static ReadOnlySpan<short> Pcm(AudioChunk chunk) =>
+        MemoryMarshal.Cast<byte, short>(chunk.Stream.GetBuffer().AsSpan(WavHeaderSize, chunk.Samples * sizeof(short)));
+
+    internal static bool CanBorrowPhantomContext(TimeSpan left, int samples, TimeSpan leftFrameEnd, TimeSpan right)
+    {
+        const long ticksPerSample = TimeSpan.TicksPerSecond / SampleRate;
+        if (left < TimeSpan.Zero || right <= left || leftFrameEnd <= left || samples <= 0)
+            return false;
+        return Math.Abs((right - left).Ticks - samples * ticksPerSample) <= ticksPerSample &&
+            Math.Abs((right - leftFrameEnd).Ticks) <= ticksPerSample;
+    }
 
     private static TimeSpan PcmDuration(MemoryStream wave) =>
         TimeSpan.FromSeconds((wave.Length - WavHeaderSize) / (double)(SampleRate * sizeof(short)));
@@ -745,13 +769,18 @@ public class AudioReader : IDisposable
 
         async Task DoConsumer()
         {
+            using AsrPhantomAnalysis? phantom = !StrictAlignment && _isFile && _config.Subtitles.WordTimestamps &&
+                _config.Subtitles.ASREngine == SubASREngineType.FasterWhisper && SeparatePhantomEvidence is { } separate
+                ? new AsrPhantomAnalysis(separate, message => { if (CanWarn) Log.Warn(message); })
+                : null;
             await using IASRService asrService = _config.Subtitles.ASREngine switch
             {
                 SubASREngineType.WhisperCpp => new WhisperCppASRService(_config),
                 SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config, _preferCpu, _confirmProcessExit)
                 {
                     StrictAlignment = StrictAlignment,
-                    CollectOmissionEvidence = _detectAsrOmissions && !StrictAlignment
+                    CollectOmissionEvidence = _detectAsrOmissions && !StrictAlignment,
+                    CollectPhantomCandidates = phantom is not null
                 },
                 _ => throw new InvalidOperationException()
             };
@@ -768,6 +797,7 @@ public class AudioReader : IDisposable
             AsrOmissionChunk? previousOmissionChunk = null;
             List<AsrOmissionCandidate> candidates = [];
             bool analyzed = false, incomplete = false;
+            (int Pass, int Number, TimeSpan Start, int Samples, TimeSpan FrameEnd, short[] Tail)? previousPcm = null;
 
             while (await channel.Reader.WaitToReadAsync(token))
             {
@@ -780,6 +810,7 @@ public class AudioReader : IDisposable
                 if (!channel.Reader.TryPeek(out AudioChunk chunk))
                     throw new InvalidOperationException("can not peek AudioChunk from channel");
 
+                bool removedFromChannel = false;
                 try
                 {
                     if (CanDebug) Log.Debug(
@@ -809,8 +840,11 @@ public class AudioReader : IDisposable
                         }
                     }
 
+                    List<(int Ordinal, SubtitleASRData Cue)>? buffered = phantom is null ? null : [];
+                    int ordinal = -1;
                     await foreach (var data in asrService.Do(chunk.Stream, token))
                     {
+                        ordinal++;
                         TimeSpan start = chunk.Start.Add(data.start);
                         TimeSpan end = chunk.Start.Add(data.end);
 
@@ -896,7 +930,65 @@ public class AudioReader : IDisposable
                             chunk.Start, chunk.End,
                             data.text));
 
-                        addSub(subData);
+                        if (buffered is null)
+                            addSub(subData);
+                        else
+                            buffered.Add((ordinal, subData));
+                    }
+
+                    bool suppressed = false;
+                    if (phantom is not null && buffered is not null && asrService is FasterWhisperASRService service)
+                    {
+                        IReadOnlyList<AsrPhantomDecision>? decisions = null;
+                        IReadOnlyList<AsrPhantomCandidate>? native = service.LastPhantomCandidates;
+                        if (native is { Count: > 0 } && native.Count == ordinal + 1 && chunk.TrustedClock &&
+                            chunk.Samples is > 0 and <= SpeechSeparation.HtDemucsSpeechSeparator.MaxAsrEvidenceSamples)
+                        {
+                            ReadOnlyMemory<short> prefix = previousPcm is { } left && left.Pass == chunk.DecodePass &&
+                                left.Number == chunk.ChunkNumber - 1 && CanBorrowPhantomContext(left.Start, left.Samples, left.FrameEnd, chunk.Start)
+                                ? left.Tail : ReadOnlyMemory<short>.Empty;
+                            ReadOnlyMemory<short> suffix = ReadOnlyMemory<short>.Empty;
+                            bool knownLeft = curTime == TimeSpan.Zero && chunk.ChunkNumber == 1 && chunk.Start == TimeSpan.Zero;
+                            if (!chunk.FileEnd && native.Any(c =>
+                                c.EndSample > chunk.Samples - AsrPhantomFilter.PaddingSamples ||
+                                !knownLeft && !prefix.IsEmpty && c.StartSample < AsrPhantomFilter.PaddingSamples))
+                            {
+                                // Free the bounded queue slot without recycling its buffer. The producer can now
+                                // finish the next PCM chunk, which is still consumed normally on the next iteration.
+                                if (!channel.Reader.TryRead(out _))
+                                    throw new InvalidOperationException("Cannot release ASR chunk for boundary context.");
+                                removedFromChannel = true;
+                                if (await channel.Reader.WaitToReadAsync(token) && channel.Reader.TryPeek(out AudioChunk right) &&
+                                    right.TrustedClock && right.DecodePass == chunk.DecodePass &&
+                                    right.ChunkNumber == chunk.ChunkNumber + 1 &&
+                                    CanBorrowPhantomContext(chunk.Start, chunk.Samples, chunk.InputFrameEnd, right.Start))
+                                    suffix = Pcm(right)[..Math.Min(AsrPhantomAnalysis.HaloSamples, right.Samples)].ToArray();
+                            }
+
+                            decisions = await phantom.AnalyzeAsync(Pcm(chunk).ToArray(),
+                                native.Select(c => (AsrPhantomCandidate?)c).ToArray(), prefix, suffix, knownLeft, chunk.FileEnd, token);
+                            if (decisions.Count != native.Count)
+                                decisions = null;
+                        }
+
+                        previousPcm = chunk.TrustedClock && chunk.Samples > 0
+                            ? (chunk.DecodePass, chunk.ChunkNumber, chunk.Start, chunk.Samples, chunk.InputFrameEnd,
+                                Pcm(chunk)[Math.Max(0, chunk.Samples - AsrPhantomAnalysis.HaloSamples)..].ToArray())
+                            : null;
+                        int dropped = 0;
+                        foreach (var (index, cue) in buffered)
+                        {
+                            if (decisions?[index].Action == AsrPhantomAction.Drop)
+                            {
+                                dropped++;
+                                ObserveSuppressedLanguage?.Invoke(cue.Language);
+                            }
+                            else
+                                addSub(cue);
+                        }
+                        suppressed = dropped > 0;
+                        if (suppressed && CanInfo)
+                            Log.Info($"Suppressed {dropped} unsupported Faster-Whisper cue(s) in chunk {chunk.ChunkNumber}.");
                     }
 
                     if (_detectAsrOmissions && asrService is FasterWhisperASRService fasterWhisper)
@@ -906,7 +998,8 @@ public class AudioReader : IDisposable
                         AsrOmissionChunk? current = evidence?.Chunk is { } localEvidence
                             ? localEvidence with { OffsetMs = (long)Math.Round(chunk.Start.TotalMilliseconds) }
                             : null;
-                        if (evidence is not null && current is not null && AsrOmissionDetector.ValidBaseline(current))
+                        // Suggestions must not refer to A text which no longer exists in the document.
+                        if (!suppressed && evidence is not null && current is not null && AsrOmissionDetector.ValidBaseline(current))
                         {
                             try
                             {
@@ -927,6 +1020,8 @@ public class AudioReader : IDisposable
                         }
                         else
                         {
+                            // Some A/B evidence exists, but its anchors are not all present in the result.
+                            analyzed |= suppressed && current is not null;
                             previousOmissionChunk = null;
                             incomplete = true;
                         }
@@ -937,7 +1032,7 @@ public class AudioReader : IDisposable
                     chunk.Stream.SetLength(0);
                     memoryStreamPool.Push(chunk.Stream);
 
-                    if (!channel.Reader.TryRead(out _))
+                    if (!removedFromChannel && !channel.Reader.TryRead(out _))
                         throw new InvalidOperationException("can not discard AudioChunk from channel");
                 }
             }
@@ -980,6 +1075,7 @@ public class AudioReader : IDisposable
             TimeSpan waveDuration = TimeSpan.Zero; // for logging
             Stopwatch chunkSw = new();
             int chunkCnt = 0;
+            int passNumber = 0;
             TimeSpan? chunkStart = null;
             TimeSpan? nextFrameTime = null;
             long framePts = NoTs;
@@ -1065,6 +1161,12 @@ public class AudioReader : IDisposable
             // time reaches stopAt. Resets chunk state at entry so it is safe to invoke twice over the one channel.
             unsafe void RunPass(TimeSpan? stopAt, SrtAlignmentAudioWindow? retry = null, TimeSpan decodeFloor = default)
             {
+                int decodePass = ++passNumber;
+                bool trustedClock = true, reachedFileEnd = false;
+                bool trackPhantomClock = SeparatePhantomEvidence is not null && _config.Subtitles.WordTimestamps && _isFile && !StrictAlignment;
+                TimeSpan? previousFrameEnd = null;
+                (int Format, int Rate, ulong Layout)? previousPhantomFormat = null;
+                long frameClockTolerance = (long)Math.Ceiling(_stream.Timebase) + 1;
                 // Start each pass with a fresh, header-only WAV buffer (never the one just handed to the consumer).
                 if (memoryStreamPool.TryPop(out var pooled))
                     waveStream = pooled;
@@ -1107,10 +1209,12 @@ public class AudioReader : IDisposable
 
                         if (ret == AVERROR_EOF || token.IsCancellationRequested)
                         {
+                            reachedFileEnd = ret == AVERROR_EOF;
                             break;
                         }
 
                         // demux error
+                        trustedClock = false;
                         if (CanWarn) Log.Warn($"av_read_frame: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
                         if (++demuxErrors == _config.Demuxer.MaxErrors)
@@ -1139,6 +1243,7 @@ public class AudioReader : IDisposable
                         }
 
                         // decoder error
+                        trustedClock = false;
                         if (CanWarn) Log.Warn($"avcodec_send_packet: {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
                         if (++decodeErrors == _config.Decoder.MaxErrors)
@@ -1162,6 +1267,9 @@ public class AudioReader : IDisposable
                             (_frame->best_effort_timestamp == NoTs && _frame->pts == NoTs)))
                             throw new InvalidDataException("Alignment requires timestamped audio frames.");
 
+                        if (_frame->sample_rate <= 0 || (_frame->best_effort_timestamp == NoTs && _frame->pts == NoTs))
+                            trustedClock = false;
+
                         if (_frame->best_effort_timestamp != NoTs)
                         {
                             framePts = _frame->best_effort_timestamp;
@@ -1179,6 +1287,24 @@ public class AudioReader : IDisposable
                         waveDuration = waveDuration.Add(new TimeSpan((long)(_frame->duration * _stream.Timebase)));
 
                         TimeSpan frameTime = new((long)(framePts * _stream.Timebase) - demuxer.StartTime);
+                        if (trackPhantomClock)
+                        {
+                            var format = (_frame->format, _frame->sample_rate, _frame->ch_layout.u.mask);
+                            if (previousPhantomFormat is { } oldFormat && oldFormat != format)
+                            {
+                                // A new resampler cannot lend context to a chunk on the preceding sample clock.
+                                decodePass = ++passNumber;
+                                if (chunkStart.HasValue)
+                                    trustedClock = false;
+                            }
+                            previousPhantomFormat = format;
+                            if (previousFrameEnd is { } expectedEnd && Math.Abs((frameTime - expectedEnd).Ticks) > frameClockTolerance)
+                                trustedClock = false;
+                            if (_frame->nb_samples <= 0 || _frame->sample_rate <= 0 || frameTime < TimeSpan.Zero)
+                                trustedClock = false;
+                            else
+                                previousFrameEnd = frameTime + TimeSpan.FromSeconds(_frame->nb_samples / (double)_frame->sample_rate);
+                        }
                         if (retry.HasValue && frameTime < decodeFloor)
                             continue;
                         if (StrictAlignment)
@@ -1259,7 +1385,8 @@ public class AudioReader : IDisposable
 
                             UpdateWavHeader(waveStream);
 
-                            AudioChunk chunk = new(waveStream, chunkCnt, chunkStart.Value, chunkEnd);
+                            AudioChunk chunk = new(waveStream, chunkCnt, chunkStart.Value, chunkEnd, decodePass, trustedClock,
+                                InputFrameEnd: previousFrameEnd.GetValueOrDefault());
 
                             if (CanDebug) Log.Debug($"Writing chunk to channel ({chunkCnt})");
                             // if channel capacity reached, it will be waited
@@ -1273,6 +1400,8 @@ public class AudioReader : IDisposable
 
                             WriteWavHeader(waveStream, targetSampleRate, targetChannel);
                             waveDuration = TimeSpan.Zero;
+                            trustedClock = true;
+                            previousFrameEnd = null;
 
                             chunkStart = null;
                             chunkSw.Restart();
@@ -1325,7 +1454,8 @@ public class AudioReader : IDisposable
 
                     UpdateWavHeader(waveStream);
 
-                    AudioChunk chunk = new(waveStream, chunkCnt, chunkStart!.Value, chunkEnd);
+                    AudioChunk chunk = new(waveStream, chunkCnt, chunkStart!.Value, chunkEnd, decodePass, trustedClock,
+                        reachedFileEnd, previousFrameEnd.GetValueOrDefault());
 
                     if (CanDebug) Log.Debug($"Writing last chunk to channel ({chunkCnt})");
                     channel.Writer.WriteAsync(chunk, token).AsTask().Wait(token);
@@ -1760,7 +1890,9 @@ public partial class FasterWhisperASRService : IASRService
 {
     internal bool StrictAlignment { get; init; }
     internal bool CollectOmissionEvidence { get; init; }
+    internal bool CollectPhantomCandidates { get; init; }
     internal AsrOmissionEvidence? LastOmissionEvidence { get; private set; }
+    internal IReadOnlyList<AsrPhantomCandidate>? LastPhantomCandidates { get; private set; }
     private readonly Config _config;
 #if !WINDOWS
     private readonly bool _confirmProcessExit;
@@ -2017,6 +2149,7 @@ public partial class FasterWhisperASRService : IASRService
     public async IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language, IReadOnlyList<WordTiming>? words)> Do(MemoryStream waveStream, [EnumeratorCancellation] CancellationToken token)
     {
         LastOmissionEvidence = null;
+        LastPhantomCandidates = null;
         FasterWhisperOmissionCapture.RunOutput? omissionOutput = CollectOmissionEvidence && _config.Subtitles.WordTimestamps
             ? new() : null;
         string tempFilePath = Path.GetTempFileName();
@@ -2234,6 +2367,9 @@ public partial class FasterWhisperASRService : IASRService
             // the sentinel check, and unavailable words fall back to proportional timings.
             if (buffered != null)
             {
+                if (CollectPhantomCandidates && IsSuccessfulAlignmentExit(exitCode, lastLine))
+                    LastPhantomCandidates = FasterWhisperPhantomCandidates.Read(outputJsonPath, buffered,
+                        AudioReader.PcmSampleCount(waveStream));
                 IReadOnlyList<IReadOnlyList<WordTiming>>? segmentWords = StrictAlignment
                     ? SrtAlignmentAudioSource.ReadWordEvidence(outputJsonPath, buffered)
                     : TryReadWordTimings(outputJsonPath, buffered.Count);

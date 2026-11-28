@@ -3,6 +3,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using CliWrap.EventStream;
 using FlyleafLib.Plugins;
@@ -14,6 +15,8 @@ public sealed class HtDemucsSpeechSeparator
 {
     private const int UnsupportedSourceExitCode = 3;
     private const int SampleRate = 44_100;
+    private const int AsrSampleRate = 16_000;
+    internal const int MaxAsrEvidenceSamples = 9 * 60 * AsrSampleRate;
     private const int FrameBytes = 2 * sizeof(float);
     private const double DurationToleranceSeconds = 0.1;
     private static readonly Guid FloatSubFormat = new("00000003-0000-0010-8000-00aa00389b71");
@@ -23,9 +26,12 @@ public sealed class HtDemucsSpeechSeparator
     private readonly string ffmpeg;
     private readonly string ffprobe;
     private readonly string runner;
+    private readonly bool cpuAsrEvidence;
 
-    private HtDemucsSpeechSeparator(string python, string checkpoint, string ffmpeg, string ffprobe, string runner)
-        => (this.python, this.checkpoint, this.ffmpeg, this.ffprobe, this.runner) = (python, checkpoint, ffmpeg, ffprobe, runner);
+    private HtDemucsSpeechSeparator(string python, string checkpoint, string ffmpeg, string ffprobe, string runner,
+        bool cpuAsrEvidence)
+        => (this.python, this.checkpoint, this.ffmpeg, this.ffprobe, this.runner, this.cpuAsrEvidence) =
+            (python, checkpoint, ffmpeg, ffprobe, runner, cpuAsrEvidence);
 
     public static HtDemucsSpeechSeparator? TryCreate()
     {
@@ -41,12 +47,21 @@ public sealed class HtDemucsSpeechSeparator
     }
 
     internal static HtDemucsSpeechSeparator? TryCreate(string? python, string? checkpoint, string? ffmpeg, string? runner)
+        => TryCreate(python, checkpoint, ffmpeg, runner, cpuAsrEvidence: false);
+
+    // Only explicitly constructed test instances can choose the CPU evidence path.
+    internal static HtDemucsSpeechSeparator? TryCreateForCpuAsrEvidence(string? python, string? checkpoint,
+        string? ffmpeg, string? runner)
+        => TryCreate(python, checkpoint, ffmpeg, runner, cpuAsrEvidence: true);
+
+    private static HtDemucsSpeechSeparator? TryCreate(string? python, string? checkpoint, string? ffmpeg, string? runner,
+        bool cpuAsrEvidence)
     {
         if (!IsLocalExecutable(python) || !IsLocalFile(checkpoint) || !IsLocalExecutable(ffmpeg) || !IsLocalFile(runner))
             return null;
 
         string ffprobe = Path.Combine(Path.GetDirectoryName(ffmpeg)!, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
-        return IsLocalExecutable(ffprobe) ? new(python, checkpoint, ffmpeg, ffprobe, runner) : null;
+        return IsLocalExecutable(ffprobe) ? new(python, checkpoint, ffmpeg, ffprobe, runner, cpuAsrEvidence) : null;
     }
 
     /// <summary>The caller holds GPU admission until this operation and any required process drain have completed.</summary>
@@ -70,19 +85,10 @@ public sealed class HtDemucsSpeechSeparator
 
         try
         {
-            var info = new ProcessStartInfo(python)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                WorkingDirectory = Path.GetDirectoryName(output.WavePath)!
-            };
-            foreach (string argument in new[] { "-I", "-B", runner, "--source", mediaPath,
+            var info = CreateProcessInfo(output.WavePath, "--source", mediaPath,
                 "--stream", streamIndex.ToString(CultureInfo.InvariantCulture), "--ffmpeg", ffmpeg, "--ffprobe", ffprobe,
                 "--model", checkpoint, "--output", output.WavePath,
-                "--duration", duration.TotalSeconds.ToString("R", CultureInfo.InvariantCulture) })
-                info.ArgumentList.Add(argument);
+                "--duration", duration.TotalSeconds.ToString("R", CultureInfo.InvariantCulture));
 
             deadline.Token.ThrowIfCancellationRequested();
             process = OnlineVideoProcess.StartEngine(info);
@@ -111,21 +117,133 @@ public sealed class HtDemucsSpeechSeparator
         }
         finally
         {
-            if (process is not null)
-            {
-                try { await process.DisposeEngineAsync().ConfigureAwait(false); }
-                catch (Exception stopFailure)
-                {
-                    throw new EngineProcessDrainException("Could not confirm that HTDemucs FT stopped. Retry shutdown.",
-                        stopFailure, async () =>
-                        {
-                            await process.DisposeEngineAsync().ConfigureAwait(false);
-                            output.Dispose();
-                        });
-                }
-            }
+            await DrainProcessAsync(process, output).ConfigureAwait(false);
             if (!keepOutput)
                 output.Dispose();
+        }
+    }
+
+    /// <summary>Checks a bounded exact 16 kHz mono recognition window. The host owns GPU admission until drain.</summary>
+    internal async Task<short[]?> TrySeparateAsrEvidenceAsync(ReadOnlyMemory<short> original, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (original.IsEmpty || original.Length > MaxAsrEvidenceSamples || !BitConverter.IsLittleEndian)
+            return null;
+
+        SeparatedAudio? staging = null;
+        OnlineVideoProcess? process = null;
+        short[]? evidence = null;
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromMinutes(5));
+        try
+        {
+            var workspace = Directory.CreateTempSubdirectory("llplayer-asr-evidence-");
+            staging = new SeparatedAudio(workspace);
+            string inputPath = Path.Combine(workspace.FullName, "input.wav");
+            string evidencePath = Path.Combine(workspace.FullName, "vocals.s16le");
+            using (var input = File.Create(inputPath))
+                WriteAsrEvidenceWave(input, original.Span);
+
+            var info = CreateProcessInfo(evidencePath, "--source", inputPath, "--ffmpeg", ffmpeg, "--model", checkpoint,
+                "--output", evidencePath, "--asr-pcm-samples", original.Length.ToString(CultureInfo.InvariantCulture));
+            if (cpuAsrEvidence)
+            {
+                info.ArgumentList.Add("--asr-evidence-cpu");
+                info.Environment["CUDA_VISIBLE_DEVICES"] = "-1";
+            }
+
+            deadline.Token.ThrowIfCancellationRequested();
+            process = OnlineVideoProcess.StartEngine(info);
+            (int? exit, string detail) = await ReadResultAsync(process, deadline.Token).ConfigureAwait(false);
+            deadline.Token.ThrowIfCancellationRequested();
+            if (exit != 0)
+                throw new IOException($"HTDemucs FT evidence failed (exit code {exit?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}).{detail}");
+
+            using var raw = File.OpenRead(evidencePath);
+            short[] pcm = ReadAsrEvidencePcm(raw, original.Length);
+            deadline.Token.ThrowIfCancellationRequested();
+            evidence = pcm;
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested && deadline.IsCancellationRequested)
+        {
+            if (Engine.Config is not null && CanWarn) Log.Warn("HTDemucs FT evidence exceeded its five-minute time limit.");
+        }
+        catch (Exception error) when (error is not EngineProcessDrainException &&
+            error is (IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or
+                InvalidOperationException or NotSupportedException or TimeoutException or System.ComponentModel.Win32Exception))
+        {
+            if (Engine.Config is not null && CanWarn) Log.Warn($"HTDemucs FT evidence is unavailable: {error.Message}");
+        }
+        finally
+        {
+            if (staging is not null)
+            {
+                await DrainProcessAsync(process, staging).ConfigureAwait(false);
+                staging.Dispose();
+            }
+        }
+        token.ThrowIfCancellationRequested();
+        return evidence;
+    }
+
+    internal static void WriteAsrEvidenceWave(Stream stream, ReadOnlySpan<short> pcm)
+    {
+        int bytes = pcm.Length * sizeof(short);
+        using var writer = new BinaryWriter(stream, Encoding.UTF8, leaveOpen: true);
+        writer.Write("RIFF"u8);
+        writer.Write(36 + bytes);
+        writer.Write("WAVEfmt "u8);
+        writer.Write(16);
+        writer.Write((ushort)1); // PCM
+        writer.Write((ushort)1); // Mono
+        writer.Write(AsrSampleRate);
+        writer.Write(AsrSampleRate * sizeof(short));
+        writer.Write((ushort)sizeof(short));
+        writer.Write((ushort)16);
+        writer.Write("data"u8);
+        writer.Write(bytes);
+        writer.Write(MemoryMarshal.AsBytes(pcm));
+    }
+
+    internal static short[] ReadAsrEvidencePcm(Stream stream, int samples)
+    {
+        if (stream.Length - stream.Position != samples * sizeof(short))
+            throw new InvalidDataException("HTDemucs FT evidence does not cover the original PCM exactly.");
+        short[] pcm = new short[samples];
+        stream.ReadExactly(MemoryMarshal.AsBytes(pcm.AsSpan()));
+        return pcm;
+    }
+
+    private ProcessStartInfo CreateProcessInfo(string outputPath, params string[] arguments)
+    {
+        var info = new ProcessStartInfo(python)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            WorkingDirectory = Path.GetDirectoryName(outputPath)!
+        };
+        foreach (string argument in new[] { "-I", "-B", runner })
+            info.ArgumentList.Add(argument);
+        foreach (string argument in arguments)
+            info.ArgumentList.Add(argument);
+        return info;
+    }
+
+    private static async ValueTask DrainProcessAsync(OnlineVideoProcess? process, SeparatedAudio staging)
+    {
+        if (process is null)
+            return;
+        try { await process.DisposeEngineAsync().ConfigureAwait(false); }
+        catch (Exception stopFailure)
+        {
+            throw new EngineProcessDrainException("Could not confirm that HTDemucs FT stopped. Retry shutdown.",
+                stopFailure, async () =>
+                {
+                    await process.DisposeEngineAsync().ConfigureAwait(false);
+                    staging.Dispose();
+                });
         }
     }
 

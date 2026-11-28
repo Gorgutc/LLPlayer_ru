@@ -128,7 +128,17 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
         bool interactive = slot.HasValue;
         using AudioReader reader = new(batchConfig, slot.GetValueOrDefault(), _preferCpu,
             enableVadSnapping: interactive && batchConfig.Subtitles.VadCueSnapping, confirmProcessExit: _confirmProcessExit,
-            detectAsrOmissions: _detectAsrOmissions);
+            detectAsrOmissions: _detectAsrOmissions)
+        {
+            // An already separated Whisper input has no independent original view at this sample clock.
+            SeparatePhantomEvidence = separated is null && _speechSeparator is { } evidenceSeparator
+                ? (pcm, cancellation) => _preferCpu?.Invoke() == true
+                    ? Task.FromResult<short[]?>(null)
+                    : evidenceSeparator.TrySeparateAsrEvidenceAsync(pcm, cancellation)
+                : null,
+            ObserveSuppressedLanguage = language => sourceLanguage = ResolveReportedSourceLanguage(sourceLanguage,
+                selectedAudioLanguage, GetKnownLanguage(language))
+        };
         if (separated is null)
             reader.Open(audio.MediaPath, audio.StreamIndex, audio.MediaType, token);
         else
