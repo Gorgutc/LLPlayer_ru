@@ -796,7 +796,7 @@ public class Subtitle : NotifyPropertyChanged
 #endif
 
     public void EnableASR(Config runConfig = null, bool attachOnly = false, bool confirmProcessExit = false,
-        CancellationToken startCancellation = default)
+        CancellationToken startCancellation = default, bool detectAsrOmissions = false)
     {
         TaskCompletionSource startup = new(TaskCreationOptions.RunContinuationsAsynchronously);
         ASRStartup = startup.Task;
@@ -807,6 +807,7 @@ public class Subtitle : NotifyPropertyChanged
         var audioStream = _player.AudioDecoder.AudioStream;
         var streamIndex = audioStream.StreamIndex;
         var mediaGeneration = _player.MediaGeneration;
+        var omissionSource = new SubtitlesASR.OmissionPlaybackSource(mediaGeneration, audioStream, _player.Config.Audio.Delay);
 
         TimeSpan curTime = new(_player.CurTime);
 
@@ -821,7 +822,7 @@ public class Subtitle : NotifyPropertyChanged
                     isDone = _player.SubtitlesASR.Execute(_subIndex, url, streamIndex, type, curTime, () => startup.TrySetResult(),
                         runConfig, attachOnly, confirmProcessExit, startCancellation, () =>
                             !_player.IsMediaResetting && mediaGeneration == _player.MediaGeneration
-                            && ReferenceEquals(audioStream, _player.AudioDecoder.AudioStream));
+                            && ReferenceEquals(audioStream, _player.AudioDecoder.AudioStream), detectAsrOmissions, omissionSource);
                 }
 
                 // F-16: restore persisted per-line voices onto the freshly transcribed cues too (same gated,

@@ -327,7 +327,7 @@ public class SettingsWindowTests
         public string? RecognitionWarning => null;
         public RecognitionSettings RecognitionSettings { get; } = new();
         public string RecognitionStatus => "Recognition idle";
-        public Task StartRecognitionAsync(int slot) => Task.CompletedTask;
+        public Task StartRecognitionAsync(int slot, bool detectAsrOmissions = true) => Task.CompletedTask;
         public Task CancelRecognitionAsync(int slot) => Task.CompletedTask;
         public Task OcrRecognitionAsync(int slot) => Task.CompletedTask;
         public Task ToggleRecognitionPauseAsync() => Task.CompletedTask;

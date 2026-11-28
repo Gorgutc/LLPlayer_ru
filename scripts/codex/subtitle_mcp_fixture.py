@@ -51,7 +51,7 @@ def verify(executable, fixture, version, parent):
     }
     prefix = PREFIX
     known = {prefix + name for name in (
-        "media_probe", "recognition_start", "translation_document_read",
+        "media_probe", "recognition_start", "recognition_omissions_read", "translation_document_read",
         "translation_document_apply", "translation_document_commit",
         "export_subtitles", "workflow_create_subtitles", "job_get",
     )}
@@ -87,6 +87,11 @@ def verify(executable, fixture, version, parent):
             if name == "workflow_create_subtitles":
                 fields = fields["files"]["items"]["properties"]
             fixture.check("requirePhysicalSource" not in fields, "The physical-source guard was advertised as caller input")
+        for name in ("recognition_start", "workflow_create_subtitles"):
+            input_schema = tools[prefix + name]["inputSchema"]["properties"]["input"]
+            fixture.check("detectAsrOmissions" in input_schema["properties"] and
+                          "detectAsrOmissions" not in input_schema.get("required", []),
+                          "Omission detection must be optional for a recognition invocation")
 
         def reject(name, arguments, code):
             reply = client.send("tools/call", {"name": name, "arguments": arguments})
@@ -122,6 +127,7 @@ def verify(executable, fixture, version, parent):
             "jobId": identifier, "revision": revision, "path": str(outside), "overwrite": True,
         }}, "invalid_arguments")
         reject(prefix + "job_get", {"jobId": identifier}, "job_not_found")
+        reject(prefix + "recognition_omissions_read", {"input": {"jobId": identifier}}, "job_not_found")
         reject(prefix + "translation_document_read", {"input": {"jobId": identifier, "revision": revision}},
                "job_not_found")
 
@@ -170,11 +176,32 @@ def verify_with_host(api, source, executable, environment, run_companion, stdio_
         awaiting = wait_for_job(api, job_id, "awaitingTranslation")
         check(client.tool(PREFIX + "job_get", {"jobId": job_id})["value"] == awaiting,
               "The profile did not expose its admitted recognition job")
+        summary = awaiting["value"]["omissionDetection"]
+        findings = invoke(client, "recognition_omissions_read", {"jobId": job_id})["value"]
+        check(summary["enabled"] is True and findings["omissionDetection"] == summary,
+              "Omission detection was not enabled by default or the persisted summary disagrees")
+        before = api.operation("settings.read", {"family": "recognition"})["value"]
+        for enabled in (False, True):
+            launched = invoke(client, "recognition_start", dict(input_args, detectAsrOmissions=enabled), writable=True)
+            scoped_id = queue_job(launched, check)
+            scoped = wait_for_job(api, scoped_id, "awaitingTranslation")["value"]
+            candidate_page = invoke(client, "recognition_omissions_read", {"jobId": scoped_id})["value"]
+            scoped_summary = scoped["omissionDetection"]
+            check(scoped_summary["enabled"] is enabled and candidate_page["omissionDetection"] == scoped_summary,
+                  "A recognition launch did not retain the requested omission mode")
+            if not enabled:
+                check(scoped_summary["status"] == "disabled" and scoped_summary["applied"] is False
+                      and scoped_summary["totalCount"] == 0 and not candidate_page["candidates"],
+                      "The explicit OFF recognition performed or exposed omission detection")
+        check(api.operation("settings.read", {"family": "recognition"})["value"] == before,
+              "Job-scoped omission modes changed the common recognition settings")
 
     with run_companion(executable, environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE) as process:
         client = discover(process)
         denied = client.tool(PREFIX + "job_get", {"jobId": job_id}, error=True)
         check(denied["error"]["code"] == "job_not_found", "A fresh profile exposed a job it did not admit")
+        denied = client.tool(PREFIX + "recognition_omissions_read", {"input": {"jobId": job_id}}, error=True)
+        check(denied["error"]["code"] == "job_not_found", "A fresh profile exposed suggestions from an unadmitted job")
         replayed = invoke(client, "recognition_start", input_args, writable=True, replay=request_id)
         check(replayed["jobId"] == job_id, "Replaying recognition allocated another underlying job")
         draft = {"jobId": job_id, "revision": awaiting["value"]["revision"]}
@@ -185,6 +212,9 @@ def verify_with_host(api, source, executable, environment, run_companion, stdio_
         invoke(client, "translation_document_apply", dict(draft, cues=translations), writable=True)
         invoke(client, "translation_document_commit", draft, writable=True)
         done = wait_for_job(api, job_id, "completed")
+        check(done["value"]["omissionDetection"] == summary and
+              invoke(client, "recognition_omissions_read", {"jobId": job_id})["value"] == findings,
+              "Committing the source draft lost its separate omission suggestions")
         saved = invoke(client, "export_subtitles", dict(draft, revision=done["value"]["revision"]), writable=True)
         completed = wait_for_job(api, queue_job(saved, check), "completed")
         check(Path(completed["value"]["path"]) == output, "The approved export did not write beside the source")

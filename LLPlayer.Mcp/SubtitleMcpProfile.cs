@@ -12,6 +12,7 @@ internal sealed class SubtitleMcpProfile(string root)
 {
     private const string Probe = "media.probe";
     private const string Recognize = "recognition.start";
+    private const string Omissions = "recognition.omissions.read";
     private const string Read = "translation.document.read";
     private const string Apply = "translation.document.apply";
     private const string Commit = "translation.document.commit";
@@ -23,7 +24,8 @@ internal sealed class SubtitleMcpProfile(string root)
     private static readonly IReadOnlyDictionary<string, Operation> Operations = new Operation[]
     {
         new(Probe, typeof(ProbeInput), "Probe a media file inside the approved library and return its source revision."),
-        new(Recognize, typeof(RecognitionInput), "Recognize the probed media and prepare a draft for external Russian translation.", true),
+        new(Recognize, typeof(RecognitionInput), "Recognize the probed media and prepare a draft for external Russian translation. Omission suggestions are enabled unless detectAsrOmissions is false.", true),
+        new(Omissions, typeof(ControlOmissionRead), "Read timed omission suggestions from a recognition or workflow job admitted by this bridge."),
         new(Read, typeof(DraftReadInput), "Read a page of the Russian translation draft created by this bridge."),
         new(Apply, typeof(DraftApplyInput), "Submit translations with the original cue IDs.", true),
         new(Commit, typeof(DraftInput), "Commit the complete Russian translation at its current revision.", true),
@@ -101,6 +103,7 @@ internal sealed class SubtitleMcpProfile(string root)
                     recognition.StreamIndex,
                     recognition.SourceLanguage,
                     recognition.Engine,
+                    recognition.DetectAsrOmissions,
                     externalTargetLanguage = "ru",
                     requirePhysicalSource = true,
                 };
@@ -119,9 +122,15 @@ internal sealed class SubtitleMcpProfile(string root)
                     }).ToArray(),
                     sourceLanguage = workflow.SourceLanguage,
                     engine = workflow.Engine,
+                    workflow.DetectAsrOmissions,
                     targetLanguage = "russian",
                     format = "srt",
                 };
+            case Omissions:
+                var omissions = Decode<ControlOmissionRead>(input);
+                if (!jobs.TryGetValue(omissions.JobId, out var sourceOperation) || sourceOperation is not (Recognize or Workflow))
+                    throw new ControlException(JobNotFound().Error!);
+                return omissions;
             case Read:
                 return RequireRecognition(Decode<DraftReadInput>(input));
             case Apply:
@@ -210,9 +219,10 @@ internal sealed class SubtitleMcpProfile(string root)
     private sealed record JobInput(Guid JobId);
     private sealed record ProbeInput(string MediaPath, int? StreamIndex = null);
     private sealed record RecognitionInput(string MediaPath, string SourceRevision, int? StreamIndex = null,
-        string? SourceLanguage = null, string? Engine = null);
+        string? SourceLanguage = null, string? Engine = null, bool? DetectAsrOmissions = null);
     private sealed record WorkflowFile(string MediaPath, string SourceRevision, int? StreamIndex = null);
-    private sealed record WorkflowInput(IReadOnlyList<WorkflowFile> Files, string? SourceLanguage = null, string? Engine = null);
+    private sealed record WorkflowInput(IReadOnlyList<WorkflowFile> Files, string? SourceLanguage = null, string? Engine = null,
+        bool? DetectAsrOmissions = null);
     private record DraftInput(Guid JobId, string Revision);
     private sealed record DraftReadInput(Guid JobId, string Revision, int Offset = 0, int Limit = 64) : DraftInput(JobId, Revision);
     private sealed record DraftApplyInput(Guid JobId, string Revision, IReadOnlyList<CueTranslation> Cues) : DraftInput(JobId, Revision);

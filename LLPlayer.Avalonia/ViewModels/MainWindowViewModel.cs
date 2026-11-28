@@ -793,6 +793,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     async Task StartRecognitionAsync(string slot) => await RecognitionAction(controller => controller.StartRecognitionAsync(int.Parse(slot)));
     [RelayCommand]
+    async Task StartRecognitionWithoutOmissionSearchAsync(string slot)
+        => await RecognitionAction(controller => controller.StartRecognitionAsync(int.Parse(slot), detectAsrOmissions: false));
+    [RelayCommand]
     async Task CancelRecognitionAsync(string slot) => await RecognitionAction(controller => controller.CancelRecognitionAsync(int.Parse(slot)));
     [RelayCommand]
     async Task OcrRecognitionAsync(string slot) => await RecognitionAction(controller => controller.OcrRecognitionAsync(int.Parse(slot)));
@@ -1247,6 +1250,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         BeginWordActionsShutdown();
         CancelAppShortcuts();
         disposed = true;
+        ShowAsrOmissionReviewCommand.Cancel();
         ClearPlaybackChoices();
         browserWaitCancellation.Dispose();
         Sidebar.PropertyChanged -= OnSidebarPropertyChanged;
@@ -1324,6 +1328,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Sidebar.Reload();
         insights?.Refresh();
         RefreshSrtAlignmentState();
+        RefreshAsrOmissionReviewState();
     }
 
     void OnSidebarSynchronizationFailed(string message)
@@ -1332,8 +1337,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     void OnExternalMediaOpening()
     {
         insights?.Invalidate();
+        asrOmissionReview?.Invalidate();
         Sidebar.Clear();
         RefreshSrtAlignmentState();
+        ShowAsrOmissionReviewCommand.Cancel();
+        RefreshAsrOmissionReviewState();
         ClearPlaybackChoices();
         pendingMediaRequest = null;
         pendingSubtitles.Clear();
@@ -1386,6 +1394,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case nameof(SubtitlesSidebarViewModel.SelectedSlot):
                 prefs.SidebarShowSecondary = Sidebar.SelectedSlot == 1;
                 RefreshSrtAlignmentState();
+                ShowAsrOmissionReviewCommand.Cancel();
+                RefreshAsrOmissionReviewState();
                 break;
             case nameof(SubtitlesSidebarViewModel.MatchCase):
                 prefs.SidebarSearchMatchCase = Sidebar.MatchCase;
@@ -1416,6 +1426,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (e.PropertyName is nameof(ISrtAlignmentController.CanStartSrtAlignment)
             or nameof(IPlaybackController.IsOpened) or nameof(IPlaybackController.IsOpening))
             RefreshSrtAlignmentState();
+        if (e.PropertyName is nameof(RecognitionStatus) or nameof(IPlaybackController.IsOpened) or nameof(IPlaybackController.IsOpening)
+            or nameof(IPlaybackController.PrimarySlotEnabled) or nameof(IPlaybackController.SecondarySlotEnabled))
+            RefreshAsrOmissionReviewState();
         switch (e.PropertyName)
         {
             case "VideoBackendPreferences":

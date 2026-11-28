@@ -11,7 +11,7 @@ public interface IRecognitionController
     string? RecognitionWarning { get; }
     RecognitionSettings RecognitionSettings { get; }
     string RecognitionStatus { get; }
-    Task StartRecognitionAsync(int slot);
+    Task StartRecognitionAsync(int slot, bool detectAsrOmissions = true);
     Task CancelRecognitionAsync(int slot);
     Task OcrRecognitionAsync(int slot);
     Task ToggleRecognitionPauseAsync();

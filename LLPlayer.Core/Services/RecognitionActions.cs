@@ -15,6 +15,7 @@ public interface IRecognitionBackend
     bool IsBusy { get; }
     bool IsPaused { get; }
     void Start(int slot);
+    void Start(int slot, bool detectAsrOmissions) => Start(slot);
     void Pause();
     void Resume();
     void Cancel(int slot);
@@ -30,10 +31,10 @@ internal interface ICoordinatedRecognitionBackend
     object CaptureInput();
     Config CaptureSettings();
     bool IsCurrentInput(object input);
-    bool CanAttach(int slot);
+    bool CanAttach(int slot, bool detectAsrOmissions);
     void SignalStop();
     RecognitionAttempt Start(int slot, object input, Config settings, bool attachOnly, bool confirmProcessExit,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken, bool detectAsrOmissions);
 }
 
 /// <summary>Canonical Flyleaf command adapter; native OCR initialization is invoked by the serialized worker.</summary>
@@ -43,10 +44,11 @@ public sealed class PlayerRecognitionBackend(Player player) : IRecognitionBacken
     public bool IsLive => player.IsLive;
     public bool IsBusy => player.IsASRRunning || Enumerable.Range(0, 2).Any(slot => player.Subtitles[slot].EnabledASR) || Enumerable.Range(0, 2).Any(slot => player.SubtitlesManager[slot].IsLoading);
     public bool IsPaused => player.IsASRPaused;
-    public void Start(int slot)
+    public void Start(int slot) => Start(slot, detectAsrOmissions: false);
+    public void Start(int slot, bool detectAsrOmissions)
     {
         if (!player.SubtitlesASR.CanExecute(out string error, out _)) throw new InvalidOperationException(error);
-        player.Commands.OpenSubtitlesASRAction(slot.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (!player.Commands.StartSubtitlesASR(slot, detectAsrOmissions: detectAsrOmissions)) throw StaleInput();
         player.Subtitles[slot].ASRStartup.GetAwaiter().GetResult();
     }
     public void Pause() => player.SubtitlesASR.Pause();
@@ -59,7 +61,8 @@ public sealed class PlayerRecognitionBackend(Player player) : IRecognitionBacken
         player.AudioDecoder.AudioStream, player.AudioDecoder.Demuxer.Url);
     Config ICoordinatedRecognitionBackend.CaptureSettings() => BatchSubtitleConfigSnapshot.CreateForRecognition(player.Config);
     bool ICoordinatedRecognitionBackend.IsCurrentInput(object input) => IsCurrent((Input)input);
-    bool ICoordinatedRecognitionBackend.CanAttach(int slot) => player.SubtitlesASR.CanAttach(slot);
+    bool ICoordinatedRecognitionBackend.CanAttach(int slot, bool detectAsrOmissions)
+        => player.SubtitlesASR.CanAttach(slot, detectAsrOmissions);
     void ICoordinatedRecognitionBackend.SignalStop() => player.SubtitlesASR.CancelForRestart();
 
     bool IsCurrent(Input input) => !player.IsDisposed && !player.IsMediaResetting && player.MediaGeneration == input.Generation
@@ -67,7 +70,7 @@ public sealed class PlayerRecognitionBackend(Player player) : IRecognitionBacken
         && player.AudioDecoder.Demuxer.Url == input.Url;
 
     RecognitionAttempt ICoordinatedRecognitionBackend.Start(int slot, object input, Config settings, bool attachOnly,
-        bool confirmProcessExit, CancellationToken cancellationToken)
+        bool confirmProcessExit, CancellationToken cancellationToken, bool detectAsrOmissions)
     {
         Input expected = (Input)input;
         RecognitionAttempt attempt = default;
@@ -75,7 +78,8 @@ public sealed class PlayerRecognitionBackend(Player player) : IRecognitionBacken
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!player.SubtitlesASR.CanExecute(out string error, out _, settings)) throw new InvalidOperationException(error);
-            if (!player.Commands.StartSubtitlesASR(slot, settings, attachOnly, confirmProcessExit, cancellationToken)) throw StaleInput();
+            if (!player.Commands.StartSubtitlesASR(slot, settings, attachOnly, confirmProcessExit, cancellationToken, detectAsrOmissions))
+                throw StaleInput();
             attempt = new(player.Subtitles[slot].ASRStartup, player.Subtitles[slot].ASRCompletion);
         }
 #if WINDOWS
@@ -189,7 +193,7 @@ public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDispos
             foreach (StartRequest? request in startRequests) request?.Command.Cancel();
     }
 
-    public Task StartAsync(int slot)
+    public Task StartAsync(int slot, bool detectAsrOmissions = true)
     {
         if (gpuCoordinator == null || backend is not ICoordinatedRecognitionBackend gpuBackend)
             return RunAsync(() =>
@@ -197,7 +201,7 @@ public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDispos
                 ValidateSlot(slot);
                 ValidateStart();
                 using IDisposable? resourceUse = acquireResourceUse?.Invoke();
-                backend.Start(slot);
+                backend.Start(slot, detectAsrOmissions);
             });
 
         ValidateSlot(slot);
@@ -205,7 +209,7 @@ public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDispos
         {
             if (disposed || shuttingDown)
                 return Task.FromException(new RecognitionActionCanceledException("Recognition was canceled because the player is closing."));
-            var request = new StartRequest(gpuBackend.CaptureInput(), new ActiveCommand());
+            var request = new StartRequest(gpuBackend.CaptureInput(), new ActiveCommand(), detectAsrOmissions);
             startRequests[slot]?.Command.Cancel();
             startRequests[slot] = request;
             Task task = Task.Run(() => StartCoordinatedAsync(slot, gpuBackend, request, gpuCoordinator));
@@ -232,7 +236,7 @@ public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDispos
             {
                 ValidateCurrent(gpuBackend, request.Input, token);
                 ValidateStart();
-                attachOnly = gpuBackend.CanAttach(slot);
+                attachOnly = gpuBackend.CanAttach(slot, request.DetectAsrOmissions);
                 if (attachOnly) return;
 
                 lock (admission) previous = asrRun;
@@ -256,7 +260,7 @@ public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDispos
             {
                 ValidateCurrent(gpuBackend, request.Input, token);
                 ValidateStart();
-                if (attachOnly && !gpuBackend.CanAttach(slot))
+                if (attachOnly && !gpuBackend.CanAttach(slot, request.DetectAsrOmissions))
                     throw new RecognitionActionCanceledException("The ASR run for the other subtitle slot is no longer available.");
                 Config settings = gpuBackend.CaptureSettings();
                 if (!attachOnly && FasterWhisperDevicePolicy.RequiresGpuAdmission(settings) != needsGpu)
@@ -265,7 +269,8 @@ public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDispos
                 IDisposable? resourceUse = attachOnly ? null : acquireResourceUse?.Invoke();
                 try
                 {
-                    RecognitionAttempt attempt = gpuBackend.Start(slot, request.Input, settings, attachOnly, needsGpu, token);
+                    RecognitionAttempt attempt = gpuBackend.Start(slot, request.Input, settings, attachOnly, needsGpu, token,
+                        request.DetectAsrOmissions);
                     if (!attachOnly)
                     {
                         Task run = TrackRunAsync(attempt.Completion, lease, resourceUse);
@@ -473,7 +478,7 @@ public sealed class RecognitionActions(IRecognitionBackend backend, Func<IDispos
         await drain.ConfigureAwait(false);
     }
 
-    sealed record StartRequest(object Input, ActiveCommand Command);
+    sealed record StartRequest(object Input, ActiveCommand Command, bool DetectAsrOmissions);
 
     // Admission owns cancellation; the worker disposes the source only after its callbacks settle.
     sealed class ActiveCommand : IDisposable

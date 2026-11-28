@@ -10,6 +10,7 @@ public partial class MainWindow
     AiInsightsWindow? insightsWindow;
     DubbingWindow? dubbingWindow;
     VoicePickerWindow? voicePickerWindow;
+    AsrOmissionReviewWindow? asrOmissionReviewWindow;
     ModelManagerWindow? modelManagerWindow;
     BatchSubtitlesWindow? batchWindow;
     public Func<bool>? KeepAliveOnClose { get; set; }
@@ -51,15 +52,31 @@ public partial class MainWindow
         // existing close veto; a nested manager belongs to Recognition and keeps that owner's semantics.
         ClosingBehavior = owned.Length > 0 && owned.All(child => child is RecognitionWindow or ModelManagerWindow
             or AiInsightsWindow or DubbingWindow or VoicePickerWindow or CaptureDevicesWindow
-            or CommandPaletteWindow or AboutWindow or PlayerDebugWindow or CheatSheetWindow
+            or CommandPaletteWindow or AboutWindow or PlayerDebugWindow or CheatSheetWindow or AsrOmissionReviewWindow
             || child is SrtAlignmentWindow && ShutdownRequested != null)
             ? WindowClosingBehavior.OwnerWindowOnly : WindowClosingBehavior.OwnerAndChildWindows;
     }
 
     void EnableLanguageWindows(bool enabled)
     {
-        foreach (Window? child in new Window?[] { insightsWindow, dubbingWindow, voicePickerWindow, modelManagerWindow, batchWindow, recognitionWindow, srtAlignmentWindow })
+        foreach (Window? child in new Window?[] { insightsWindow, dubbingWindow, voicePickerWindow, modelManagerWindow, batchWindow,
+                     recognitionWindow, srtAlignmentWindow, asrOmissionReviewWindow })
             if (child != null) child.IsEnabled = enabled;
+    }
+
+    public void ShowAsrOmissionReview(AsrOmissionReviewViewModel model)
+    {
+        vm?.CancelAppShortcuts();
+        if (asrOmissionReviewWindow != null) { asrOmissionReviewWindow.Activate(); return; }
+        var window = new AsrOmissionReviewWindow(model);
+        asrOmissionReviewWindow = window;
+        OwnKeyboardSurface(window);
+        window.Closed += (_, _) =>
+        {
+            asrOmissionReviewWindow = null;
+            vm?.AsrOmissionReviewClosed(model);
+        };
+        _ = window.ShowDialog(this);
     }
 
     public void ShowAiInsights(AiInsightsViewModel model)
@@ -151,6 +168,7 @@ public partial class MainWindow
         if (batchWindow != null) { batchWindow.IsShuttingDown = true; batchWindow.Close(); }
         insightsWindow?.Close(); modelManagerWindow?.Close(); dubbingWindow?.Close(); voicePickerWindow?.Close();
         srtAlignmentWindow?.Close();
+        asrOmissionReviewWindow?.Close();
     }
 
     void OnCueVoiceClick(object? sender, RoutedEventArgs args)

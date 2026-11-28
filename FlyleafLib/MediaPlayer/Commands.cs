@@ -333,7 +333,7 @@ public class Commands
     }
 
     public bool StartSubtitlesASR(int subIndex, Config runConfig = null, bool attachOnly = false,
-        bool confirmProcessExit = false, CancellationToken startCancellation = default)
+        bool confirmProcessExit = false, CancellationToken startCancellation = default, bool detectAsrOmissions = false)
     {
         startCancellation.ThrowIfCancellationRequested();
 
@@ -363,7 +363,7 @@ public class Commands
             player.Subtitles[subIndex].Disable();
         }
 
-        player.Subtitles[subIndex].EnableASR(runConfig, attachOnly, confirmProcessExit, startCancellation);
+        player.Subtitles[subIndex].EnableASR(runConfig, attachOnly, confirmProcessExit, startCancellation, detectAsrOmissions);
         return true;
     }
 

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LLPlayer.ControlApi;
 
 namespace LLPlayer.Core.Automation;
@@ -13,38 +14,44 @@ public sealed record ControlTranslationCommit(Guid JobId, string Revision);
 public sealed record ControlDocumentPage(Guid DocumentId, string Revision, string? SourceLanguage,
     string? TargetLanguage, ImmutableArray<ControlCue> Cues, int TotalCount, int? NextOffset);
 public sealed record ControlDocumentSummary(Guid DocumentId, string Revision, string? SourceLanguage,
-    string? TargetLanguage, int TotalCount, int? SelectedCount = null, int? ReceivedCount = null);
+    string? TargetLanguage, int TotalCount, int? SelectedCount = null, int? ReceivedCount = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlOmissionSummary? OmissionDetection = null);
 
 /// <summary>Routes external translation through the persisted job and keeps document results bounded at the wire boundary.</summary>
 public sealed class ControlTranslationOperations(ControlJobService jobs)
 {
     private sealed record Checkpoint(ControlCueDocument? Document = null, ControlTranslationDraft? Draft = null,
-        string? CommittedSourceRevision = null);
+        string? CommittedSourceRevision = null,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControlRecognitionOmissions? Omissions = null);
 
-    public static ControlJobOutcome SaveDocument(ControlJobContext context, ControlCueDocument document)
+    public static ControlJobOutcome SaveDocument(ControlJobContext context, ControlCueDocument document,
+        ControlRecognitionOmissions? omissions = null)
     {
-        context.SaveCheckpoint(ControlProtocol.Encode(new Checkpoint(Document: document)));
-        return new(ControlJobStatus.Completed, ControlProtocol.Encode(Summary(document)));
+        context.SaveCheckpoint(ControlProtocol.Encode(new Checkpoint(Document: document, Omissions: omissions)));
+        return new(ControlJobStatus.Completed, ControlProtocol.Encode(Summary(document, omissions: omissions)));
     }
 
     public static void SaveDocumentPreview(ControlJobContext context, ControlCueDocument document)
         => context.SaveCheckpoint(ControlProtocol.Encode(new Checkpoint(Document: document)));
 
     public static ControlJobOutcome AwaitHarnessTranslation(ControlJobContext context, ControlCueDocument document,
-        string targetLanguage, int start = 0, int? count = null)
+        string targetLanguage, int start = 0, int? count = null, ControlRecognitionOmissions? omissions = null)
     {
         try
         {
             var draft = ControlTranslationDraft.Start(document, targetLanguage, start, count);
-            context.SaveCheckpoint(ControlProtocol.Encode(new Checkpoint(Draft: draft)));
-            return Awaiting(draft);
+            context.SaveCheckpoint(ControlProtocol.Encode(new Checkpoint(Draft: draft, Omissions: omissions)));
+            return Awaiting(draft, omissions);
         }
         catch (ControlCueException e) { throw Failure(e); }
     }
 
     /// <summary>Restore a saved draft after the handler revalidates its input and configuration.</summary>
     public static ControlJobOutcome? RestoreHarnessTranslation(ControlJobContext context) =>
-        ReadCheckpoint(context.Checkpoint)?.Draft is { } draft ? Awaiting(draft) : null;
+        ReadCheckpoint(context.Checkpoint) is { Draft: { } draft } saved ? Awaiting(draft, saved.Omissions) : null;
+
+    public static ControlRecognitionOmissions? ReadRecognitionOmissions(JsonElement? checkpoint) =>
+        ReadCheckpoint(checkpoint)?.Omissions;
 
     public async Task<ControlCueDocument> GetDocumentAsync(ControlScope scope, ControlDocumentReference reference,
         CancellationToken token = default)
@@ -93,9 +100,11 @@ public sealed class ControlTranslationOperations(ControlJobService jobs)
     {
         try
         {
-            var draft = RequireDraft(checkpoint);
+            var saved = RequireDraftCheckpoint(checkpoint);
+            var draft = saved.Draft!;
             var updated = draft.Submit(args.Revision, args.Cues);
-            return new(ControlProtocol.Encode(new Checkpoint(Draft: updated)), Awaiting(updated), NoChange: ReferenceEquals(draft, updated));
+            return new(ControlProtocol.Encode(saved with { Draft = updated }), Awaiting(updated, saved.Omissions),
+                NoChange: ReferenceEquals(draft, updated));
         }
         catch (ControlCueException e) { return new(checkpoint, new(ControlJobStatus.AwaitingTranslation, Error: DraftError(e).Error)); }
     }, token);
@@ -107,10 +116,12 @@ public sealed class ControlTranslationOperations(ControlJobService jobs)
         {
             try
             {
-                var draft = RequireDraft(checkpoint);
+                var saved = RequireDraftCheckpoint(checkpoint);
+                var draft = saved.Draft!;
                 var replacement = draft.Commit(args.Revision, draft.Source);
-                return new(ControlProtocol.Encode(new Checkpoint(Document: replacement, CommittedSourceRevision: draft.Source.Revision)),
-                    new(ControlJobStatus.Completed, ControlProtocol.Encode(Summary(replacement))));
+                return new(ControlProtocol.Encode(new Checkpoint(Document: replacement,
+                        CommittedSourceRevision: draft.Source.Revision, Omissions: saved.Omissions)),
+                    new(ControlJobStatus.Completed, ControlProtocol.Encode(Summary(replacement, omissions: saved.Omissions))));
             }
             catch (ControlCueException e) { return new(checkpoint, new(ControlJobStatus.AwaitingTranslation, Error: DraftError(e).Error)); }
         }, token).ConfigureAwait(false);
@@ -144,15 +155,19 @@ public sealed class ControlTranslationOperations(ControlJobService jobs)
         return data.Deserialize<Checkpoint>(ControlProtocol.Json);
     }
 
-    private static ControlTranslationDraft RequireDraft(JsonElement? checkpoint) => ReadCheckpoint(checkpoint)?.Draft
-        ?? throw new ControlCueException("translation_unavailable", "No translation draft was retained by this job.");
+    private static Checkpoint RequireDraftCheckpoint(JsonElement? checkpoint) =>
+        ReadCheckpoint(checkpoint) is { Draft: not null } saved ? saved
+            : throw new ControlCueException("translation_unavailable", "No translation draft was retained by this job.");
 
-    private static ControlJobOutcome Awaiting(ControlTranslationDraft draft) => new(ControlJobStatus.AwaitingTranslation,
-        ControlProtocol.Encode(Summary(draft.Source, draft)));
+    private static ControlTranslationDraft RequireDraft(JsonElement? checkpoint) => RequireDraftCheckpoint(checkpoint).Draft!;
 
-    private static ControlDocumentSummary Summary(ControlCueDocument document, ControlTranslationDraft? draft = null) =>
+    private static ControlJobOutcome Awaiting(ControlTranslationDraft draft, ControlRecognitionOmissions? omissions) =>
+        new(ControlJobStatus.AwaitingTranslation, ControlProtocol.Encode(Summary(draft.Source, draft, omissions)));
+
+    private static ControlDocumentSummary Summary(ControlCueDocument document, ControlTranslationDraft? draft = null,
+        ControlRecognitionOmissions? omissions = null) =>
         new(document.DocumentId, document.Revision, document.SourceLanguage, draft?.TargetLanguage ?? document.TargetLanguage,
-            document.Cues.Length, draft?.CueOrdinals.Length, draft?.Submitted.Count);
+            document.Cues.Length, draft?.CueOrdinals.Length, draft?.Submitted.Count, omissions?.Summarize());
 
     private static ControlResult DraftError(ControlCueException e) =>
         ControlResult.Fail(e.Code, e.Message, retryable: e.Code is "revision_conflict" or "translation_incomplete");

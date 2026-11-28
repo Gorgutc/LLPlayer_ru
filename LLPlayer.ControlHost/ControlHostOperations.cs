@@ -79,8 +79,12 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
 
         Read<ProbeRequest, ProbeResult>("media.probe", "media", "List streams and revision of a local finite media source.",
             (_, args, ct) => ProbeAsync(args, ct));
-        Job<RecognitionRequest>("recognition.start", "recognition", "Recognize a selected audio stream in a local media file.",
+        Job<RecognitionRequest>("recognition.start", "recognition",
+            "Recognize a selected audio stream. Omission suggestions are enabled unless detectAsrOmissions is false.",
             RecognizeAsync);
+        Read<ControlOmissionRead, ControlOmissionPage>("recognition.omissions.read", "recognition",
+            "Read timed omission suggestions separately from the retained original cue document.",
+            (request, args, ct) => ReadRecognitionOmissionsAsync(request.Scope, args, ct));
         Read<JobIdRequest, ControlResult>("recognition.pause", "recognition", "Pause recognition at a chunk boundary.",
             (request, args, ct) => UpdatePauseAsync(request.Scope, args.JobId, true, ct), mutates: true);
         Read<JobIdRequest, ControlResult>("recognition.resume", "recognition", "Continue paused recognition.",
@@ -107,7 +111,8 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
             (request, args, ct) => documents.CommitAsync(request.Scope, request.ExpectedRevision, args, ct), mutates: true);
         Job<ExportRequest>("export.subtitles", "export", "Write an existing subtitle document atomically.",
             ExportAsync);
-        Job<PipelineRequest>("workflow.create_subtitles", "recognition", "Recognize, translate and export each listed media file.",
+        Job<PipelineRequest>("workflow.create_subtitles", "recognition",
+            "Recognize, translate and export each listed media file. Omission suggestions are kept separate.",
             RunPipelineAsync);
 
         Read<ModelListRequest, IReadOnlyList<ModelEntry>>("models.list", "models", "List models and installation status.",
@@ -202,18 +207,42 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
                 TimeSpan.FromTicks(args.StartTicks), args.Slot, pause.Token,
                 new InlineProgress<BatchAsrProgress>(ReportAsr), ct,
                 waiting => context.Report(waiting ? "waiting_for_gpu" : "recognizing", status: waiting
-                    ? ControlJobStatus.WaitingForResource : ControlJobStatus.Running), saved.Config, sourceLanguage);
+                    ? ControlJobStatus.WaitingForResource : ControlJobStatus.Running), saved.Config, sourceLanguage,
+                detectAsrOmissions: args.DetectAsrOmissions ?? true);
             await context.VerifyInputAsync(CheckedSourcePath(path, args.RequirePhysicalSource), ct);
             context.VerifyIdentity(ControlJobContext.RecognitionSourcePathIdentity, PhysicalSourcePath(path, args.RequirePhysicalSource));
             var document = ControlCueDocument.Capture(context.JobId, sourceStamp, result.SourceLanguage.ISO6391, result.Subtitles);
+            var omissions = ControlRecognitionOmissions.Capture(result.OmissionReport, args.DetectAsrOmissions ?? true);
             return args.ExternalTargetLanguage is { } target
-                ? ControlTranslationOperations.AwaitHarnessTranslation(context, document, target)
-                : ControlTranslationOperations.SaveDocument(context, document);
+                ? ControlTranslationOperations.AwaitHarnessTranslation(context, document, target, omissions: omissions)
+                : ControlTranslationOperations.SaveDocument(context, document, omissions);
         }
         finally
         {
             recognition.TryRemove(context.JobId, out _);
         }
+    }
+
+    private async Task<ControlOmissionPage> ReadRecognitionOmissionsAsync(ControlScope scope, ControlOmissionRead args,
+        CancellationToken ct)
+    {
+        ControlJob job = await jobs.GetAsync(scope, args.JobId, ct)
+            ?? throw new ControlException(new("job_not_found", "The selected job does not exist in this scope."));
+        if (args.FileIndex is < 0 || (job.OperationId == "recognition.start" && args.FileIndex is > 0))
+            throw new ControlException(new("invalid_arguments", "The omission suggestion file index is invalid."));
+
+        var saved = await jobs.ReadCheckpointAsync(scope, args.JobId, ct);
+        if (saved.Error is { } error)
+            throw new ControlException(error);
+        var omissions = job.OperationId switch
+        {
+            "recognition.start" => ControlTranslationOperations.ReadRecognitionOmissions(saved.Value),
+            "workflow.create_subtitles" => ReadPipelineOmissions(saved.Value, args.FileIndex ?? 0),
+            _ => null
+        };
+        return omissions?.Read(args) ?? throw new ControlException(new("omissions_unavailable",
+            "The selected job has no retained omission suggestion report.",
+            job.Status is ControlJobStatus.Accepted or ControlJobStatus.WaitingForResource or ControlJobStatus.Running));
     }
 
     private async Task<ControlResult> UpdatePauseAsync(ControlScope scope, Guid id, bool paused, CancellationToken ct)
@@ -371,7 +400,8 @@ internal sealed partial class ControlHostOperations(ControlOperationCatalog cata
     internal sealed record RecognitionRequest(string MediaPath, int? StreamIndex = null,
         SubASREngineType? Engine = null, long StartTicks = 0, int? Slot = null, string? ExternalTargetLanguage = null,
         string? SourceRevision = null, string? SourceLanguage = null,
-        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool RequirePhysicalSource = false);
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] bool RequirePhysicalSource = false,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DetectAsrOmissions = null);
     internal sealed record JobIdRequest(Guid JobId);
     internal sealed record ProviderTranslationRequest(Guid JobId, string Revision, TargetLanguage TargetLanguage,
         string? SourceLanguage = null, int Start = 0, int? Count = null);

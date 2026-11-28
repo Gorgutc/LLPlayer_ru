@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using CliWrap;
 using CliWrap.Builders;
 using CliWrap.EventStream;
+using FlyleafLib.MediaPlayer.AsrOmissions;
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaStream;
@@ -37,22 +38,31 @@ namespace FlyleafLib.MediaPlayer;
 /// </remarks>
 public class SubtitlesASR
 {
+    public sealed record OmissionPlaybackSource(long MediaGeneration, AudioStream Audio, long AudioDelay);
+
+    public readonly record struct OmissionPlaybackReport(AsrOmissionReport Report, OmissionPlaybackSource? Source);
+
     private readonly SubtitlesManager _subtitlesManager;
     private readonly Config _config;
     private readonly Lock _locker = new();
     private readonly Lock _lockerSubs = new();
     private CancellationTokenSource? _cts = null;
     private long _slotRevision;
+    private bool _detectAsrOmissions;
+    private readonly OmissionPlaybackReport[] _omissionReports =
+        [new(AsrOmissionReport.Initial(false, false), null), new(AsrOmissionReport.Initial(false, false), null)];
     // Guarded by _lockerSubs (HC-37). Private so no consumer can enumerate it without the lock; external readers
     // (e.g. the audio screamer) use SnapshotSubIndexes().
     private readonly HashSet<int> SubIndexSet = new();
+    // Slots preserving completed cues from a different omission mode are still ASR tracks for source reset.
+    private readonly HashSet<int> _retainedSlots = new();
 
     /// <summary>A thread-safe snapshot of the currently-active ASR sub-indexes, taken under <c>_lockerSubs</c>.</summary>
     public int[] SnapshotSubIndexes()
     {
         lock (_lockerSubs)
         {
-            return SubIndexSet.ToArray();
+            return SubIndexSet.Concat(_retainedSlots).ToArray();
         }
     }
 
@@ -78,6 +88,23 @@ public class SubtitlesASR
     {
         lock (_lockerSubs)
             return SubIndexSet.Count > 0 && !SubIndexSet.Contains(slot);
+    }
+
+    /// <summary>Sharing an existing run requires the same request-scoped omission mode.</summary>
+    public bool CanAttach(int slot, bool detectAsrOmissions)
+    {
+        lock (_lockerSubs)
+            return _detectAsrOmissions == detectAsrOmissions && SubIndexSet.Count > 0 && !SubIndexSet.Contains(slot);
+    }
+
+    /// <summary>Returns the current detached review report for a subtitle slot.</summary>
+    public AsrOmissionReport GetOmissionReport(int slot) => GetOmissionPlaybackReport(slot).Report;
+
+    /// <summary>Returns the review report and its originating audio together, including for a shared ASR run.</summary>
+    public OmissionPlaybackReport GetOmissionPlaybackReport(int slot)
+    {
+        lock (_lockerSubs)
+            return _omissionReports[slot];
     }
 
     /// <summary>Retires a run before admission for its restart while preserving its existing cues.</summary>
@@ -202,7 +229,8 @@ public class SubtitlesASR
     /// <returns>true: process completed, false: run in progress</returns>
     public bool Execute(int subIndex, string url, int streamIndex, MediaType type, TimeSpan curTime, Action? startupAcknowledged = null,
         Config? runConfig = null, bool attachOnly = false, bool confirmProcessExit = false,
-        CancellationToken startCancellation = default, Func<bool>? isCurrentInput = null)
+        CancellationToken startCancellation = default, Func<bool>? isCurrentInput = null,
+        bool detectAsrOmissions = false, OmissionPlaybackSource? omissionSource = null)
     {
         startCancellation.ThrowIfCancellationRequested();
         long revision;
@@ -212,10 +240,12 @@ public class SubtitlesASR
         {
             CheckInput();
             revision = _slotRevision;
-            if (CanAttach(subIndex))
+            if (CanAttach(subIndex, detectAsrOmissions))
             {
                 SubIndexSet.Add(subIndex);
+                _retainedSlots.Remove(subIndex);
                 int otherIndex = (subIndex + 1) % 2;
+                _omissionReports[subIndex] = _omissionReports[otherIndex];
 
                 // HC-37: snapshot the other track's cues under its own _subsLocker (SnapshotSubs) rather than
                 // enumerating its live Subs while that track's ASR may still be appending.
@@ -259,9 +289,11 @@ public class SubtitlesASR
 
         // If it has already been executed, cancel it to start over from the current playback position.
         bool alreadyRunning;
+        bool replacingDifferentMode;
         lock (_lockerSubs)
         {
             alreadyRunning = SubIndexSet.Contains(subIndex);
+            replacingDifferentMode = SubIndexSet.Count > 0 && _detectAsrOmissions != detectAsrOmissions;
         }
         if (alreadyRunning)
         {
@@ -292,13 +324,15 @@ public class SubtitlesASR
                 {
                     // A concurrent dual-ASR detach keeps the remaining worker alive.
                     // Restore its cues without reattaching a slot the user has since disabled.
-                    if (!SubIndexSet.Contains(i)) continue;
+                    if (!SubIndexSet.Contains(i) || (replacingDifferentMode && i != subIndex)) continue;
                     _subtitlesManager[i].Load(prevSubs[i]);
                     // Re-enable spinner
                     _subtitlesManager[i].StartLoading();
                 }
             }
         }
+        else if (replacingDifferentMode)
+            CancelForRestart(); // Keep the other slot's existing cues and review report until it is reset.
 
         lock (_locker)
         {
@@ -310,7 +344,18 @@ public class SubtitlesASR
                 CheckInput();
                 if (revision != _slotRevision || (alreadyRunning && !SubIndexSet.Contains(subIndex)))
                     throw new OperationCanceledException("The subtitle source changed before ASR could start.");
+                if (_detectAsrOmissions != detectAsrOmissions)
+                {
+                    // Keep the other track visible, but stop appending to it from an incompatible run.
+                    _retainedSlots.UnionWith(SubIndexSet);
+                    SubIndexSet.Clear();
+                }
                 SubIndexSet.Add(subIndex);
+                _retainedSlots.Remove(subIndex);
+                _detectAsrOmissions = detectAsrOmissions;
+                OmissionPlaybackReport initial = new(AsrOmissionReport.Initial(detectAsrOmissions,
+                    (runConfig ?? _config).Subtitles.ASREngine == SubASREngineType.FasterWhisper), omissionSource);
+                foreach (int slot in SubIndexSet) _omissionReports[slot] = initial;
                 _cts?.Dispose();
                 _cts = new CancellationTokenSource();
             }
@@ -330,7 +375,7 @@ public class SubtitlesASR
             // post-hoc without per-chunk audio, so it does not run VAD). Gated by the config toggle; fail-soft.
             Config effectiveConfig = runConfig ?? _config;
             using AudioReader reader = new(effectiveConfig, subIndex, enableVadSnapping: effectiveConfig.Subtitles.VadCueSnapping,
-                confirmProcessExit: confirmProcessExit);
+                confirmProcessExit: confirmProcessExit, detectAsrOmissions: detectAsrOmissions);
             reader.Open(url, streamIndex, type, token);
 
             if (token.IsCancellationRequested)
@@ -401,6 +446,11 @@ public class SubtitlesASR
 
             if (!token.IsCancellationRequested)
             {
+                lock (_lockerSubs)
+                {
+                    if (revision == _slotRevision && !token.IsCancellationRequested)
+                        foreach (int slot in SubIndexSet) _omissionReports[slot] = _omissionReports[slot] with { Report = reader.OmissionReport };
+                }
                 Utils.PlayCompletionSound();
                 // Also surface a non-blocking visual confirmation (the UI subscribes to ASRCompleted).
                 _config.Subtitles.player.RaiseASRCompleted();
@@ -435,17 +485,30 @@ public class SubtitlesASR
         }
     }
 
-    public void TryCancel(bool isWait)
+    public void TryCancel(bool isWait) => CancelSlots(isWait, preserveRetainedSlots: false);
+
+    private void CancelSlots(bool isWait, bool preserveRetainedSlots)
     {
         CancellationTokenSource? cts;
         lock (_lockerSubs)
         {
             cts = _cts;
             _slotRevision++;
-            foreach (int slot in SubIndexSet) _subtitlesManager[slot].Clear();
+            OmissionPlaybackReport reset = new(AsrOmissionReport.Initial(false, false), null);
+            foreach (int slot in SubIndexSet)
+            {
+                _omissionReports[slot] = reset;
+                _subtitlesManager[slot].Clear();
+            }
             // A coordinated restart may already have requested cancellation. Reset still retires the slots so
             // an ASR command for replacement media cannot attach to the canceled run.
             SubIndexSet.Clear();
+            if (!preserveRetainedSlots)
+            {
+                foreach (int slot in _retainedSlots) _subtitlesManager[slot].Clear();
+                _retainedSlots.Clear();
+                Array.Fill(_omissionReports, reset);
+            }
         }
 
         try { cts?.Cancel(); }
@@ -466,8 +529,12 @@ public class SubtitlesASR
         // HC-37: read and mutate SubIndexSet under _lockerSubs (the Contains/Count checks were unlocked).
         lock (_lockerSubs)
         {
+            _omissionReports[subIndex] = new(AsrOmissionReport.Initial(false, false), null);
             if (!SubIndexSet.Contains(subIndex))
+            {
+                if (_retainedSlots.Remove(subIndex)) _subtitlesManager[subIndex].Clear();
                 return;
+            }
 
             if (SubIndexSet.Count == 2)
             {
@@ -479,7 +546,7 @@ public class SubtitlesASR
         }
 
         // cancel asynchronously as it takes time to cancel.
-        TryCancel(false);
+        CancelSlots(isWait: false, preserveRetainedSlots: true);
     }
 }
 
@@ -492,6 +559,8 @@ public class AudioReader : IDisposable
     private readonly int _subIndex;
     private readonly Func<bool>? _preferCpu;
     private readonly bool _confirmProcessExit;
+    private readonly bool _detectAsrOmissions;
+    internal AsrOmissionReport OmissionReport { get; private set; }
     internal bool StrictAlignment { get; init; }
     internal SrtAlignmentAudioWindow? AlignmentWindow { get; init; }
 
@@ -519,13 +588,16 @@ public class AudioReader : IDisposable
     /// when it returns true a chunk is transcribed on CPU instead of the configured GPU device. Null keeps
     /// the configured device (the interactive ASR path passes nothing, so its behaviour is unchanged).</param>
     public AudioReader(Config config, int subIndex, Func<bool>? preferCpu = null, bool enableVadSnapping = false,
-        bool confirmProcessExit = false)
+        bool confirmProcessExit = false, bool detectAsrOmissions = false)
     {
         _config = config;
         _subIndex = subIndex;
         _preferCpu = preferCpu;
         _enableVadSnapping = enableVadSnapping;
         _confirmProcessExit = confirmProcessExit;
+        _detectAsrOmissions = detectAsrOmissions;
+        OmissionReport = AsrOmissionReport.Initial(detectAsrOmissions,
+            config.Subtitles.ASREngine == SubASREngineType.FasterWhisper);
         Log = new LogHandler(("[#1]").PadRight(8, ' ') + " [AudioReader   ] ");
     }
 
@@ -678,7 +750,8 @@ public class AudioReader : IDisposable
                 SubASREngineType.WhisperCpp => new WhisperCppASRService(_config),
                 SubASREngineType.FasterWhisper => new FasterWhisperASRService(_config, _preferCpu, _confirmProcessExit)
                 {
-                    StrictAlignment = StrictAlignment
+                    StrictAlignment = StrictAlignment,
+                    CollectOmissionEvidence = _detectAsrOmissions && !StrictAlignment
                 },
                 _ => throw new InvalidOperationException()
             };
@@ -692,6 +765,9 @@ public class AudioReader : IDisposable
             // whisper repetition loops (see the dedup check below).
             string? lastText = null;
             TimeSpan lastEnd = TimeSpan.MinValue;
+            AsrOmissionChunk? previousOmissionChunk = null;
+            List<AsrOmissionCandidate> candidates = [];
+            bool analyzed = false, incomplete = false;
 
             while (await channel.Reader.WaitToReadAsync(token))
             {
@@ -822,6 +898,39 @@ public class AudioReader : IDisposable
 
                         addSub(subData);
                     }
+
+                    if (_detectAsrOmissions && asrService is FasterWhisperASRService fasterWhisper)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        AsrOmissionEvidence? evidence = fasterWhisper.LastOmissionEvidence;
+                        AsrOmissionChunk? current = evidence?.Chunk is { } localEvidence
+                            ? localEvidence with { OffsetMs = (long)Math.Round(chunk.Start.TotalMilliseconds) }
+                            : null;
+                        if (evidence is not null && current is not null && AsrOmissionDetector.ValidBaseline(current))
+                        {
+                            try
+                            {
+                                var detected = AsrOmissionDetector.Scan(previousOmissionChunk is { } previous
+                                    ? [previous, current] : [current], token);
+                                candidates.AddRange(detected.Where(candidate => candidate.ChunkOffsetMs == current.OffsetMs));
+                                // Only A/B are needed as context for the next adjacent seam.
+                                previousOmissionChunk = current with { Confirmations = null, VadIntervals = null };
+                                analyzed = true;
+                                incomplete |= evidence.Status == AsrOmissionStatus.Partial;
+                            }
+                            catch (Exception e) when (e is ArgumentException or InvalidOperationException or OverflowException)
+                            {
+                                // Malformed optional evidence cannot fail baseline recognition or anchor a seam.
+                                previousOmissionChunk = null;
+                                incomplete = true;
+                            }
+                        }
+                        else
+                        {
+                            previousOmissionChunk = null;
+                            incomplete = true;
+                        }
+                    }
                 }
                 finally
                 {
@@ -832,6 +941,9 @@ public class AudioReader : IDisposable
                         throw new InvalidOperationException("can not discard AudioChunk from channel");
                 }
             }
+            if (_detectAsrOmissions && analyzed)
+                OmissionReport = new(true, incomplete ? AsrOmissionStatus.Partial : AsrOmissionStatus.Analyzed,
+                    candidates.AsReadOnly());
         }
 
         unsafe void DoProducer()
@@ -1647,6 +1759,8 @@ public class WhisperCppASRService : IASRService
 public partial class FasterWhisperASRService : IASRService
 {
     internal bool StrictAlignment { get; init; }
+    internal bool CollectOmissionEvidence { get; init; }
+    internal AsrOmissionEvidence? LastOmissionEvidence { get; private set; }
     private readonly Config _config;
 #if !WINDOWS
     private readonly bool _confirmProcessExit;
@@ -1902,6 +2016,9 @@ public partial class FasterWhisperASRService : IASRService
 
     public async IAsyncEnumerable<(string text, TimeSpan start, TimeSpan end, string language, IReadOnlyList<WordTiming>? words)> Do(MemoryStream waveStream, [EnumeratorCancellation] CancellationToken token)
     {
+        LastOmissionEvidence = null;
+        FasterWhisperOmissionCapture.RunOutput? omissionOutput = CollectOmissionEvidence && _config.Subtitles.WordTimestamps
+            ? new() : null;
         string tempFilePath = Path.GetTempFileName();
         // because no output option
         string outputFilePath = Path.ChangeExtension(tempFilePath, "srt");
@@ -2015,6 +2132,7 @@ public partial class FasterWhisperASRService : IASRService
                 }
 
                 string line = stdOut.Text;
+                omissionOutput?.Observe(line);
 
                 // process stdout
                 if (!oneSuccess)
@@ -2143,7 +2261,16 @@ public partial class FasterWhisperASRService : IASRService
                         ["whisper_output"] = output.ToString()
                     }
                 };
+
             }
+
+            // A has already been delivered exactly as before. Diagnostics reuse the selected chunk command,
+            // language and PCM, leaving the first pass and normal subtitle pipeline independent.
+            if (omissionOutput is not null && IsSuccessfulAlignmentExit(exitCode, lastLine))
+                LastOmissionEvidence = await FasterWhisperOmissionCapture.CaptureAsync(baselineCommand: baseCmd,
+                    baselineWave: waveStream, nativeBaselinePath: outputJsonPath, baselineOutput: omissionOutput,
+                    language: _isLanguageDetect ? _detectedLanguage : _manualLanguage, priority: _processPriority,
+                    token: token).ConfigureAwait(false);
         }
         finally
         {
