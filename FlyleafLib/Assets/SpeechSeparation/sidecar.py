@@ -5,12 +5,14 @@ import hashlib
 import io
 import json
 import math
+import os
 from fractions import Fraction
 from pathlib import Path
 import random
 import subprocess
 import sys
 import tempfile
+import wave
 
 MODEL_SHA256 = "f3cf25b222c4eed7cd49dd8b2c9597d50c18bd154090f7b919cfa5f93cf22c49"
 MODEL_BYTES = 84_141_271
@@ -20,6 +22,8 @@ FRAME_BYTES = CHANNELS * 4
 DURATION_TOLERANCE = 0.1
 # Demucs holds the full mixture and four stereo float stems, even when only vocals is saved.
 MAX_DURATION = 30 * 60
+ASR_RATE = 16_000
+MAX_ASR_EVIDENCE_SAMPLES = 9 * 60 * ASR_RATE
 LOCAL_FORMATS = "aiff,asf,avi,flac,matroska,webm,mov,mp4,m4a,3gp,3g2,mj2,mp3,mpeg,mpegts,ogg,wav"
 LOCAL_INPUT = ("-protocol_whitelist", "file", "-format_whitelist", LOCAL_FORMATS)
 
@@ -108,7 +112,12 @@ def resolve_source(source):
     return source
 
 
-def separate_vocals(model_path, mixture_path, frames, vocal_path):
+def require_cuda(torch):
+    if not torch.cuda.is_available():
+        raise RuntimeError("The configured PyTorch runtime does not provide CUDA.")
+
+
+def separate_vocals(model_path, mixture_path, frames, vocal_path, device="cuda:0"):
     # Validate the same immutable bytes that will be given to the restricted checkpoint loader.
     with model_path.open("rb") as model_file:
         model_bytes = model_file.read(MODEL_BYTES + 1)
@@ -125,8 +134,8 @@ def separate_vocals(model_path, mixture_path, frames, vocal_path):
     from demucs.htdemucs import HTDemucs
     from demucs.states import load_model
 
-    if not torch.cuda.is_available():
-        raise RuntimeError("The configured PyTorch runtime does not provide CUDA.")
+    if device != "cpu":
+        require_cuda(torch)
     expected_globals = {"numpy.dtype", "fractions.Fraction", "demucs.htdemucs.HTDemucs",
                         "numpy.core.multiarray.scalar"}
     if set(torch.serialization.get_unsafe_globals_in_checkpoint(checkpoint)) != expected_globals:
@@ -157,8 +166,7 @@ def separate_vocals(model_path, mixture_path, frames, vocal_path):
     random.seed(0)
     torch.manual_seed(0)
     with torch.inference_mode():
-        stems = apply_model(model, mixture[None], shifts=1, split=True, overlap=0.25,
-                            device="cuda:0")[0]
+        stems = apply_model(model, mixture[None], shifts=1, split=True, overlap=0.25, device=device)[0]
     if stems.shape != (len(model.sources), CHANNELS, frames):
         raise RuntimeError("HTDemucs changed the audio timeline.")
     vocal = stems[model.sources.index("vocals")].clone()
@@ -169,25 +177,116 @@ def separate_vocals(model_path, mixture_path, frames, vocal_path):
     prevent_clip(vocal, mode="rescale").T.contiguous().numpy().astype("<f4", copy=False).tofile(vocal_path)
 
 
+def ceil_resample(samples, source_rate, target_rate):
+    return (samples * target_rate + source_rate - 1) // source_rate
+
+
+def validate_asr_input(source, samples):
+    if not 0 < samples <= MAX_ASR_EVIDENCE_SAMPLES:
+        raise UnsupportedSource("The requested evidence window is outside the allowed 16 kHz sample range.")
+    try:
+        with wave.open(str(source), "rb") as audio:
+            if (audio.getnchannels(), audio.getsampwidth(), audio.getframerate(), audio.getnframes(),
+                    audio.getcomptype()) != (1, 2, ASR_RATE, samples, "NONE"):
+                raise UnsupportedSource("Evidence requires exactly the original mono PCM16 sample clock.")
+    except (EOFError, wave.Error) as error:
+        raise UnsupportedSource("Evidence requires a valid PCM WAV input.") from error
+
+
+def decode_asr_evidence(ffmpeg, source, samples, raw):
+    run([
+        ffmpeg, "-v", "error", "-nostdin", "-xerror", *LOCAL_INPUT,
+        "-i", source, "-map", "0:a:0", "-af", "pan=stereo|c0=c0|c1=c0", "-ar", str(RATE),
+        "-c:a", "pcm_f32le", "-f", "f32le", "-n", raw,
+    ], timeout=45)
+    frames = ceil_resample(samples, ASR_RATE, RATE)
+    if raw.stat().st_size != frames * FRAME_BYTES:
+        raise UnsupportedSource("The evidence model input does not cover the original PCM clock.")
+    return frames
+
+
+def encode_asr_evidence(ffmpeg, vocal, frames, samples, destination):
+    if vocal.stat().st_size != frames * FRAME_BYTES:
+        raise UnsupportedSource("The evidence stem does not cover the original model input.")
+    run([
+        ffmpeg, "-v", "error", "-nostdin", "-xerror", "-f", "f32le", "-ar", str(RATE),
+        "-ac", str(CHANNELS), "-i", vocal, "-af", "pan=mono|c0=0.5*c0+0.5*c1",
+        "-ar", str(ASR_RATE), "-c:a", "pcm_s16le", "-fflags", "+bitexact",
+        "-flags:a", "+bitexact", "-f", "s16le", "-n", destination,
+    ], timeout=45)
+
+    expected_bytes = samples * 2
+    output_bytes = destination.stat().st_size
+    if output_bytes == expected_bytes:
+        return
+    # Both resamplers have zero-origin inputs. A round-up on each rate change can
+    # add just one terminal sample. Keep the exact prefix; never pad a short stem.
+    if (output_bytes == expected_bytes + 2 and frames == ceil_resample(samples, ASR_RATE, RATE)
+            and ceil_resample(frames, RATE, ASR_RATE) == samples + 1):
+        with destination.open("r+b") as output:
+            output.truncate(expected_bytes)
+        return
+    raise UnsupportedSource("The evidence output does not cover the original PCM exactly.")
+
+
+def isolate_cpu_evidence():
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+    import torch
+    if torch.cuda.is_available():
+        raise RuntimeError("CUDA unexpectedly visible in the isolated CPU evidence process.")
+    torch.set_num_threads(8)
+    torch.set_num_interop_threads(1)
+
+
+def separate_asr_evidence(args, source):
+    validate_asr_input(source, args.asr_pcm_samples)
+    if args.asr_evidence_cpu:
+        isolate_cpu_evidence()
+    with tempfile.TemporaryDirectory(prefix="evidence-", dir=args.output.parent) as temporary:
+        directory = Path(temporary)
+        raw, vocal, pcm = directory / "mixture.f32", directory / "vocals.f32", directory / "vocals.s16le"
+        frames = decode_asr_evidence(args.ffmpeg, source, args.asr_pcm_samples, raw)
+        if args.asr_evidence_cpu:
+            separate_vocals(args.model, raw, frames, vocal, device="cpu")
+        else:
+            separate_vocals(args.model, raw, frames, vocal)
+        encode_asr_evidence(args.ffmpeg, vocal, frames, args.asr_pcm_samples, pcm)
+        pcm.rename(args.output)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, type=Path)
-    parser.add_argument("--stream", required=True, type=int)
+    parser.add_argument("--stream", type=int)
     parser.add_argument("--ffmpeg", required=True, type=Path)
-    parser.add_argument("--ffprobe", required=True, type=Path)
+    parser.add_argument("--ffprobe", type=Path)
     parser.add_argument("--model", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--duration", required=True, type=float)
+    parser.add_argument("--duration", type=float)
+    parser.add_argument("--asr-pcm-samples", type=int)
+    parser.add_argument("--asr-evidence-cpu", action="store_true")
     args = parser.parse_args()
+    evidence = args.asr_pcm_samples is not None
+    media_args = (args.stream, args.ffprobe, args.duration)
+    if evidence and any(value is not None for value in media_args):
+        parser.error("--asr-pcm-samples cannot be combined with media stream arguments")
+    if not evidence and (args.asr_evidence_cpu or any(value is None for value in media_args)):
+        parser.error("media separation requires --stream, --ffprobe and --duration")
     try:
         source = resolve_source(args.source)
-        if args.stream < 0:
+        if not evidence and args.stream < 0:
             raise UnsupportedSource("Speech separation requires a selected audio track.")
-        if any(not path.is_absolute() or not path.is_file() for path in (args.ffmpeg, args.ffprobe, args.model)):
-            raise RuntimeError("Speech separation requires absolute paths to FFmpeg, ffprobe and the local model.")
+        executables = (args.ffmpeg, args.model) if evidence else (args.ffmpeg, args.ffprobe, args.model)
+        if any(not path.is_absolute() or not path.is_file() for path in executables):
+            raise RuntimeError("Evidence requires absolute paths to FFmpeg and the local model." if evidence else
+                               "Speech separation requires absolute paths to FFmpeg, ffprobe and the local model.")
         if (not args.output.is_absolute() or args.output.exists() or args.output.is_symlink()
                 or not args.output.parent.is_dir()):
             raise RuntimeError("Speech separation requires a new output path in its temporary directory.")
+
+        if evidence:
+            separate_asr_evidence(args, source)
+            return 0
 
         inspect_source(args.ffprobe, source, args.stream, args.duration)
         with tempfile.TemporaryDirectory(prefix="stem-", dir=args.output.parent) as temporary:

@@ -20,6 +20,14 @@ The bundled runner accepts the [upstream vocal checkpoint](https://dl.fbaipublic
 
 The CUDA prepass uses the run's existing GPU admission. It exits before ASR reads the temporary stem. The selected input file is read-only. Intermediate and vocal files are kept in an owned temporary directory. Cancellation drains the process tree before the job releases admission and removes its files.
 
+## Unsupported Faster Whisper cues
+
+Local Avalonia batch and detached ControlHost jobs also apply the W-001 / W-002 v6b filter when Faster Whisper returns word timestamps on the original audio and speech separation is configured. The filter compares the engine's completed native JSON to the emitted cues and uses Silero on the original PCM, the aligned HTDemucs stem and normalized views. Speech evidence or unavailable coverage keeps the cue. A chunk boundary contributes context only when adjacent PCM from the same decode matches the sample and timestamp clocks. The filter uses bounded evidence under the existing GPU admission and skips GPU evidence while the batch is using its CPU-while-active policy.
+
+A cue that is dropped is withheld from the new recognition document. Other cues keep the engine's order, text and timing. Omission review skips a chunk if it contains any dropped cue. A successful full-file F-02 prepass gives ASR the vocal track and leaves this post-filter inactive because the original view is unavailable on that chunk's clock. An explicit separation `OFF`, missing dependencies and disabled word timestamps also leave the original cue output in place. Existing subtitle files and profiles are outside this operation.
+
+The accepted v6b comparison used identical full raw inputs. It dropped four of five music hallucinations in `07_06` and three of three in `07_67_02`, keeping the remaining `07_06` cue after a corroborating normalized-stem detection. It kept all 68 and 55 reference-matched words in the +10 dB and +12 dB speech-under-music controls. This residual cue is a documented limit of the filter.
+
 ## Evidence
 
 The model choice comes from a same-source experiment on a 12:14 film with VAD on. Relative to the tested CPU MDX workflow, the CUDA vocal checkpoint reduced word deletions from 19 to 11 and caption edits from 50 to 46. The complete runs took 213.1 and 75.3 seconds, respectively. Both missed the original target cue. This experiment used one long ASR chunk and supports a model choice for initial integration.

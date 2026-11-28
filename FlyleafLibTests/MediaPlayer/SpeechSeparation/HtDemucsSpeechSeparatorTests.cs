@@ -11,11 +11,11 @@ public sealed class HtDemucsSpeechSeparatorTests
         DirectoryInfo workspace = Directory.CreateTempSubdirectory("llplayer-test-separation-");
         try
         {
-            string python = CreateExecutable("python");
-            string ffmpeg = CreateExecutable("ffmpeg");
-            string ffprobe = CreateExecutable("ffprobe");
-            string checkpoint = CreateFile("vocal.th");
-            string runner = CreateFile("sidecar.py");
+            string python = CreateFixture(workspace, "python", executable: true);
+            string ffmpeg = CreateFixture(workspace, "ffmpeg", executable: true);
+            string ffprobe = CreateFixture(workspace, "ffprobe", executable: true);
+            string checkpoint = CreateFixture(workspace, "vocal.th");
+            string runner = CreateFixture(workspace, "sidecar.py");
 
             Assert.NotNull(HtDemucsSpeechSeparator.TryCreate(python, checkpoint, ffmpeg, runner));
             Assert.Null(HtDemucsSpeechSeparator.TryCreate("python", checkpoint, ffmpeg, runner));
@@ -24,21 +24,6 @@ public sealed class HtDemucsSpeechSeparatorTests
             Assert.Null(HtDemucsSpeechSeparator.TryCreate(python, checkpoint, ffmpeg, Path.Combine(workspace.FullName, "missing.py")));
             File.Delete(ffprobe);
             Assert.Null(HtDemucsSpeechSeparator.TryCreate(python, checkpoint, ffmpeg, runner));
-
-            string CreateFile(string name)
-            {
-                string path = Path.Combine(workspace.FullName, name);
-                File.WriteAllText(path, "fixture");
-                return path;
-            }
-
-            string CreateExecutable(string name)
-            {
-                string path = CreateFile(OperatingSystem.IsWindows() ? name + ".exe" : name);
-                if (!OperatingSystem.IsWindows())
-                    File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-                return path;
-            }
         }
         finally { workspace.Delete(true); }
     }
@@ -86,6 +71,70 @@ public sealed class HtDemucsSpeechSeparatorTests
     }
 
     [Fact]
+    public void Asr_evidence_wave_preserves_exact_PCM16_mono_sample_clock()
+    {
+        short[] pcm = [short.MinValue, -1, 0, 1, short.MaxValue];
+        using MemoryStream stream = new();
+        HtDemucsSpeechSeparator.WriteAsrEvidenceWave(stream, pcm);
+
+        using BinaryReader reader = new(stream);
+        stream.Position = 0;
+        Assert.Equal("RIFF"u8.ToArray(), reader.ReadBytes(4));
+        Assert.Equal(36 + pcm.Length * sizeof(short), reader.ReadInt32());
+        Assert.Equal("WAVEfmt "u8.ToArray(), reader.ReadBytes(8));
+        Assert.Equal(16, reader.ReadInt32());
+        Assert.Equal((ushort)1, reader.ReadUInt16()); // PCM
+        Assert.Equal((ushort)1, reader.ReadUInt16()); // mono
+        Assert.Equal(16_000, reader.ReadInt32());
+        Assert.Equal(32_000, reader.ReadInt32());
+        Assert.Equal((ushort)2, reader.ReadUInt16());
+        Assert.Equal((ushort)16, reader.ReadUInt16());
+        Assert.Equal("data"u8.ToArray(), reader.ReadBytes(4));
+        Assert.Equal(pcm.Length * sizeof(short), reader.ReadInt32());
+        Assert.Equal(pcm, HtDemucsSpeechSeparator.ReadAsrEvidencePcm(stream, pcm.Length));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void Asr_evidence_rejects_any_returned_sample_count_other_than_requested(int returnedBytes)
+    {
+        using MemoryStream stream = new(new byte[returnedBytes]);
+        Assert.Throws<InvalidDataException>(() => HtDemucsSpeechSeparator.ReadAsrEvidencePcm(stream, 2));
+    }
+
+    [Fact]
+    public async Task Asr_evidence_checks_user_cancellation_and_rejects_unsupported_input_without_running_a_model()
+    {
+        DirectoryInfo workspace = Directory.CreateTempSubdirectory("llplayer-test-separation-");
+        try
+        {
+            CreateFixture(workspace, "ffprobe", executable: true);
+            var separator = HtDemucsSpeechSeparator.TryCreateForCpuAsrEvidence(
+                CreateFixture(workspace, "python", executable: true),
+                CreateFixture(workspace, "vocal.th"),
+                CreateFixture(workspace, "ffmpeg", executable: true),
+                CreateFixture(workspace, "sidecar.py"));
+            Assert.NotNull(separator);
+            using var canceled = new CancellationTokenSource();
+            await canceled.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                separator.TrySeparateAsrEvidenceAsync(ReadOnlyMemory<short>.Empty, canceled.Token));
+
+            CancellationToken token = TestContext.Current.CancellationToken;
+            Assert.Null(await separator.TrySeparateAsrEvidenceAsync(ReadOnlyMemory<short>.Empty, token));
+            Assert.Null(await separator.TrySeparateAsrEvidenceAsync(
+                new short[HtDemucsSpeechSeparator.MaxAsrEvidenceSamples + 1], token));
+            // The local fixtures pass availability checks but are not real executables.
+            Assert.Null(await separator.TrySeparateAsrEvidenceAsync(new short[] { 1, 2 }, token));
+        }
+        finally { workspace.Delete(true); }
+    }
+
+    [Fact]
     public void A_replaced_or_edited_source_cannot_use_the_stem()
     {
         DirectoryInfo workspace = Directory.CreateTempSubdirectory("llplayer-test-separation-");
@@ -105,6 +154,15 @@ public sealed class HtDemucsSpeechSeparatorTests
             Assert.Throws<IOException>(() => HtDemucsSpeechSeparator.EnsureSourceUnchanged(input, original));
         }
         finally { workspace.Delete(true); }
+    }
+
+    private static string CreateFixture(DirectoryInfo workspace, string name, bool executable = false)
+    {
+        string path = Path.Combine(workspace.FullName, executable && OperatingSystem.IsWindows() ? name + ".exe" : name);
+        File.WriteAllText(path, "fixture");
+        if (executable && !OperatingSystem.IsWindows())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        return path;
     }
 
     private static MemoryStream CreateWave(bool extensible = false, int format = 3, int channels = 2,
