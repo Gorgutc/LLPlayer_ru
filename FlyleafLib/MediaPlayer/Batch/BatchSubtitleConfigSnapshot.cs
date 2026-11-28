@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using CliWrap.Builders;
 using FlyleafLib.MediaPlayer.Translation;
 using FlyleafLib.MediaPlayer.Translation.Services;
 using Whisper.net.LibraryLoader;
@@ -13,6 +14,54 @@ public static class BatchSubtitleConfigSnapshot
     public static Config Create(Config source) => Create(source, forBatch: true);
 
     public static Config CreateForRecognition(Config source) => Create(source, forBatch: false);
+
+    internal static Config CreateForSelectedSource(Config source, bool forRecognition, Language? sourceLanguage)
+    {
+        Config snapshot = Create(source, forBatch: !forRecognition);
+        if (sourceLanguage?.ISO6391 is not { Length: > 0 } code)
+            return snapshot;
+
+        // The request overrides detection for this job, independent of the selected track's language tag.
+        snapshot.Subtitles.WhisperConfig.Language = code;
+        snapshot.Subtitles.WhisperConfig.LanguageDetection = false;
+        if (snapshot.Subtitles.ASREngine == SubASREngineType.FasterWhisper)
+        {
+            var faster = snapshot.Subtitles.FasterWhisperConfig;
+            faster.ExtraArguments = RemoveFasterWhisperLanguageOptions(faster.ExtraArguments);
+        }
+        return snapshot;
+    }
+
+    private static string RemoveFasterWhisperLanguageOptions(string arguments)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+            return arguments;
+        var tokens = FasterWhisperDevicePolicy.ReadArguments(arguments)
+            ?? throw new ArgumentException("Malformed Faster Whisper extra arguments prevent overriding the recognition language.", nameof(arguments));
+
+        ArgumentsBuilder remaining = new();
+        bool removed = false;
+        bool optionsEnded = false;
+        for (int i = 0; i < tokens.Count; i++)
+        {
+            string token = tokens[i];
+            optionsEnded |= token == "--";
+            int equals = token.IndexOf('=');
+            string option = equals < 0 ? token : token[..equals];
+            // XXL also accepts attached -lVALUE, while -ldt and -lds are distinct detection options.
+            bool attachedLanguage = option.Length > 2 && option.StartsWith("-l", StringComparison.Ordinal) &&
+                option is not ("-ldt" or "-lds");
+            if (!optionsEnded && ((option is "--language" or "-l") || attachedLanguage))
+            {
+                if (!attachedLanguage && equals < 0 && i + 1 < tokens.Count && !tokens[i + 1].StartsWith('-'))
+                    i++;
+                removed = true;
+                continue;
+            }
+            remaining.Add(token);
+        }
+        return removed ? remaining.Build() : arguments;
+    }
 
     private static Config Create(Config source, bool forBatch)
     {

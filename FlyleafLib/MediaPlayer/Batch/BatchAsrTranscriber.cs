@@ -88,8 +88,7 @@ public sealed class BatchAsrTranscriber : IBatchAsrTranscriber
 
         return Task.Run(() =>
         {
-            Config localConfig = _forRecognition ? BatchSubtitleConfigSnapshot.CreateForRecognition(_batchConfig)
-                : BatchSubtitleConfigSnapshot.Create(_batchConfig);
+            Config localConfig = BatchSubtitleConfigSnapshot.CreateForSelectedSource(_batchConfig, _forRecognition, sourceLanguage);
             localConfig.Demuxer.FormatOpt["protocol_whitelist"] = "file";
             MediaAudioProbeResult audio = new MediaAudioProbe(localConfig).Probe(mediaPath, token, streamIndex, strictSource: true);
             if (sourceLanguage != null)

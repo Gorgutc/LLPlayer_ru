@@ -8,6 +8,8 @@ public static partial class AsrOmissionDetector
 {
     private enum Decision { Other, ShortInsertion, UnstableAnchors, IncompleteClause, NoLongGapOrStretchedCue }
 
+    private enum BoundaryEcho { None, Ambiguous, LowConfidence }
+
     private static List<Candidate> Anchored(Frame frame, Frame? previous, CancellationToken token)
     {
         var (legacy, ignored) = Legacy(frame, token);
@@ -105,19 +107,23 @@ public static partial class AsrOmissionDetector
                 ignored[range] = Decision.IncompleteClause;
                 continue;
             }
-            if (!HasClauseSize(f.B, lo, hi) || !Adjacent(f.A, e.AStart) || f.A[e.AStart - 1].Cue <= consumedThrough)
+            if (!Adjacent(f.A, e.AStart) || f.A[e.AStart - 1].Cue <= consumedThrough)
                 continue;
 
-            Candidate? safe = BuildCandidate(f, AsrOmissionKind.Gap, e.AStart, lo, hi, f.B[e.BEnd]);
+            var trimmed = TrimTimedClauseEdges(f, e.AStart, lo, hi);
+            if (!HasClauseSize(f.B, trimmed.Lo, trimmed.Hi))
+                continue;
+
+            Candidate? safe = BuildCandidate(f, AsrOmissionKind.Gap, e.AStart, trimmed.Lo, trimmed.Hi, f.B[e.BEnd]);
             if (safe is null)
                 continue;
-            AsrOmissionKind? kind = SpanKind(f, e, lo, hi, allowMixed: false);
+            AsrOmissionKind? kind = SpanKind(f, e, safe.DonorLo, safe.DonorHi, allowMixed: false);
             if (!kind.HasValue)
             {
                 ignored[range] = Decision.NoLongGapOrStretchedCue;
                 continue;
             }
-            candidates.Add(safe with { Kind = kind.Value });
+            candidates.Add(safe with { Kind = kind.Value, Review = trimmed.Review });
             consumedThrough = f.A[e.AStart].Cue;
         }
         return (candidates, ignored);
@@ -176,6 +182,29 @@ public static partial class AsrOmissionDetector
         return new(kind, lo, hi, start, last, following, nextStart);
     }
 
+    private static (int Lo, int Hi, AsrOmissionReviewReason? Review) TrimTimedClauseEdges(Frame f, int position, int lo, int hi)
+    {
+        BoundaryEcho left = ClassifyTimedEcho(f.A[position - 1], f.B[lo - 1], f.B[lo]);
+        BoundaryEcho right = ClassifyTimedEcho(f.A[position], f.B[hi], f.B[hi - 1]);
+        if (left == BoundaryEcho.LowConfidence)
+            lo++;
+        if (right == BoundaryEcho.LowConfidence)
+            hi--;
+        return (lo, hi, left != BoundaryEcho.None || right != BoundaryEcho.None ? AsrOmissionReviewReason.BoundaryRepeatUncertain : null);
+    }
+
+    // A repeated word may be genuine if the primary clock drifts. Trim only a weak occurrence paired with a strong match.
+    private static BoundaryEcho ClassifyTimedEcho(Word primary, Word matched, Word repeated)
+    {
+        if (primary.Key.Length == 0 || primary.Key != matched.Key || primary.Key != repeated.Key || matched.End <= matched.Start ||
+            !Close(primary.Start, matched.Start, BoundaryDrift) || !Close(primary.End, matched.End, BoundaryDrift) ||
+            Math.Max(primary.Start, repeated.Start) >= Math.Min(primary.End, repeated.End) ||
+            matched.End > repeated.Start && repeated.End > matched.Start)
+            return BoundaryEcho.None;
+        return Score(primary.Probability, .80) && Score(matched.Probability, .80) &&
+            Score(repeated.Probability) && repeated.Probability <= .45 ? BoundaryEcho.LowConfidence : BoundaryEcho.Ambiguous;
+    }
+
     private static bool Displayable(Word[] donor, int lo, int hi, long start)
     {
         int sentence = lo;
@@ -221,9 +250,11 @@ public static partial class AsrOmissionDetector
             (int lo, int hi) = Clause(f.A, f.B, e, legacy: false);
             if (!HasClauseSize(f.B, lo, hi) || !DonorRangeValid(f, lo, hi))
                 continue;
-            if (SpanKind(f, e, lo, hi, allowMixed: true) is { } kind &&
-                BuildCandidate(f, kind, e.AStart, lo, hi, f.B[e.BEnd]) is { } candidate)
-                yield return candidate;
+            var trimmed = TrimTimedClauseEdges(f, e.AStart, lo, hi);
+            if (HasClauseSize(f.B, trimmed.Lo, trimmed.Hi) &&
+                SpanKind(f, e, trimmed.Lo, trimmed.Hi, allowMixed: true) is { } kind &&
+                BuildCandidate(f, kind, e.AStart, trimmed.Lo, trimmed.Hi, f.B[e.BEnd]) is { } candidate)
+                yield return candidate with { Review = trimmed.Review };
         }
     }
 
