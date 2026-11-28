@@ -156,7 +156,7 @@ public static partial class AsrOmissionDetector
             .Select(w => new AsrOmissionInterval(w.Start, w.End))
             .Concat(frame.Chunk.Baseline.Where(c => c.Words.Count == 0).Select(c => new AsrOmissionInterval(c.StartMs, c.EndMs)))
             .Concat(selected.Select(c => new AsrOmissionInterval(c.Start, c.End))));
-        Dictionary<int, long> moves = selected.Where(c => c.FollowingCue.HasValue && c.FollowingStart.HasValue)
+        Dictionary<int, long> moves = selected.Where(c => c.Review is null && c.FollowingCue.HasValue && c.FollowingStart.HasValue)
             .GroupBy(c => c.FollowingCue!.Value).ToDictionary(g => g.Key, g => g.Last().FollowingStart!.Value);
         AsrOmissionInterval[] shown = frame.Chunk.Baseline.Select((c, i) =>
             new AsrOmissionInterval(moves.GetValueOrDefault(i, c.StartMs), c.EndMs)).ToArray();

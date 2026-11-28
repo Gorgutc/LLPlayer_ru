@@ -27,6 +27,85 @@ public class BatchSubtitleConfigSnapshotTests
         return config;
     }
 
+    [Theory]
+    [InlineData(true, "--language nn")]
+    [InlineData(false, "--language=nn")]
+    [InlineData(true, "-l nn")]
+    [InlineData(false, "-l=nn")]
+    [InlineData(true, "-lnn")]
+    public void SelectedSource_LanguageOverridesAutomaticDetectionAndExtraArguments(bool forRecognition, string oldLanguage)
+    {
+        Config config = NewTestConfig();
+        config.Subtitles.ASREngine = SubASREngineType.FasterWhisper;
+        config.Subtitles.ASRPerSegmentLanguage = true;
+        config.Subtitles.WhisperConfig.Language = "ja";
+        config.Subtitles.WhisperConfig.LanguageDetection = true;
+        const string prompt = "literal --language nn and -l nn";
+        string threshold = forRecognition ? "--language_detection_threshold" : "-ldt";
+        string segments = forRecognition ? "--language_detection_segments=2" : "-lds=2";
+        string extras = $"{oldLanguage} --initial_prompt \"{prompt}\" --device cuda {threshold} 0.37 {segments}";
+        config.Subtitles.FasterWhisperConfig.ExtraArguments = extras;
+
+        Config snapshot = BatchSubtitleConfigSnapshot.CreateForSelectedSource(config, forRecognition, Language.English);
+        string command = FasterWhisperASRService.BuildCommand(snapshot.Subtitles.FasterWhisperConfig,
+            snapshot.Subtitles.WhisperConfig).Arguments;
+        List<string> argv = FasterWhisperDevicePolicy.ReadArguments(command)!;
+
+        argv.Count(arg => arg == "--language" || arg.StartsWith("--language=", StringComparison.Ordinal) ||
+            (arg.StartsWith("-l", StringComparison.Ordinal) && arg != threshold && arg != segments)).Should().Be(1);
+        argv.Should().ContainInOrder("--language", "en");
+        argv.Should().ContainInOrder("--initial_prompt", prompt, "--device", "cuda");
+        argv.Should().ContainInOrder(threshold, "0.37", segments);
+        snapshot.Subtitles.WhisperConfig.LanguageDetection.Should().BeFalse();
+        config.Subtitles.WhisperConfig.LanguageDetection.Should().BeTrue();
+        config.Subtitles.WhisperConfig.Language.Should().Be("ja");
+        config.Subtitles.FasterWhisperConfig.ExtraArguments.Should().Be(extras);
+    }
+
+    [Fact]
+    public void SelectedSource_WithoutLanguageKeepsProfileDetectionAndArguments()
+    {
+        Config config = NewTestConfig();
+        config.Subtitles.ASREngine = SubASREngineType.FasterWhisper;
+        config.Subtitles.WhisperConfig.LanguageDetection = true;
+        config.Subtitles.FasterWhisperConfig.ExtraArguments = "--language nn";
+
+        Config snapshot = BatchSubtitleConfigSnapshot.CreateForSelectedSource(config, forRecognition: true, sourceLanguage: null);
+
+        snapshot.Subtitles.WhisperConfig.LanguageDetection.Should().BeTrue();
+        snapshot.Subtitles.FasterWhisperConfig.ExtraArguments.Should().Be("--language nn");
+    }
+
+    [Fact]
+    public void SelectedSource_AppliesLanguageToWhisperCppSnapshot()
+    {
+        Config config = NewTestConfig();
+        config.Subtitles.ASREngine = SubASREngineType.WhisperCpp;
+        config.Subtitles.WhisperConfig.LanguageDetection = true;
+
+        Config snapshot = BatchSubtitleConfigSnapshot.CreateForSelectedSource(config, forRecognition: true, Language.Get("ja"));
+
+        snapshot.Subtitles.WhisperConfig.Language.Should().Be("ja");
+        snapshot.Subtitles.WhisperConfig.LanguageDetection.Should().BeFalse();
+        config.Subtitles.WhisperConfig.LanguageDetection.Should().BeTrue();
+    }
+
+    [Fact]
+    public void SelectedSource_EnglishOnlyModelStillUsesEnglish()
+    {
+        Config config = NewTestConfig();
+        config.Subtitles.ASREngine = SubASREngineType.FasterWhisper;
+        config.Subtitles.FasterWhisperConfig.Model = "tiny.en";
+        config.Subtitles.FasterWhisperConfig.ExtraArguments = "--language=nn";
+        Config snapshot = BatchSubtitleConfigSnapshot.CreateForSelectedSource(config, forRecognition: true, Language.Get("ja"));
+
+        string command = FasterWhisperASRService.BuildCommand(snapshot.Subtitles.FasterWhisperConfig,
+            snapshot.Subtitles.WhisperConfig).Arguments;
+
+        FasterWhisperDevicePolicy.ReadArguments(command).Should().ContainInOrder("--language", "en");
+        command.Should().NotContain("--language=nn");
+    }
+
     [Fact]
     public void CreateSubtitlesConfig_AsrPerSegmentLanguage_IsCopied()
     {

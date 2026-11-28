@@ -37,7 +37,8 @@ public enum AsrOmissionKind
 public enum AsrOmissionReviewReason
 {
     BaselineCueAlreadyOnScreen,
-    PartialDonorCue
+    PartialDonorCue,
+    BoundaryRepeatUncertain
 }
 
 /// <summary>
